@@ -10,11 +10,11 @@ import (
 	"errors"
 	"io"
 	"time"
+	"unsafe"
 )
 
 type rows struct {
 	r      *C.duckdb_result
-	cols   []*column
 	cursor int64
 }
 
@@ -23,9 +23,9 @@ func (r *rows) Columns() []string {
 		panic("database/sql/driver: misuse of duckdb driver: Columns of closed rows")
 	}
 
-	cols := make([]string, len(r.cols))
-	for i, c := range r.cols {
-		cols[i] = c.name
+	cols := make([]string, int64(r.r.column_count))
+	for i, c := range r.columns() {
+		cols[i] = C.GoString(c.name)
 	}
 
 	return cols
@@ -40,42 +40,41 @@ func (r *rows) Next(dst []driver.Value) error {
 		return io.EOF
 	}
 
+	cols := r.columns()
+
 	for i := 0; i < int(r.r.column_count); i++ {
-		ct := r.cols[i].dataType
-		switch ct {
+		col := cols[i]
+
+		switch col._type {
 		case C.DUCKDB_TYPE_INVALID:
 			return errInvalidType
 		case C.DUCKDB_TYPE_BOOLEAN:
-			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			if val == 0 {
-				dst[i] = false
-			} else {
-				dst[i] = true
-			}
+			dst[i] = (*[1 << 31]bool)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_TINYINT:
-			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			dst[i] = int8(val)
+			dst[i] = (*[1 << 31]int8)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_SMALLINT:
-			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			dst[i] = int16(val)
+			dst[i] = (*[1 << 31]int16)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_INTEGER:
-			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			dst[i] = int32(val)
+			dst[i] = (*[1 << 31]int32)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_BIGINT:
-			val := C.duckdb_value_int64(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			dst[i] = int64(val)
+			dst[i] = (*[1 << 31]int64)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_FLOAT:
-			continue
+			dst[i] = (*[1 << 31]float32)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_DOUBLE:
-			continue
-		case C.DUCKDB_TYPE_TIMESTAMP:
-			val := C.duckdb_value_int64(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			dst[i] = time.Unix(int64(val), 0)
+			dst[i] = (*[1 << 31]float64)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_DATE:
-			continue
+			val := (*[1 << 31]C.duckdb_date)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = time.Date(
+				int(val.year),
+				time.Month(val.month),
+				int(val.day),
+				0, 0, 0, 0,
+				time.UTC,
+			)
 		case C.DUCKDB_TYPE_VARCHAR:
-			val := C.duckdb_value_varchar(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			dst[i] = C.GoString(val)
+			dst[i] = C.GoString((*[1 << 31]*C.char)(unsafe.Pointer(col.data))[r.cursor])
+		case C.DUCKDB_TYPE_TIMESTAMP:
+			// TODO: Implement when availabe in DuckDB
 		}
 	}
 
@@ -93,6 +92,16 @@ func (r *rows) Close() error {
 
 	r.r = nil
 	return nil
+}
+
+func (r rows) columns() []C.duckdb_column {
+	cols := make([]C.duckdb_column, int(r.r.column_count))
+
+	for i := 0; i < int(r.r.column_count); i++ {
+		cols[i] = (*[1 << 30]C.duckdb_column)(unsafe.Pointer(r.r.columns))[i]
+	}
+
+	return cols
 }
 
 var (

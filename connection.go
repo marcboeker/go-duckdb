@@ -68,12 +68,7 @@ func (c *conn) query(query string, args []driver.Value) (driver.Rows, error) {
 		return nil, err
 	}
 
-	cols, err := parseColumns(res)
-	if err != nil {
-		return nil, err
-	}
-
-	return &rows{r: res, cols: cols}, nil
+	return &rows{r: res}, nil
 }
 
 func (c *conn) exec(cmd string) (*C.duckdb_result, error) {

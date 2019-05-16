@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/marcboeker/go-duckdb"
 )
@@ -23,26 +24,37 @@ func main() {
 
 	check(db.Ping())
 
-	check(db.Exec("CREATE TABLE users(name VARCHAR, age INTEGER)"))
-	check(db.Exec("INSERT INTO users VALUES('marc', 33)"))
-	check(db.Exec("INSERT INTO users VALUES('macgyver', 55)"))
+	check(db.Exec("CREATE TABLE users(name VARCHAR, age INTEGER, height FLOAT, awesome BOOLEAN, bday DATE)"))
+	check(db.Exec("INSERT INTO users VALUES('marc', 99, 1.91, true, '1970-01-01')"))
+	check(db.Exec("INSERT INTO users VALUES('macgyver', 70, 1.85, true, '1951-01-23')"))
 
 	type user struct {
-		name string
-		age  int
+		name    string
+		age     int
+		height  float32
+		awesome bool
+		bday    time.Time
 	}
 
-	rows, err := db.Query("SELECT name, age FROM users WHERE name = ? OR name = ? AND age > ?", "macgyver", "marc", 30)
+	rows, err := db.Query(`
+		SELECT name, age, height, awesome, bday
+		FROM users 
+		WHERE (name = ? OR name = ?) AND age > ? AND awesome = ?`,
+		"macgyver", "marc", 30, true,
+	)
 	check(err)
 	defer rows.Close()
 
 	for rows.Next() {
 		u := new(user)
-		err := rows.Scan(&u.name, &u.age)
+		err := rows.Scan(&u.name, &u.age, &u.height, &u.awesome, &u.bday)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("%s is %d years old\n", u.name, u.age)
+		fmt.Printf(
+			"%s is %d years old, %.2f tall, bday on %s and has awesomeness: %t\n",
+			u.name, u.age, u.height, u.bday.Format(time.RFC3339), u.awesome,
+		)
 	}
 	check(rows.Err())
 
