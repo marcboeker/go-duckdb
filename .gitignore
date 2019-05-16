@@ -1,4 +1,2 @@
-duckdb.h
-libduckdb_static.a
-libduckdb.dylib
-libduckdb.dll
+.vscode
+run.sh
