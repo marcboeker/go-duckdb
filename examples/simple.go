@@ -23,26 +23,33 @@ func main() {
 
 	check(db.Ping())
 
-	check(db.Exec("CREATE TABLE users(name VARCHAR, age INTEGER)"))
-	check(db.Exec("INSERT INTO users VALUES('marc', 33)"))
-	check(db.Exec("INSERT INTO users VALUES('macgyver', 55)"))
+	check(db.Exec("CREATE TABLE users(name VARCHAR, age INTEGER, height FLOAT, awesome BOOLEAN)"))
+	check(db.Exec("INSERT INTO users VALUES('marc', 33, 1.91, true)"))
+	check(db.Exec("INSERT INTO users VALUES('macgyver', 69, 1.85, true)"))
 
 	type user struct {
-		name string
-		age  int
+		name    string
+		age     int
+		height  float32
+		awesome bool
 	}
 
-	rows, err := db.Query("SELECT name, age FROM users WHERE name = ? OR name = ? AND age > ?", "macgyver", "marc", 30)
+	rows, err := db.Query(`
+		SELECT name, age, height, awesome
+		FROM users 
+		WHERE name = ? OR name = ? AND age > ?`,
+		"macgyver", "marc", 30,
+	)
 	check(err)
 	defer rows.Close()
 
 	for rows.Next() {
 		u := new(user)
-		err := rows.Scan(&u.name, &u.age)
+		err := rows.Scan(&u.name, &u.age, &u.height, &u.awesome)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("%s is %d years old\n", u.name, u.age)
+		fmt.Printf("%s is %d years old, %.2f tall and has awesomeness: %t\n", u.name, u.age, u.height, u.awesome)
 	}
 	check(rows.Err())
 

@@ -9,7 +9,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
-	"time"
 )
 
 type rows struct {
@@ -46,17 +45,13 @@ func (r *rows) Next(dst []driver.Value) error {
 		case C.DUCKDB_TYPE_INVALID:
 			return errInvalidType
 		case C.DUCKDB_TYPE_BOOLEAN:
-			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			if val == 0 {
-				dst[i] = false
-			} else {
-				dst[i] = true
-			}
+			val := C.duckdb_value_boolean(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
+			dst[i] = bool(val)
 		case C.DUCKDB_TYPE_TINYINT:
-			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
+			val := C.duckdb_value_int8(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
 			dst[i] = int8(val)
 		case C.DUCKDB_TYPE_SMALLINT:
-			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
+			val := C.duckdb_value_int16(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
 			dst[i] = int16(val)
 		case C.DUCKDB_TYPE_INTEGER:
 			val := C.duckdb_value_int32(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
@@ -65,14 +60,11 @@ func (r *rows) Next(dst []driver.Value) error {
 			val := C.duckdb_value_int64(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
 			dst[i] = int64(val)
 		case C.DUCKDB_TYPE_FLOAT:
-			continue
+			val := C.duckdb_value_float(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
+			dst[i] = float32(val)
 		case C.DUCKDB_TYPE_DOUBLE:
-			continue
-		case C.DUCKDB_TYPE_TIMESTAMP:
-			val := C.duckdb_value_int64(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
-			dst[i] = time.Unix(int64(val), 0)
-		case C.DUCKDB_TYPE_DATE:
-			continue
+			val := C.duckdb_value_double(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
+			dst[i] = float64(val)
 		case C.DUCKDB_TYPE_VARCHAR:
 			val := C.duckdb_value_varchar(r.r, C.ulonglong(i), C.ulonglong(r.cursor))
 			dst[i] = C.GoString(val)
