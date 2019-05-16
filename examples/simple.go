@@ -58,7 +58,11 @@ func main() {
 	}
 	check(rows.Err())
 
-	check(db.Exec("DELETE FROM users"))
+	res, err := db.Exec("DELETE FROM users")
+	check(err)
+
+	ra, _ := res.RowsAffected()
+	fmt.Printf("Deleted %d rows\n", ra)
 }
 
 func check(args ...interface{}) {

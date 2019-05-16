@@ -27,9 +27,8 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
 	}
 
-	_, err := c.exec(query)
-
-	return &result{}, err
+	res, err := c.exec(query)
+	return &result{r: res}, err
 }
 
 func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
