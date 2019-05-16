@@ -12,11 +12,16 @@ import (
 	_ "github.com/marcboeker/go-duckdb"
 )
 
+var (
+	db *sql.DB
+)
+
 func main() {
 	// Use second argument to store DB on disk
 	// db, err := sql.Open("duckdb", "foobar.db")
 
-	db, err := sql.Open("duckdb", "")
+	var err error
+	db, err = sql.Open("duckdb", "")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -63,6 +68,8 @@ func main() {
 
 	ra, _ := res.RowsAffected()
 	fmt.Printf("Deleted %d rows\n", ra)
+
+	runTransaction()
 }
 
 func check(args ...interface{}) {
@@ -70,4 +77,30 @@ func check(args ...interface{}) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func runTransaction() {
+	fmt.Println("Starting transaction...")
+	tx, err := db.Begin()
+	check(err)
+
+	check(tx.Exec("INSERT INTO users VALUES('gru', 25, 1.35, false, '1996-04-03')"))
+	row := tx.QueryRow("SELECT COUNT(*) FROM users WHERE name = ?", "gru")
+	var count int64
+	check(row.Scan(&count))
+	if count > 0 {
+		fmt.Println("User Gru was inserted")
+	}
+
+	fmt.Println("Rolling back transaction...")
+	check(tx.Rollback())
+
+	row = db.QueryRow("SELECT COUNT(*) FROM users WHERE name = ?", "gru")
+	check(row.Scan(&count))
+	if count > 0 {
+		fmt.Println("Found user Gru")
+	} else {
+		fmt.Println("Didn't found user Gru")
+	}
+
 }

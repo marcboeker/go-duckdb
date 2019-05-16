@@ -40,7 +40,16 @@ func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
-	return nil, errNotImpl
+	if c.tx {
+		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
+	}
+
+	if _, err := c.exec("BEGIN TRANSACTION"); err != nil {
+		return nil, err
+	}
+
+	c.tx = true
+	return &tx{c}, nil
 }
 
 func (c *conn) Close() error {
