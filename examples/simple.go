@@ -5,7 +5,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"time"
 
@@ -56,7 +55,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf(
+		log.Printf(
 			"%s is %d years old, %.2f tall, bday on %s and has awesomeness: %t\n",
 			u.name, u.age, u.height, u.bday.Format(time.RFC3339), u.awesome,
 		)
@@ -67,7 +66,7 @@ func main() {
 	check(err)
 
 	ra, _ := res.RowsAffected()
-	fmt.Printf("Deleted %d rows\n", ra)
+	log.Printf("Deleted %d rows\n", ra)
 
 	runTransaction()
 }
@@ -80,7 +79,7 @@ func check(args ...interface{}) {
 }
 
 func runTransaction() {
-	fmt.Println("Starting transaction...")
+	log.Println("Starting transaction...")
 	tx, err := db.Begin()
 	check(err)
 
@@ -89,18 +88,18 @@ func runTransaction() {
 	var count int64
 	check(row.Scan(&count))
 	if count > 0 {
-		fmt.Println("User Gru was inserted")
+		log.Println("User Gru was inserted")
 	}
 
-	fmt.Println("Rolling back transaction...")
+	log.Println("Rolling back transaction...")
 	check(tx.Rollback())
 
 	row = db.QueryRow("SELECT COUNT(*) FROM users WHERE name = ?", "gru")
 	check(row.Scan(&count))
 	if count > 0 {
-		fmt.Println("Found user Gru")
+		log.Println("Found user Gru")
 	} else {
-		fmt.Println("Didn't found user Gru")
+		log.Println("Didn't found user Gru")
 	}
 
 }
