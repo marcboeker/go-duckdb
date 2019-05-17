@@ -1,12 +1,7 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 type result struct {
-	r *C.duckdb_result
+	ra int64
 }
 
 func (r result) LastInsertId() (int64, error) {
@@ -14,6 +9,5 @@ func (r result) LastInsertId() (int64, error) {
 }
 
 func (r result) RowsAffected() (int64, error) {
-	ra := int64(C.duckdb_value_int64(r.r, 0, 0))
-	return ra, nil
+	return r.ra, nil
 }

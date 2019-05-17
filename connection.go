@@ -28,7 +28,14 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	}
 
 	res, err := c.exec(query)
-	return &result{r: res}, err
+	if err != nil {
+		return nil, err
+	}
+	defer C.duckdb_destroy_result(res)
+
+	ra := int64(C.duckdb_value_int64(res, 0, 0))
+
+	return &result{ra: ra}, nil
 }
 
 func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
