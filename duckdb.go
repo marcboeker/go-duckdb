@@ -41,6 +41,5 @@ func (impl) Open(name string) (driver.Conn, error) {
 }
 
 var (
-	errError   = errors.New("could not open database")
-	errNotImpl = errors.New("feature not implemented")
+	errError = errors.New("could not open database")
 )

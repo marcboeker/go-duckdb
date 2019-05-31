@@ -43,7 +43,20 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 }
 
 func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
-	return nil, errNotImpl
+	if c.closed {
+		panic("database/sql/driver: misuse of duckdb driver: Prepare after Close")
+	}
+	cmdstr := C.CString(cmd)
+	defer C.free(unsafe.Pointer(cmdstr))
+
+	var s C.duckdb_prepared_statement
+	C.duckdb_prepare(*c.con, cmdstr, &s)
+
+	// TODO: This is error prone, but we need to wait for the
+	// C-API to return the number of parameters.
+	pc := strings.Count(cmd, "?")
+
+	return &stmt{c: c, stmt: &s, paramCount: pc}, nil
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
