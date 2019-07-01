@@ -15,6 +15,7 @@ import (
 
 type rows struct {
 	r      *C.duckdb_result
+	s      *stmt
 	cursor int64
 }
 
@@ -91,6 +92,11 @@ func (r *rows) Close() error {
 	C.duckdb_destroy_result(r.r)
 
 	r.r = nil
+	if r.s != nil {
+		r.s.rows = false
+		r.s = nil
+	}
+
 	return nil
 }
 
