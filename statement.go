@@ -14,11 +14,10 @@ import (
 )
 
 type stmt struct {
-	c          *conn
-	stmt       *C.duckdb_prepared_statement
-	closed     bool
-	rows       bool
-	paramCount int
+	c      *conn
+	stmt   *C.duckdb_prepared_statement
+	closed bool
+	rows   bool
 }
 
 func (s *stmt) Close() error {
@@ -38,12 +37,14 @@ func (s *stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	return s.paramCount
+	var pc C.ulonglong
+	C.duckdb_nparams(*s.stmt, &pc)
+	return int(pc)
 }
 
 func (s *stmt) start(args []driver.Value) error {
-	if s.paramCount != len(args) {
-		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.paramCount)
+	if s.NumInput() != len(args) {
+		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
 
 	for i, v := range args {

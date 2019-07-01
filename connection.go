@@ -52,11 +52,7 @@ func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	var s C.duckdb_prepared_statement
 	C.duckdb_prepare(*c.con, cmdstr, &s)
 
-	// TODO: This is error prone, but we need to wait for the
-	// C-API to return the number of parameters.
-	pc := strings.Count(cmd, "?")
-
-	return &stmt{c: c, stmt: &s, paramCount: pc}, nil
+	return &stmt{c: c, stmt: &s}, nil
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
