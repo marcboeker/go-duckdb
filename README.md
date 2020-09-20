@@ -10,7 +10,13 @@ The DuckDB driver conforms to the built-in `database/sql` interface.
 go get github.com/marcboeker/go-duckdb
 ```
 
-`go-duckdb` uses `CGO` to make calls to the linked DuckDB database. Therefor you need to have a [compiled](https://github.com/cwida/duckdb#compiling) version of DuckDB availabe.
+`go-duckdb` uses `CGO` to make calls to the linked DuckDB database. Therefor you need to have a compiled version of DuckDB availabe.
+
+```
+git clone https://github.com/cwida/duckdb.git
+cd duckdb
+make
+```
 
 Please locate the following files in your DuckDB directory, as we need them to use the `go-duckdb` driver:
 
