@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"reflect"
 	"time"
 	"unsafe"
 )
@@ -82,6 +83,60 @@ func (r *rows) Next(dst []driver.Value) error {
 	r.cursor++
 
 	return nil
+}
+
+// implements driver.RowsColumnTypeScanType
+func (r *rows) ColumnTypeScanType(index int) reflect.Type {
+	col := r.columns()[index]
+	switch col._type{
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return reflect.TypeOf(true)
+	case C.DUCKDB_TYPE_TINYINT:
+		return reflect.TypeOf(int8(0))
+	case C.DUCKDB_TYPE_SMALLINT:
+		return reflect.TypeOf(int16(0))
+	case C.DUCKDB_TYPE_INTEGER:
+		return reflect.TypeOf(int(0))
+	case C.DUCKDB_TYPE_BIGINT:
+		return reflect.TypeOf(int64(0))
+	case C.DUCKDB_TYPE_FLOAT:
+		return reflect.TypeOf(float32(0))
+	case C.DUCKDB_TYPE_DOUBLE:
+		return reflect.TypeOf(float64(0))
+	case C.DUCKDB_TYPE_DATE, C.DUCKDB_TYPE_TIMESTAMP:
+		return reflect.TypeOf(time.Time{})
+	case C.DUCKDB_TYPE_VARCHAR:
+		return reflect.TypeOf("")
+	}
+	return nil
+}
+
+// implements driver.RowsColumnTypeScanType
+func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
+	col := r.columns()[index]
+	switch col._type{
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return "BOOLEAN"
+	case C.DUCKDB_TYPE_TINYINT:
+		return "TINYINT"
+	case C.DUCKDB_TYPE_SMALLINT:
+		return "SMALLINT"
+	case C.DUCKDB_TYPE_INTEGER:
+		return "INT"
+	case C.DUCKDB_TYPE_BIGINT:
+		return "BIGINT"
+	case C.DUCKDB_TYPE_FLOAT:
+		return "FLOAT"
+	case C.DUCKDB_TYPE_DOUBLE:
+		return "DOUBLE"
+	case C.DUCKDB_TYPE_DATE:
+		return "DATE"
+	case C.DUCKDB_TYPE_VARCHAR:
+		return "VARCHAR"
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		return "TIMESTAMP"
+	}
+	return ""
 }
 
 func (r *rows) Close() error {
