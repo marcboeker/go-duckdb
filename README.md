@@ -20,10 +20,12 @@ make
 
 Please locate the following files in your DuckDB directory, as we need them to use the `go-duckdb` driver:
 
-- `build/release/src/libduckdb{_static}.a` (for Linux)
+- `build/release/src/libduckdb{_static}.a` or `build/release/src/libduckdb.so` (for Linux)
 - `build/release/src/libduckdb.dylib` (for macOS)
 - `build/release/src/libduckdb.dll` (for Windows)
 - `src/include/duckdb.h`
+
+If you don't want to compile DuckDB yourself, you could also use the pre-compiled libraries from their [releases page](https://github.com/cwida/duckdb/releases).
 
 To run the example or execute the tests please specify the following `CGO_LDFLAGS`, `CGO_CFLAGS` and the `DYLD_LIBRARY_PATH` (if you are on macOS) env variables.
 
