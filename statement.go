@@ -37,7 +37,7 @@ func (s *stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	var pc C.ulonglong
+	var pc C.idx_t
 	C.duckdb_nparams(*s.stmt, &pc)
 	return int(pc)
 }
@@ -50,32 +50,32 @@ func (s *stmt) start(args []driver.Value) error {
 	for i, v := range args {
 		switch v := v.(type) {
 		case int8:
-			if rv := C.duckdb_bind_int8(*s.stmt, C.ulonglong(i+1), C.schar(v)); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_int8(*s.stmt, C.idx_t(i+1), C.int8_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 			continue
 		case int16:
-			if rv := C.duckdb_bind_int16(*s.stmt, C.ulonglong(i+1), C.short(v)); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_int16(*s.stmt, C.idx_t(i+1), C.int16_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 			continue
 		case int32:
-			if rv := C.duckdb_bind_int32(*s.stmt, C.ulonglong(i+1), C.int(v)); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_int32(*s.stmt, C.idx_t(i+1), C.int32_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 			continue
 		case int64:
-			if rv := C.duckdb_bind_int64(*s.stmt, C.ulonglong(i+1), C.longlong(v)); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_int64(*s.stmt, C.idx_t(i+1), C.int64_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 			continue
 		case float64:
-			if rv := C.duckdb_bind_double(*s.stmt, C.ulonglong(i+1), C.double(v)); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_double(*s.stmt, C.idx_t(i+1), C.double(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 			continue
 		case bool:
-			if rv := C.duckdb_bind_boolean(*s.stmt, C.ulonglong(i+1), true); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), true); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 			continue
@@ -83,7 +83,7 @@ func (s *stmt) start(args []driver.Value) error {
 			// TODO
 		case string:
 			str := C.CString(v)
-			if rv := C.duckdb_bind_varchar(*s.stmt, C.ulonglong(i+1), str); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_varchar(*s.stmt, C.idx_t(i+1), str); rv == C.DuckDBError {
 				C.free(unsafe.Pointer(str))
 				return errCouldNotBind
 			}
