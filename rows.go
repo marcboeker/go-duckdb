@@ -65,7 +65,7 @@ func (r *rows) Next(dst []driver.Value) error {
 		case C.DUCKDB_TYPE_DOUBLE:
 			dst[i] = (*[1 << 31]float64)(unsafe.Pointer(col.data))[r.cursor]
 		case C.DUCKDB_TYPE_DATE:
-			val := (*[1 << 31]C.duckdb_date)(unsafe.Pointer(col.data))[r.cursor]
+			val := (*[1 << 31]C.duckdb_date_struct)(unsafe.Pointer(col.data))[r.cursor]
 			dst[i] = time.Date(
 				int(val.year),
 				time.Month(val.month),
