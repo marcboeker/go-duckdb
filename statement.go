@@ -37,9 +37,8 @@ func (s *stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	var pc C.idx_t
-	C.duckdb_nparams(*s.stmt, &pc)
-	return int(pc)
+	paramCount := C.duckdb_nparams(*s.stmt)
+	return int(paramCount)
 }
 
 func (s *stmt) start(args []driver.Value) error {
@@ -112,7 +111,8 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 
 	var res C.duckdb_result
 	if err := C.duckdb_execute_prepared(*s.stmt, &res); err == C.DuckDBError {
-		return nil, errors.New(C.GoString(res.error_message))
+		dbErr := C.duckdb_result_error(&res)
+		return nil, errors.New(C.GoString(dbErr))
 	}
 	if err != nil {
 		return nil, err
@@ -141,10 +141,11 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	var res C.duckdb_result
 
 	if err := C.duckdb_execute_prepared(*s.stmt, &res); err == C.DuckDBError {
-		return nil, errors.New(C.GoString(res.error_message))
+		dbErr := C.duckdb_result_error(&res)
+		return nil, errors.New(C.GoString(dbErr))
 	}
 
-	return &rows{r: &res, s: s}, nil
+	return &rows{res: &res, s: s}, nil
 }
 
 var (

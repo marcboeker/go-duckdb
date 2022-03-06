@@ -92,7 +92,7 @@ func (c *conn) query(query string, args []driver.Value) (driver.Rows, error) {
 		return nil, err
 	}
 
-	return &rows{r: res}, nil
+	return &rows{res: res}, nil
 }
 
 func (c *conn) exec(cmd string) (*C.duckdb_result, error) {
@@ -102,7 +102,8 @@ func (c *conn) exec(cmd string) (*C.duckdb_result, error) {
 	var res C.duckdb_result
 
 	if err := C.duckdb_query(*c.con, cmdstr, &res); err == C.DuckDBError {
-		return nil, errors.New(C.GoString(res.error_message))
+		dbErr := C.duckdb_result_error(&res)
+		return nil, errors.New(C.GoString(dbErr))
 	}
 
 	return &res, nil

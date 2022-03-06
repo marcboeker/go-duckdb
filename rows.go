@@ -15,57 +15,59 @@ import (
 )
 
 type rows struct {
-	r      *C.duckdb_result
+	res    *C.duckdb_result
 	s      *stmt
 	cursor int64
 }
 
 func (r *rows) Columns() []string {
-	if r.r == nil {
+	if r.res == nil {
 		panic("database/sql/driver: misuse of duckdb driver: Columns of closed rows")
 	}
 
-	cols := make([]string, int64(r.r.column_count))
-	for i, c := range r.columns() {
-		cols[i] = C.GoString(c.name)
+	colCount := C.duckdb_column_count(r.res)
+	cols := make([]string, int64(colCount))
+	for i := C.ulonglong(0); i < colCount; i++ {
+		name := C.duckdb_column_name(r.res, i)
+		cols[i] = C.GoString(name)
 	}
 
 	return cols
 }
 
 func (r *rows) Next(dst []driver.Value) error {
-	if r.r == nil {
+	if r.res == nil {
 		panic("database/sql/driver: misuse of duckdb driver: Next of closed rows")
 	}
 
-	if r.cursor >= int64(r.r.row_count) {
+	rowCount := C.duckdb_row_count(r.res)
+	if r.cursor >= int64(rowCount) {
 		return io.EOF
 	}
 
-	cols := r.columns()
-
-	for i := 0; i < int(r.r.column_count); i++ {
-		col := cols[i]
-
-		switch col._type {
+	colCount := C.duckdb_column_count(r.res)
+	for i := 0; i < int(colCount); i++ {
+		colType := C.duckdb_column_type(r.res, C.ulonglong(i))
+		colData := C.duckdb_column_data(r.res, C.ulonglong(i))
+		switch colType {
 		case C.DUCKDB_TYPE_INVALID:
 			return errInvalidType
 		case C.DUCKDB_TYPE_BOOLEAN:
-			dst[i] = (*[1 << 31]bool)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = (*[1 << 31]bool)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_TINYINT:
-			dst[i] = (*[1 << 31]int8)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = (*[1 << 31]int8)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_SMALLINT:
-			dst[i] = (*[1 << 31]int16)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = (*[1 << 31]int16)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_INTEGER:
-			dst[i] = (*[1 << 31]int32)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = (*[1 << 31]int32)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_BIGINT:
-			dst[i] = (*[1 << 31]int64)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = (*[1 << 31]int64)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_FLOAT:
-			dst[i] = (*[1 << 31]float32)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = (*[1 << 31]float32)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_DOUBLE:
-			dst[i] = (*[1 << 31]float64)(unsafe.Pointer(col.data))[r.cursor]
+			dst[i] = (*[1 << 31]float64)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_DATE:
-			val := (*[1 << 31]C.duckdb_date_struct)(unsafe.Pointer(col.data))[r.cursor]
+			val := (*[1 << 31]C.duckdb_date_struct)(unsafe.Pointer(colData))[r.cursor]
 			dst[i] = time.Date(
 				int(val.year),
 				time.Month(val.month),
@@ -74,7 +76,7 @@ func (r *rows) Next(dst []driver.Value) error {
 				time.UTC,
 			)
 		case C.DUCKDB_TYPE_VARCHAR:
-			dst[i] = C.GoString((*[1 << 31]*C.char)(unsafe.Pointer(col.data))[r.cursor])
+			dst[i] = C.GoString((*[1 << 31]*C.char)(unsafe.Pointer(colData))[r.cursor])
 		case C.DUCKDB_TYPE_TIMESTAMP:
 			// TODO: Implement when availabe in DuckDB
 		}
@@ -87,8 +89,8 @@ func (r *rows) Next(dst []driver.Value) error {
 
 // implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	col := r.columns()[index]
-	switch col._type{
+	colType := C.duckdb_column_type(r.res, C.ulonglong(index))
+	switch colType {
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return reflect.TypeOf(true)
 	case C.DUCKDB_TYPE_TINYINT:
@@ -113,8 +115,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	col := r.columns()[index]
-	switch col._type{
+	colType := C.duckdb_column_type(r.res, C.ulonglong(index))
+	switch colType {
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return "BOOLEAN"
 	case C.DUCKDB_TYPE_TINYINT:
@@ -140,29 +142,19 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 }
 
 func (r *rows) Close() error {
-	if r.r == nil {
+	if r.res == nil {
 		panic("database/sql/driver: misuse of duckdb driver: Close of already closed rows")
 	}
 
-	C.duckdb_destroy_result(r.r)
+	C.duckdb_destroy_result(r.res)
 
-	r.r = nil
+	r.res = nil
 	if r.s != nil {
 		r.s.rows = false
 		r.s = nil
 	}
 
 	return nil
-}
-
-func (r rows) columns() []C.duckdb_column {
-	cols := make([]C.duckdb_column, int(r.r.column_count))
-
-	for i := 0; i < int(r.r.column_count); i++ {
-		cols[i] = (*[1 << 30]C.duckdb_column)(unsafe.Pointer(r.r.columns))[i]
-	}
-
-	return cols
 }
 
 var (
