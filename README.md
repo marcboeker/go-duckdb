@@ -1,4 +1,4 @@
-# Go SQL driver for [DuckDB](https://github.com/cwida/duckdb)
+# Go SQL driver for [DuckDB](https://github.com/duckdb/duckdb)
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
