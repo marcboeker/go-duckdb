@@ -27,7 +27,7 @@ func (r *rows) Columns() []string {
 
 	colCount := C.duckdb_column_count(r.res)
 	cols := make([]string, int64(colCount))
-	for i := C.ulonglong(0); i < colCount; i++ {
+	for i := C.idx_t(0); i < colCount; i++ {
 		name := C.duckdb_column_name(r.res, i)
 		cols[i] = C.GoString(name)
 	}
@@ -47,8 +47,8 @@ func (r *rows) Next(dst []driver.Value) error {
 
 	colCount := C.duckdb_column_count(r.res)
 	for i := 0; i < int(colCount); i++ {
-		colType := C.duckdb_column_type(r.res, C.ulonglong(i))
-		colData := C.duckdb_column_data(r.res, C.ulonglong(i))
+		colType := C.duckdb_column_type(r.res, C.idx_t(i))
+		colData := C.duckdb_column_data(r.res, C.idx_t(i))
 		switch colType {
 		case C.DUCKDB_TYPE_INVALID:
 			return errInvalidType
@@ -89,7 +89,7 @@ func (r *rows) Next(dst []driver.Value) error {
 
 // implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	colType := C.duckdb_column_type(r.res, C.ulonglong(index))
+	colType := C.duckdb_column_type(r.res, C.idx_t(index))
 	switch colType {
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return reflect.TypeOf(true)
@@ -115,7 +115,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	colType := C.duckdb_column_type(r.res, C.ulonglong(index))
+	colType := C.duckdb_column_type(r.res, C.idx_t(index))
 	switch colType {
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return "BOOLEAN"
