@@ -2,6 +2,8 @@ package duckdb
 
 import (
 	"database/sql"
+	"fmt"
+	"math"
 	"testing"
 )
 
@@ -55,6 +57,21 @@ func TestQuery(t *testing.T) {
 
 	if !found {
 		t.Error("could not find row")
+	}
+}
+
+// Sum(int) generate result of type HugeInt (int128)
+func TestSumOfInt(t *testing.T) {
+	db := openDB(t)
+	for _, expected := range []int64{0, 1, -1, math.MaxInt64, math.MinInt64} {
+		t.Run(fmt.Sprintf("sum(%d)", expected), func(t *testing.T) {
+			var res int64
+			if err := db.QueryRow("SELECT SUM(?)", expected).Scan(&res); err != nil {
+				t.Errorf("can not scan value %v", err)
+			} else if res != expected {
+				t.Errorf("unexpected value %d != resulting value %d", expected, res)
+			}
+		})
 	}
 }
 
