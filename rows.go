@@ -8,7 +8,9 @@ import "C"
 import (
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"reflect"
 	"time"
 	"unsafe"
@@ -62,6 +64,13 @@ func (r *rows) Next(dst []driver.Value) error {
 			dst[i] = (*[1 << 31]int32)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_BIGINT:
 			dst[i] = (*[1 << 31]int64)(unsafe.Pointer(colData))[r.cursor]
+		case C.DUCKDB_TYPE_HUGEINT: //int128...
+			var v = (*[1 << 31]HugeInt)(unsafe.Pointer(colData))[r.cursor]
+			if v, err := v.Int64(); err != nil {
+				return err
+			} else {
+				dst[i] = v
+			}
 		case C.DUCKDB_TYPE_FLOAT:
 			dst[i] = (*[1 << 31]float32)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_DOUBLE:
@@ -160,3 +169,20 @@ func (r *rows) Close() error {
 var (
 	errInvalidType = errors.New("invalid data type")
 )
+
+// HugeInt are composed in a (lower, upper) component
+// The value of the HugeInt is upper * 2^64 + lower
+type HugeInt struct {
+	lower uint64
+	upper int64
+}
+
+func (v HugeInt) Int64() (int64, error) {
+	if v.upper == 0 && v.lower <= math.MaxInt64 {
+		return int64(v.lower), nil
+	} else if v.upper == -1 && v.lower <= math.MaxUint64 {
+		return -int64(math.MaxUint64 - v.lower + 1), nil
+	} else {
+		return 0, fmt.Errorf("can not convert duckdb:hugeint to go:int64 (upper:%d,lower:%d)", v.upper, v.lower)
+	}
+}
