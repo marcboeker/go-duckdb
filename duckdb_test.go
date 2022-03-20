@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 )
 
 func TestOpen(t *testing.T) {
@@ -70,6 +71,29 @@ func TestSumOfInt(t *testing.T) {
 				t.Errorf("can not scan value %v", err)
 			} else if res != expected {
 				t.Errorf("unexpected value %d != resulting value %d", expected, res)
+			}
+		})
+	}
+}
+
+// CAST(? as DATE) generate result of type Date (time.Time)
+func TestDate(t *testing.T) {
+	db := openDB(t)
+	tests := map[string]struct {
+		input string
+		want  time.Time
+	}{
+		"epoch":       {input: "1970-01-01", want: time.UnixMilli(0)},
+		"before 1970": {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC).Local()},
+		"after 1970":  {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC).Local()},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var res time.Time
+			if err := db.QueryRow("SELECT CAST(? as DATE)", tc.input).Scan(&res); err != nil {
+				t.Errorf("can not scan value %v", err)
+			} else if res != tc.want {
+				t.Errorf("expected value %v != resulting value %v", tc.want, res)
 			}
 		})
 	}
