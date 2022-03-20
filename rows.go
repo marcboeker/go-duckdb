@@ -76,14 +76,8 @@ func (r *rows) Next(dst []driver.Value) error {
 		case C.DUCKDB_TYPE_DOUBLE:
 			dst[i] = (*[1 << 31]float64)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_DATE:
-			val := (*[1 << 31]C.duckdb_date_struct)(unsafe.Pointer(colData))[r.cursor]
-			dst[i] = time.Date(
-				int(val.year),
-				time.Month(val.month),
-				int(val.day),
-				0, 0, 0, 0,
-				time.UTC,
-			)
+			val := (*[1 << 31]C.duckdb_date)(unsafe.Pointer(colData))[r.cursor]
+			dst[i] = time.UnixMilli(0).Add(time.Duration(int64(val.days)) * 24 * time.Hour)
 		case C.DUCKDB_TYPE_VARCHAR:
 			dst[i] = C.GoString((*[1 << 31]*C.char)(unsafe.Pointer(colData))[r.cursor])
 		case C.DUCKDB_TYPE_TIMESTAMP:
