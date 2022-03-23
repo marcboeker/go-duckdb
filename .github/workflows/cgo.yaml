@@ -1,0 +1,27 @@
+name: Go
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        go: ["1.17"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+
+      - uses: actions/checkout@v2
+
+      - name: "Run Tests"
+        run: make test
