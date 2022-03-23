@@ -15,10 +15,14 @@ LDFLAGS := LIB=libduckdb.$(LIB_EXT) CGO_LDFLAGS="-L$(LIB_PATH)" $(LIBRARY_PATH) 
 $(LIBS):
 	mkdir -p lib
 	curl -Lo lib/libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v0.3.2/libduckdb-$(ARCH_OS).zip
-	cd lib; unzip libduckdb.zip
+	cd lib; unzip -u libduckdb.zip
 
-.PHONY: build
-build: $(LIBS)
+.PHONY: install
+install: $(LIBS)
+	$(LDFLAGS) go install -ldflags="-r $(LIB_PATH)" ./...
+
+.PHONY: examples
+examples: $(LIBS)
 	$(LDFLAGS) go run -ldflags="-r $(LIB_PATH)" examples/simple.go
 
 .PHONY: test

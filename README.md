@@ -8,16 +8,18 @@ The DuckDB driver conforms to the built-in `database/sql` interface.
 go get github.com/marcboeker/go-duckdb
 ```
 
-`go-duckdb` uses `CGO` to make calls to the linked DuckDB database. Therefor you need to have a compiled version of DuckDB availabe.
+`go-duckdb` uses `CGO` to make calls to the linked DuckDB database. Therefore you need to have a [compiled version of DuckDB](https://github.com/duckdb/duckdb/releases) availabe or compile your own.
 
 
-**Please use the latest DuckDB version from master.**
+*Please use the latest DuckDB version from master.*
 
 ```
 git clone https://github.com/duckdb/duckdb.git
 cd duckdb
 make
 ```
+
+If you don't want to compile DuckDB yourself, you could also use the pre-compiled libraries from their [releases page](https://github.com/duckdb/duckdb/releases).
 
 Please locate the following files in your DuckDB directory, as we need them to build the `go-duckdb` driver:
 
@@ -26,20 +28,25 @@ Please locate the following files in your DuckDB directory, as we need them to b
 - `build/release/src/libduckdb.dll` (for Windows)
 - `src/include/duckdb.h`
 
-If you don't want to compile DuckDB yourself, you could also use the pre-compiled libraries from their [releases page](https://github.com/duckdb/duckdb/releases).
-
 To run the example or execute the tests please specify the following `CGO_LDFLAGS`, `CGO_CFLAGS` and the `DYLD_LIBRARY_PATH` (if you are on macOS) env variables.
 
+On Linux:
+
 ```
-CGO_LDFLAGS="-L/path/to/libduckdb_static.a" CGO_CFLAGS="-I/path/to/duckdb.h" DYLD_LIBRARY_PATH="/path/to/libduckdb.dylib" go run examples/simple.go
+CGO_LDFLAGS="-L/path/to/libduckdb_static.a" CGO_CFLAGS="-I/path/to/duckdb.h" go run examples/simple.go
 ```
 
-For example on macOS:
+On macOS:
 
 ```
 CGO_LDFLAGS="-L/path/to/duckdb/build/release/src" CGO_CFLAGS="-I/path/to/duckdb/src/include" DYLD_LIBRARY_PATH="/path/to/duckdb/build/release/src" go run examples/simple.go
 ```
 
+You could also use `make` to install go-duckdb or run the examples/tests.
+
+- `make test` runs the test cases.
+- `make examples` executes the `examples/simple.go` file.
+- `make install` installs the current version.
 ## Usage
 
 `go-duckdb` hooks into the `database/sql` interface provided by the Go stdlib. To open a connection, simply specify the driver type as `duckdb`:
