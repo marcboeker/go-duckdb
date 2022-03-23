@@ -19,11 +19,11 @@ $(LIBS):
 
 .PHONY: build
 build: $(LIBS)
-	$(LDFLAGS) go run examples/simple.go
+	$(LDFLAGS) go run -ldflags="-r $(LIB_PATH)" examples/simple.go
 
 .PHONY: test
 test: $(LIBS)
-	$(LDFLAGS) go test -v ./...
+	$(LDFLAGS) go test -ldflags="-r $(LIB_PATH)" -v ./...
 
 .PHONY: clean
 clean:
