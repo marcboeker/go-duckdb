@@ -81,7 +81,8 @@ func (r *rows) Next(dst []driver.Value) error {
 		case C.DUCKDB_TYPE_VARCHAR:
 			dst[i] = C.GoString((*[1 << 31]*C.char)(unsafe.Pointer(colData))[r.cursor])
 		case C.DUCKDB_TYPE_TIMESTAMP:
-			// TODO: Implement when availabe in DuckDB
+			val := (*[1 << 31]C.duckdb_timestamp)(unsafe.Pointer(colData))[r.cursor]
+			dst[i] = time.UnixMicro(int64(val.micros))
 		}
 	}
 
