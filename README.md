@@ -61,4 +61,10 @@ This creates an in-memory instance of DuckDB. If you would like to store the dat
 db, err := sql.Open("duckdb", "/path/to/foo.db")
 ```
 
+If you want to set specific [config options for DuckDB](https://duckdb.org/docs/sql/configuration), you can add them as query style parameters in the form of `name=value` to the DSN, like:
+
+```
+db, err := sql.Open("duckdb", "/path/to/foo.db?access_mode=read_only&threads=4")
+```
+
 Please refer to the [database/sql](https://godoc.org/database/sql) GoDoc for further usage instructions.

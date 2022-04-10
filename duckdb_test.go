@@ -2,6 +2,7 @@ package duckdb
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -10,14 +11,46 @@ import (
 
 func TestOpen(t *testing.T) {
 	db := openDB(t)
+	defer db.Close()
 
 	if db == nil {
 		t.Error("database cannot be nil")
 	}
 }
 
+func TestOpenWithConfig(t *testing.T) {
+	db, err := sql.Open("duckdb", "?access_mode=read_write&threads=4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Check if config options have been set.
+	res := db.QueryRow("SELECT current_setting('access_mode'), current_setting('threads')")
+	var (
+		accessMode string
+		threads    string
+	)
+	if err := res.Scan(&accessMode, &threads); err != nil {
+		t.Fatal(err)
+	}
+	if accessMode != "read_write" || threads != "4" {
+		t.Fatal("config option not set")
+	}
+}
+
+func TestOpenWithInvalidConfig(t *testing.T) {
+	db, _ := sql.Open("duckdb", "?threads=NaN")
+	err := db.Ping()
+
+	if !errors.Is(err, prepareConfigError) {
+		t.Fatal("invalid config should not be accepted")
+	}
+}
+
 func TestExec(t *testing.T) {
 	db := openDB(t)
+	defer db.Close()
 
 	res := createTable(db, t)
 	if res == nil {
@@ -27,6 +60,7 @@ func TestExec(t *testing.T) {
 
 func TestQuery(t *testing.T) {
 	db := openDB(t)
+	defer db.Close()
 	createTable(db, t)
 
 	_, err := db.Exec("INSERT INTO foo VALUES('lala', 12345)")
@@ -64,6 +98,7 @@ func TestQuery(t *testing.T) {
 // Sum(int) generate result of type HugeInt (int128)
 func TestSumOfInt(t *testing.T) {
 	db := openDB(t)
+	defer db.Close()
 	for _, expected := range []int64{0, 1, -1, math.MaxInt64, math.MinInt64} {
 		t.Run(fmt.Sprintf("sum(%d)", expected), func(t *testing.T) {
 			var res int64
@@ -79,6 +114,7 @@ func TestSumOfInt(t *testing.T) {
 // CAST(? as DATE) generate result of type Date (time.Time)
 func TestDate(t *testing.T) {
 	db := openDB(t)
+	defer db.Close()
 	tests := map[string]struct {
 		input string
 		want  time.Time
@@ -101,6 +137,7 @@ func TestDate(t *testing.T) {
 
 func TestTimestamp(t *testing.T) {
 	db := openDB(t)
+	defer db.Close()
 	tests := map[string]struct {
 		input string
 		want  time.Time
@@ -124,6 +161,10 @@ func TestTimestamp(t *testing.T) {
 func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Ping(); err != nil {
 		t.Fatal(err)
 	}
 
