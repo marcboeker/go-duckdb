@@ -28,7 +28,7 @@ func main() {
 	// db, err := sql.Open("duckdb", "foobar.db")
 
 	var err error
-	db, err = sql.Open("duckdb", "")
+	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,13 +36,18 @@ func main() {
 
 	check(db.Ping())
 
+	setting := db.QueryRow("SELECT current_setting('access_mode')")
+	var am string
+	check(setting.Scan(&am))
+	log.Printf("DB opened with access mode %s", am)
+
 	check(db.Exec("CREATE TABLE users(name VARCHAR, age INTEGER, height FLOAT, awesome BOOLEAN, bday DATE)"))
 	check(db.Exec("INSERT INTO users VALUES('marc', 99, 1.91, true, '1970-01-01')"))
 	check(db.Exec("INSERT INTO users VALUES('macgyver', 70, 1.85, true, '1951-01-23')"))
 
 	rows, err := db.Query(`
 		SELECT name, age, height, awesome, bday
-		FROM users 
+		FROM users
 		WHERE (name = ? OR name = ?) AND age > ? AND awesome = ?`,
 		"macgyver", "marc", 30, true,
 	)
@@ -100,7 +105,7 @@ func runTransaction() {
 	if count > 0 {
 		log.Println("Found user Gru")
 	} else {
-		log.Println("Didn't find user Gru")
+		log.Println("Couldn't find user Gru")
 	}
 }
 
