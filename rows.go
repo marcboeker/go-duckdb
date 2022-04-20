@@ -91,7 +91,7 @@ func (r *rows) Next(dst []driver.Value) error {
 	return nil
 }
 
-// implements driver.RowsColumnTypeScanType
+// Implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	colType := C.duckdb_column_type(r.res, C.idx_t(index))
 	switch colType {
@@ -117,7 +117,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	return nil
 }
 
-// implements driver.RowsColumnTypeScanType
+// Implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	colType := C.duckdb_column_type(r.res, C.idx_t(index))
 	switch colType {
