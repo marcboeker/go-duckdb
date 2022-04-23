@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -112,8 +113,9 @@ func (c *conn) exec(cmd string) (*C.duckdb_result, error) {
 // interpolateParams is taken from
 // https://github.com/go-sql-driver/mysql
 func (c *conn) interpolateParams(query string, args []driver.Value) (string, error) {
-	if strings.Count(query, "?") != len(args) {
-		return "", driver.ErrSkip
+	paramCount := strings.Count(query, "?")
+	if paramCount != len(args) {
+		return "", fmt.Errorf("invalid number of parameters. expected %d, got %d", paramCount, len(args))
 	}
 
 	buf := []byte{}
@@ -160,7 +162,7 @@ func (c *conn) interpolateParams(query string, args []driver.Value) (string, err
 			buf = append(buf, escapeValue(v)...)
 			buf = append(buf, '\'')
 		default:
-			return "", driver.ErrSkip
+			return "", fmt.Errorf("unknown parameter type %s", v)
 		}
 	}
 

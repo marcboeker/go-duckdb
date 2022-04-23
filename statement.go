@@ -137,13 +137,13 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		return nil, err
 	}
 
-	s.rows = true
 	var res C.duckdb_result
-
-	if err := C.duckdb_execute_prepared(*s.stmt, &res); err == C.DuckDBError {
+	if state := C.duckdb_execute_prepared(*s.stmt, &res); state == C.DuckDBError {
+		defer C.duckdb_destroy_result(&res)
 		dbErr := C.duckdb_result_error(&res)
 		return nil, errors.New(C.GoString(dbErr))
 	}
+	s.rows = true
 
 	return &rows{res: &res, s: s}, nil
 }
