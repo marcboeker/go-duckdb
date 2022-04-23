@@ -95,6 +95,26 @@ func TestQuery(t *testing.T) {
 	}
 }
 
+func TestQueryWithWrongSyntax(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Query("select * from tbl col=?", 1)
+	if err == nil {
+		t.Error("should return error with invalid syntax")
+	}
+}
+
+func TestQueryWithMissingParams(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Query("select * from tbl col=?")
+	if err == nil {
+		t.Error("should return error about missing parameters")
+	}
+}
+
 // Sum(int) generate result of type HugeInt (int128)
 func TestSumOfInt(t *testing.T) {
 	db := openDB(t)
