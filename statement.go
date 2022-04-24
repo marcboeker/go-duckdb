@@ -9,7 +9,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"time"
 	"unsafe"
 )
 
@@ -52,34 +51,26 @@ func (s *stmt) start(args []driver.Value) error {
 			if rv := C.duckdb_bind_int8(*s.stmt, C.idx_t(i+1), C.int8_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-			continue
 		case int16:
 			if rv := C.duckdb_bind_int16(*s.stmt, C.idx_t(i+1), C.int16_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-			continue
 		case int32:
 			if rv := C.duckdb_bind_int32(*s.stmt, C.idx_t(i+1), C.int32_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-			continue
 		case int64:
 			if rv := C.duckdb_bind_int64(*s.stmt, C.idx_t(i+1), C.int64_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-			continue
 		case float64:
 			if rv := C.duckdb_bind_double(*s.stmt, C.idx_t(i+1), C.double(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-			continue
 		case bool:
 			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), true); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-			continue
-		case time.Time:
-			// TODO
 		case string:
 			str := C.CString(v)
 			if rv := C.duckdb_bind_varchar(*s.stmt, C.idx_t(i+1), str); rv == C.DuckDBError {
@@ -87,7 +78,9 @@ func (s *stmt) start(args []driver.Value) error {
 				return errCouldNotBind
 			}
 			C.free(unsafe.Pointer(str))
-			continue
+		// case time.Time:
+		// TODO:
+
 		default:
 			return driver.ErrSkip
 		}
@@ -139,9 +132,10 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 
 	var res C.duckdb_result
 	if state := C.duckdb_execute_prepared(*s.stmt, &res); state == C.DuckDBError {
-		defer C.duckdb_destroy_result(&res)
-		dbErr := C.duckdb_result_error(&res)
-		return nil, errors.New(C.GoString(dbErr))
+		dbErr := C.GoString(C.duckdb_result_error(&res))
+		C.duckdb_destroy_result(&res)
+
+		return nil, errors.New(dbErr)
 	}
 	s.rows = true
 
