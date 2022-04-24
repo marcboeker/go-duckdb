@@ -27,8 +27,11 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
 	}
-
-	res, err := c.exec(query)
+	queryStr, err := c.interpolateParams(query, args)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.exec(queryStr)
 	if err != nil {
 		return nil, err
 	}

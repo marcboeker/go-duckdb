@@ -63,7 +63,7 @@ func TestQuery(t *testing.T) {
 	defer db.Close()
 	createTable(db, t)
 
-	_, err := db.Exec("INSERT INTO foo VALUES('lala', 12345)")
+	_, err := db.Exec("INSERT INTO foo VALUES('lala', ?)", 12345)
 	if err != nil {
 		t.Fatal(err)
 	}
