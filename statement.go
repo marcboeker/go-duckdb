@@ -103,12 +103,10 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	}
 
 	var res C.duckdb_result
-	if err := C.duckdb_execute_prepared(*s.stmt, &res); err == C.DuckDBError {
-		dbErr := C.duckdb_result_error(&res)
-		return nil, errors.New(C.GoString(dbErr))
-	}
-	if err != nil {
-		return nil, err
+	if state := C.duckdb_execute_prepared(*s.stmt, &res); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_result_error(&res))
+		C.duckdb_destroy_result(&res)
+		return nil, errors.New(dbErr)
 	}
 	defer C.duckdb_destroy_result(&res)
 
