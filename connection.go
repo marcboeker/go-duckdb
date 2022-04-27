@@ -27,8 +27,11 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
 	}
-
-	res, err := c.exec(query)
+	queryStr, err := c.interpolateParams(query, args)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.exec(queryStr)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +54,12 @@ func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	defer C.free(unsafe.Pointer(cmdstr))
 
 	var s C.duckdb_prepared_statement
-	C.duckdb_prepare(*c.con, cmdstr, &s)
+	if state := C.duckdb_prepare(*c.con, cmdstr, &s); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_prepare_error(s))
+		C.duckdb_destroy_prepare(&s)
+
+		return nil, errors.New(dbErr)
+	}
 
 	return &stmt{c: c, stmt: &s}, nil
 }
