@@ -2,6 +2,8 @@
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
+![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
+
 ## Installation
 
 ```
