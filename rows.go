@@ -115,6 +115,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(time.Time{})
 	case C.DUCKDB_TYPE_VARCHAR:
 		return reflect.TypeOf("")
+	case C.DUCKDB_TYPE_BLOB:
+		return reflect.TypeOf([]byte{})
 	}
 	return nil
 }
@@ -143,6 +145,8 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 		return "VARCHAR"
 	case C.DUCKDB_TYPE_TIMESTAMP:
 		return "TIMESTAMP"
+	case C.DUCKDB_TYPE_BLOB:
+		return "BLOB"
 	}
 	return ""
 }
