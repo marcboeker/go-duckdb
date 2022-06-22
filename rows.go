@@ -80,6 +80,8 @@ func (r *rows) Next(dst []driver.Value) error {
 			dst[i] = time.UnixMilli(0).Add(time.Duration(int64(val.days)) * 24 * time.Hour)
 		case C.DUCKDB_TYPE_VARCHAR:
 			dst[i] = C.GoString((*[1 << 31]*C.char)(unsafe.Pointer(colData))[r.cursor])
+		case C.DUCKDB_TYPE_BLOB:
+			dst[i] = (*[1 << 31][]byte)(unsafe.Pointer(colData))[r.cursor]
 		case C.DUCKDB_TYPE_TIMESTAMP:
 			val := (*[1 << 31]C.duckdb_timestamp)(unsafe.Pointer(colData))[r.cursor]
 			dst[i] = time.UnixMicro(int64(val.micros))
