@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -175,6 +176,17 @@ func TestTimestamp(t *testing.T) {
 				t.Errorf("expected value %v != resulting value %v", tc.want, res)
 			}
 		})
+	}
+}
+
+func TestBlob(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+	var res []byte
+	if err := db.QueryRow("SELECT 'AB'::BLOB").Scan(&res); err != nil {
+		t.Errorf("can not scan value %v", err)
+	} else if !bytes.Equal(res, []byte("AB")) {
+		t.Errorf("expected value 'ab' != resulting value %v", res)
 	}
 }
 
