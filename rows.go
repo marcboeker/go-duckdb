@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,87 +18,135 @@ import (
 )
 
 type rows struct {
-	res    *C.duckdb_result
-	s      *stmt
-	cursor int64
+	res        C.duckdb_result
+	stmt       *stmt
+	columns    []string
+	chunkCount C.ulong
+
+	chunk         C.duckdb_data_chunk
+	chunkRowCount C.ulong
+	chunkIdx      C.idx_t
+	chunkRowIdx   C.idx_t
+}
+
+func NewRows(res C.duckdb_result) *rows {
+	return NewRowsWithStmt(res, nil)
+}
+
+func NewRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
+	chunkc := C.duckdb_result_chunk_count(res)
+
+	n := C.duckdb_column_count(&res)
+	columns := make([]string, 0, n)
+	for i := C.ulong(0); i < n; i++ {
+		columns = append(columns, C.GoString(C.duckdb_column_name(&res, i)))
+	}
+
+	return &rows{res, stmt, columns, chunkc, nil, 0, 0, 0}
 }
 
 func (r *rows) Columns() []string {
-	if r.res == nil {
-		panic("database/sql/driver: misuse of duckdb driver: Columns of closed rows")
-	}
-
-	colCount := C.duckdb_column_count(r.res)
-	cols := make([]string, int64(colCount))
-	for i := C.idx_t(0); i < colCount; i++ {
-		name := C.duckdb_column_name(r.res, i)
-		cols[i] = C.GoString(name)
-	}
-
-	return cols
+	return r.columns
 }
 
 func (r *rows) Next(dst []driver.Value) error {
-	if r.res == nil {
-		panic("database/sql/driver: misuse of duckdb driver: Next of closed rows")
+	if r.chunkRowIdx >= r.chunkRowCount {
+		r.chunk = C.duckdb_result_get_chunk(r.res, r.chunkIdx)
+		r.chunkRowCount = C.duckdb_data_chunk_get_size(r.chunk)
+		r.chunkIdx++
+		r.chunkRowIdx = 0
 	}
 
-	rowCount := C.duckdb_row_count(r.res)
-	if r.cursor >= int64(rowCount) {
+	if r.chunkIdx > r.chunkCount {
 		return io.EOF
 	}
 
-	colCount := C.duckdb_column_count(r.res)
-	for i := 0; i < int(colCount); i++ {
-		colType := C.duckdb_column_type(r.res, C.idx_t(i))
-		colData := C.duckdb_column_data(r.res, C.idx_t(i))
-		switch colType {
-		case C.DUCKDB_TYPE_INVALID:
-			return errInvalidType
-		case C.DUCKDB_TYPE_BOOLEAN:
-			dst[i] = (*[1 << 31]bool)(unsafe.Pointer(colData))[r.cursor]
-		case C.DUCKDB_TYPE_TINYINT:
-			dst[i] = (*[1 << 31]int8)(unsafe.Pointer(colData))[r.cursor]
-		case C.DUCKDB_TYPE_SMALLINT:
-			dst[i] = (*[1 << 31]int16)(unsafe.Pointer(colData))[r.cursor]
-		case C.DUCKDB_TYPE_INTEGER:
-			dst[i] = (*[1 << 31]int32)(unsafe.Pointer(colData))[r.cursor]
-		case C.DUCKDB_TYPE_BIGINT:
-			dst[i] = (*[1 << 31]int64)(unsafe.Pointer(colData))[r.cursor]
-		case C.DUCKDB_TYPE_HUGEINT: //int128...
-			var v = (*[1 << 31]HugeInt)(unsafe.Pointer(colData))[r.cursor]
-			if v, err := v.Int64(); err != nil {
-				return err
-			} else {
-				dst[i] = v
-			}
-		case C.DUCKDB_TYPE_FLOAT:
-			dst[i] = (*[1 << 31]float32)(unsafe.Pointer(colData))[r.cursor]
-		case C.DUCKDB_TYPE_DOUBLE:
-			dst[i] = (*[1 << 31]float64)(unsafe.Pointer(colData))[r.cursor]
-		case C.DUCKDB_TYPE_DATE:
-			val := (*[1 << 31]C.duckdb_date)(unsafe.Pointer(colData))[r.cursor]
-			dst[i] = time.UnixMilli(0).Add(time.Duration(int64(val.days)) * 24 * time.Hour)
-		case C.DUCKDB_TYPE_VARCHAR:
-			dst[i] = C.GoString((*[1 << 31]*C.char)(unsafe.Pointer(colData))[r.cursor])
-		case C.DUCKDB_TYPE_BLOB:
-			blob := C.duckdb_value_blob(r.res, C.idx_t(i), C.idx_t(r.cursor))
-			dst[i] = C.GoBytes(blob.data, C.int(blob.size))
-			C.duckdb_free(blob.data)
-		case C.DUCKDB_TYPE_TIMESTAMP:
-			val := (*[1 << 31]C.duckdb_timestamp)(unsafe.Pointer(colData))[r.cursor]
-			dst[i] = time.UnixMicro(int64(val.micros))
-		}
+	colCount := len(r.columns)
+	if len(dst) != colCount {
+		panic("BUG: dst size mismatch")
 	}
 
-	r.cursor++
+	for colIdx := C.idx_t(0); colIdx < C.idx_t(colCount); colIdx++ {
+		vector := C.duckdb_data_chunk_get_vector(r.chunk, colIdx)
+		value, err := scanValue(vector, r.chunkRowIdx)
+		if err != nil {
+			return err
+		}
+		dst[colIdx] = value
+	}
+
+	r.chunkRowIdx++
 
 	return nil
 }
 
+func get[T driver.Value](vector C.duckdb_vector, rowIdx C.idx_t) T {
+	ptr := C.duckdb_vector_get_data(vector)
+	xs := (*[1 << 31]T)(ptr)
+	return xs[rowIdx]
+}
+
+func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (driver.Value, error) {
+	v, err := scan(vector, rowIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	switch value := v.(type) {
+	case map[string]any, []any:
+		return json.Marshal(value)
+	case driver.Value:
+		return value, nil
+	default:
+		panic(fmt.Sprintf("BUG: found unexpected type when scanning: %T", value))
+	}
+}
+
+func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
+	ty := C.duckdb_vector_get_column_type(vector)
+	typeId := C.duckdb_get_type_id(ty)
+	switch typeId {
+	case C.DUCKDB_TYPE_INVALID:
+		return nil, errInvalidType
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return get[bool](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_TINYINT:
+		return get[int8](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_SMALLINT:
+		return get[int16](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_INTEGER:
+		return int64(get[int32](vector, rowIdx)), nil
+	case C.DUCKDB_TYPE_BIGINT:
+		return get[int64](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_HUGEINT:
+		return get[HugeInt](vector, rowIdx).Int64()
+	case C.DUCKDB_TYPE_FLOAT:
+		return get[float32](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_DOUBLE:
+		return get[float64](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_DATE:
+		date := C.duckdb_from_date(get[C.duckdb_date](vector, rowIdx))
+		return time.Date(int(date.year), time.Month(date.month), int(date.day), 0, 0, 0, 0, time.UTC), nil
+	case C.DUCKDB_TYPE_BLOB:
+		return convertBlob(vector, rowIdx), nil
+	case C.DUCKDB_TYPE_VARCHAR:
+		return convertString(vector, rowIdx), nil
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
+	case C.DUCKDB_TYPE_LIST:
+		return scanList(vector, rowIdx)
+	case C.DUCKDB_TYPE_STRUCT:
+		return scanStruct(ty, vector, rowIdx)
+	case C.DUCKDB_TYPE_JSON:
+		return convertString(vector, rowIdx), nil
+	default:
+		return nil, fmt.Errorf("not supported type %d", typeId)
+	}
+}
+
 // Implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	colType := C.duckdb_column_type(r.res, C.idx_t(index))
+	colType := C.duckdb_column_type(&r.res, C.idx_t(index))
 	switch colType {
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return reflect.TypeOf(true)
@@ -125,7 +174,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // Implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	colType := C.duckdb_column_type(r.res, C.idx_t(index))
+	colType := C.duckdb_column_type(&r.res, C.idx_t(index))
 	switch colType {
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return "BOOLEAN"
@@ -154,16 +203,11 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 }
 
 func (r *rows) Close() error {
-	if r.res == nil {
-		panic("database/sql/driver: misuse of duckdb driver: Close of already closed rows")
-	}
+	C.duckdb_destroy_result(&r.res)
 
-	C.duckdb_destroy_result(r.res)
-
-	r.res = nil
-	if r.s != nil {
-		r.s.rows = false
-		r.s = nil
+	if r.stmt != nil {
+		r.stmt.rows = false
+		r.stmt = nil
 	}
 
 	return nil
@@ -183,9 +227,99 @@ type HugeInt struct {
 func (v HugeInt) Int64() (int64, error) {
 	if v.upper == 0 && v.lower <= math.MaxInt64 {
 		return int64(v.lower), nil
-	} else if v.upper == -1 && v.lower <= math.MaxUint64 {
+	} else if v.upper == -1 {
 		return -int64(math.MaxUint64 - v.lower + 1), nil
 	} else {
 		return 0, fmt.Errorf("can not convert duckdb:hugeint to go:int64 (upper:%d,lower:%d)", v.upper, v.lower)
 	}
+}
+
+func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
+	data := C.duckdb_list_vector_get_child(vector)
+	entry := get[duckdb_list_entry_t](vector, rowIdx)
+	converted := make([]any, 0, entry.length)
+
+	for i := entry.offset; i < entry.offset+entry.length; i++ {
+		value, err := scan(data, i)
+		if err != nil {
+			return nil, err
+		}
+		converted = append(converted, value)
+	}
+
+	return converted, nil
+}
+
+// just json encoding structs as I'm not sure how better to do it within the database/sql framework
+func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (map[string]any, error) {
+	data := map[string]any{}
+	for j := C.idx_t(0); j < C.duckdb_struct_type_child_count(ty); j++ {
+		name := C.GoString(C.duckdb_struct_type_child_name(ty, j))
+		childTy := C.duckdb_struct_type_child_type(ty, j)
+		defer C.duckdb_destroy_logical_type(&childTy)
+		child := C.duckdb_struct_vector_get_child(vector, j)
+		value, err := scan(child, rowIdx)
+		if err != nil {
+			return nil, err
+		}
+		data[name] = value
+	}
+	return data, nil
+}
+
+const stringInlineLength = 12
+const stringPrefixLength = 4
+
+// WARNING may change!
+// References
+// struct string_t
+// duckdb/src/include/duckdb/common/types/string_type.hpp
+// duckdb/tools/juliapkg/src/ctypes.jl
+// duckdb/tools/juliapkg/src/result.jl
+type duckdb_string_t struct {
+	length int32
+	prefix [stringPrefixLength]byte
+	ptr    *C.char
+}
+
+func convertString(vector C.duckdb_vector, rowIdx C.idx_t) string {
+	return string(convertBlob(vector, rowIdx))
+}
+
+// duckdb/tools/juliapkg/src/ctypes.jl
+// seems that `json`, `varchar`, and `blob` have the same repr
+func convertBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
+	s := get[duckdb_string_t](vector, rowIdx)
+	if s.length < stringInlineLength {
+		// inline data is stored from byte 4..16 (up to 12 bytes)
+		return C.GoBytes(unsafe.Pointer(&s.prefix), C.int(s.length))
+	} else {
+		// any longer strings are stored as a pointer in `ptr`
+		return C.GoBytes(unsafe.Pointer(s.ptr), C.int(s.length))
+	}
+}
+
+// convert_vector_list
+// duckdb/tools/juliapkg/src/result.jl
+type duckdb_list_entry_t struct {
+	offset C.idx_t
+	length C.idx_t
+}
+
+// Use as the `Scanner` type for any composite types (maps, lists, structs)
+type Composite[T any] struct {
+	t T
+}
+
+func (s Composite[T]) Get() T {
+	return s.t
+}
+
+func (s *Composite[T]) Scan(v any) error {
+	bytes, ok := v.([]byte)
+	if !ok {
+		return fmt.Errorf("invalid type `%T` for `%T`, expected `[]byte`", bytes, s)
+	}
+
+	return json.Unmarshal(bytes, &s.t)
 }

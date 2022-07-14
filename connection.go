@@ -35,11 +35,11 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_result(res)
+	defer C.duckdb_destroy_result(&res)
 
-	ra := int64(C.duckdb_value_int64(res, 0, 0))
+	ra := int64(C.duckdb_value_int64(&res, 0, 0))
 
-	return &result{ra: ra}, nil
+	return &result{ra}, nil
 }
 
 func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
@@ -101,10 +101,10 @@ func (c *conn) query(query string, args []driver.Value) (driver.Rows, error) {
 		return nil, err
 	}
 
-	return &rows{res: res}, nil
+	return NewRows(res), nil
 }
 
-func (c *conn) exec(cmd string) (*C.duckdb_result, error) {
+func (c *conn) exec(cmd string) (C.duckdb_result, error) {
 	cmdstr := C.CString(cmd)
 	defer C.free(unsafe.Pointer(cmdstr))
 
@@ -112,10 +112,10 @@ func (c *conn) exec(cmd string) (*C.duckdb_result, error) {
 
 	if err := C.duckdb_query(*c.con, cmdstr, &res); err == C.DuckDBError {
 		dbErr := C.duckdb_result_error(&res)
-		return nil, errors.New(C.GoString(dbErr))
+		return res, errors.New(C.GoString(dbErr))
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 // interpolateParams is taken from
