@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"database/sql/driver"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -139,6 +140,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return scanStruct(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_JSON:
 		return convertString(vector, rowIdx), nil
+	case C.DUCKDB_TYPE_UUID:
+		return get[HugeInt](vector, rowIdx).UUID(), nil
 	default:
 		return nil, fmt.Errorf("not supported type %d", typeId)
 	}
@@ -222,6 +225,14 @@ var (
 type HugeInt struct {
 	lower uint64
 	upper int64
+}
+
+func (v HugeInt) UUID() []byte {
+	var uuid [16]byte
+	// We need to flip the `sign bit` of the signed `HugeInt` to transform it to UUID bytes
+	binary.BigEndian.PutUint64(uuid[:8], uint64(v.upper)^1<<63)
+	binary.BigEndian.PutUint64(uuid[8:], v.lower)
+	return uuid[:]
 }
 
 func (v HugeInt) Int64() (int64, error) {

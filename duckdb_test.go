@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/georgysavva/scany/sqlscan"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpen(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -24,6 +26,7 @@ func TestOpen(t *testing.T) {
 }
 
 func TestOpenWithConfig(t *testing.T) {
+	t.Parallel()
 	db, err := sql.Open("duckdb", "?access_mode=read_write&threads=4")
 	require.NoError(t, err)
 	defer db.Close()
@@ -40,6 +43,7 @@ func TestOpenWithConfig(t *testing.T) {
 }
 
 func TestOpenWithInvalidConfig(t *testing.T) {
+	t.Parallel()
 	db, _ := sql.Open("duckdb", "?threads=NaN")
 	err := db.Ping()
 
@@ -49,6 +53,7 @@ func TestOpenWithInvalidConfig(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -59,6 +64,7 @@ func TestExec(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	createTable(db, t)
@@ -96,6 +102,7 @@ func TestQuery(t *testing.T) {
 }
 
 func TestQueryJSON(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -113,6 +120,7 @@ func TestQueryJSON(t *testing.T) {
 }
 
 func TestQueryStruct(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	createTable(db, t)
@@ -136,6 +144,7 @@ func TestQueryStruct(t *testing.T) {
 }
 
 func TestQuerySimpleList(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -149,6 +158,7 @@ func TestQuerySimpleList(t *testing.T) {
 }
 
 func TestQueryListOfStructs(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -163,7 +173,35 @@ func TestQueryListOfStructs(t *testing.T) {
 	require.Equal(t, point{3, 4}, row.Get()[1])
 }
 
+func TestQueryUUID(t *testing.T) {
+	t.Parallel()
+	test := func(t *testing.T, expected uuid.UUID) {
+		db := openDB(t)
+		defer db.Close()
+
+		var uuid uuid.UUID
+		require.NoError(t, db.QueryRow("SELECT ?", expected).Scan(&uuid))
+		require.Equal(t, expected, uuid)
+
+		require.NoError(t, db.QueryRow("SELECT ?::uuid", expected).Scan(&uuid))
+		require.Equal(t, expected, uuid)
+	}
+
+	for i := 0; i < 50; i++ {
+		t.Run(fmt.Sprintf("uuid %d", i), func(t *testing.T) {
+			t.Parallel()
+			test(t, uuid.New())
+		})
+	}
+
+	test(t, uuid.Nil)
+	// this is a testcase that checks the `>= 0` condition in `HugeInt.UUID()`
+	// if we use strict `>` this test will fail
+	test(t, uuid.MustParse("80000000-0000-0000-0000-200000000000"))
+}
+
 func TestQueryCompositeAggregate(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	createTable(db, t)
@@ -192,6 +230,7 @@ func TestQueryCompositeAggregate(t *testing.T) {
 }
 
 func TestLargeNumberOfRows(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -212,6 +251,7 @@ func TestLargeNumberOfRows(t *testing.T) {
 }
 
 func TestQueryWithWrongSyntax(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -222,6 +262,7 @@ func TestQueryWithWrongSyntax(t *testing.T) {
 }
 
 func TestQueryWithMissingParams(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 
@@ -233,6 +274,7 @@ func TestQueryWithMissingParams(t *testing.T) {
 
 // Sum(int) generate result of type HugeInt (int128)
 func TestSumOfInt(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	for _, expected := range []int64{0, 1, -1, math.MaxInt64, math.MinInt64} {
@@ -248,6 +290,7 @@ func TestSumOfInt(t *testing.T) {
 }
 
 func TestVarchar(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	var s string
@@ -260,6 +303,7 @@ func TestVarchar(t *testing.T) {
 }
 
 func TestBlob(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	var bytes []byte
@@ -272,6 +316,7 @@ func TestBlob(t *testing.T) {
 }
 
 func TestJson(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	var bytes []byte
@@ -285,6 +330,7 @@ func TestJson(t *testing.T) {
 
 // CAST(? as DATE) generate result of type Date (time.Time)
 func TestDate(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	tests := map[string]struct {
@@ -306,6 +352,7 @@ func TestDate(t *testing.T) {
 }
 
 func TestTimestamp(t *testing.T) {
+	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
 	tests := map[string]struct {
