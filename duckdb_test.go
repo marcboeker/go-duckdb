@@ -289,6 +289,15 @@ func TestSumOfInt(t *testing.T) {
 	}
 }
 
+func TestQueryNull(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+	var s *int
+	require.NoError(t, db.QueryRow("select null").Scan(&s))
+	require.Nil(t, s)
+}
+
 func TestVarchar(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)

@@ -100,12 +100,19 @@ func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (driver.Value, error) {
 		return json.Marshal(value)
 	case driver.Value:
 		return value, nil
+	case nil:
+		return nil, nil
 	default:
 		panic(fmt.Sprintf("BUG: found unexpected type when scanning: %T", value))
 	}
 }
 
 func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
+	validity := C.duckdb_vector_get_validity(vector)
+	if !C.duckdb_validity_row_is_valid(validity, rowIdx) {
+		return nil, nil
+	}
+
 	ty := C.duckdb_vector_get_column_type(vector)
 	typeId := C.duckdb_get_type_id(ty)
 	switch typeId {
