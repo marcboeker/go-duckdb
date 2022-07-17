@@ -334,8 +334,8 @@ func TestDate(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
 	tests := map[string]struct {
-		input string
 		want  time.Time
+		input string
 	}{
 		"epoch":       {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
 		"before 1970": {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},

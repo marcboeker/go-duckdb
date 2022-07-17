@@ -19,12 +19,11 @@ import (
 )
 
 type rows struct {
-	res        C.duckdb_result
-	stmt       *stmt
-	columns    []string
-	chunkCount C.ulong
-
+	res           C.duckdb_result
+	stmt          *stmt
 	chunk         C.duckdb_data_chunk
+	columns       []string
+	chunkCount    C.ulong
 	chunkRowCount C.ulong
 	chunkIdx      C.idx_t
 	chunkRowIdx   C.idx_t
@@ -35,15 +34,18 @@ func NewRows(res C.duckdb_result) *rows {
 }
 
 func NewRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
-	chunkc := C.duckdb_result_chunk_count(res)
-
 	n := C.duckdb_column_count(&res)
 	columns := make([]string, 0, n)
 	for i := C.ulong(0); i < n; i++ {
 		columns = append(columns, C.GoString(C.duckdb_column_name(&res, i)))
 	}
 
-	return &rows{res, stmt, columns, chunkc, nil, 0, 0, 0}
+	return &rows{
+		res:        res,
+		stmt:       stmt,
+		columns:    columns,
+		chunkCount: C.duckdb_result_chunk_count(res),
+	}
 }
 
 func (r *rows) Columns() []string {
@@ -81,7 +83,7 @@ func (r *rows) Next(dst []driver.Value) error {
 	return nil
 }
 
-func get[T driver.Value](vector C.duckdb_vector, rowIdx C.idx_t) T {
+func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
 	ptr := C.duckdb_vector_get_data(vector)
 	xs := (*[1 << 31]T)(ptr)
 	return xs[rowIdx]
@@ -129,9 +131,9 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		date := C.duckdb_from_date(get[C.duckdb_date](vector, rowIdx))
 		return time.Date(int(date.year), time.Month(date.month), int(date.day), 0, 0, 0, 0, time.UTC), nil
 	case C.DUCKDB_TYPE_BLOB:
-		return convertBlob(vector, rowIdx), nil
+		return scanBlob(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_VARCHAR:
-		return convertString(vector, rowIdx), nil
+		return scanString(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_TIMESTAMP:
 		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_LIST:
@@ -139,7 +141,7 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_STRUCT:
 		return scanStruct(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_JSON:
-		return convertString(vector, rowIdx), nil
+		return scanString(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_UUID:
 		return get[HugeInt](vector, rowIdx).UUID(), nil
 	default:
@@ -293,13 +295,13 @@ type duckdb_string_t struct {
 	ptr    *C.char
 }
 
-func convertString(vector C.duckdb_vector, rowIdx C.idx_t) string {
-	return string(convertBlob(vector, rowIdx))
+func scanString(vector C.duckdb_vector, rowIdx C.idx_t) string {
+	return string(scanBlob(vector, rowIdx))
 }
 
 // duckdb/tools/juliapkg/src/ctypes.jl
 // seems that `json`, `varchar`, and `blob` have the same repr
-func convertBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
+func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
 	s := get[duckdb_string_t](vector, rowIdx)
 	if s.length < stringInlineLength {
 		// inline data is stored from byte 4..16 (up to 12 bytes)
