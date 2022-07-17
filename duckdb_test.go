@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"testing"
 	"time"
@@ -69,15 +68,11 @@ func TestQuery(t *testing.T) {
 	defer db.Close()
 	createTable(db, t)
 
-	_, err := db.Exec("INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 54321)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err := db.Exec("INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+	require.NoError(t, err)
 
 	rows, err := db.Query("SELECT bar, baz FROM foo WHERE baz > ?", 12344)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer rows.Close()
 
 	found := false
@@ -87,18 +82,14 @@ func TestQuery(t *testing.T) {
 			baz int
 		)
 		err := rows.Scan(&bar, &baz)
-		if err != nil {
-			t.Fatal(err)
+		require.NoError(t, err)
+		if bar != "lala" || baz != 12345 {
+			t.Errorf("wrong values for bar [%s] and baz [%d]", bar, baz)
 		}
-		// if bar != "lala" || baz != 12345 {
-		// 	t.Errorf("wrong values for bar [%s] and baz [%d]", bar, baz)
-		// }
 		found = true
 	}
 
-	if !found {
-		t.Error("could not find row")
-	}
+	require.True(t, found, "could not find row")
 }
 
 func TestQueryJSON(t *testing.T) {
@@ -108,9 +99,7 @@ func TestQueryJSON(t *testing.T) {
 
 	var bytes []byte
 	err := db.QueryRow("select json_array('foo', 'bar')").Scan(&bytes)
-	if err != nil {
-		log.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	var data []string
 	require.NoError(t, json.Unmarshal(bytes, &data))
@@ -195,8 +184,6 @@ func TestQueryUUID(t *testing.T) {
 	}
 
 	test(t, uuid.Nil)
-	// this is a testcase that checks the `>= 0` condition in `HugeInt.UUID()`
-	// if we use strict `>` this test will fail
 	test(t, uuid.MustParse("80000000-0000-0000-0000-200000000000"))
 }
 
@@ -256,9 +243,7 @@ func TestQueryWithWrongSyntax(t *testing.T) {
 	defer db.Close()
 
 	_, err := db.Query("select * from tbl col=?", 1)
-	if err == nil {
-		t.Error("should return error with invalid syntax")
-	}
+	require.Error(t, err, "should return error with invalid syntax")
 }
 
 func TestQueryWithMissingParams(t *testing.T) {
@@ -267,9 +252,7 @@ func TestQueryWithMissingParams(t *testing.T) {
 	defer db.Close()
 
 	_, err := db.Query("select * from tbl col=?")
-	if err == nil {
-		t.Error("should return error about missing parameters")
-	}
+	require.Error(t, err, "should return error with missing parameters")
 }
 
 // Sum(int) generate result of type HugeInt (int128)
@@ -386,22 +369,13 @@ func TestTimestamp(t *testing.T) {
 
 func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := db.Ping(); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, err)
+	require.NoError(t, db.Ping())
 	return db
 }
 
 func createTable(db *sql.DB, t *testing.T) *sql.Result {
 	res, err := db.Exec("CREATE TABLE foo(bar VARCHAR, baz INTEGER)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, err)
 	return &res
 }

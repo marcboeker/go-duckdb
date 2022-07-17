@@ -95,6 +95,7 @@ func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (driver.Value, error) {
 		return nil, err
 	}
 
+	// json encoding composite types for now due to `driver.Value` limitations
 	switch value := v.(type) {
 	case map[string]any, []any:
 		return json.Marshal(value)
@@ -270,13 +271,10 @@ func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
 	return converted, nil
 }
 
-// just json encoding structs as I'm not sure how better to do it within the database/sql framework
 func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (map[string]any, error) {
 	data := map[string]any{}
 	for j := C.idx_t(0); j < C.duckdb_struct_type_child_count(ty); j++ {
 		name := C.GoString(C.duckdb_struct_type_child_name(ty, j))
-		childTy := C.duckdb_struct_type_child_type(ty, j)
-		defer C.duckdb_destroy_logical_type(&childTy)
 		child := C.duckdb_struct_vector_get_child(vector, j)
 		value, err := scan(child, rowIdx)
 		if err != nil {
