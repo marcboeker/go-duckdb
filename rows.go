@@ -65,9 +65,6 @@ func (r *rows) Next(dst []driver.Value) error {
 	}
 
 	colCount := len(r.columns)
-	if len(dst) != colCount {
-		panic("BUG: dst size mismatch")
-	}
 
 	for colIdx := C.idx_t(0); colIdx < C.idx_t(colCount); colIdx++ {
 		vector := C.duckdb_data_chunk_get_vector(r.chunk, colIdx)
@@ -288,24 +285,12 @@ func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t
 const stringInlineLength = 12
 const stringPrefixLength = 4
 
-// WARNING may change!
-// References
-// struct string_t
-// duckdb/src/include/duckdb/common/types/string_type.hpp
-// duckdb/tools/juliapkg/src/ctypes.jl
-// duckdb/tools/juliapkg/src/result.jl
-type duckdb_string_t struct {
-	length int32
-	prefix [stringPrefixLength]byte
-	ptr    *C.char
-}
-
 func scanString(vector C.duckdb_vector, rowIdx C.idx_t) string {
 	return string(scanBlob(vector, rowIdx))
 }
 
 // duckdb/tools/juliapkg/src/ctypes.jl
-// seems that `json`, `varchar`, and `blob` have the same repr
+// `json`, `varchar`, and `blob` have the same repr
 func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
 	s := get[duckdb_string_t](vector, rowIdx)
 	if s.length < stringInlineLength {
@@ -315,13 +300,6 @@ func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
 		// any longer strings are stored as a pointer in `ptr`
 		return C.GoBytes(unsafe.Pointer(s.ptr), C.int(s.length))
 	}
-}
-
-// convert_vector_list
-// duckdb/tools/juliapkg/src/result.jl
-type duckdb_list_entry_t struct {
-	offset C.idx_t
-	length C.idx_t
 }
 
 // Use as the `Scanner` type for any composite types (maps, lists, structs)
