@@ -86,16 +86,26 @@ func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
 	return xs[rowIdx]
 }
 
+// can use other encoding schemes
+// current limitation that only string keys are supported for maps
+func encode(data any) ([]byte, error) {
+	return json.Marshal(data)
+}
+
+func decode(buf []byte, out any) error {
+	return json.Unmarshal(buf, out)
+}
+
 func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (driver.Value, error) {
 	v, err := scan(vector, rowIdx)
 	if err != nil {
 		return nil, err
 	}
 
-	// json encoding composite types for now due to `driver.Value` limitations
+	// encoding composite types for now due to `driver.Value` limitations
 	switch value := v.(type) {
-	case map[string]any, []any:
-		return json.Marshal(value)
+	case map[string]any, []any, Map:
+		return encode(value)
 	case driver.Value:
 		return value, nil
 	case nil:
@@ -145,6 +155,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return scanList(vector, rowIdx)
 	case C.DUCKDB_TYPE_STRUCT:
 		return scanStruct(ty, vector, rowIdx)
+	case C.DUCKDB_TYPE_MAP:
+		return scanMap(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_JSON:
 		return scanString(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_UUID:
@@ -282,6 +294,26 @@ func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t
 	return data, nil
 }
 
+func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Map, error) {
+	data, err := scanStruct(ty, vector, rowIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := Map{}
+	keys := data["key"].([]any)
+	values := data["value"].([]any)
+	for i := 0; i < len(keys); i++ {
+		key, ok := keys[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("only string map keys are currently supported")
+		}
+		out[key] = values[i]
+	}
+
+	return out, nil
+}
+
 const stringInlineLength = 12
 const stringPrefixLength = 4
 
@@ -317,5 +349,20 @@ func (s *Composite[T]) Scan(v any) error {
 		return fmt.Errorf("invalid type `%T` for `%T`, expected `[]byte`", bytes, s)
 	}
 
-	return json.Unmarshal(bytes, &s.t)
+	return decode(bytes, &s.t)
+}
+
+type Map map[string]any
+
+func (m *Map) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, (*map[string]any)(m))
+}
+
+func (m *Map) Scan(v any) error {
+	bytes, ok := v.([]byte)
+	if !ok {
+		return fmt.Errorf("invalid type `%T` for `Map`, expected `[]byte`", bytes)
+	}
+
+	return decode(bytes, (*map[string]any)(m))
 }

@@ -132,6 +132,28 @@ func TestQueryStruct(t *testing.T) {
 	require.Equal(t, row{"lala", 12346}, rows[3].Get())
 }
 
+func TestQueryMap(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	var m Map
+	require.NoError(t, db.QueryRow("select map(['foo', 'bar'], ['a', 'e'])").Scan(&m))
+	require.Equal(t, Map{
+		"foo": "a",
+		"bar": "e",
+	}, m)
+}
+
+func TestQueryNonStringMap(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	var m Map
+	require.ErrorContains(t, db.QueryRow("select map([0], ['a'])").Scan(&m), "only string map keys are currently supported")
+}
+
 func TestQuerySimpleList(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
