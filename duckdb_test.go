@@ -151,7 +151,8 @@ func TestQueryNonStringMap(t *testing.T) {
 	defer db.Close()
 
 	var m Map
-	require.ErrorContains(t, db.QueryRow("select map([0], ['a'])").Scan(&m), "only string map keys are currently supported")
+	require.NoError(t, db.QueryRow("select map([0], ['a'])").Scan(&m))
+	require.Equal(t, Map{int64(0): "a"}, m)
 }
 
 func TestQuerySimpleList(t *testing.T) {
