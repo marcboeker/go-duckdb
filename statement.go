@@ -137,7 +137,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 	s.rows = true
 
-	return NewRowsWithStmt(res, s), nil
+	return newRowsWithStmt(res, s), nil
 }
 
 var (

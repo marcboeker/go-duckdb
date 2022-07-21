@@ -101,7 +101,7 @@ func (c *conn) query(query string, args []driver.Value) (driver.Rows, error) {
 		return nil, err
 	}
 
-	return NewRows(res), nil
+	return newRows(res), nil
 }
 
 func (c *conn) exec(cmd string) (C.duckdb_result, error) {

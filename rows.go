@@ -30,11 +30,11 @@ type rows struct {
 	chunkRowIdx   C.idx_t
 }
 
-func NewRows(res C.duckdb_result) *rows {
-	return NewRowsWithStmt(res, nil)
+func newRows(res C.duckdb_result) *rows {
+	return newRowsWithStmt(res, nil)
 }
 
-func NewRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
+func newRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
 	n := C.duckdb_column_count(&res)
 	columns := make([]string, 0, n)
 	for i := C.idx_t(0); i < n; i++ {
