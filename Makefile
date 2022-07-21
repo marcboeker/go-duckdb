@@ -1,4 +1,4 @@
-DUCKDB_VERSION=0.3.4
+DUCKDB_VERSION=0.4.0
 LIB_PATH := $(shell pwd)/lib
 
 ifeq ($(shell uname -s),Darwin)
