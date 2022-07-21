@@ -112,7 +112,7 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 
 	ra := int64(C.duckdb_value_int64(&res, 0, 0))
 
-	return &result{ra: ra}, nil
+	return &result{ra}, nil
 }
 
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
@@ -137,7 +137,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	}
 	s.rows = true
 
-	return &rows{res: &res, s: s}, nil
+	return newRowsWithStmt(res, s), nil
 }
 
 var (
