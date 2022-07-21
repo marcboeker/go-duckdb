@@ -24,8 +24,8 @@ type rows struct {
 	stmt          *stmt
 	chunk         C.duckdb_data_chunk
 	columns       []string
-	chunkCount    C.ulong
-	chunkRowCount C.ulong
+	chunkCount    C.idx_t
+	chunkRowCount C.idx_t
 	chunkIdx      C.idx_t
 	chunkRowIdx   C.idx_t
 }
@@ -37,7 +37,7 @@ func NewRows(res C.duckdb_result) *rows {
 func NewRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
 	n := C.duckdb_column_count(&res)
 	columns := make([]string, 0, n)
-	for i := C.ulong(0); i < n; i++ {
+	for i := C.idx_t(0); i < n; i++ {
 		columns = append(columns, C.GoString(C.duckdb_column_name(&res, i)))
 	}
 
