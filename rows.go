@@ -302,9 +302,6 @@ func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (
 	return out, nil
 }
 
-const stringInlineLength = 12
-const stringPrefixLength = 4
-
 func scanString(vector C.duckdb_vector, rowIdx C.idx_t) string {
 	return string(scanBlob(vector, rowIdx))
 }

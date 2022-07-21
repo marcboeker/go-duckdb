@@ -5,6 +5,9 @@ package duckdb
 */
 import "C"
 
+const stringInlineLength = 12
+const stringPrefixLength = 4
+
 // refer to convert_vector_list in
 // duckdb/tools/juliapkg/src/result.jl
 type duckdb_list_entry_t struct {
