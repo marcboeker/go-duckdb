@@ -169,6 +169,38 @@ func TestQuerySimpleList(t *testing.T) {
 	}
 }
 
+func TestQueryDecimal(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	t.Run("decimal widths", func(t *testing.T) {
+		for i := 1; i <= 38; i++ {
+			var f float64 = 999
+			require.NoError(t, db.QueryRow(fmt.Sprintf("SELECT 0::DECIMAL(%d, 1)", i)).Scan(&f))
+			require.Equal(t, float64(0), f)
+		}
+	})
+
+	t.Run("multiple rows", func(t *testing.T) {
+		var fs []float64
+		query := `SELECT * FROM (VALUES
+			(1.23 :: DECIMAL(3, 2)),
+			(123.45 :: DECIMAL(5, 2)),
+			(123456789.01 :: DECIMAL(11, 2)),
+			(1234567890123456789.234 :: DECIMAL(22, 3)),
+		)`
+		require.NoError(t, sqlscan.Select(context.Background(), db, &fs, query))
+		require.Equal(t, []float64{1.23, 123.45, 123456789.01, 1234567890123456789.234}, fs)
+	})
+
+	t.Run("huge decimal", func(t *testing.T) {
+		var f float64
+		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789 :: DECIMAL(38, 20)").Scan(&f))
+		require.True(t, math.Abs(float64(123456789.01234567890123456789)-f) < 0.0000001)
+	})
+}
+
 func TestQueryListOfStructs(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)

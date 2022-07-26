@@ -143,6 +143,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return scanString(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_TIMESTAMP:
 		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
+	case C.DUCKDB_TYPE_DECIMAL:
+		return scanDecimal(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_LIST:
 		return scanList(vector, rowIdx)
 	case C.DUCKDB_TYPE_STRUCT:
@@ -154,7 +156,7 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_UUID:
 		return get[HugeInt](vector, rowIdx).UUID(), nil
 	default:
-		return nil, fmt.Errorf("not supported type %d", typeId)
+		return nil, fmt.Errorf("unsupported type %d", typeId)
 	}
 }
 
@@ -164,6 +166,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	switch colType {
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return reflect.TypeOf(true)
+	case C.DUCKDB_TYPE_DECIMAL:
+		return reflect.TypeOf(float64(0))
 	case C.DUCKDB_TYPE_TINYINT:
 		return reflect.TypeOf(int8(0))
 	case C.DUCKDB_TYPE_SMALLINT:
@@ -233,16 +237,13 @@ var (
 
 // HugeInt are composed in a (lower, upper) component
 // The value of the HugeInt is upper * 2^64 + lower
-type HugeInt struct {
-	lower uint64
-	upper int64
-}
+type HugeInt C.duckdb_hugeint
 
 func (v HugeInt) UUID() []byte {
 	var uuid [16]byte
 	// We need to flip the `sign bit` of the signed `HugeInt` to transform it to UUID bytes
 	binary.BigEndian.PutUint64(uuid[:8], uint64(v.upper)^1<<63)
-	binary.BigEndian.PutUint64(uuid[8:], v.lower)
+	binary.BigEndian.PutUint64(uuid[8:], uint64(v.lower))
 	return uuid[:]
 }
 
@@ -254,6 +255,28 @@ func (v HugeInt) Int64() (int64, error) {
 	} else {
 		return 0, fmt.Errorf("can not convert duckdb:hugeint to go:int64 (upper:%d,lower:%d)", v.upper, v.lower)
 	}
+}
+
+func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (float64, error) {
+	scale := C.duckdb_decimal_scale(ty)
+	width := C.duckdb_decimal_width(ty)
+	var value C.duckdb_hugeint
+	switch C.duckdb_decimal_internal_type(ty) {
+	case C.DUCKDB_TYPE_SMALLINT:
+		value.lower = C.uint64_t(get[uint16](vector, rowIdx))
+	case C.DUCKDB_TYPE_INTEGER:
+		value.lower = C.uint64_t(get[uint32](vector, rowIdx))
+	case C.DUCKDB_TYPE_BIGINT:
+		value.lower = C.uint64_t(get[uint64](vector, rowIdx))
+	case C.DUCKDB_TYPE_HUGEINT:
+		i := get[C.duckdb_hugeint](vector, rowIdx)
+		value.lower = i.lower
+		value.upper = i.upper
+	default:
+		return 0, errInvalidType
+	}
+	decimal := C.duckdb_decimal{width, scale, value}
+	return float64(C.duckdb_decimal_to_double(decimal)), nil
 }
 
 func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
