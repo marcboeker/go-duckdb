@@ -406,9 +406,11 @@ func TestTimestamp(t *testing.T) {
 		input string
 		want  time.Time
 	}{
-		"epoch":       {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
-		"before 1970": {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"after 1970":  {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
+		"epoch":         {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
+		"before 1970":   {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
+		"after 1970":    {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
+		"HH:MM:SS":      {input: "2022-12-12 11:35:43", want: time.Date(2022, 12, 12, 11, 35, 43, 0, time.UTC)},
+		"HH:MM:SS.DDDD": {input: "2022-12-12 11:35:43.5678", want: time.Date(2022, 12, 12, 11, 35, 43, 567800000, time.UTC)},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {

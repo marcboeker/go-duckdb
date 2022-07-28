@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 )
 
@@ -78,7 +79,12 @@ func (s *stmt) start(args []driver.Value) error {
 				return errCouldNotBind
 			}
 			C.free(unsafe.Pointer(str))
-		// case time.Time:
+		case time.Time:
+			var dt C.duckdb_timestamp
+			dt.micros = C.int64_t(v.UTC().UnixMicro())
+			if rv := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(i+1), dt); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
 		// TODO:
 
 		default:
