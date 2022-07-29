@@ -143,6 +143,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return scanString(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_TIMESTAMP:
 		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
+	case C.DUCKDB_TYPE_INTERVAL:
+		return scanInterval(vector, rowIdx)
 	case C.DUCKDB_TYPE_DECIMAL:
 		return scanDecimal(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_LIST:
@@ -340,6 +342,22 @@ func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
 		// any longer strings are stored as a pointer in `ptr`
 		return C.GoBytes(unsafe.Pointer(s.ptr), C.int(s.length))
 	}
+}
+
+type Interval struct {
+	days   int32
+	months int32
+	micros int64
+}
+
+func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
+	i := get[C.duckdb_interval](vector, rowIdx)
+	data := Interval{
+		days:   int32(i.days),
+		months: int32(i.months),
+		micros: int64(i.micros),
+	}
+	return data, nil
 }
 
 // Use as the `Scanner` type for any composite types (maps, lists, structs)
