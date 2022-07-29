@@ -333,7 +333,7 @@ func scanString(vector C.duckdb_vector, rowIdx C.idx_t) string {
 // `json`, `varchar`, and `blob` have the same repr
 func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
 	s := get[duckdb_string_t](vector, rowIdx)
-	if s.length < stringInlineLength {
+	if s.length <= stringInlineLength {
 		// inline data is stored from byte 4..16 (up to 12 bytes)
 		return C.GoBytes(unsafe.Pointer(&s.prefix), C.int(s.length))
 	} else {

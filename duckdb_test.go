@@ -344,6 +344,14 @@ func TestVarchar(t *testing.T) {
 	require.NoError(t, db.QueryRow("select 'inline'").Scan(&s))
 	require.Equal(t, "inline", s)
 
+	// size = 12 needs to be verified
+	require.NoError(t, db.QueryRow("select 'inlineSize12'").Scan(&s))
+	require.Equal(t, "inlineSize12", s)
+
+	// size = 13 needs to be verified
+	require.NoError(t, db.QueryRow("select 'inlineSize13_'").Scan(&s))
+	require.Equal(t, "inlineSize13_", s)
+
 	const q = "uninlined string that is greater than 12 bytes long"
 	require.NoError(t, db.QueryRow(fmt.Sprintf("SELECT '%s'", q)).Scan(&s))
 	require.Equal(t, q, s)
