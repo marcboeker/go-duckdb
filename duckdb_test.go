@@ -961,6 +961,34 @@ func TestRandomizedVARCHAR(t *testing.T) {
 	}
 }
 
+func TestColumnTypeNames(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE misc(id INTEGER, u8 UTINYINT, i8 TINYINT, u16 USMALLINT, i16 SMALLINT,
+		u32 UINTEGER, i32 INTEGER, u64 UBIGINT, i64 BIGINT, hi HUGEINT,
+		f REAL, d DOUBLE, s VARCHAR, b BOOLEAN)`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO misc VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		1, 1, -1, 2, -2, 3, -3, 4, -4, 1234, 5.1, 6.2, "hello", true)
+	require.NoError(t, err)
+
+	rows, err := db.Query("SELECT * FROM misc ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	expectedDbTypeNames := []string{"INTEGER", "UTINYINT", "TINYINT", "USMALLINT", "SMALLINT",
+		"UINTEGER", "INTEGER", "UBIGINT", "BIGINT", "HUGEINT",
+		"FLOAT", "DOUBLE", "VARCHAR", "BOOLEAN"}
+	colTypes, err := rows.ColumnTypes()
+	for i, s := range colTypes {
+		assert.NotNil(t, s)
+		assert.Equal(t, expectedDbTypeNames[i], s.DatabaseTypeName())
+	}
+}
+
 func TestEmpty(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
