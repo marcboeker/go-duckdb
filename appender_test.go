@@ -64,10 +64,10 @@ func TestAppenderSimple(t *testing.T) {
 	rows := []dataRow{
 		{1, 42, -42, 3754, -3754, 36465349, -36465349,
 			97971444235, -97971444235,
-			time.Now().UTC(), 2373.49, 9136.85, "the quick brown fox jumps over the lazy dog...", true},
+			time.Date(2022, 8, 2, 11, 58, 23, 0, time.UTC), 2373.49, 9136.85, "the quick brown fox jumps over the lazy dog...", true},
 		{2, 123, -123, 4913, -4913, 946742376, -946742376,
 			764679802746, -764679802746,
-			time.Now().Add(-8000 * time.Hour).UTC(),
+			time.Date(2022, 7, 1, 18, 23, 56, 0, time.UTC),
 			2.43123, 26.95644, "hello", false},
 	}
 	dbconn, err := db.Conn(context.Background())
