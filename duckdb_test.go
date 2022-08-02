@@ -444,15 +444,15 @@ func TestInterval(t *testing.T) {
 	}{
 		"simple interval": {
 			input: "INTERVAL 5 HOUR",
-			want:  Interval{days: 0, months: 0, micros: 18000000000},
+			want:  Interval{Days: 0, Months: 0, Micros: 18000000000},
 		},
 		"interval arithmetic": {
 			input: "INTERVAL 1 DAY + INTERVAL 5 DAY",
-			want:  Interval{days: 6, months: 0, micros: 0},
+			want:  Interval{Days: 6, Months: 0, Micros: 0},
 		},
 		"timestamp arithmetic": {
 			input: "CAST('2022-05-01' as TIMESTAMP) - CAST('2022-04-01' as TIMESTAMP)",
-			want:  Interval{days: 30, months: 0, micros: 0},
+			want:  Interval{Days: 30, Months: 0, Micros: 0},
 		},
 	}
 	for name, tc := range tests {

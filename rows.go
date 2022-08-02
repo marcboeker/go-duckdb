@@ -345,17 +345,17 @@ func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
 }
 
 type Interval struct {
-	days   int32
-	months int32
-	micros int64
+	Days   int32 `json:"days"`
+	Months int32 `json:"months"`
+	Micros int64 `json:"micros"`
 }
 
 func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 	i := get[C.duckdb_interval](vector, rowIdx)
 	data := Interval{
-		days:   int32(i.days),
-		months: int32(i.months),
-		micros: int64(i.micros),
+		Days:   int32(i.days),
+		Months: int32(i.months),
+		Micros: int64(i.micros),
 	}
 	return data, nil
 }
