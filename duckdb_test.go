@@ -615,6 +615,321 @@ const (
 	nRandomTestRows = 10000
 )
 
+func TestRandomizedUTINYINT(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value UTINYINT)`)
+	require.NoError(t, err)
+
+	values := []uint8{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, uint8(randInt(0, 255)))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value uint8
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedTINYINT(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value TINYINT)`)
+	require.NoError(t, err)
+
+	values := []int8{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, int8(randInt(-128, 127)))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value int8
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedUSMALLINT(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value USMALLINT)`)
+	require.NoError(t, err)
+
+	values := []uint16{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, uint16(randInt(0, 65535)))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value uint16
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedSMALLINT(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value SMALLINT)`)
+	require.NoError(t, err)
+
+	values := []int16{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, int16(randInt(-32768, 32767)))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value int16
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedUINTEGER(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value UINTEGER)`)
+	require.NoError(t, err)
+
+	values := []uint32{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, uint32(randInt(0, 4294967295)))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value uint32
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedINTEGER(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value INTEGER)`)
+	require.NoError(t, err)
+
+	values := []int32{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, int32(randInt(-2147483648, 2147483647)))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value int32
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedUBIGINT(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value UBIGINT)`)
+	require.NoError(t, err)
+
+	values := []uint64{}
+	for i := 0; i < nRandomTestRows; i++ {
+		v := rand.Uint64()
+		// go sql doesn't support uint64 values with high bit set (see for example https://github.com/lib/pq/issues/72)
+		if v > 9223372036854775807 {
+			v = 9223372036854775807
+		}
+		values = append(values, v)
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value uint64
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedBIGINT(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id BIGINT, value BIGINT)`)
+	require.NoError(t, err)
+
+	values := []int64{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, rand.Int63())
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value int64
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
+func TestRandomizedREAL(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value REAL)`)
+	require.NoError(t, err)
+
+	values := []float32{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, randFloat32(-3.4e+37, 3.4e+37))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value float32
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.True(t, float32similar(values[id], value))
+	}
+}
+
+func TestRandomizedDOUBLE(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value DOUBLE)`)
+	require.NoError(t, err)
+
+	values := []float64{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, randFloat64(-1.6e+307, 1.6e+307))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value float64
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.True(t, float64similar(values[id], value))
+	}
+}
+
 func TestRandomizedVARCHAR(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
@@ -881,8 +1196,33 @@ func createTable(db *sql.DB, t *testing.T) *sql.Result {
 	return &res
 }
 
+const (
+	epsilon32 = 0.0000002
+	epsilon64 = 0.0000000000002
+)
+
 func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
+}
+
+func randBool() bool {
+	return (rand.Int()%2 == 0)
+}
+
+func randFloat32(lo float32, hi float32) float32 {
+	return (rand.Float32() * (hi - lo)) + lo
+}
+
+func randFloat64(lo float64, hi float64) float64 {
+	return (rand.Float64() * (hi - lo)) + lo
+}
+
+func float32similar(v1 float32, v2 float32) bool {
+	return math.Abs(float64(v2-v1)) < epsilon32
+}
+
+func float64similar(v1 float64, v2 float64) bool {
+	return math.Abs(float64(v2-v1)) < epsilon64
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
