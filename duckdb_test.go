@@ -13,6 +13,8 @@ import (
 	"github.com/georgysavva/scany/sqlscan"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"reflect"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -426,6 +428,39 @@ func TestTimestamp(t *testing.T) {
 			if err := db.QueryRow("SELECT CAST(? as TIMESTAMP)", tc.input).Scan(&res); err != nil {
 				t.Errorf("can not scan value %v", err)
 			} else if res != tc.want {
+				t.Errorf("expected value %v != resulting value %v", tc.want, res)
+			}
+		})
+	}
+}
+
+func TestInterval(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+	tests := map[string]struct {
+		input string
+		want  Interval
+	}{
+		"simple interval": {
+			input: "INTERVAL 5 HOUR",
+			want:  Interval{Days: 0, Months: 0, Micros: 18000000000},
+		},
+		"interval arithmetic": {
+			input: "INTERVAL 1 DAY + INTERVAL 5 DAY",
+			want:  Interval{Days: 6, Months: 0, Micros: 0},
+		},
+		"timestamp arithmetic": {
+			input: "CAST('2022-05-01' as TIMESTAMP) - CAST('2022-04-01' as TIMESTAMP)",
+			want:  Interval{Days: 30, Months: 0, Micros: 0},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var res Interval
+			if err := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input)).Scan(&res); err != nil {
+				t.Errorf("can not scan value %v", err)
+			} else if !reflect.DeepEqual(tc.want, res) {
 				t.Errorf("expected value %v != resulting value %v", tc.want, res)
 			}
 		})
