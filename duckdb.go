@@ -38,8 +38,11 @@ func (impl) Open(dataSourceName string) (driver.Conn, error) {
 
 	// Check for config options.
 	if len(parsedDSN.RawQuery) == 0 {
-		if state := C.duckdb_open(path, &db); state == C.DuckDBError {
-			return nil, openError
+		var nullConfig C.duckdb_config
+		errMsg := C.CString("")
+		defer C.duckdb_free(unsafe.Pointer(errMsg))
+		if state := C.duckdb_open_ext(path, &db, nullConfig, &errMsg); state == C.DuckDBError {
+			return nil, fmt.Errorf("%w: %s", openError, C.GoString(errMsg))
 		}
 	} else {
 		config, err := prepareConfig(parsedDSN.Query())
