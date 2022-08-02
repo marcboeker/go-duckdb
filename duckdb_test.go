@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"reflect"
 	"testing"
 	"time"
@@ -577,6 +578,74 @@ func TestInterval(t *testing.T) {
 	})
 }
 
+func TestVariousLengthsVARCHAR(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value VARCHAR)`)
+	require.NoError(t, err)
+
+	const maxLength = 1024
+	values := []string{}
+	for i := 0; i <= maxLength; i++ {
+		values = append(values, randString(i))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value string
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, maxLength)
+		assert.Equal(t, values[id], value)
+		assert.Equal(t, len(values[id]), id)
+	}
+}
+
+const (
+	nRandomTestRows = 10000
+)
+
+func TestRandomizedVARCHAR(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value VARCHAR)`)
+	require.NoError(t, err)
+
+	values := []string{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, randString(int(randInt(0, 256))))
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value string
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.Equal(t, values[id], value)
+	}
+}
+
 func TestEmpty(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
@@ -810,4 +879,18 @@ func createTable(db *sql.DB, t *testing.T) *sql.Result {
 	res, err := db.Exec("CREATE TABLE foo(bar VARCHAR, baz INTEGER)")
 	require.NoError(t, err)
 	return &res
+}
+
+func randInt(lo int64, hi int64) int64 {
+	return rand.Int63n(hi-lo+1) + lo
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+func randString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }
