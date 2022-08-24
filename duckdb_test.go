@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"reflect"
+
 	"github.com/georgysavva/scany/sqlscan"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"reflect"
 
 	"github.com/stretchr/testify/require"
 )
@@ -471,6 +472,12 @@ func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
 	require.NoError(t, db.Ping())
+
+	_, err = db.Exec("INSTALL 'json'")
+	require.NoError(t, err)
+	_, err = db.Exec("LOAD 'json'")
+	require.NoError(t, err)
+
 	return db
 }
 

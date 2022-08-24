@@ -5,7 +5,8 @@
 package duckdb
 
 /*
-#cgo LDFLAGS: -lduckdb
+#cgo CXXFLAGS: -std=c++11 -fPIC -O3
+#cgo linux LDFLAGS: -ldl
 #include <duckdb.h>
 */
 import "C"
