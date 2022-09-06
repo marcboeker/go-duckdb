@@ -1,0 +1,70 @@
+name: Build static library dependencies
+on:
+  push:
+    branches: ["test-static"]
+env:
+  DUCKDB_VERSION: "0.4.0"
+jobs:
+  darwin_amd64:
+    runs-on: macos-latest
+    steps:
+      - name: Build
+        shell: bash
+        run: |
+          curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
+          unzip -u libduckdb.zip
+          # g++ -std=c++11 -fPIC -g0 -O3 --target=x86_64-apple-macos11 -c duckdb.cpp
+          # ar rvs libduckdb.a duckdb.o
+          echo "amd64" > libduckdb.a
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: darwin_amd64
+          path: libduckdb.a
+          retention-days: 1
+  darwin_arm64:
+    runs-on: macos-latest
+    steps:
+      - name: Build
+        shell: bash
+        run: |
+          curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
+          unzip -u libduckdb.zip
+          # g++ -std=c++11 -fPIC -g0 -O3 --target=arm64-apple-macos11 -c duckdb.cpp
+          # ar rvs libduckdb.a duckdb.o
+          echo "arm64" > libduckdb.a
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: darwin_arm64
+          path: libduckdb.a
+          retention-days: 1
+  commit:
+    runs-on: ubuntu-latest
+    needs: [darwin_amd64, darwin_arm64]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Update source
+        shell: bash
+        run: |
+          curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
+          unzip -u libduckdb.zip
+          mv duckdb.cpp deps/source/
+          mv duckdb.h duckdb.hpp deps/source/include/
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+      - name: Replace deps
+        shell: bash
+        run: |
+          mv darwin_amd64/libduckdb.a deps/darwin_amd64/libduckdb.a
+          mv darwin_arm64/libduckdb.a deps/darwin_arm64/libduckdb.a
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v3
+        with:
+          commit-message: Upgrade to DuckDB v${{ env.DUCKDB_VERSION }}
+          branch-suffix: random
+          delete-branch: true
+          title: Upgrade to DuckDB v${{ env.DUCKDB_VERSION }}
+          body: This pull-request was automatically generated
+          add-paths: |
+            deps
