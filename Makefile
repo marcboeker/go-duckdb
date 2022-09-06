@@ -1,6 +1,6 @@
 .PHONY: install
 install:
-	go install ./...
+	go install .
 
 .PHONY: examples
 examples:
@@ -8,4 +8,4 @@ examples:
 
 .PHONY: test
 test:
-	go test -v -race -count=1 ./...
+	go test -v -race -count=1 .
