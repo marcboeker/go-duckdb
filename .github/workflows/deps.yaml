@@ -1,9 +1,9 @@
 name: Build static library dependencies
 on:
   push:
-    branches: ["test-static"]
+    branches: ["main"]
 env:
-  DUCKDB_VERSION: "0.4.0"
+  DUCKDB_VERSION: "0.5.0"
 jobs:
   darwin_amd64:
     runs-on: macos-latest
@@ -13,9 +13,8 @@ jobs:
         run: |
           curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
           unzip -u libduckdb.zip
-          # g++ -std=c++11 -fPIC -g0 -O3 --target=x86_64-apple-macos11 -c duckdb.cpp
-          # ar rvs libduckdb.a duckdb.o
-          echo "amd64" > libduckdb.a
+          g++ -std=c++11 -fPIC -g0 -O3 --target=x86_64-apple-macos11 -c duckdb.cpp
+          ar rvs libduckdb.a duckdb.o
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
@@ -30,9 +29,8 @@ jobs:
         run: |
           curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
           unzip -u libduckdb.zip
-          # g++ -std=c++11 -fPIC -g0 -O3 --target=arm64-apple-macos11 -c duckdb.cpp
-          # ar rvs libduckdb.a duckdb.o
-          echo "arm64" > libduckdb.a
+          g++ -std=c++11 -fPIC -g0 -O3 --target=arm64-apple-macos11 -c duckdb.cpp
+          ar rvs libduckdb.a duckdb.o
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
