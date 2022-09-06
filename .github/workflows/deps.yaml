@@ -5,7 +5,7 @@ on:
     paths:
       - ".github/workflows/deps.yaml"
 env:
-  DUCKDB_VERSION: "0.5.0"
+  DUCKDB_VERSION: "0.4.0"
 jobs:
   darwin_amd64:
     runs-on: macos-latest
