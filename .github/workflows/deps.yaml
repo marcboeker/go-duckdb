@@ -1,7 +1,7 @@
 name: Build static library dependencies
 on:
   push:
-    branches: ["main"]
+    branches: ["master"]
     paths:
       - ".github/workflows/deps.yaml"
 env:
