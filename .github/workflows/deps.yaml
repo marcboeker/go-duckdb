@@ -47,8 +47,8 @@ jobs:
         run: |
           curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
           unzip -u libduckdb.zip
-          mv duckdb.cpp deps/source/
-          mv duckdb.h duckdb.hpp deps/source/include/
+          mv duckdb.hpp duckdb.cpp deps/source/
+          mv duckdb.h deps/source/include/
       - name: Download all artifacts
         uses: actions/download-artifact@v3
       - name: Replace deps

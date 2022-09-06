@@ -4,10 +4,8 @@ package duckdb
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/deps/source/include
-#cgo CXXFLAGS: -std=c++11 -fPIC -g0 -O3
-#cgo windows CXXFLAGS: -DWIN32 -DDUCKDB_BUILD_LIBRARY
-#cgo linux LDFLAGS: -ldl
-#cgo windows LDFLAGS: -lws2_32
-#include <duckdb.h>
 */
 import "C"
+
+// This import contains the source code and C++ compilation flags
+import _ "github.com/marcboeker/go-duckdb/deps/source"
