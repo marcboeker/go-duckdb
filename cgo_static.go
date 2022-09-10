@@ -1,11 +1,12 @@
-//go:build !duckdb_use_source && darwin
+//go:build !(duckdb_use_lib || duckdb_use_source) && (darwin || (linux && amd64))
 
 package duckdb
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/deps/source/include
 #cgo LDFLAGS: -lduckdb
 #cgo darwin,amd64 LDFLAGS: -lc++ -L${SRCDIR}/deps/darwin_amd64
 #cgo darwin,arm64 LDFLAGS: -lc++ -L${SRCDIR}/deps/darwin_arm64
+#cgo linux,amd64 LDFLAGS: -lstdc++ -lm -ldl -L${SRCDIR}/deps/linux_amd64
+#include <duckdb.h>
 */
 import "C"
