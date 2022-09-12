@@ -3,7 +3,7 @@
 package duckdb
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/deps/source/include
 #cgo LDFLAGS: -lduckdb
+#include <duckdb.h>
 */
 import "C"
