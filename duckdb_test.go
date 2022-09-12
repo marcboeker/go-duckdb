@@ -7,15 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"testing"
 	"time"
-
-	"reflect"
 
 	"github.com/georgysavva/scany/sqlscan"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 )
 
