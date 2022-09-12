@@ -70,8 +70,8 @@ jobs:
           path: deps/darwin_arm64
       - uses: actions/download-artifact@v3
         with:
-          name: linux_arm64
-          path: deps/linux_arm64
+          name: linux_amd64
+          path: deps/linux_amd64
       - name: Push static libraries
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
