@@ -13,8 +13,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - shell: bash
-        # run: make deps.darwin.amd64
-        run: touch deps/darwin_amd64/libduckdb.a
+        run: make deps.darwin.amd64
       - uses: actions/upload-artifact@v3
         with:
           name: darwin_amd64
@@ -27,8 +26,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - shell: bash
-        # run: make deps.darwin.arm64
-        run: touch deps/darwin_arm64/libduckdb.a
+        run: make deps.darwin.arm64
       - uses: actions/upload-artifact@v3
         with:
           name: darwin_arm64
@@ -41,8 +39,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - shell: bash
-        # run: make deps.linux.amd64
-        run: touch deps/linux_amd64/libduckdb.a
+        run: make deps.linux.amd64
       - uses: actions/upload-artifact@v3
         with:
           name: linux_amd64
