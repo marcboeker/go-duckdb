@@ -1,10 +1,10 @@
 name: Build static library dependencies
 on:
   pull_request:
-    # paths:
-    #   - "duckdb.cpp"
-    #   - "duckdb.h"
-    #   - "duckdb.hpp"
+    paths:
+      - "duckdb.cpp"
+      - "duckdb.h"
+      - "duckdb.hpp"
 jobs:
   darwin_amd64:
     runs-on: macos-latest
