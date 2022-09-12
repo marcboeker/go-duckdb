@@ -1,4 +1,4 @@
-#ifdef GODUCKDB_USE_SOURCE
+#ifdef GODUCKDB_FROM_SOURCE
 /*
 Copyright 2018-2022 Stichting DuckDB Foundation
 
