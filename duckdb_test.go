@@ -466,6 +466,17 @@ func TestInterval(t *testing.T) {
 	}
 }
 
+func TestEmpty(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+	rows, err := db.Query(`SELECT 1 WHERE 1 = 0`)
+	require.NoError(t, err)
+	defer rows.Close()
+	require.False(t, rows.Next())
+	require.NoError(t, rows.Err())
+}
+
 func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)

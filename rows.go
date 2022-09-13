@@ -42,10 +42,13 @@ func newRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
 	}
 
 	return &rows{
-		res:        res,
-		stmt:       stmt,
-		columns:    columns,
-		chunkCount: C.duckdb_result_chunk_count(res),
+		res:           res,
+		stmt:          stmt,
+		columns:       columns,
+		chunkCount:    C.duckdb_result_chunk_count(res),
+		chunkRowCount: 0,
+		chunkIdx:      0,
+		chunkRowIdx:   0,
 	}
 }
 
@@ -54,15 +57,14 @@ func (r *rows) Columns() []string {
 }
 
 func (r *rows) Next(dst []driver.Value) error {
-	if r.chunkRowIdx >= r.chunkRowCount {
+	for r.chunkRowIdx == r.chunkRowCount {
+		if r.chunkIdx == r.chunkCount {
+			return io.EOF
+		}
 		r.chunk = C.duckdb_result_get_chunk(r.res, r.chunkIdx)
-		r.chunkRowCount = C.duckdb_data_chunk_get_size(r.chunk)
 		r.chunkIdx++
+		r.chunkRowCount = C.duckdb_data_chunk_get_size(r.chunk)
 		r.chunkRowIdx = 0
-	}
-
-	if r.chunkIdx > r.chunkCount {
-		return io.EOF
 	}
 
 	colCount := len(r.columns)
