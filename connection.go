@@ -142,34 +142,3 @@ func (c *conn) queryUnprepared(cmd string) (driver.Rows, error) {
 
 	return newRows(res), nil
 }
-
-func (c *conn) Appender(schema string, table string) (*appender, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Appender after Close")
-	}
-
-	var schemastr *(C.char)
-	if schema != "" {
-		schemastr = C.CString(schema)
-		defer C.free(unsafe.Pointer(schemastr))
-	}
-
-	tablestr := C.CString(table)
-	defer C.free(unsafe.Pointer(tablestr))
-
-	var a C.duckdb_appender
-	if state := C.duckdb_appender_create(*c.con, schemastr, tablestr, &a); state == C.DuckDBError {
-		return nil, fmt.Errorf("can't create appender")
-	}
-
-	return &appender{c: c, schema: schema, table: table, appender: &a}, nil
-}
-
-func Appender(dbconn driver.Conn, schema string, table string) (*appender, error) {
-	conn, ok := dbconn.(*conn)
-	if !ok {
-		return nil, fmt.Errorf("not a duckdb driver connection")
-	}
-
-	return conn.Appender(schema, table)
-}
