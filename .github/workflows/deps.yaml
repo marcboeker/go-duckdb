@@ -1,6 +1,6 @@
 name: Build static library dependencies
 on:
-  pull_request:
+  push:
 jobs:
   darwin_amd64:
     runs-on: macos-latest
