@@ -1,6 +1,8 @@
 name: Build static library dependencies
 on:
-  pull_request:
+  push:
+    branches-ignore:
+      - master
     paths:
       - "duckdb.cpp"
       - "duckdb.h"
