@@ -1,35 +1,42 @@
-DUCKDB_VERSION=0.4.0
-LIB_PATH := $(shell pwd)/lib
-
-ifeq ($(shell uname -s),Darwin)
-LIB_EXT=dylib
-ARCH_OS=osx-universal
-LIBRARY_PATH := DYLD_LIBRARY_PATH=$(LIB_PATH)
-else
-LIB_EXT=so
-ARCH_OS=linux-amd64
-LIBRARY_PATH := LD_LIBRARY_PATH=$(LIB_PATH)
-endif
-LIBS := lib/libduckdb.$(LIB_EXT)
-LDFLAGS := LIB=libduckdb.$(LIB_EXT) CGO_LDFLAGS="-L$(LIB_PATH)" $(LIBRARY_PATH) CGO_CFLAGS="-I$(LIB_PATH)"
-
-$(LIBS):
-	mkdir -p lib
-	curl -Lo lib/libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-$(ARCH_OS).zip
-	cd lib; unzip -u libduckdb.zip
+DUCKDB_VERSION=0.5.0
 
 .PHONY: install
-install: $(LIBS)
-	$(LDFLAGS) go install -ldflags="-r $(LIB_PATH)" ./...
+install:
+	go install .
 
 .PHONY: examples
-examples: $(LIBS)
-	$(LDFLAGS) go run -ldflags="-r $(LIB_PATH)" examples/simple.go
+examples:
+	go run examples/simple.go
 
 .PHONY: test
-test: $(LIBS)
-	$(LDFLAGS) go test -ldflags="-r $(LIB_PATH)" -v -race -count=1 ./...
+test:
+	go test -v -race -count=1 .
 
-.PHONY: clean
-clean:
-	rm -rf lib
+.PHONY: deps.source
+deps.source:
+	curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
+	unzip -o libduckdb.zip
+	rm libduckdb.zip
+	echo '#ifdef GODUCKDB_FROM_SOURCE' > duckdb.hpp.tmp; cat duckdb.hpp >> duckdb.hpp.tmp; echo '\n#endif' >> duckdb.hpp.tmp; mv duckdb.hpp.tmp duckdb.hpp
+	echo '#ifdef GODUCKDB_FROM_SOURCE' > duckdb.cpp.tmp; cat duckdb.cpp >> duckdb.cpp.tmp; echo '\n#endif' >> duckdb.cpp.tmp; mv duckdb.cpp.tmp duckdb.cpp
+
+.PHONY: deps.darwin.amd64
+deps.darwin.amd64:
+	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "darwin" ]; then echo "Error: must run build on darwin"; false; fi
+	g++ -std=c++11 -O3 --target=x86_64-apple-macos11 -DGODUCKDB_FROM_SOURCE -c duckdb.cpp
+	ar rvs libduckdb.a duckdb.o
+	mv libduckdb.a deps/darwin_amd64/libduckdb.a
+
+.PHONY: deps.darwin.arm64
+deps.darwin.arm64:
+	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "darwin" ]; then echo "Error: must run build on darwin"; false; fi
+	g++ -std=c++11 -O3 --target=arm64-apple-macos11 -DGODUCKDB_FROM_SOURCE -c duckdb.cpp
+	ar rvs libduckdb.a duckdb.o
+	mv libduckdb.a deps/darwin_arm64/libduckdb.a
+
+.PHONY: deps.linux.amd64
+deps.linux.amd64:
+	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
+	g++ -std=c++11 -O3 -DGODUCKDB_FROM_SOURCE -c duckdb.cpp
+	ar rvs libduckdb.a duckdb.o
+	mv libduckdb.a deps/linux_amd64/libduckdb.a
