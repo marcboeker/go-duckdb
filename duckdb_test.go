@@ -204,27 +204,32 @@ func TestQueryListOfStructs(t *testing.T) {
 
 func TestQueryUUID(t *testing.T) {
 	t.Parallel()
-	test := func(t *testing.T, expected uuid.UUID) {
-		db := openDB(t)
-		defer db.Close()
+
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("CREATE TABLE uuid_test(uuid UUID)")
+	require.NoError(t, err)
+
+	tests := []uuid.UUID{
+		uuid.New(),
+		uuid.Nil,
+		uuid.MustParse("80000000-0000-0000-0000-200000000000"),
+	}
+	for _, v := range tests {
+		_, err := db.Exec("INSERT INTO uuid_test VALUES(?)", v)
+		require.NoError(t, err)
 
 		var uuid uuid.UUID
-		require.NoError(t, db.QueryRow("SELECT ?", expected).Scan(&uuid))
-		require.Equal(t, expected, uuid)
+		require.NoError(t, db.QueryRow("SELECT uuid FROM uuid_test WHERE uuid = ?", v).Scan(&uuid))
+		require.Equal(t, v, uuid)
 
-		require.NoError(t, db.QueryRow("SELECT ?::uuid", expected).Scan(&uuid))
-		require.Equal(t, expected, uuid)
+		require.NoError(t, db.QueryRow("SELECT ?", v).Scan(&uuid))
+		require.Equal(t, v, uuid)
+
+		require.NoError(t, db.QueryRow("SELECT ?::uuid", v).Scan(&uuid))
+		require.Equal(t, v, uuid)
 	}
-
-	for i := 0; i < 50; i++ {
-		t.Run(fmt.Sprintf("uuid %d", i), func(t *testing.T) {
-			t.Parallel()
-			test(t, uuid.New())
-		})
-	}
-
-	test(t, uuid.Nil)
-	test(t, uuid.MustParse("80000000-0000-0000-0000-200000000000"))
 }
 
 func TestQueryCompositeAggregate(t *testing.T) {
