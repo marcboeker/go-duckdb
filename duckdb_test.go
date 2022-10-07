@@ -93,22 +93,6 @@ func TestQuery(t *testing.T) {
 	require.True(t, found, "could not find row")
 }
 
-func TestQueryJSON(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	var bytes []byte
-	err := db.QueryRow("select json_array('foo', 'bar')").Scan(&bytes)
-	require.NoError(t, err)
-
-	var data []string
-	require.NoError(t, json.Unmarshal(bytes, &data))
-	require.Equal(t, len(data), 2)
-	require.Equal(t, data[0], "foo")
-	require.Equal(t, data[1], "bar")
-}
-
 func TestQueryStruct(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
@@ -371,10 +355,13 @@ func TestBlob(t *testing.T) {
 	require.Equal(t, []byte{0xAA}, bytes)
 }
 
-func TestJson(t *testing.T) {
+func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
+
+	loadJSONExt(t, db)
+
 	var bytes []byte
 
 	require.NoError(t, db.QueryRow("SELECT '{}'::JSON").Scan(&bytes))
@@ -382,6 +369,15 @@ func TestJson(t *testing.T) {
 
 	require.NoError(t, db.QueryRow(`SELECT '{"foo": "bar"}'::JSON`).Scan(&bytes))
 	require.Equal(t, `{"foo": "bar"}`, string(bytes))
+
+	err := db.QueryRow("SELECT json_array('foo', 'bar')").Scan(&bytes)
+	require.NoError(t, err)
+
+	var data []string
+	require.NoError(t, json.Unmarshal(bytes, &data))
+	require.Equal(t, len(data), 2)
+	require.Equal(t, data[0], "foo")
+	require.Equal(t, data[1], "bar")
 }
 
 // CAST(? as DATE) generate result of type Date (time.Time)
@@ -481,13 +477,14 @@ func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
 	require.NoError(t, db.Ping())
+	return db
+}
 
-	_, err = db.Exec("INSTALL 'json'")
+func loadJSONExt(t *testing.T, db *sql.DB) {
+	_, err := db.Exec("INSTALL 'json'")
 	require.NoError(t, err)
 	_, err = db.Exec("LOAD 'json'")
 	require.NoError(t, err)
-
-	return db
 }
 
 func createTable(db *sql.DB, t *testing.T) *sql.Result {
