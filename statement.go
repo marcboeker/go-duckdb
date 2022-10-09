@@ -48,6 +48,10 @@ func (s *stmt) start(args []driver.Value) error {
 
 	for i, v := range args {
 		switch v := v.(type) {
+		case bool:
+			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), true); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
 		case int8:
 			if rv := C.duckdb_bind_int8(*s.stmt, C.idx_t(i+1), C.int8_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
@@ -64,29 +68,73 @@ func (s *stmt) start(args []driver.Value) error {
 			if rv := C.duckdb_bind_int64(*s.stmt, C.idx_t(i+1), C.int64_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
+		case int:
+			if rv := C.duckdb_bind_int64(*s.stmt, C.idx_t(i+1), C.int64_t(v)); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
+		case HugeInt:
+			val := C.duckdb_hugeint{upper: v.upper, lower: v.lower}
+			if rv := C.duckdb_bind_hugeint(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
+		case uint8:
+			if rv := C.duckdb_bind_uint8(*s.stmt, C.idx_t(i+1), C.uchar(v)); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
+		case uint16:
+			if rv := C.duckdb_bind_uint16(*s.stmt, C.idx_t(i+1), C.uint16_t(v)); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
+		case uint32:
+			if rv := C.duckdb_bind_uint32(*s.stmt, C.idx_t(i+1), C.uint32_t(v)); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
+		case uint64:
+			if rv := C.duckdb_bind_uint64(*s.stmt, C.idx_t(i+1), C.uint64_t(v)); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
+		case float32:
+			if rv := C.duckdb_bind_float(*s.stmt, C.idx_t(i+1), C.float(v)); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
 		case float64:
 			if rv := C.duckdb_bind_double(*s.stmt, C.idx_t(i+1), C.double(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-		case bool:
-			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), true); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
 		case string:
-			str := C.CString(v)
-			if rv := C.duckdb_bind_varchar(*s.stmt, C.idx_t(i+1), str); rv == C.DuckDBError {
-				C.free(unsafe.Pointer(str))
+			val := C.CString(v)
+			if rv := C.duckdb_bind_varchar(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
+				C.free(unsafe.Pointer(val))
 				return errCouldNotBind
 			}
-			C.free(unsafe.Pointer(str))
+			C.free(unsafe.Pointer(val))
+		case []byte:
+			val := C.CBytes(v)
+			l := len(v)
+			if rv := C.duckdb_bind_blob(*s.stmt, C.idx_t(i+1), val, C.ulonglong(l)); rv == C.DuckDBError {
+				C.free(unsafe.Pointer(val))
+				return errCouldNotBind
+			}
+			C.free(unsafe.Pointer(val))
 		case time.Time:
-			var dt C.duckdb_timestamp
-			dt.micros = C.int64_t(v.UTC().UnixMicro())
-			if rv := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(i+1), dt); rv == C.DuckDBError {
+			var val C.duckdb_timestamp
+			val.micros = C.int64_t(v.UTC().UnixMicro())
+			if rv := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-		// TODO:
-
+		case Interval:
+			val := C.duckdb_interval{
+				months: C.int(v.Months),
+				days:   C.int(v.Days),
+				micros: C.longlong(v.Micros),
+			}
+			if rv := C.duckdb_bind_interval(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
+		case nil:
+			if rv := C.duckdb_bind_null(*s.stmt, C.idx_t(i+1)); rv == C.DuckDBError {
+				return errCouldNotBind
+			}
 		default:
 			return driver.ErrSkip
 		}
@@ -112,9 +160,13 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	if state := C.duckdb_execute_prepared(*s.stmt, &res); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_result_error(&res))
 		C.duckdb_destroy_result(&res)
+		C.duckdb_destroy_prepare(s.stmt)
 		return nil, errors.New(dbErr)
 	}
-	defer C.duckdb_destroy_result(&res)
+	defer func() {
+		C.duckdb_destroy_result(&res)
+		C.duckdb_destroy_prepare(s.stmt)
+	}()
 
 	ra := int64(C.duckdb_value_int64(&res, 0, 0))
 
@@ -138,7 +190,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	if state := C.duckdb_execute_prepared(*s.stmt, &res); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_result_error(&res))
 		C.duckdb_destroy_result(&res)
-
+		C.duckdb_destroy_prepare(s.stmt)
 		return nil, errors.New(dbErr)
 	}
 	s.rows = true

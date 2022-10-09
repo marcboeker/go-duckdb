@@ -127,11 +127,11 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_SMALLINT:
 		return get[int16](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_INTEGER:
-		return int64(get[int32](vector, rowIdx)), nil
+		return get[int32](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_BIGINT:
 		return get[int64](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_HUGEINT:
-		return get[HugeInt](vector, rowIdx).Int64()
+		return get[HugeInt](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_FLOAT:
 		return get[float32](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DOUBLE:
@@ -177,7 +177,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case C.DUCKDB_TYPE_SMALLINT:
 		return reflect.TypeOf(int16(0))
 	case C.DUCKDB_TYPE_INTEGER:
-		return reflect.TypeOf(int(0))
+		return reflect.TypeOf(int32(0))
 	case C.DUCKDB_TYPE_BIGINT:
 		return reflect.TypeOf(int64(0))
 	case C.DUCKDB_TYPE_FLOAT:
@@ -190,6 +190,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf("")
 	case C.DUCKDB_TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
+	case C.DUCKDB_TYPE_MAP:
+		return reflect.TypeOf(Map{})
 	}
 	return nil
 }
@@ -205,7 +207,7 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	case C.DUCKDB_TYPE_SMALLINT:
 		return "SMALLINT"
 	case C.DUCKDB_TYPE_INTEGER:
-		return "INT"
+		return "INTEGER"
 	case C.DUCKDB_TYPE_BIGINT:
 		return "BIGINT"
 	case C.DUCKDB_TYPE_FLOAT:
@@ -220,6 +222,8 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 		return "TIMESTAMP"
 	case C.DUCKDB_TYPE_BLOB:
 		return "BLOB"
+	case C.DUCKDB_TYPE_MAP:
+		return "MAP"
 	}
 	return ""
 }
@@ -228,6 +232,7 @@ func (r *rows) Close() error {
 	C.duckdb_destroy_result(&r.res)
 
 	if r.stmt != nil {
+		C.duckdb_destroy_prepare(r.stmt.stmt)
 		r.stmt.rows = false
 		r.stmt = nil
 	}
@@ -257,7 +262,7 @@ func (v HugeInt) Int64() (int64, error) {
 	} else if v.upper == -1 {
 		return -int64(math.MaxUint64 - v.lower + 1), nil
 	} else {
-		return 0, fmt.Errorf("can not convert duckdb:hugeint to go:int64 (upper:%d,lower:%d)", v.upper, v.lower)
+		return 0, fmt.Errorf("can not convert duckdb:hugeint to go:int64 (upper:%d, lower:%d)", v.upper, v.lower)
 	}
 }
 

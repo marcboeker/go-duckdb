@@ -10,7 +10,7 @@ func (t *tx) Commit() error {
 	}
 
 	t.c.tx = false
-	_, err := t.c.exec("COMMIT TRANSACTION")
+	_, err := t.c.Exec("COMMIT TRANSACTION", nil)
 	t.c = nil
 
 	return err
@@ -22,7 +22,7 @@ func (t *tx) Rollback() error {
 	}
 
 	t.c.tx = false
-	_, err := t.c.exec("ROLLBACK")
+	_, err := t.c.Exec("ROLLBACK", nil)
 	t.c = nil
 
 	return err
