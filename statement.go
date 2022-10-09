@@ -73,7 +73,10 @@ func (s *stmt) start(args []driver.Value) error {
 				return errCouldNotBind
 			}
 		case HugeInt:
-			val := C.duckdb_hugeint{upper: v.upper, lower: v.lower}
+			val := C.duckdb_hugeint{
+				upper: C.int64_t(v.upper),
+				lower: C.uint64_t(v.lower),
+			}
 			if rv := C.duckdb_bind_hugeint(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
@@ -111,22 +114,23 @@ func (s *stmt) start(args []driver.Value) error {
 		case []byte:
 			val := C.CBytes(v)
 			l := len(v)
-			if rv := C.duckdb_bind_blob(*s.stmt, C.idx_t(i+1), val, C.ulonglong(l)); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_blob(*s.stmt, C.idx_t(i+1), val, C.uint64_t(l)); rv == C.DuckDBError {
 				C.free(unsafe.Pointer(val))
 				return errCouldNotBind
 			}
 			C.free(unsafe.Pointer(val))
 		case time.Time:
-			var val C.duckdb_timestamp
-			val.micros = C.int64_t(v.UTC().UnixMicro())
+			val := C.duckdb_timestamp{
+				micros: C.int64_t(v.UTC().UnixMicro()),
+			}
 			if rv := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 		case Interval:
 			val := C.duckdb_interval{
-				months: C.int(v.Months),
-				days:   C.int(v.Days),
-				micros: C.longlong(v.Micros),
+				months: C.int32_t(v.Months),
+				days:   C.int32_t(v.Days),
+				micros: C.int64_t(v.Micros),
 			}
 			if rv := C.duckdb_bind_interval(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
 				return errCouldNotBind
