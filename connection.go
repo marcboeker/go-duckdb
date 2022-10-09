@@ -9,8 +9,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"unsafe"
-
-	"github.com/google/uuid"
 )
 
 type conn struct {
@@ -24,10 +22,12 @@ func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch v := nv.Value.(type) {
 	case HugeInt:
 		nv.Value = HugeInt(v)
-	case uuid.UUID:
-		nv.Value = v.String()
+		return nil
+	case Interval:
+		nv.Value = Interval(v)
+		return nil
 	}
-	return nil
+	return driver.ErrSkip
 }
 
 func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {

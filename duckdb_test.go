@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"reflect"
 	"testing"
 	"time"
 
@@ -503,33 +502,42 @@ func TestInterval(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
-	tests := map[string]struct {
-		input string
-		want  Interval
-	}{
-		"simple interval": {
-			input: "INTERVAL 5 HOUR",
-			want:  Interval{Days: 0, Months: 0, Micros: 18000000000},
-		},
-		"interval arithmetic": {
-			input: "INTERVAL 1 DAY + INTERVAL 5 DAY",
-			want:  Interval{Days: 6, Months: 0, Micros: 0},
-		},
-		"timestamp arithmetic": {
-			input: "CAST('2022-05-01' as TIMESTAMP) - CAST('2022-04-01' as TIMESTAMP)",
-			want:  Interval{Days: 30, Months: 0, Micros: 0},
-		},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			var res Interval
-			if err := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input)).Scan(&res); err != nil {
-				t.Errorf("can not scan value %v", err)
-			} else if !reflect.DeepEqual(tc.want, res) {
-				t.Errorf("expected value %v != resulting value %v", tc.want, res)
-			}
-		})
-	}
+
+	t.Run("bind interval", func(t *testing.T) {
+		interval := Interval{Days: 10, Months: 4, Micros: 4}
+		row := db.QueryRow("SELECT ?::INTERVAL", interval)
+
+		var res Interval
+		require.NoError(t, row.Scan(&res))
+		require.Equal(t, interval, res)
+	})
+
+	t.Run("scan interval", func(t *testing.T) {
+		tests := map[string]struct {
+			input string
+			want  Interval
+		}{
+			"simple interval": {
+				input: "INTERVAL 5 HOUR",
+				want:  Interval{Days: 0, Months: 0, Micros: 18000000000},
+			},
+			"interval arithmetic": {
+				input: "INTERVAL 1 DAY + INTERVAL 5 DAY",
+				want:  Interval{Days: 6, Months: 0, Micros: 0},
+			},
+			"timestamp arithmetic": {
+				input: "CAST('2022-05-01' as TIMESTAMP) - CAST('2022-04-01' as TIMESTAMP)",
+				want:  Interval{Days: 30, Months: 0, Micros: 0},
+			},
+		}
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				var res Interval
+				require.NoError(t, db.QueryRow(fmt.Sprintf("SELECT %s", tc.input)).Scan(&res))
+				require.Equal(t, tc.want, res)
+			})
+		}
+	})
 }
 
 func TestEmpty(t *testing.T) {
