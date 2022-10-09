@@ -11,8 +11,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "109f932c4"
-#define DUCKDB_VERSION "v0.5.0"
+#define DUCKDB_SOURCE_ID "7c111322d"
+#define DUCKDB_VERSION "v0.5.1"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -670,7 +670,7 @@ struct date_t { // NOLINT
 
 //! Type used to represent time (microseconds)
 struct dtime_t { // NOLINT
-    int64_t micros;
+	int64_t micros;
 
 	dtime_t() = default;
 	explicit inline dtime_t(int64_t micros_p) : micros(micros_p) {}
@@ -705,9 +705,11 @@ struct dtime_t { // NOLINT
 	static inline dtime_t allballs() {return dtime_t(0); } // NOLINT
 };
 
+struct dtime_tz_t : public dtime_t {};
+
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
-    int64_t value;
+	int64_t value;
 
 	timestamp_t() = default;
 	explicit inline timestamp_t(int64_t value_p) : value(value_p) {}
@@ -737,6 +739,11 @@ struct timestamp_t { // NOLINT
 	static inline timestamp_t ninfinity() {return timestamp_t(-std::numeric_limits<int64_t>::max()); } // NOLINT
 	static inline timestamp_t epoch() {return timestamp_t(0); } // NOLINT
 };
+
+struct timestamp_tz_t : public timestamp_t {};
+struct timestamp_ns_t : public timestamp_t {};
+struct timestamp_ms_t : public timestamp_t {};
+struct timestamp_sec_t : public timestamp_t {};
 
 struct interval_t {
 	int32_t months;
@@ -1021,6 +1028,10 @@ struct LogicalType {
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
+	inline void CopyAuxInfo(const LogicalType& other) {
+		type_info_ = other.type_info_;
+	}
+	bool EqualTypeInfo(const LogicalType& rhs) const;
 
 	// copy assignment
 	inline LogicalType& operator=(const LogicalType &other) {
@@ -1047,6 +1058,16 @@ struct LogicalType {
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
 
+	DUCKDB_API static bool TypeIsTimestamp(LogicalTypeId id) {
+		return (id == LogicalTypeId::TIMESTAMP ||
+				id == LogicalTypeId::TIMESTAMP_MS ||
+				id == LogicalTypeId::TIMESTAMP_NS ||
+				id == LogicalTypeId::TIMESTAMP_SEC ||
+				id == LogicalTypeId::TIMESTAMP_TZ);
+	}
+	DUCKDB_API static bool TypeIsTimestamp(const LogicalType& type) {
+		return TypeIsTimestamp(type.id());
+	}
 	DUCKDB_API string ToString() const;
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
@@ -1262,6 +1283,87 @@ struct aggregate_state_t {
 };
 
 } // namespace duckdb
+
+namespace std {
+
+	//! Date
+	template <>
+	struct hash<duckdb::date_t>
+	{
+		std::size_t operator()(const duckdb::date_t& k) const
+		{
+			using std::hash;
+			return hash<int32_t>()((int32_t)k);
+		}
+	};
+
+	//! Time
+	template <>
+	struct hash<duckdb::dtime_t>
+	{
+		std::size_t operator()(const duckdb::dtime_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::dtime_tz_t>
+	{
+		std::size_t operator()(const duckdb::dtime_tz_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+
+	//! Timestamp
+	template <>
+	struct hash<duckdb::timestamp_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_ms_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_ms_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_ns_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_ns_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_sec_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_sec_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+	template <>
+	struct hash<duckdb::timestamp_tz_t>
+	{
+		std::size_t operator()(const duckdb::timestamp_tz_t& k) const
+		{
+			using std::hash;
+			return hash<int64_t>()((int64_t)k);
+		}
+	};
+}
 
 
 namespace duckdb {
@@ -3161,7 +3263,17 @@ Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(dtime_tz_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(timestamp_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_sec_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_ms_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_ns_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(timestamp_tz_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(const char *value);
 template <>
@@ -3372,8 +3484,8 @@ public:
 	DUCKDB_API AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size);
 	DUCKDB_API ~AllocatedData();
 	// disable copy constructors
-	DUCKDB_API AllocatedData(const AllocatedData &other) = delete;
-	DUCKDB_API AllocatedData &operator=(const AllocatedData &) = delete;
+	AllocatedData(const AllocatedData &other) = delete;
+	AllocatedData &operator=(const AllocatedData &) = delete;
 	//! enable move constructors
 	DUCKDB_API AllocatedData(AllocatedData &&other) noexcept;
 	DUCKDB_API AllocatedData &operator=(AllocatedData &&) noexcept;
@@ -4301,6 +4413,13 @@ struct StringVector {
 	DUCKDB_API static void AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer);
 	//! Add a reference from this vector to the string heap of the provided vector
 	DUCKDB_API static void AddHeapReference(Vector &vector, Vector &other);
+};
+
+struct MapVector {
+	DUCKDB_API static const Vector &GetKeys(const Vector &vector);
+	DUCKDB_API static const Vector &GetValues(const Vector &vector);
+	DUCKDB_API static Vector &GetKeys(Vector &vector);
+	DUCKDB_API static Vector &GetValues(Vector &vector);
 };
 
 struct StructVector {
@@ -9819,9 +9938,12 @@ public:
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	ColumnDefinition &GetColumn(const string &name);
-	//! Returns a list of types of the table
+	//! Returns a list of types of the table, excluding generated columns
 	vector<LogicalType> GetTypes();
 	string ToSQL() override;
+
+	//! Get statistics of a column (physical or virtual) within the table
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
@@ -12844,6 +12966,7 @@ public:
 
 	//! Push a new error
 	void PushError(PreservedError exception);
+
 	//! True if an error has been thrown
 	bool HasError();
 	//! Throw the exception that was pushed using PushError.
@@ -12891,13 +13014,13 @@ private:
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
-	void ThrowExceptionInternal();
 
 private:
 	PhysicalOperator *physical_plan;
 	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
+	mutex error_lock;
 	//! The pipelines of the current query
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! The root pipeline of the query
@@ -12919,6 +13042,8 @@ private:
 	atomic<idx_t> completed_pipelines;
 	//! The total amount of pipelines in the query
 	idx_t total_pipelines;
+	//! Whether or not execution is cancelled
+	bool cancelled;
 
 	//! The adjacent union pipelines of each pipeline
 	//! Union pipelines have the same sink, but can be run concurrently along with this pipeline
