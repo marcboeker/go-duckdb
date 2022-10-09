@@ -38,6 +38,7 @@ func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 	return stmt.Exec(args)
 }
 
@@ -46,6 +47,7 @@ func (c *conn) Query(cmd string, args []driver.Value) (driver.Rows, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return stmt.Query(args)
 }
 

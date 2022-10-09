@@ -167,10 +167,7 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 		C.duckdb_destroy_prepare(s.stmt)
 		return nil, errors.New(dbErr)
 	}
-	defer func() {
-		C.duckdb_destroy_result(&res)
-		C.duckdb_destroy_prepare(s.stmt)
-	}()
+	defer C.duckdb_destroy_result(&res)
 
 	ra := int64(C.duckdb_value_int64(&res, 0, 0))
 

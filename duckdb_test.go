@@ -64,8 +64,11 @@ func TestQuery(t *testing.T) {
 	createTable(db, t)
 
 	t.Run("simple", func(t *testing.T) {
-		_, err := db.Exec("INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+		res, err := db.Exec("INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
 		require.NoError(t, err)
+		ra, err := res.RowsAffected()
+		require.NoError(t, err)
+		require.Equal(t, int64(2), ra)
 
 		rows, err := db.Query("SELECT bar, baz FROM foo WHERE baz > ?", 12344)
 		require.NoError(t, err)
