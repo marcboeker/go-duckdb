@@ -1,7 +1,6 @@
 package duckdb
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/georgysavva/scany/sqlscan"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -131,7 +129,24 @@ func TestStruct(t *testing.T) {
 	defer db.Close()
 	createTable(db, t)
 
-	t.Run("select struct", func(t *testing.T) {
+	t.Run("scan single struct", func(t *testing.T) {
+		row := db.QueryRow("SELECT {'x': 1, 'y': 2}")
+
+		type point struct {
+			X int
+			Y int
+		}
+
+		want := Composite[point]{
+			point{1, 2},
+		}
+
+		var result Composite[point]
+		require.NoError(t, row.Scan(&result))
+		require.Equal(t, want, result)
+	})
+
+	t.Run("scan slice of structs", func(t *testing.T) {
 		_, err := db.Exec("INSERT INTO foo VALUES('lala', ?), ('lala', ?), ('lalo', 42), ('lalo', 43)", 12345, 12346)
 		require.NoError(t, err)
 
@@ -140,37 +155,25 @@ func TestStruct(t *testing.T) {
 			Baz int
 		}
 
-		want := []row{
-			{"lalo", 42},
-			{"lalo", 43},
-			{"lala", 12345},
-			{"lala", 12346},
+		want := []Composite[row]{
+			{row{"lalo", 42}},
+			{row{"lalo", 43}},
+			{row{"lala", 12345}},
+			{row{"lala", 12346}},
 		}
 
 		rows, err := db.Query("SELECT ROW(bar, baz) FROM foo ORDER BY baz")
 		require.NoError(t, err)
 		defer rows.Close()
 
-		i := 0
+		var result []Composite[row]
 		for rows.Next() {
-			res := Composite[row]{}
+			var res Composite[row]
 			err := rows.Scan(&res)
 			require.NoError(t, err)
-			require.Equal(t, want[i], res.Get())
-			i++
+			result = append(result, res)
 		}
-	})
-
-	t.Run("select struct slice", func(t *testing.T) {
-		type point struct {
-			X int
-			Y int
-		}
-		var row Composite[[]point]
-		require.NoError(t, sqlscan.Get(context.Background(), db, &row, "SELECT ARRAY[{'x': 1, 'y': 2}, {'x': 3, 'y': 4}]"))
-		require.Equal(t, 2, len(row.Get()))
-		require.Equal(t, point{1, 2}, row.Get()[0])
-		require.Equal(t, point{3, 4}, row.Get()[1])
+		require.Equal(t, want, result)
 	})
 }
 
