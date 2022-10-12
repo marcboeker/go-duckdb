@@ -34,6 +34,11 @@ func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
 	}
+
+	if len(args) == 0 {
+		return c.execUnprepared(cmd)
+	}
+
 	stmt, err := c.prepareStmt(cmd)
 	if err != nil {
 		return nil, err
@@ -43,6 +48,14 @@ func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {
 }
 
 func (c *conn) Query(cmd string, args []driver.Value) (driver.Rows, error) {
+	if c.closed {
+		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
+	}
+
+	if len(args) == 0 {
+		return c.queryUnprepared(cmd)
+	}
+
 	stmt, err := c.prepareStmt(cmd)
 	if err != nil {
 		return nil, err
@@ -97,4 +110,34 @@ func (c *conn) prepareStmt(cmd string) (driver.Stmt, error) {
 	}
 
 	return &stmt{c: c, stmt: &s}, nil
+}
+
+func (c *conn) execUnprepared(cmd string) (driver.Result, error) {
+	cmdstr := C.CString(cmd)
+	defer C.free(unsafe.Pointer(cmdstr))
+
+	var res C.duckdb_result
+	if err := C.duckdb_query(*c.con, cmdstr, &res); err == C.DuckDBError {
+		dbErr := C.duckdb_result_error(&res)
+		return nil, errors.New(C.GoString(dbErr))
+	}
+
+	defer C.duckdb_destroy_result(&res)
+
+	ra := int64(C.duckdb_value_int64(&res, 0, 0))
+
+	return &result{ra}, nil
+}
+
+func (c *conn) queryUnprepared(cmd string) (driver.Rows, error) {
+	cmdstr := C.CString(cmd)
+	defer C.free(unsafe.Pointer(cmdstr))
+
+	var res C.duckdb_result
+	if err := C.duckdb_query(*c.con, cmdstr, &res); err == C.DuckDBError {
+		dbErr := C.duckdb_result_error(&res)
+		return nil, errors.New(C.GoString(dbErr))
+	}
+
+	return newRows(res), nil
 }

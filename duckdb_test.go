@@ -588,6 +588,20 @@ func TestEmpty(t *testing.T) {
 	require.NoError(t, rows.Err())
 }
 
+func TestMultiple(t *testing.T) {
+	t.Parallel()
+
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("CREATE TABLE foo (x text); CREATE TABLE bar (x text);")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO foo VALUES (?); INSERT INTO bar VALUES (?);", "hello", "world")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Cannot prepare multiple statements at once")
+}
+
 func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
