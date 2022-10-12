@@ -419,6 +419,36 @@ func TestBlob(t *testing.T) {
 	})
 }
 
+func TestBoolean(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	var res bool
+
+	t.Run("scan", func(t *testing.T) {
+		require.NoError(t, db.QueryRow("SELECT true").Scan(&res))
+		require.Equal(t, true, res)
+
+		require.NoError(t, db.QueryRow("SELECT false").Scan(&res))
+		require.Equal(t, false, res)
+	})
+
+	t.Run("bind", func(t *testing.T) {
+		require.NoError(t, db.QueryRow("SELECT ?", true).Scan(&res))
+		require.Equal(t, true, res)
+
+		require.NoError(t, db.QueryRow("SELECT ?", false).Scan(&res))
+		require.Equal(t, false, res)
+
+		require.NoError(t, db.QueryRow("SELECT ?", 0).Scan(&res))
+		require.Equal(t, false, res)
+
+		require.NoError(t, db.QueryRow("SELECT ?", 1).Scan(&res))
+		require.Equal(t, true, res)
+	})
+}
+
 func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)

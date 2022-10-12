@@ -49,7 +49,7 @@ func (s *stmt) start(args []driver.Value) error {
 	for i, v := range args {
 		switch v := v.(type) {
 		case bool:
-			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), true); rv == C.DuckDBError {
+			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), C.bool(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
 		case int8:
