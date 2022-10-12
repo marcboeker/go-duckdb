@@ -7,16 +7,12 @@ import "C"
 
 import (
 	"database/sql/driver"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"reflect"
 	"time"
 	"unsafe"
-
-	"github.com/mitchellh/mapstructure"
 )
 
 type rows struct {
@@ -83,16 +79,6 @@ func (r *rows) Next(dst []driver.Value) error {
 	return nil
 }
 
-func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
-	ptr := C.duckdb_vector_get_data(vector)
-	xs := (*[1 << 31]T)(ptr)
-	return xs[rowIdx]
-}
-
-func decode(data any, out any) error {
-	return mapstructure.Decode(data, out)
-}
-
 func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	v, err := scan(vector, rowIdx)
 	if err != nil {
@@ -127,11 +113,11 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_SMALLINT:
 		return get[int16](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_INTEGER:
-		return int64(get[int32](vector, rowIdx)), nil
+		return get[int32](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_BIGINT:
 		return get[int64](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_HUGEINT:
-		return get[HugeInt](vector, rowIdx).Int64()
+		return get[HugeInt](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_FLOAT:
 		return get[float32](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DOUBLE:
@@ -177,7 +163,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case C.DUCKDB_TYPE_SMALLINT:
 		return reflect.TypeOf(int16(0))
 	case C.DUCKDB_TYPE_INTEGER:
-		return reflect.TypeOf(int(0))
+		return reflect.TypeOf(int32(0))
 	case C.DUCKDB_TYPE_BIGINT:
 		return reflect.TypeOf(int64(0))
 	case C.DUCKDB_TYPE_FLOAT:
@@ -190,6 +176,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf("")
 	case C.DUCKDB_TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
+	case C.DUCKDB_TYPE_MAP:
+		return reflect.TypeOf(Map{})
 	}
 	return nil
 }
@@ -205,7 +193,7 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	case C.DUCKDB_TYPE_SMALLINT:
 		return "SMALLINT"
 	case C.DUCKDB_TYPE_INTEGER:
-		return "INT"
+		return "INTEGER"
 	case C.DUCKDB_TYPE_BIGINT:
 		return "BIGINT"
 	case C.DUCKDB_TYPE_FLOAT:
@@ -220,6 +208,8 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 		return "TIMESTAMP"
 	case C.DUCKDB_TYPE_BLOB:
 		return "BLOB"
+	case C.DUCKDB_TYPE_MAP:
+		return "MAP"
 	}
 	return ""
 }
@@ -228,6 +218,7 @@ func (r *rows) Close() error {
 	C.duckdb_destroy_result(&r.res)
 
 	if r.stmt != nil {
+		C.duckdb_destroy_prepare(r.stmt.stmt)
 		r.stmt.rows = false
 		r.stmt = nil
 	}
@@ -235,82 +226,10 @@ func (r *rows) Close() error {
 	return nil
 }
 
-var (
-	errInvalidType = errors.New("invalid data type")
-)
-
-// HugeInt are composed in a (lower, upper) component
-// The value of the HugeInt is upper * 2^64 + lower
-type HugeInt C.duckdb_hugeint
-
-func (v HugeInt) UUID() []byte {
-	var uuid [16]byte
-	// We need to flip the `sign bit` of the signed `HugeInt` to transform it to UUID bytes
-	binary.BigEndian.PutUint64(uuid[:8], uint64(v.upper)^1<<63)
-	binary.BigEndian.PutUint64(uuid[8:], uint64(v.lower))
-	return uuid[:]
-}
-
-func (v HugeInt) Int64() (int64, error) {
-	if v.upper == 0 && v.lower <= math.MaxInt64 {
-		return int64(v.lower), nil
-	} else if v.upper == -1 {
-		return -int64(math.MaxUint64 - v.lower + 1), nil
-	} else {
-		return 0, fmt.Errorf("can not convert duckdb:hugeint to go:int64 (upper:%d,lower:%d)", v.upper, v.lower)
-	}
-}
-
-func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (float64, error) {
-	scale := C.duckdb_decimal_scale(ty)
-	width := C.duckdb_decimal_width(ty)
-	var value C.duckdb_hugeint
-	switch C.duckdb_decimal_internal_type(ty) {
-	case C.DUCKDB_TYPE_SMALLINT:
-		value.lower = C.uint64_t(get[uint16](vector, rowIdx))
-	case C.DUCKDB_TYPE_INTEGER:
-		value.lower = C.uint64_t(get[uint32](vector, rowIdx))
-	case C.DUCKDB_TYPE_BIGINT:
-		value.lower = C.uint64_t(get[uint64](vector, rowIdx))
-	case C.DUCKDB_TYPE_HUGEINT:
-		i := get[C.duckdb_hugeint](vector, rowIdx)
-		value.lower = i.lower
-		value.upper = i.upper
-	default:
-		return 0, errInvalidType
-	}
-	decimal := C.duckdb_decimal{width, scale, value}
-	return float64(C.duckdb_decimal_to_double(decimal)), nil
-}
-
-func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
-	data := C.duckdb_list_vector_get_child(vector)
-	entry := get[duckdb_list_entry_t](vector, rowIdx)
-	converted := make([]any, 0, entry.length)
-
-	for i := entry.offset; i < entry.offset+entry.length; i++ {
-		value, err := scan(data, i)
-		if err != nil {
-			return nil, err
-		}
-		converted = append(converted, value)
-	}
-
-	return converted, nil
-}
-
-func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (map[string]any, error) {
-	data := map[string]any{}
-	for j := C.idx_t(0); j < C.duckdb_struct_type_child_count(ty); j++ {
-		name := C.GoString(C.duckdb_struct_type_child_name(ty, j))
-		child := C.duckdb_struct_vector_get_child(vector, j)
-		value, err := scan(child, rowIdx)
-		if err != nil {
-			return nil, err
-		}
-		data[name] = value
-	}
-	return data, nil
+func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
+	ptr := C.duckdb_vector_get_data(vector)
+	xs := (*[1 << 31]T)(ptr)
+	return xs[rowIdx]
 }
 
 func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Map, error) {
@@ -346,10 +265,56 @@ func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
 	}
 }
 
-type Interval struct {
-	Days   int32 `json:"days"`
-	Months int32 `json:"months"`
-	Micros int64 `json:"micros"`
+func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
+	data := C.duckdb_list_vector_get_child(vector)
+	entry := get[duckdb_list_entry_t](vector, rowIdx)
+	converted := make([]any, 0, entry.length)
+
+	for i := entry.offset; i < entry.offset+entry.length; i++ {
+		value, err := scan(data, i)
+		if err != nil {
+			return nil, err
+		}
+		converted = append(converted, value)
+	}
+
+	return converted, nil
+}
+
+func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (map[string]any, error) {
+	data := map[string]any{}
+	for j := C.idx_t(0); j < C.duckdb_struct_type_child_count(ty); j++ {
+		name := C.GoString(C.duckdb_struct_type_child_name(ty, j))
+		child := C.duckdb_struct_vector_get_child(vector, j)
+		value, err := scan(child, rowIdx)
+		if err != nil {
+			return nil, err
+		}
+		data[name] = value
+	}
+	return data, nil
+}
+
+func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (float64, error) {
+	scale := C.duckdb_decimal_scale(ty)
+	width := C.duckdb_decimal_width(ty)
+	var value C.duckdb_hugeint
+	switch C.duckdb_decimal_internal_type(ty) {
+	case C.DUCKDB_TYPE_SMALLINT:
+		value.lower = C.uint64_t(get[uint16](vector, rowIdx))
+	case C.DUCKDB_TYPE_INTEGER:
+		value.lower = C.uint64_t(get[uint32](vector, rowIdx))
+	case C.DUCKDB_TYPE_BIGINT:
+		value.lower = C.uint64_t(get[uint64](vector, rowIdx))
+	case C.DUCKDB_TYPE_HUGEINT:
+		i := get[C.duckdb_hugeint](vector, rowIdx)
+		value.lower = i.lower
+		value.upper = i.upper
+	default:
+		return 0, errInvalidType
+	}
+	decimal := C.duckdb_decimal{width, scale, value}
+	return float64(C.duckdb_decimal_to_double(decimal)), nil
 }
 
 func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
@@ -362,27 +327,6 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 	return data, nil
 }
 
-// Use as the `Scanner` type for any composite types (maps, lists, structs)
-type Composite[T any] struct {
-	t T
-}
-
-func (s Composite[T]) Get() T {
-	return s.t
-}
-
-func (s *Composite[T]) Scan(v any) error {
-	return decode(v, &s.t)
-}
-
-type Map map[any]any
-
-func (m *Map) Scan(v any) error {
-	data, ok := v.(Map)
-	if !ok {
-		return fmt.Errorf("invalid type `%T` for scanning `Map`, expected `Map`", data)
-	}
-
-	*m = data
-	return nil
-}
+var (
+	errInvalidType = errors.New("invalid data type")
+)

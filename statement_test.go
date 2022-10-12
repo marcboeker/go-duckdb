@@ -1,61 +1,53 @@
 package duckdb
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestPrepareQuery(t *testing.T) {
-
-	db := openDB(t) //:memory:
-
+	db := openDB(t)
 	defer db.Close()
 	createTable(db, t)
 
-	stmt, err := db.Prepare("select * from foo where baz=?")
-	if err != nil {
-		t.Fatal("prepare:", err)
-	}
+	stmt, err := db.Prepare("SELECT * FROM foo WHERE baz=?")
+	require.NoError(t, err)
 	defer stmt.Close()
+
 	rows, err := stmt.Query(0)
-	if err != nil {
-		t.Fatal("query:", err)
-	}
+	require.NoError(t, err)
 	defer rows.Close()
 }
 
 func TestPrepareWithError(t *testing.T) {
-
-	db := openDB(t) //:memory:
-
+	db := openDB(t)
 	defer db.Close()
 	createTable(db, t)
+
 	testCases := []struct {
 		tpl string
 		err string
 	}{
 		{
-			tpl: "select * from tbl where baz=?",
+			tpl: "SELECT * FROM tbl WHERE baz=?",
 			err: "Table with name tbl does not exist",
 		},
 		{
-			tpl: "select * from foo where col=?",
+			tpl: "SELECT * FROM foo WHERE col=?",
 			err: `Referenced column "col" not found in FROM clause`,
 		},
 		{
-			tpl: "select * from foo  col=?",
+			tpl: "SELECT * FROM foo col=?",
 			err: `syntax error at or near "="`,
 		},
 	}
-	for _, tC := range testCases {
-		stmt, err := db.Prepare(tC.tpl)
-		if err == nil {
-			stmt.Close()
-			t.Fatal("expected err:", tC.tpl)
+	for _, tc := range testCases {
+		stmt, err := db.Prepare(tc.tpl)
+		if err != nil {
+			require.ErrorContains(t, err, tc.err)
+			continue
 		}
-
-		if !strings.Contains(err.Error(), tC.err) {
-			t.Error("expected contains[", tC.err, "], but:", err)
-		}
+		defer stmt.Close()
 	}
 }
