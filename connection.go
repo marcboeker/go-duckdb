@@ -117,15 +117,15 @@ func (c *conn) execUnprepared(cmd string) (driver.Result, error) {
 	defer C.free(unsafe.Pointer(cmdstr))
 
 	var res C.duckdb_result
-	if err := C.duckdb_query(*c.con, cmdstr, &res); err == C.DuckDBError {
-		dbErr := C.duckdb_result_error(&res)
-		return nil, errors.New(C.GoString(dbErr))
-	}
-
+	err := C.duckdb_query(*c.con, cmdstr, &res)
 	defer C.duckdb_destroy_result(&res)
 
-	ra := int64(C.duckdb_value_int64(&res, 0, 0))
+	if err == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_result_error(&res))
+		return nil, errors.New(dbErr)
+	}
 
+	ra := int64(C.duckdb_value_int64(&res, 0, 0))
 	return &result{ra}, nil
 }
 
@@ -135,8 +135,9 @@ func (c *conn) queryUnprepared(cmd string) (driver.Rows, error) {
 
 	var res C.duckdb_result
 	if err := C.duckdb_query(*c.con, cmdstr, &res); err == C.DuckDBError {
-		dbErr := C.duckdb_result_error(&res)
-		return nil, errors.New(C.GoString(dbErr))
+		dbErr := C.GoString(C.duckdb_result_error(&res))
+		C.duckdb_destroy_result(&res)
+		return nil, errors.New(dbErr)
 	}
 
 	return newRows(res), nil
