@@ -961,6 +961,37 @@ func TestRandomizedVARCHAR(t *testing.T) {
 	}
 }
 
+func TestRandomizedTIMESTAMP(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec(`CREATE TABLE values(id INTEGER, value TIMESTAMP)`)
+	require.NoError(t, err)
+
+	values := []time.Time{}
+	for i := 0; i < nRandomTestRows; i++ {
+		values = append(values, randTime())
+	}
+
+	for id, value := range values {
+		_, err := db.Exec(`INSERT INTO values VALUES (?, ?)`, id, value)
+		require.NoError(t, err)
+	}
+
+	rows, err := db.Query("SELECT id, value FROM values ORDER BY id ASC")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var value time.Time
+		require.NoError(t, rows.Scan(&id, &value))
+		assert.LessOrEqual(t, id, nRandomTestRows)
+		assert.True(t, float32similar(float32(values[id].Unix()), float32(value.Unix())))
+	}
+}
+
 func TestColumnTypeNames(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
@@ -981,7 +1012,7 @@ func TestColumnTypeNames(t *testing.T) {
 
 	expectedDbTypeNames := []string{"INTEGER", "UTINYINT", "TINYINT", "USMALLINT", "SMALLINT",
 		"UINTEGER", "INTEGER", "UBIGINT", "BIGINT", "HUGEINT",
-		"FLOAT", "DOUBLE", "VARCHAR", "BOOLEAN"}
+		"FLOAT", "DOUBLE", "VARCHAR", "BOOLEAN", "TIMESTAMP"}
 	colTypes, err := rows.ColumnTypes()
 	for i, s := range colTypes {
 		assert.NotNil(t, s)
@@ -1261,4 +1292,12 @@ func randString(n int) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func randTime() time.Time {
+	lo := int64(788918400)  // 1995
+	hi := int64(1735689600) // 2025
+	randomEpoch := randInt(lo, hi)
+
+	return time.Unix(randomEpoch, 0)
 }
