@@ -102,6 +102,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	}
 
 	ty := C.duckdb_vector_get_column_type(vector)
+	defer C.duckdb_destroy_logical_type(&ty)
+
 	typeId := C.duckdb_get_type_id(ty)
 	switch typeId {
 	case C.DUCKDB_TYPE_INVALID:
@@ -116,35 +118,51 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return get[int32](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_BIGINT:
 		return get[int64](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_HUGEINT:
-		return get[HugeInt](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_UTINYINT:
+		return get[uint8](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_USMALLINT:
+		return get[uint16](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_UINTEGER:
+		return get[uint32](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_UBIGINT:
+		return get[uint64](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_FLOAT:
 		return get[float32](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DOUBLE:
 		return get[float64](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_DATE:
 		date := C.duckdb_from_date(get[C.duckdb_date](vector, rowIdx))
 		return time.Date(int(date.year), time.Month(date.month), int(date.day), 0, 0, 0, 0, time.UTC), nil
-	case C.DUCKDB_TYPE_BLOB:
-		return scanBlob(vector, rowIdx), nil
-	case C.DUCKDB_TYPE_VARCHAR:
-		return scanString(vector, rowIdx), nil
-	case C.DUCKDB_TYPE_TIMESTAMP:
-		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
+	case C.DUCKDB_TYPE_TIME:
+		return time.UnixMicro(int64(get[C.duckdb_time](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_INTERVAL:
 		return scanInterval(vector, rowIdx)
+	case C.DUCKDB_TYPE_HUGEINT:
+		return get[HugeInt](vector, rowIdx), nil
+	case C.DUCKDB_TYPE_VARCHAR:
+		return scanString(vector, rowIdx), nil
+	case C.DUCKDB_TYPE_BLOB:
+		return scanBlob(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DECIMAL:
 		return scanDecimal(ty, vector, rowIdx)
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		return time.Unix(int64(get[C.duckdb_timestamp](vector, rowIdx).micros), 0).UTC(), nil
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		return time.UnixMilli(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		return time.Unix(0, int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_LIST:
 		return scanList(vector, rowIdx)
 	case C.DUCKDB_TYPE_STRUCT:
 		return scanStruct(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_MAP:
 		return scanMap(ty, vector, rowIdx)
-	case C.DUCKDB_TYPE_JSON:
-		return scanString(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_UUID:
 		return get[HugeInt](vector, rowIdx).UUID(), nil
+	case C.DUCKDB_TYPE_JSON:
+		return scanString(vector, rowIdx), nil
 	default:
 		return nil, fmt.Errorf("unsupported type %d", typeId)
 	}
@@ -154,10 +172,10 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	colType := C.duckdb_column_type(&r.res, C.idx_t(index))
 	switch colType {
+	case C.DUCKDB_TYPE_INVALID:
+		return nil
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return reflect.TypeOf(true)
-	case C.DUCKDB_TYPE_DECIMAL:
-		return reflect.TypeOf(float64(0))
 	case C.DUCKDB_TYPE_TINYINT:
 		return reflect.TypeOf(int8(0))
 	case C.DUCKDB_TYPE_SMALLINT:
@@ -166,52 +184,76 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(int32(0))
 	case C.DUCKDB_TYPE_BIGINT:
 		return reflect.TypeOf(int64(0))
+	case C.DUCKDB_TYPE_UTINYINT:
+		return reflect.TypeOf(uint8(0))
+	case C.DUCKDB_TYPE_USMALLINT:
+		return reflect.TypeOf(uint16(0))
+	case C.DUCKDB_TYPE_UINTEGER:
+		return reflect.TypeOf(uint32(0))
+	case C.DUCKDB_TYPE_UBIGINT:
+		return reflect.TypeOf(uint64(0))
 	case C.DUCKDB_TYPE_FLOAT:
 		return reflect.TypeOf(float32(0))
 	case C.DUCKDB_TYPE_DOUBLE:
 		return reflect.TypeOf(float64(0))
-	case C.DUCKDB_TYPE_DATE, C.DUCKDB_TYPE_TIMESTAMP:
+	case C.DUCKDB_TYPE_TIMESTAMP:
 		return reflect.TypeOf(time.Time{})
+	case C.DUCKDB_TYPE_DATE:
+		return reflect.TypeOf(time.Time{})
+	case C.DUCKDB_TYPE_TIME:
+		return reflect.TypeOf(time.Time{})
+	case C.DUCKDB_TYPE_INTERVAL:
+		return reflect.TypeOf(Interval{})
+	case C.DUCKDB_TYPE_HUGEINT:
+		return reflect.TypeOf(HugeInt{})
 	case C.DUCKDB_TYPE_VARCHAR:
 		return reflect.TypeOf("")
 	case C.DUCKDB_TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
+	case C.DUCKDB_TYPE_DECIMAL:
+		return reflect.TypeOf(float64(0))
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		return reflect.TypeOf(time.Time{})
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		return reflect.TypeOf(time.Time{})
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		return reflect.TypeOf(time.Time{})
+	case C.DUCKDB_TYPE_LIST:
+		return reflect.TypeOf([]any{})
+	case C.DUCKDB_TYPE_STRUCT:
+		return reflect.TypeOf(map[string]any{})
 	case C.DUCKDB_TYPE_MAP:
 		return reflect.TypeOf(Map{})
+	case C.DUCKDB_TYPE_UUID:
+		return reflect.TypeOf([]byte{})
+	case C.DUCKDB_TYPE_JSON:
+		return reflect.TypeOf("")
+	default:
+		return nil
 	}
-	return nil
 }
 
 // Implements driver.RowsColumnTypeScanType
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
+	// Only allocate logical type if necessary
 	colType := C.duckdb_column_type(&r.res, C.idx_t(index))
 	switch colType {
-	case C.DUCKDB_TYPE_BOOLEAN:
-		return "BOOLEAN"
-	case C.DUCKDB_TYPE_TINYINT:
-		return "TINYINT"
-	case C.DUCKDB_TYPE_SMALLINT:
-		return "SMALLINT"
-	case C.DUCKDB_TYPE_INTEGER:
-		return "INTEGER"
-	case C.DUCKDB_TYPE_BIGINT:
-		return "BIGINT"
-	case C.DUCKDB_TYPE_FLOAT:
-		return "FLOAT"
-	case C.DUCKDB_TYPE_DOUBLE:
-		return "DOUBLE"
-	case C.DUCKDB_TYPE_DATE:
-		return "DATE"
-	case C.DUCKDB_TYPE_VARCHAR:
-		return "VARCHAR"
-	case C.DUCKDB_TYPE_TIMESTAMP:
-		return "TIMESTAMP"
-	case C.DUCKDB_TYPE_BLOB:
-		return "BLOB"
+	case C.DUCKDB_TYPE_DECIMAL:
+		fallthrough
+	case C.DUCKDB_TYPE_ENUM:
+		fallthrough
+	case C.DUCKDB_TYPE_LIST:
+		fallthrough
+	case C.DUCKDB_TYPE_STRUCT:
+		fallthrough
 	case C.DUCKDB_TYPE_MAP:
-		return "MAP"
+		logColType := C.duckdb_column_logical_type(&r.res, C.idx_t(index))
+		defer C.duckdb_destroy_logical_type(&logColType)
+		return logicalTypeName(logColType)
+	default:
+		// Handle as primitive type
+		return typeName(colType)
 	}
-	return ""
 }
 
 func (r *rows) Close() error {
@@ -330,3 +372,128 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 var (
 	errInvalidType = errors.New("invalid data type")
 )
+
+func typeName(t C.duckdb_type) string {
+	// Corresponds to enum order of duckdb_type
+	switch t {
+	case C.DUCKDB_TYPE_INVALID:
+		return "INVALID"
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return "BOOLEAN"
+	case C.DUCKDB_TYPE_TINYINT:
+		return "TINYINT"
+	case C.DUCKDB_TYPE_SMALLINT:
+		return "SMALLINT"
+	case C.DUCKDB_TYPE_INTEGER:
+		return "INTEGER"
+	case C.DUCKDB_TYPE_BIGINT:
+		return "BIGINT"
+	case C.DUCKDB_TYPE_UTINYINT:
+		return "UTINYINT"
+	case C.DUCKDB_TYPE_USMALLINT:
+		return "USMALLINT"
+	case C.DUCKDB_TYPE_UINTEGER:
+		return "UINTEGER"
+	case C.DUCKDB_TYPE_UBIGINT:
+		return "UBIGINT"
+	case C.DUCKDB_TYPE_FLOAT:
+		return "FLOAT"
+	case C.DUCKDB_TYPE_DOUBLE:
+		return "DOUBLE"
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		return "TIMESTAMP"
+	case C.DUCKDB_TYPE_DATE:
+		return "DATE"
+	case C.DUCKDB_TYPE_TIME:
+		return "TIME"
+	case C.DUCKDB_TYPE_INTERVAL:
+		return "INTERVAL"
+	case C.DUCKDB_TYPE_HUGEINT:
+		return "HUGEINT"
+	case C.DUCKDB_TYPE_VARCHAR:
+		return "VARCHAR"
+	case C.DUCKDB_TYPE_BLOB:
+		return "BLOB"
+	case C.DUCKDB_TYPE_DECIMAL:
+		// NOTE: should be handled as logical type
+		return "DECIMAL"
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		return "TIMESTAMP_S"
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		return "TIMESTAMP_MS"
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		return "TIMESTAMP_NS"
+	case C.DUCKDB_TYPE_ENUM:
+		// NOTE: should be handled as logical type
+		return "ENUM"
+	case C.DUCKDB_TYPE_LIST:
+		// NOTE: should be handled as logical type
+		return "LIST"
+	case C.DUCKDB_TYPE_STRUCT:
+		// NOTE: should be handled as logical type
+		return "STRUCT"
+	case C.DUCKDB_TYPE_MAP:
+		// NOTE: should be handled as logical type
+		return "MAP"
+	case C.DUCKDB_TYPE_UUID:
+		return "UUID"
+	case C.DUCKDB_TYPE_JSON:
+		return "JSON"
+	}
+	return ""
+}
+
+func logicalTypeName(lt C.duckdb_logical_type) string {
+	t := C.duckdb_get_type_id(lt)
+	switch t {
+	case C.DUCKDB_TYPE_DECIMAL:
+		width := C.duckdb_decimal_width(lt)
+		scale := C.duckdb_decimal_scale(lt)
+		return fmt.Sprintf("DECIMAL(%d,%d)", width, scale)
+	case C.DUCKDB_TYPE_ENUM:
+		// C API does not currently expose enum name
+		return "ENUM"
+	case C.DUCKDB_TYPE_LIST:
+		clt := C.duckdb_list_type_child_type(lt)
+		defer C.duckdb_destroy_logical_type(&clt)
+		return logicalTypeName(clt) + "[]"
+	case C.DUCKDB_TYPE_STRUCT:
+		return logicalTypeNameStruct(lt)
+	case C.DUCKDB_TYPE_MAP:
+		return logicalTypeNameMap(lt)
+	}
+	return typeName(t)
+}
+
+func logicalTypeNameStruct(lt C.duckdb_logical_type) string {
+	count := int(C.duckdb_struct_type_child_count(lt))
+	name := "STRUCT("
+	for i := 0; i < count; i++ {
+		// Child name
+		cn := C.duckdb_struct_type_child_name(lt, C.idx_t(i))
+		defer C.duckdb_free(unsafe.Pointer(cn))
+
+		// Child logical type
+		clt := C.duckdb_struct_type_child_type(lt, C.idx_t(i))
+		defer C.duckdb_destroy_logical_type(&clt)
+
+		// Add comma if not at end of list
+		name += C.GoString(cn) + " " + logicalTypeName(clt)
+		if i != count-1 {
+			name += ", "
+		}
+	}
+	return name + ")"
+}
+
+func logicalTypeNameMap(lt C.duckdb_logical_type) string {
+	// Key logical type
+	klt := C.duckdb_map_type_key_type(lt)
+	defer C.duckdb_destroy_logical_type(&klt)
+
+	// Value logical type
+	vlt := C.duckdb_map_type_value_type(lt)
+	defer C.duckdb_destroy_logical_type(&vlt)
+
+	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(klt), logicalTypeName(vlt))
+}
