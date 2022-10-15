@@ -439,8 +439,10 @@ func typeName(t C.duckdb_type) string {
 		return "UUID"
 	case C.DUCKDB_TYPE_JSON:
 		return "JSON"
+	default:
+		// Should never happen
+		return ""
 	}
-	return ""
 }
 
 func logicalTypeName(lt C.duckdb_logical_type) string {
@@ -461,8 +463,9 @@ func logicalTypeName(lt C.duckdb_logical_type) string {
 		return logicalTypeNameStruct(lt)
 	case C.DUCKDB_TYPE_MAP:
 		return logicalTypeNameMap(lt)
+	default:
+		return typeName(t)
 	}
-	return typeName(t)
 }
 
 func logicalTypeNameStruct(lt C.duckdb_logical_type) string {

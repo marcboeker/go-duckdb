@@ -609,7 +609,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		value    any
 		typeName string
 	}{
-		// 	DUCKDB_TYPE_BOOLEAN
+		// DUCKDB_TYPE_BOOLEAN
 		{
 			sql:      "SELECT true AS col",
 			value:    true,
