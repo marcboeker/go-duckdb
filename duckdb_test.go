@@ -603,33 +603,13 @@ func TestMultiple(t *testing.T) {
 	require.Contains(t, err.Error(), "Cannot prepare multiple statements at once")
 }
 
-func openDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
-	require.NoError(t, db.Ping())
-	return db
-}
-
-func loadJSONExt(t *testing.T, db *sql.DB) {
-	_, err := db.Exec("INSTALL 'json'")
-	require.NoError(t, err)
-	_, err = db.Exec("LOAD 'json'")
-	require.NoError(t, err)
-}
-
-func createTable(db *sql.DB, t *testing.T) *sql.Result {
-	res, err := db.Exec("CREATE TABLE foo(bar VARCHAR, baz INTEGER)")
-	require.NoError(t, err)
-	return &res
-}
-
-func TestTypes(t *testing.T) {
+func TestTypeNamesAndScanTypes(t *testing.T) {
 	tests := []struct {
 		sql      string
 		value    any
 		typeName string
 	}{
-		// 	DUCKDB_TYPE_BOOLEAN:
+		// 	DUCKDB_TYPE_BOOLEAN
 		{
 			sql:      "SELECT true AS col",
 			value:    true,
@@ -810,4 +790,24 @@ func TestTypes(t *testing.T) {
 			require.Equal(t, test.value, val)
 		})
 	}
+}
+
+func openDB(t *testing.T) *sql.DB {
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+	require.NoError(t, db.Ping())
+	return db
+}
+
+func loadJSONExt(t *testing.T, db *sql.DB) {
+	_, err := db.Exec("INSTALL 'json'")
+	require.NoError(t, err)
+	_, err = db.Exec("LOAD 'json'")
+	require.NoError(t, err)
+}
+
+func createTable(db *sql.DB, t *testing.T) *sql.Result {
+	res, err := db.Exec("CREATE TABLE foo(bar VARCHAR, baz INTEGER)")
+	require.NoError(t, err)
+	return &res
 }
