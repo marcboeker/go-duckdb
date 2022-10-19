@@ -356,7 +356,7 @@ func TestHugeInt(t *testing.T) {
 			"-170141183460469231731687303715884105727",
 		}
 		for _, expected := range tests {
-			t.Run(fmt.Sprintf("sum(%s)", expected), func(t *testing.T) {
+			t.Run(expected, func(t *testing.T) {
 				var res *big.Int
 				err := db.QueryRow(fmt.Sprintf("SELECT %s::HUGEINT", expected)).Scan(&res)
 				require.NoError(t, err)
