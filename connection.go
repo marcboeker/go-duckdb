@@ -8,6 +8,7 @@ import "C"
 import (
 	"database/sql/driver"
 	"errors"
+	"math/big"
 	"unsafe"
 )
 
@@ -19,12 +20,8 @@ type conn struct {
 }
 
 func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
-	switch v := nv.Value.(type) {
-	case HugeInt:
-		nv.Value = HugeInt(v)
-		return nil
-	case Interval:
-		nv.Value = Interval(v)
+	switch nv.Value.(type) {
+	case *big.Int, Interval:
 		return nil
 	}
 	return driver.ErrSkip
