@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 	"unsafe"
 )
@@ -72,10 +73,10 @@ func (s *stmt) start(args []driver.Value) error {
 			if rv := C.duckdb_bind_int64(*s.stmt, C.idx_t(i+1), C.int64_t(v)); rv == C.DuckDBError {
 				return errCouldNotBind
 			}
-		case HugeInt:
-			val := C.duckdb_hugeint{
-				upper: C.int64_t(v.upper),
-				lower: C.uint64_t(v.lower),
+		case *big.Int:
+			val, err := hugeIntFromNative(v)
+			if err != nil {
+				return err
 			}
 			if rv := C.duckdb_bind_hugeint(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
 				return errCouldNotBind

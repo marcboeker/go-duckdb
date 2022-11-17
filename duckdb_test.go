@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"reflect"
 	"testing"
 	"time"
@@ -344,32 +345,45 @@ func TestHugeInt(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
 
-	t.Run("scan HugeInt", func(t *testing.T) {
-		for _, expected := range []int64{0, 1, -1, math.MaxInt64, math.MinInt64} {
-			t.Run(fmt.Sprintf("sum(%d)", expected), func(t *testing.T) {
-				var res HugeInt
-				err := db.QueryRow("SELECT SUM(?)", expected).Scan(&res)
+	t.Run("scan hugeint", func(t *testing.T) {
+		tests := []string{
+			"0",
+			"1",
+			"-1",
+			"9223372036854775807",
+			"-9223372036854775808",
+			"170141183460469231731687303715884105727",
+			"-170141183460469231731687303715884105727",
+		}
+		for _, expected := range tests {
+			t.Run(expected, func(t *testing.T) {
+				var res *big.Int
+				err := db.QueryRow(fmt.Sprintf("SELECT %s::HUGEINT", expected)).Scan(&res)
 				require.NoError(t, err)
-
-				expct, err := res.Int64()
-				require.NoError(t, err)
-				require.Equal(t, expected, expct)
+				require.Equal(t, expected, res.String())
 			})
 		}
 	})
 
-	t.Run("bind HugeInt", func(t *testing.T) {
+	t.Run("bind hugeint", func(t *testing.T) {
 		_, err := db.Exec("CREATE TABLE hugeint_test (number HUGEINT)")
 		require.NoError(t, err)
 
-		val := HugeInt{upper: 1, lower: 2}
+		val := big.NewInt(1)
+		val.SetBit(val, 101, 1)
 		_, err = db.Exec("INSERT INTO hugeint_test VALUES(?)", val)
 		require.NoError(t, err)
 
-		var res HugeInt
+		var res *big.Int
 		err = db.QueryRow("SELECT number FROM hugeint_test WHERE number = ?", val).Scan(&res)
 		require.NoError(t, err)
-		require.Equal(t, val, res)
+		require.Equal(t, val.String(), res.String())
+
+		tooHuge := big.NewInt(1)
+		tooHuge.SetBit(tooHuge, 129, 1)
+		_, err = db.Exec("INSERT INTO hugeint_test VALUES(?)", tooHuge)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "too big")
 	})
 }
 
@@ -702,7 +716,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		// DUCKDB_TYPE_HUGEINT
 		{
 			sql:      "SELECT 31::HUGEINT AS col",
-			value:    HugeInt{lower: 31, upper: 0},
+			value:    big.NewInt(31),
 			typeName: "HUGEINT",
 		},
 		// DUCKDB_TYPE_VARCHAR
