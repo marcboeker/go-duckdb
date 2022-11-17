@@ -484,7 +484,7 @@ func TestJSON(t *testing.T) {
 		}{
 			Foo: "bar",
 		})
-		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, val).Scan(&data))
+		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, string(val)).Scan(&data))
 		require.Equal(t, "bar", data)
 	})
 
