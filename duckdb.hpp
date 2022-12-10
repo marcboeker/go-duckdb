@@ -11,8 +11,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "2213f9c946"
-#define DUCKDB_VERSION "v0.6.0"
+#define DUCKDB_SOURCE_ID "919cad22e8"
+#define DUCKDB_VERSION "v0.6.1"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -677,124 +677,6 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
-//! Type used to represent dates (days since 1970-01-01)
-struct date_t { // NOLINT
-	int32_t days;
-
-	date_t() = default;
-	explicit inline date_t(int32_t days_p) : days(days_p) {}
-
-	// explicit conversion
-	explicit inline operator int32_t() const {return days;}
-
-	// comparison operators
-	inline bool operator==(const date_t &rhs) const {return days == rhs.days;};
-	inline bool operator!=(const date_t &rhs) const {return days != rhs.days;};
-	inline bool operator<=(const date_t &rhs) const {return days <= rhs.days;};
-	inline bool operator<(const date_t &rhs) const {return days < rhs.days;};
-	inline bool operator>(const date_t &rhs) const {return days > rhs.days;};
-	inline bool operator>=(const date_t &rhs) const {return days >= rhs.days;};
-
-	// arithmetic operators
-	inline date_t operator+(const int32_t &days) const {return date_t(this->days + days);};
-	inline date_t operator-(const int32_t &days) const {return date_t(this->days - days);};
-
-	// in-place operators
-	inline date_t &operator+=(const int32_t &days) {this->days += days; return *this;};
-	inline date_t &operator-=(const int32_t &days) {this->days -= days; return *this;};
-
-	// special values
-	static inline date_t infinity() {return date_t(std::numeric_limits<int32_t>::max()); } // NOLINT
-	static inline date_t ninfinity() {return date_t(-std::numeric_limits<int32_t>::max()); } // NOLINT
-	static inline date_t epoch() {return date_t(0); } // NOLINT
-};
-
-//! Type used to represent time (microseconds)
-struct dtime_t { // NOLINT
-	int64_t micros;
-
-	dtime_t() = default;
-	explicit inline dtime_t(int64_t micros_p) : micros(micros_p) {}
-	inline dtime_t& operator=(int64_t micros_p) {micros = micros_p; return *this;}
-
-	// explicit conversion
-	explicit inline operator int64_t() const {return micros;}
-	explicit inline operator double() const {return micros;}
-
-	// comparison operators
-	inline bool operator==(const dtime_t &rhs) const {return micros == rhs.micros;};
-	inline bool operator!=(const dtime_t &rhs) const {return micros != rhs.micros;};
-	inline bool operator<=(const dtime_t &rhs) const {return micros <= rhs.micros;};
-	inline bool operator<(const dtime_t &rhs) const {return micros < rhs.micros;};
-	inline bool operator>(const dtime_t &rhs) const {return micros > rhs.micros;};
-	inline bool operator>=(const dtime_t &rhs) const {return micros >= rhs.micros;};
-
-	// arithmetic operators
-	inline dtime_t operator+(const int64_t &micros) const {return dtime_t(this->micros + micros);};
-	inline dtime_t operator+(const double &micros) const {return dtime_t(this->micros + int64_t(micros));};
-	inline dtime_t operator-(const int64_t &micros) const {return dtime_t(this->micros - micros);};
-	inline dtime_t operator*(const idx_t &copies) const {return dtime_t(this->micros * copies);};
-	inline dtime_t operator/(const idx_t &copies) const {return dtime_t(this->micros / copies);};
-	inline int64_t operator-(const dtime_t &other) const {return this->micros - other.micros;};
-
-	// in-place operators
-	inline dtime_t &operator+=(const int64_t &micros) {this->micros += micros; return *this;};
-	inline dtime_t &operator-=(const int64_t &micros) {this->micros -= micros; return *this;};
-	inline dtime_t &operator+=(const dtime_t &other) {this->micros += other.micros; return *this;};
-
-	// special values
-	static inline dtime_t allballs() {return dtime_t(0); } // NOLINT
-};
-
-struct dtime_tz_t : public dtime_t {};
-
-//! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
-struct timestamp_t { // NOLINT
-	int64_t value;
-
-	timestamp_t() = default;
-	explicit inline timestamp_t(int64_t value_p) : value(value_p) {}
-	inline timestamp_t& operator=(int64_t value_p) {value = value_p; return *this;}
-
-	// explicit conversion
-	explicit inline operator int64_t() const {return value;}
-
-	// comparison operators
-	inline bool operator==(const timestamp_t &rhs) const {return value == rhs.value;};
-	inline bool operator!=(const timestamp_t &rhs) const {return value != rhs.value;};
-	inline bool operator<=(const timestamp_t &rhs) const {return value <= rhs.value;};
-	inline bool operator<(const timestamp_t &rhs) const {return value < rhs.value;};
-	inline bool operator>(const timestamp_t &rhs) const {return value > rhs.value;};
-	inline bool operator>=(const timestamp_t &rhs) const {return value >= rhs.value;};
-
-	// arithmetic operators
-	inline timestamp_t operator+(const double &value) const {return timestamp_t(this->value + int64_t(value));};
-	inline int64_t operator-(const timestamp_t &other) const {return this->value - other.value;};
-
-	// in-place operators
-	inline timestamp_t &operator+=(const int64_t &value) {this->value += value; return *this;};
-	inline timestamp_t &operator-=(const int64_t &value) {this->value -= value; return *this;};
-
-	// special values
-	static inline timestamp_t infinity() {return timestamp_t(std::numeric_limits<int64_t>::max()); } // NOLINT
-	static inline timestamp_t ninfinity() {return timestamp_t(-std::numeric_limits<int64_t>::max()); } // NOLINT
-	static inline timestamp_t epoch() {return timestamp_t(0); } // NOLINT
-};
-
-struct timestamp_tz_t : public timestamp_t {};
-struct timestamp_ns_t : public timestamp_t {};
-struct timestamp_ms_t : public timestamp_t {};
-struct timestamp_sec_t : public timestamp_t {};
-
-struct interval_t {
-	int32_t months;
-	int32_t days;
-	int64_t micros;
-
-	inline bool operator==(const interval_t &rhs) const {
-		return this->days == rhs.days && this->months == rhs.months && this->micros == rhs.micros;
-	}
-};
 
 struct hugeint_t {
 public:
@@ -1249,64 +1131,11 @@ struct AggregateStateType {
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
 };
 
-
 DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
 
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
 DUCKDB_API LogicalType TransformStringToLogicalType(const string &str);
-
-//! Returns the PhysicalType for the given type
-template <class T>
-PhysicalType GetTypeId() {
-	if (std::is_same<T, bool>()) {
-		return PhysicalType::BOOL;
-	} else if (std::is_same<T, int8_t>()) {
-		return PhysicalType::INT8;
-	} else if (std::is_same<T, int16_t>()) {
-		return PhysicalType::INT16;
-	} else if (std::is_same<T, int32_t>()) {
-		return PhysicalType::INT32;
-	} else if (std::is_same<T, int64_t>()) {
-		return PhysicalType::INT64;
-	} else if (std::is_same<T, uint8_t>()) {
-		return PhysicalType::UINT8;
-	} else if (std::is_same<T, uint16_t>()) {
-		return PhysicalType::UINT16;
-	} else if (std::is_same<T, uint32_t>()) {
-		return PhysicalType::UINT32;
-	} else if (std::is_same<T, uint64_t>()) {
-		return PhysicalType::UINT64;
-	} else if (std::is_same<T, hugeint_t>()) {
-		return PhysicalType::INT128;
-	} else if (std::is_same<T, date_t>()) {
-		return PhysicalType::INT32;
-	} else if (std::is_same<T, dtime_t>()) {
-		return PhysicalType::INT64;
-	} else if (std::is_same<T, timestamp_t>()) {
-		return PhysicalType::INT64;
-	} else if (std::is_same<T, float>()) {
-		return PhysicalType::FLOAT;
-	} else if (std::is_same<T, double>()) {
-		return PhysicalType::DOUBLE;
-	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>() || std::is_same<T, string_t>()) {
-		return PhysicalType::VARCHAR;
-	} else if (std::is_same<T, interval_t>()) {
-		return PhysicalType::INTERVAL;
-	} else {
-		return PhysicalType::INVALID;
-	}
-}
-
-template<class T>
-bool TypeIsNumber() {
-	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>();
-}
-
-template <class T>
-bool IsValidType() {
-	return GetTypeId<T>() != PhysicalType::INVALID;
-}
 
 //! The PhysicalType used by the row identifiers column
 extern const PhysicalType ROW_TYPE;
@@ -1317,11 +1146,6 @@ bool TypeIsConstantSize(PhysicalType type);
 bool TypeIsIntegral(PhysicalType type);
 bool TypeIsNumeric(PhysicalType type);
 bool TypeIsInteger(PhysicalType type);
-
-template <class T>
-bool IsIntegerType() {
-	return TypeIsIntegral(GetTypeId<T>());
-}
 
 bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
@@ -1336,87 +1160,6 @@ struct aggregate_state_t {
 };
 
 } // namespace duckdb
-
-namespace std {
-
-	//! Date
-	template <>
-	struct hash<duckdb::date_t>
-	{
-		std::size_t operator()(const duckdb::date_t& k) const
-		{
-			using std::hash;
-			return hash<int32_t>()((int32_t)k);
-		}
-	};
-
-	//! Time
-	template <>
-	struct hash<duckdb::dtime_t>
-	{
-		std::size_t operator()(const duckdb::dtime_t& k) const
-		{
-			using std::hash;
-			return hash<int64_t>()((int64_t)k);
-		}
-	};
-	template <>
-	struct hash<duckdb::dtime_tz_t>
-	{
-		std::size_t operator()(const duckdb::dtime_tz_t& k) const
-		{
-			using std::hash;
-			return hash<int64_t>()((int64_t)k);
-		}
-	};
-
-	//! Timestamp
-	template <>
-	struct hash<duckdb::timestamp_t>
-	{
-		std::size_t operator()(const duckdb::timestamp_t& k) const
-		{
-			using std::hash;
-			return hash<int64_t>()((int64_t)k);
-		}
-	};
-	template <>
-	struct hash<duckdb::timestamp_ms_t>
-	{
-		std::size_t operator()(const duckdb::timestamp_ms_t& k) const
-		{
-			using std::hash;
-			return hash<int64_t>()((int64_t)k);
-		}
-	};
-	template <>
-	struct hash<duckdb::timestamp_ns_t>
-	{
-		std::size_t operator()(const duckdb::timestamp_ns_t& k) const
-		{
-			using std::hash;
-			return hash<int64_t>()((int64_t)k);
-		}
-	};
-	template <>
-	struct hash<duckdb::timestamp_sec_t>
-	{
-		std::size_t operator()(const duckdb::timestamp_sec_t& k) const
-		{
-			using std::hash;
-			return hash<int64_t>()((int64_t)k);
-		}
-	};
-	template <>
-	struct hash<duckdb::timestamp_tz_t>
-	{
-		std::size_t operator()(const duckdb::timestamp_tz_t& k) const
-		{
-			using std::hash;
-			return hash<int64_t>()((int64_t)k);
-		}
-	};
-}
 
 
 namespace duckdb {
@@ -2949,6 +2692,927 @@ public:
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/types/timestamp.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/limits.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+namespace duckdb {
+
+template <class T>
+struct NumericLimits {
+	DUCKDB_API static T Minimum();
+	DUCKDB_API static T Maximum();
+	DUCKDB_API static bool IsSigned();
+	DUCKDB_API static idx_t Digits();
+};
+
+template <>
+struct NumericLimits<int8_t> {
+	DUCKDB_API static int8_t Minimum();
+	DUCKDB_API static int8_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return true;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 3;
+	}
+};
+template <>
+struct NumericLimits<int16_t> {
+	DUCKDB_API static int16_t Minimum();
+	DUCKDB_API static int16_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return true;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 5;
+	}
+};
+template <>
+struct NumericLimits<int32_t> {
+	DUCKDB_API static int32_t Minimum();
+	DUCKDB_API static int32_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return true;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 10;
+	}
+};
+template <>
+struct NumericLimits<int64_t> {
+	DUCKDB_API static int64_t Minimum();
+	DUCKDB_API static int64_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return true;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 19;
+	}
+};
+template <>
+struct NumericLimits<hugeint_t> {
+	DUCKDB_API static hugeint_t Minimum();
+	DUCKDB_API static hugeint_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return true;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 39;
+	}
+};
+template <>
+struct NumericLimits<uint8_t> {
+	DUCKDB_API static uint8_t Minimum();
+	DUCKDB_API static uint8_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return false;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 3;
+	}
+};
+template <>
+struct NumericLimits<uint16_t> {
+	DUCKDB_API static uint16_t Minimum();
+	DUCKDB_API static uint16_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return false;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 5;
+	}
+};
+template <>
+struct NumericLimits<uint32_t> {
+	DUCKDB_API static uint32_t Minimum();
+	DUCKDB_API static uint32_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return false;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 10;
+	}
+};
+template <>
+struct NumericLimits<uint64_t> {
+	DUCKDB_API static uint64_t Minimum();
+	DUCKDB_API static uint64_t Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return false;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 20;
+	}
+};
+template <>
+struct NumericLimits<float> {
+	DUCKDB_API static float Minimum();
+	DUCKDB_API static float Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return true;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 127;
+	}
+};
+template <>
+struct NumericLimits<double> {
+	DUCKDB_API static double Minimum();
+	DUCKDB_API static double Maximum();
+	DUCKDB_API static bool IsSigned() {
+		return true;
+	}
+	DUCKDB_API static idx_t Digits() {
+		return 250;
+	}
+};
+
+} // namespace duckdb
+
+
+
+
+#include <functional>
+
+namespace duckdb {
+
+struct date_t;
+struct dtime_t;
+
+//! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
+struct timestamp_t { // NOLINT
+	int64_t value;
+
+	timestamp_t() = default;
+	explicit inline timestamp_t(int64_t value_p) : value(value_p) {
+	}
+	inline timestamp_t &operator=(int64_t value_p) {
+		value = value_p;
+		return *this;
+	}
+
+	// explicit conversion
+	explicit inline operator int64_t() const {
+		return value;
+	}
+
+	// comparison operators
+	inline bool operator==(const timestamp_t &rhs) const {
+		return value == rhs.value;
+	};
+	inline bool operator!=(const timestamp_t &rhs) const {
+		return value != rhs.value;
+	};
+	inline bool operator<=(const timestamp_t &rhs) const {
+		return value <= rhs.value;
+	};
+	inline bool operator<(const timestamp_t &rhs) const {
+		return value < rhs.value;
+	};
+	inline bool operator>(const timestamp_t &rhs) const {
+		return value > rhs.value;
+	};
+	inline bool operator>=(const timestamp_t &rhs) const {
+		return value >= rhs.value;
+	};
+
+	// arithmetic operators
+	inline timestamp_t operator+(const double &value) const {
+		return timestamp_t(this->value + int64_t(value));
+	};
+	inline int64_t operator-(const timestamp_t &other) const {
+		return this->value - other.value;
+	};
+
+	// in-place operators
+	inline timestamp_t &operator+=(const int64_t &value) {
+		this->value += value;
+		return *this;
+	};
+	inline timestamp_t &operator-=(const int64_t &value) {
+		this->value -= value;
+		return *this;
+	};
+
+	// special values
+	static timestamp_t infinity() {
+		return timestamp_t(NumericLimits<int64_t>::Maximum());
+	} // NOLINT
+	static timestamp_t ninfinity() {
+		return timestamp_t(-NumericLimits<int64_t>::Maximum());
+	} // NOLINT
+	static inline timestamp_t epoch() {
+		return timestamp_t(0);
+	} // NOLINT
+};
+
+struct timestamp_tz_t : public timestamp_t {};
+struct timestamp_ns_t : public timestamp_t {};
+struct timestamp_ms_t : public timestamp_t {};
+struct timestamp_sec_t : public timestamp_t {};
+
+//! The Timestamp class is a static class that holds helper functions for the Timestamp
+//! type.
+class Timestamp {
+public:
+	// min timestamp is 290308-12-22 (BC)
+	constexpr static const int32_t MIN_YEAR = -290308;
+	constexpr static const int32_t MIN_MONTH = 12;
+	constexpr static const int32_t MIN_DAY = 22;
+
+public:
+	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
+	DUCKDB_API static timestamp_t FromString(const string &str);
+	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
+	//! If has_offset is true, then the result is an instant that was offset from UTC
+	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
+	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
+	                                             string_t &tz);
+	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
+	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len);
+	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
+	DUCKDB_API static string ToString(timestamp_t timestamp);
+
+	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
+
+	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
+	//! Create a Timestamp object from a specified (date, time) combination
+	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
+	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
+
+	//! Is the timestamp finite or infinite?
+	static inline bool IsFinite(timestamp_t timestamp) {
+		return timestamp != timestamp_t::infinity() && timestamp != timestamp_t::ninfinity();
+	}
+
+	//! Extract the date and time from a given timestamp object
+	DUCKDB_API static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
+	//! Returns current timestamp
+	DUCKDB_API static timestamp_t GetCurrentTimestamp();
+
+	//! Convert the epoch (in sec) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t ms);
+	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochMs(int64_t ms);
+	//! Convert the epoch (in microseconds) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochMicroSeconds(int64_t micros);
+	//! Convert the epoch (in nanoseconds) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t micros);
+
+	//! Convert the epoch (in seconds) to a timestamp
+	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
+	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static int64_t GetEpochMs(timestamp_t timestamp);
+	//! Convert a timestamp to epoch (in microseconds)
+	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
+	//! Convert a timestamp to epoch (in nanoseconds)
+	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
+
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
+	                                         int &minute_offset);
+
+	DUCKDB_API static string ConversionError(const string &str);
+	DUCKDB_API static string ConversionError(string_t str);
+};
+
+} // namespace duckdb
+
+namespace std {
+
+//! Timestamp
+template <>
+struct hash<duckdb::timestamp_t> {
+	std::size_t operator()(const duckdb::timestamp_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_ms_t> {
+	std::size_t operator()(const duckdb::timestamp_ms_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_ns_t> {
+	std::size_t operator()(const duckdb::timestamp_ns_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_sec_t> {
+	std::size_t operator()(const duckdb::timestamp_sec_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::timestamp_tz_t> {
+	std::size_t operator()(const duckdb::timestamp_tz_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+} // namespace std
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/types/date.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/types/string_type.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+#include <cstring>
+
+namespace duckdb {
+
+struct string_t {
+	friend struct StringComparisonOperators;
+	friend class StringSegment;
+
+public:
+	static constexpr idx_t PREFIX_BYTES = 4 * sizeof(char);
+	static constexpr idx_t INLINE_BYTES = 12 * sizeof(char);
+	static constexpr idx_t HEADER_SIZE = sizeof(uint32_t) + PREFIX_BYTES;
+#ifndef DUCKDB_DEBUG_NO_INLINE
+	static constexpr idx_t PREFIX_LENGTH = PREFIX_BYTES;
+	static constexpr idx_t INLINE_LENGTH = INLINE_BYTES;
+#else
+	static constexpr idx_t PREFIX_LENGTH = 0;
+	static constexpr idx_t INLINE_LENGTH = 0;
+#endif
+
+	string_t() = default;
+	explicit string_t(uint32_t len) {
+		value.inlined.length = len;
+	}
+	string_t(const char *data, uint32_t len) {
+		value.inlined.length = len;
+		D_ASSERT(data || GetSize() == 0);
+		if (IsInlined()) {
+			// zero initialize the prefix first
+			// this makes sure that strings with length smaller than 4 still have an equal prefix
+			memset(value.inlined.inlined, 0, INLINE_BYTES);
+			if (GetSize() == 0) {
+				return;
+			}
+			// small string: inlined
+			memcpy(value.inlined.inlined, data, GetSize());
+		} else {
+			// large string: store pointer
+#ifndef DUCKDB_DEBUG_NO_INLINE
+			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
+#else
+			memset(value.pointer.prefix, 0, PREFIX_BYTES);
+#endif
+			value.pointer.ptr = (char *)data;
+		}
+	}
+	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
+	}
+	string_t(const string &value)
+	    : string_t(value.c_str(), value.size()) { // NOLINT: Allow implicit conversion from `const char*`
+	}
+
+	bool IsInlined() const {
+		return GetSize() <= INLINE_LENGTH;
+	}
+
+	//! this is unsafe since the string will not be terminated at the end
+	const char *GetDataUnsafe() const {
+		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+	}
+
+	char *GetDataWriteable() const {
+		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
+	}
+
+	const char *GetPrefix() const {
+		return value.pointer.prefix;
+	}
+
+	idx_t GetSize() const {
+		return value.inlined.length;
+	}
+
+	string GetString() const {
+		return string(GetDataUnsafe(), GetSize());
+	}
+
+	explicit operator string() const {
+		return GetString();
+	}
+
+	void Finalize() {
+		// set trailing NULL byte
+		if (GetSize() <= INLINE_LENGTH) {
+			// fill prefix with zeros if the length is smaller than the prefix length
+			for (idx_t i = GetSize(); i < INLINE_BYTES; i++) {
+				value.inlined.inlined[i] = '\0';
+			}
+		} else {
+			// copy the data into the prefix
+#ifndef DUCKDB_DEBUG_NO_INLINE
+			auto dataptr = (char *)GetDataUnsafe();
+			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
+#else
+			memset(value.pointer.prefix, 0, PREFIX_BYTES);
+#endif
+		}
+	}
+
+	void Verify() const;
+	void VerifyNull() const;
+	bool operator<(const string_t &r) const {
+		auto this_str = this->GetString();
+		auto r_str = r.GetString();
+		return this_str < r_str;
+	}
+
+private:
+	union {
+		struct {
+			uint32_t length;
+			char prefix[4];
+			char *ptr;
+		} pointer;
+		struct {
+			uint32_t length;
+			char inlined[12];
+		} inlined;
+	} value;
+};
+
+} // namespace duckdb
+
+
+
+#include <functional>
+
+namespace duckdb {
+
+struct timestamp_t;
+
+//! Type used to represent dates (days since 1970-01-01)
+struct date_t { // NOLINT
+	int32_t days;
+
+	date_t() = default;
+	explicit inline date_t(int32_t days_p) : days(days_p) {
+	}
+
+	// explicit conversion
+	explicit inline operator int32_t() const {
+		return days;
+	}
+
+	// comparison operators
+	inline bool operator==(const date_t &rhs) const {
+		return days == rhs.days;
+	};
+	inline bool operator!=(const date_t &rhs) const {
+		return days != rhs.days;
+	};
+	inline bool operator<=(const date_t &rhs) const {
+		return days <= rhs.days;
+	};
+	inline bool operator<(const date_t &rhs) const {
+		return days < rhs.days;
+	};
+	inline bool operator>(const date_t &rhs) const {
+		return days > rhs.days;
+	};
+	inline bool operator>=(const date_t &rhs) const {
+		return days >= rhs.days;
+	};
+
+	// arithmetic operators
+	inline date_t operator+(const int32_t &days) const {
+		return date_t(this->days + days);
+	};
+	inline date_t operator-(const int32_t &days) const {
+		return date_t(this->days - days);
+	};
+
+	// in-place operators
+	inline date_t &operator+=(const int32_t &days) {
+		this->days += days;
+		return *this;
+	};
+	inline date_t &operator-=(const int32_t &days) {
+		this->days -= days;
+		return *this;
+	};
+
+	// special values
+	static inline date_t infinity() {
+		return date_t(NumericLimits<int32_t>::Maximum());
+	} // NOLINT
+	static inline date_t ninfinity() {
+		return date_t(-NumericLimits<int32_t>::Maximum());
+	} // NOLINT
+	static inline date_t epoch() {
+		return date_t(0);
+	} // NOLINT
+};
+
+//! The Date class is a static class that holds helper functions for the Date type.
+class Date {
+public:
+	static const char *PINF;  // NOLINT
+	static const char *NINF;  // NOLINT
+	static const char *EPOCH; // NOLINT
+
+	static const string_t MONTH_NAMES[12];
+	static const string_t MONTH_NAMES_ABBREVIATED[12];
+	static const string_t DAY_NAMES[7];
+	static const string_t DAY_NAMES_ABBREVIATED[7];
+	static const int32_t NORMAL_DAYS[13];
+	static const int32_t CUMULATIVE_DAYS[13];
+	static const int32_t LEAP_DAYS[13];
+	static const int32_t CUMULATIVE_LEAP_DAYS[13];
+	static const int32_t CUMULATIVE_YEAR_DAYS[401];
+	static const int8_t MONTH_PER_DAY_OF_YEAR[365];
+	static const int8_t LEAP_MONTH_PER_DAY_OF_YEAR[366];
+
+	// min date is 5877642-06-25 (BC) (-2^31+2)
+	constexpr static const int32_t DATE_MIN_YEAR = -5877641;
+	constexpr static const int32_t DATE_MIN_MONTH = 6;
+	constexpr static const int32_t DATE_MIN_DAY = 25;
+	// max date is 5881580-07-10 (2^31-2)
+	constexpr static const int32_t DATE_MAX_YEAR = 5881580;
+	constexpr static const int32_t DATE_MAX_MONTH = 7;
+	constexpr static const int32_t DATE_MAX_DAY = 10;
+	constexpr static const int32_t EPOCH_YEAR = 1970;
+
+	constexpr static const int32_t YEAR_INTERVAL = 400;
+	constexpr static const int32_t DAYS_PER_YEAR_INTERVAL = 146097;
+
+public:
+	//! Convert a string in the format "YYYY-MM-DD" to a date object
+	DUCKDB_API static date_t FromString(const string &str, bool strict = false);
+	//! Convert a string in the format "YYYY-MM-DD" to a date object
+	DUCKDB_API static date_t FromCString(const char *str, idx_t len, bool strict = false);
+	//! Convert a date object to a string in the format "YYYY-MM-DD"
+	DUCKDB_API static string ToString(date_t date);
+	//! Try to convert text in a buffer to a date; returns true if parsing was successful
+	//! If the date was a "special" value, the special flag will be set.
+	DUCKDB_API static bool TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special,
+	                                      bool strict = false);
+
+	//! Create a string "YYYY-MM-DD" from a specified (year, month, day)
+	//! combination
+	DUCKDB_API static string Format(int32_t year, int32_t month, int32_t day);
+
+	//! Extract the year, month and day from a given date object
+	DUCKDB_API static void Convert(date_t date, int32_t &out_year, int32_t &out_month, int32_t &out_day);
+	//! Create a Date object from a specified (year, month, day) combination
+	DUCKDB_API static date_t FromDate(int32_t year, int32_t month, int32_t day);
+	DUCKDB_API static bool TryFromDate(int32_t year, int32_t month, int32_t day, date_t &result);
+
+	//! Returns true if (year) is a leap year, and false otherwise
+	DUCKDB_API static bool IsLeapYear(int32_t year);
+
+	//! Returns true if the specified (year, month, day) combination is a valid
+	//! date
+	DUCKDB_API static bool IsValid(int32_t year, int32_t month, int32_t day);
+
+	//! Returns true if the specified date is finite
+	static inline bool IsFinite(date_t date) {
+		return date != date_t::infinity() && date != date_t::ninfinity();
+	}
+
+	//! The max number of days in a month of a given year
+	DUCKDB_API static int32_t MonthDays(int32_t year, int32_t month);
+
+	//! Extract the epoch from the date (seconds since 1970-01-01)
+	DUCKDB_API static int64_t Epoch(date_t date);
+	//! Extract the epoch from the date (nanoseconds since 1970-01-01)
+	DUCKDB_API static int64_t EpochNanoseconds(date_t date);
+	//! Extract the epoch from the date (microseconds since 1970-01-01)
+	DUCKDB_API static int64_t EpochMicroseconds(date_t date);
+	//! Convert the epoch (seconds since 1970-01-01) to a date_t
+	DUCKDB_API static date_t EpochToDate(int64_t epoch);
+
+	//! Extract the number of days since epoch (days since 1970-01-01)
+	DUCKDB_API static int32_t EpochDays(date_t date);
+	//! Convert the epoch number of days to a date_t
+	DUCKDB_API static date_t EpochDaysToDate(int32_t epoch);
+
+	//! Extract year of a date entry
+	DUCKDB_API static int32_t ExtractYear(date_t date);
+	//! Extract year of a date entry, but optimized to first try the last year found
+	DUCKDB_API static int32_t ExtractYear(date_t date, int32_t *last_year);
+	DUCKDB_API static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
+	//! Extract month of a date entry
+	DUCKDB_API static int32_t ExtractMonth(date_t date);
+	//! Extract day of a date entry
+	DUCKDB_API static int32_t ExtractDay(date_t date);
+	//! Extract the day of the week (1-7)
+	DUCKDB_API static int32_t ExtractISODayOfTheWeek(date_t date);
+	//! Extract the day of the year
+	DUCKDB_API static int32_t ExtractDayOfTheYear(date_t date);
+	//! Extract the ISO week number
+	//! ISO weeks start on Monday and the first week of a year
+	//! contains January 4 of that year.
+	//! In the ISO week-numbering system, it is possible for early-January dates
+	//! to be part of the 52nd or 53rd week of the previous year.
+	DUCKDB_API static void ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week);
+	DUCKDB_API static int32_t ExtractISOWeekNumber(date_t date);
+	DUCKDB_API static int32_t ExtractISOYearNumber(date_t date);
+	//! Extract the week number as Python handles it.
+	//! Either Monday or Sunday is the first day of the week,
+	//! and any date before the first Monday/Sunday returns week 0
+	//! This is a bit more consistent because week numbers in a year are always incrementing
+	DUCKDB_API static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
+	//! Returns the date of the monday of the current week.
+	DUCKDB_API static date_t GetMondayOfCurrentWeek(date_t date);
+
+	//! Helper function to parse two digits from a string (e.g. "30" -> 30, "03" -> 3, "3" -> 3)
+	DUCKDB_API static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result);
+
+	DUCKDB_API static string ConversionError(const string &str);
+	DUCKDB_API static string ConversionError(string_t str);
+
+private:
+	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
+};
+
+} // namespace duckdb
+
+namespace std {
+
+//! Date
+template <>
+struct hash<duckdb::date_t> {
+	std::size_t operator()(const duckdb::date_t &k) const {
+		using std::hash;
+		return hash<int32_t>()((int32_t)k);
+	}
+};
+} // namespace std
+
+
+
+
+
+#include <functional>
+
+namespace duckdb {
+
+//! Type used to represent time (microseconds)
+struct dtime_t { // NOLINT
+	int64_t micros;
+
+	dtime_t() = default;
+	explicit inline dtime_t(int64_t micros_p) : micros(micros_p) {
+	}
+	inline dtime_t &operator=(int64_t micros_p) {
+		micros = micros_p;
+		return *this;
+	}
+
+	// explicit conversion
+	explicit inline operator int64_t() const {
+		return micros;
+	}
+	explicit inline operator double() const {
+		return micros;
+	}
+
+	// comparison operators
+	inline bool operator==(const dtime_t &rhs) const {
+		return micros == rhs.micros;
+	};
+	inline bool operator!=(const dtime_t &rhs) const {
+		return micros != rhs.micros;
+	};
+	inline bool operator<=(const dtime_t &rhs) const {
+		return micros <= rhs.micros;
+	};
+	inline bool operator<(const dtime_t &rhs) const {
+		return micros < rhs.micros;
+	};
+	inline bool operator>(const dtime_t &rhs) const {
+		return micros > rhs.micros;
+	};
+	inline bool operator>=(const dtime_t &rhs) const {
+		return micros >= rhs.micros;
+	};
+
+	// arithmetic operators
+	inline dtime_t operator+(const int64_t &micros) const {
+		return dtime_t(this->micros + micros);
+	};
+	inline dtime_t operator+(const double &micros) const {
+		return dtime_t(this->micros + int64_t(micros));
+	};
+	inline dtime_t operator-(const int64_t &micros) const {
+		return dtime_t(this->micros - micros);
+	};
+	inline dtime_t operator*(const idx_t &copies) const {
+		return dtime_t(this->micros * copies);
+	};
+	inline dtime_t operator/(const idx_t &copies) const {
+		return dtime_t(this->micros / copies);
+	};
+	inline int64_t operator-(const dtime_t &other) const {
+		return this->micros - other.micros;
+	};
+
+	// in-place operators
+	inline dtime_t &operator+=(const int64_t &micros) {
+		this->micros += micros;
+		return *this;
+	};
+	inline dtime_t &operator-=(const int64_t &micros) {
+		this->micros -= micros;
+		return *this;
+	};
+	inline dtime_t &operator+=(const dtime_t &other) {
+		this->micros += other.micros;
+		return *this;
+	};
+
+	// special values
+	static inline dtime_t allballs() {
+		return dtime_t(0);
+	} // NOLINT
+};
+
+struct dtime_tz_t : public dtime_t {};
+
+} // namespace duckdb
+
+namespace std {
+
+//! Time
+template <>
+struct hash<duckdb::dtime_t> {
+	std::size_t operator()(const duckdb::dtime_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+template <>
+struct hash<duckdb::dtime_tz_t> {
+	std::size_t operator()(const duckdb::dtime_tz_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+} // namespace std
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/types/interval.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+namespace duckdb {
+
+struct dtime_t;
+struct date_t;
+struct timestamp_t;
+
+struct interval_t {
+	int32_t months;
+	int32_t days;
+	int64_t micros;
+
+	inline bool operator==(const interval_t &rhs) const {
+		return this->days == rhs.days && this->months == rhs.months && this->micros == rhs.micros;
+	}
+};
+
+//! The Interval class is a static class that holds helper functions for the Interval
+//! type.
+class Interval {
+public:
+	static constexpr const int32_t MONTHS_PER_MILLENIUM = 12000;
+	static constexpr const int32_t MONTHS_PER_CENTURY = 1200;
+	static constexpr const int32_t MONTHS_PER_DECADE = 120;
+	static constexpr const int32_t MONTHS_PER_YEAR = 12;
+	static constexpr const int32_t MONTHS_PER_QUARTER = 3;
+	static constexpr const int32_t DAYS_PER_WEEK = 7;
+	//! only used for interval comparison/ordering purposes, in which case a month counts as 30 days
+	static constexpr const int64_t DAYS_PER_MONTH = 30;
+	static constexpr const int64_t DAYS_PER_YEAR = 365;
+	static constexpr const int64_t MSECS_PER_SEC = 1000;
+	static constexpr const int32_t SECS_PER_MINUTE = 60;
+	static constexpr const int32_t MINS_PER_HOUR = 60;
+	static constexpr const int32_t HOURS_PER_DAY = 24;
+	static constexpr const int32_t SECS_PER_HOUR = SECS_PER_MINUTE * MINS_PER_HOUR;
+	static constexpr const int32_t SECS_PER_DAY = SECS_PER_HOUR * HOURS_PER_DAY;
+	static constexpr const int32_t SECS_PER_WEEK = SECS_PER_DAY * DAYS_PER_WEEK;
+
+	static constexpr const int64_t MICROS_PER_MSEC = 1000;
+	static constexpr const int64_t MICROS_PER_SEC = MICROS_PER_MSEC * MSECS_PER_SEC;
+	static constexpr const int64_t MICROS_PER_MINUTE = MICROS_PER_SEC * SECS_PER_MINUTE;
+	static constexpr const int64_t MICROS_PER_HOUR = MICROS_PER_MINUTE * MINS_PER_HOUR;
+	static constexpr const int64_t MICROS_PER_DAY = MICROS_PER_HOUR * HOURS_PER_DAY;
+	static constexpr const int64_t MICROS_PER_WEEK = MICROS_PER_DAY * DAYS_PER_WEEK;
+	static constexpr const int64_t MICROS_PER_MONTH = MICROS_PER_DAY * DAYS_PER_MONTH;
+
+	static constexpr const int64_t NANOS_PER_MICRO = 1000;
+	static constexpr const int64_t NANOS_PER_MSEC = NANOS_PER_MICRO * MICROS_PER_MSEC;
+	static constexpr const int64_t NANOS_PER_SEC = NANOS_PER_MSEC * MSECS_PER_SEC;
+	static constexpr const int64_t NANOS_PER_MINUTE = NANOS_PER_SEC * SECS_PER_MINUTE;
+	static constexpr const int64_t NANOS_PER_HOUR = NANOS_PER_MINUTE * MINS_PER_HOUR;
+	static constexpr const int64_t NANOS_PER_DAY = NANOS_PER_HOUR * HOURS_PER_DAY;
+	static constexpr const int64_t NANOS_PER_WEEK = NANOS_PER_DAY * DAYS_PER_WEEK;
+
+public:
+	//! Convert a string to an interval object
+	static bool FromString(const string &str, interval_t &result);
+	//! Convert a string to an interval object
+	static bool FromCString(const char *str, idx_t len, interval_t &result, string *error_message, bool strict);
+	//! Convert an interval object to a string
+	static string ToString(const interval_t &val);
+
+	//! Convert milliseconds to a normalised interval
+	DUCKDB_API static interval_t FromMicro(int64_t micros);
+
+	//! Get Interval in milliseconds
+	static int64_t GetMilli(const interval_t &val);
+
+	//! Get Interval in microseconds
+	static int64_t GetMicro(const interval_t &val);
+
+	//! Get Interval in Nanoseconds
+	static int64_t GetNanoseconds(const interval_t &val);
+
+	//! Returns the age between two timestamps (including 30 day months)
+	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
+
+	//! Returns the exact difference between two timestamps (days and seconds)
+	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
+
+	//! Returns the inverted interval
+	static interval_t Invert(interval_t interval);
+
+	//! Add an interval to a date
+	static date_t Add(date_t left, interval_t right);
+	//! Add an interval to a timestamp
+	static timestamp_t Add(timestamp_t left, interval_t right);
+	//! Add an interval to a time. In case the time overflows or underflows, modify the date by the overflow.
+	//! For example if we go from 23:00 to 02:00, we add a day to the date
+	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
+
+	//! Comparison operators
+	static bool Equals(interval_t left, interval_t right);
+	static bool GreaterThan(interval_t left, interval_t right);
+	static bool GreaterThanEquals(interval_t left, interval_t right);
+};
+} // namespace duckdb
+
 
 namespace duckdb {
 
@@ -3612,6 +4276,9 @@ private:
 };
 
 class Allocator {
+	// 281TB ought to be enough for anybody
+	static constexpr const idx_t MAXIMUM_ALLOC_SIZE = 281474976710656ULL;
+
 public:
 	DUCKDB_API Allocator();
 	DUCKDB_API Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
@@ -3684,6 +4351,7 @@ void DestroyObject(T *ptr) {
 //! As such this class should be used primarily for larger allocations.
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
+	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
 };
 
 } // namespace duckdb
@@ -3737,7 +4405,7 @@ namespace duckdb {
 //! returned pointer will remain valid until the StringHeap is destroyed
 class StringHeap {
 public:
-	StringHeap();
+	StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
 
 	void Destroy();
 	void Move(StringHeap &other);
@@ -3763,141 +4431,6 @@ private:
 
 } // namespace duckdb
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/types/string_type.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-#include <cstring>
-
-namespace duckdb {
-
-struct string_t {
-	friend struct StringComparisonOperators;
-	friend class StringSegment;
-
-public:
-	static constexpr idx_t PREFIX_BYTES = 4 * sizeof(char);
-	static constexpr idx_t INLINE_BYTES = 12 * sizeof(char);
-	static constexpr idx_t HEADER_SIZE = sizeof(uint32_t) + PREFIX_BYTES;
-#ifndef DUCKDB_DEBUG_NO_INLINE
-	static constexpr idx_t PREFIX_LENGTH = PREFIX_BYTES;
-	static constexpr idx_t INLINE_LENGTH = INLINE_BYTES;
-#else
-	static constexpr idx_t PREFIX_LENGTH = 0;
-	static constexpr idx_t INLINE_LENGTH = 0;
-#endif
-
-	string_t() = default;
-	explicit string_t(uint32_t len) {
-		value.inlined.length = len;
-	}
-	string_t(const char *data, uint32_t len) {
-		value.inlined.length = len;
-		D_ASSERT(data || GetSize() == 0);
-		if (IsInlined()) {
-			// zero initialize the prefix first
-			// this makes sure that strings with length smaller than 4 still have an equal prefix
-			memset(value.inlined.inlined, 0, INLINE_BYTES);
-			if (GetSize() == 0) {
-				return;
-			}
-			// small string: inlined
-			memcpy(value.inlined.inlined, data, GetSize());
-		} else {
-			// large string: store pointer
-#ifndef DUCKDB_DEBUG_NO_INLINE
-			memcpy(value.pointer.prefix, data, PREFIX_LENGTH);
-#else
-			memset(value.pointer.prefix, 0, PREFIX_BYTES);
-#endif
-			value.pointer.ptr = (char *)data;
-		}
-	}
-	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
-	}
-	string_t(const string &value)
-	    : string_t(value.c_str(), value.size()) { // NOLINT: Allow implicit conversion from `const char*`
-	}
-
-	bool IsInlined() const {
-		return GetSize() <= INLINE_LENGTH;
-	}
-
-	//! this is unsafe since the string will not be terminated at the end
-	const char *GetDataUnsafe() const {
-		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
-	}
-
-	char *GetDataWriteable() const {
-		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
-	}
-
-	const char *GetPrefix() const {
-		return value.pointer.prefix;
-	}
-
-	idx_t GetSize() const {
-		return value.inlined.length;
-	}
-
-	string GetString() const {
-		return string(GetDataUnsafe(), GetSize());
-	}
-
-	explicit operator string() const {
-		return GetString();
-	}
-
-	void Finalize() {
-		// set trailing NULL byte
-		if (GetSize() <= INLINE_LENGTH) {
-			// fill prefix with zeros if the length is smaller than the prefix length
-			for (idx_t i = GetSize(); i < INLINE_BYTES; i++) {
-				value.inlined.inlined[i] = '\0';
-			}
-		} else {
-			// copy the data into the prefix
-#ifndef DUCKDB_DEBUG_NO_INLINE
-			auto dataptr = (char *)GetDataUnsafe();
-			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
-#else
-			memset(value.pointer.prefix, 0, PREFIX_BYTES);
-#endif
-		}
-	}
-
-	void Verify() const;
-	void VerifyNull() const;
-	bool operator<(const string_t &r) const {
-		auto this_str = this->GetString();
-		auto r_str = r.GetString();
-		return this_str < r_str;
-	}
-
-private:
-	union {
-		struct {
-			uint32_t length;
-			char prefix[4];
-			char *ptr;
-		} pointer;
-		struct {
-			uint32_t length;
-			char inlined[12];
-		} inlined;
-	} value;
-};
-
-} // namespace duckdb
 
 //===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -7523,13 +8056,9 @@ struct ExpressionExecutorState {
 
 
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/limits.hpp
-//
-//
-//===----------------------------------------------------------------------===//
+
+
+
 
 
 
@@ -7537,137 +8066,65 @@ struct ExpressionExecutorState {
 
 namespace duckdb {
 
+//! Returns the PhysicalType for the given type
 template <class T>
-struct NumericLimits {
-	DUCKDB_API static T Minimum();
-	DUCKDB_API static T Maximum();
-	DUCKDB_API static bool IsSigned();
-	DUCKDB_API static idx_t Digits();
-};
+PhysicalType GetTypeId() {
+	if (std::is_same<T, bool>()) {
+		return PhysicalType::BOOL;
+	} else if (std::is_same<T, int8_t>()) {
+		return PhysicalType::INT8;
+	} else if (std::is_same<T, int16_t>()) {
+		return PhysicalType::INT16;
+	} else if (std::is_same<T, int32_t>()) {
+		return PhysicalType::INT32;
+	} else if (std::is_same<T, int64_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, uint8_t>()) {
+		return PhysicalType::UINT8;
+	} else if (std::is_same<T, uint16_t>()) {
+		return PhysicalType::UINT16;
+	} else if (std::is_same<T, uint32_t>()) {
+		return PhysicalType::UINT32;
+	} else if (std::is_same<T, uint64_t>()) {
+		return PhysicalType::UINT64;
+	} else if (std::is_same<T, hugeint_t>()) {
+		return PhysicalType::INT128;
+	} else if (std::is_same<T, date_t>()) {
+		return PhysicalType::INT32;
+	} else if (std::is_same<T, dtime_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, timestamp_t>()) {
+		return PhysicalType::INT64;
+	} else if (std::is_same<T, float>()) {
+		return PhysicalType::FLOAT;
+	} else if (std::is_same<T, double>()) {
+		return PhysicalType::DOUBLE;
+	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>() || std::is_same<T, string_t>()) {
+		return PhysicalType::VARCHAR;
+	} else if (std::is_same<T, interval_t>()) {
+		return PhysicalType::INTERVAL;
+	} else {
+		return PhysicalType::INVALID;
+	}
+}
 
-template <>
-struct NumericLimits<int8_t> {
-	DUCKDB_API static int8_t Minimum();
-	DUCKDB_API static int8_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return true;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 3;
-	}
-};
-template <>
-struct NumericLimits<int16_t> {
-	DUCKDB_API static int16_t Minimum();
-	DUCKDB_API static int16_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return true;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 5;
-	}
-};
-template <>
-struct NumericLimits<int32_t> {
-	DUCKDB_API static int32_t Minimum();
-	DUCKDB_API static int32_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return true;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 10;
-	}
-};
-template <>
-struct NumericLimits<int64_t> {
-	DUCKDB_API static int64_t Minimum();
-	DUCKDB_API static int64_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return true;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 19;
-	}
-};
-template <>
-struct NumericLimits<hugeint_t> {
-	DUCKDB_API static hugeint_t Minimum();
-	DUCKDB_API static hugeint_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return true;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 39;
-	}
-};
-template <>
-struct NumericLimits<uint8_t> {
-	DUCKDB_API static uint8_t Minimum();
-	DUCKDB_API static uint8_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return false;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 3;
-	}
-};
-template <>
-struct NumericLimits<uint16_t> {
-	DUCKDB_API static uint16_t Minimum();
-	DUCKDB_API static uint16_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return false;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 5;
-	}
-};
-template <>
-struct NumericLimits<uint32_t> {
-	DUCKDB_API static uint32_t Minimum();
-	DUCKDB_API static uint32_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return false;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 10;
-	}
-};
-template <>
-struct NumericLimits<uint64_t> {
-	DUCKDB_API static uint64_t Minimum();
-	DUCKDB_API static uint64_t Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return false;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 20;
-	}
-};
-template <>
-struct NumericLimits<float> {
-	DUCKDB_API static float Minimum();
-	DUCKDB_API static float Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return true;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 127;
-	}
-};
-template <>
-struct NumericLimits<double> {
-	DUCKDB_API static double Minimum();
-	DUCKDB_API static double Maximum();
-	DUCKDB_API static bool IsSigned() {
-		return true;
-	}
-	DUCKDB_API static idx_t Digits() {
-		return 250;
-	}
-};
+template <class T>
+bool TypeIsNumber() {
+	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>();
+}
+
+template <class T>
+bool IsValidType() {
+	return GetTypeId<T>() != PhysicalType::INVALID;
+}
+
+template <class T>
+bool IsIntegerType() {
+	return TypeIsIntegral(GetTypeId<T>());
+}
 
 } // namespace duckdb
+
 
 
 
@@ -7816,103 +8273,11 @@ template <>
 bool Hugeint::TryConvert(double value, hugeint_t &result);
 template <>
 bool Hugeint::TryConvert(long double value, hugeint_t &result);
+template <>
+bool Hugeint::TryConvert(const char *value, hugeint_t &result);
 
 } // namespace duckdb
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/types/interval.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-namespace duckdb {
-
-//! The Interval class is a static class that holds helper functions for the Interval
-//! type.
-class Interval {
-public:
-	static constexpr const int32_t MONTHS_PER_MILLENIUM = 12000;
-	static constexpr const int32_t MONTHS_PER_CENTURY = 1200;
-	static constexpr const int32_t MONTHS_PER_DECADE = 120;
-	static constexpr const int32_t MONTHS_PER_YEAR = 12;
-	static constexpr const int32_t MONTHS_PER_QUARTER = 3;
-	static constexpr const int32_t DAYS_PER_WEEK = 7;
-	//! only used for interval comparison/ordering purposes, in which case a month counts as 30 days
-	static constexpr const int64_t DAYS_PER_MONTH = 30;
-	static constexpr const int64_t DAYS_PER_YEAR = 365;
-	static constexpr const int64_t MSECS_PER_SEC = 1000;
-	static constexpr const int32_t SECS_PER_MINUTE = 60;
-	static constexpr const int32_t MINS_PER_HOUR = 60;
-	static constexpr const int32_t HOURS_PER_DAY = 24;
-	static constexpr const int32_t SECS_PER_HOUR = SECS_PER_MINUTE * MINS_PER_HOUR;
-	static constexpr const int32_t SECS_PER_DAY = SECS_PER_HOUR * HOURS_PER_DAY;
-	static constexpr const int32_t SECS_PER_WEEK = SECS_PER_DAY * DAYS_PER_WEEK;
-
-	static constexpr const int64_t MICROS_PER_MSEC = 1000;
-	static constexpr const int64_t MICROS_PER_SEC = MICROS_PER_MSEC * MSECS_PER_SEC;
-	static constexpr const int64_t MICROS_PER_MINUTE = MICROS_PER_SEC * SECS_PER_MINUTE;
-	static constexpr const int64_t MICROS_PER_HOUR = MICROS_PER_MINUTE * MINS_PER_HOUR;
-	static constexpr const int64_t MICROS_PER_DAY = MICROS_PER_HOUR * HOURS_PER_DAY;
-	static constexpr const int64_t MICROS_PER_WEEK = MICROS_PER_DAY * DAYS_PER_WEEK;
-	static constexpr const int64_t MICROS_PER_MONTH = MICROS_PER_DAY * DAYS_PER_MONTH;
-
-	static constexpr const int64_t NANOS_PER_MICRO = 1000;
-	static constexpr const int64_t NANOS_PER_MSEC = NANOS_PER_MICRO * MICROS_PER_MSEC;
-	static constexpr const int64_t NANOS_PER_SEC = NANOS_PER_MSEC * MSECS_PER_SEC;
-	static constexpr const int64_t NANOS_PER_MINUTE = NANOS_PER_SEC * SECS_PER_MINUTE;
-	static constexpr const int64_t NANOS_PER_HOUR = NANOS_PER_MINUTE * MINS_PER_HOUR;
-	static constexpr const int64_t NANOS_PER_DAY = NANOS_PER_HOUR * HOURS_PER_DAY;
-	static constexpr const int64_t NANOS_PER_WEEK = NANOS_PER_DAY * DAYS_PER_WEEK;
-
-public:
-	//! Convert a string to an interval object
-	static bool FromString(const string &str, interval_t &result);
-	//! Convert a string to an interval object
-	static bool FromCString(const char *str, idx_t len, interval_t &result, string *error_message, bool strict);
-	//! Convert an interval object to a string
-	static string ToString(const interval_t &val);
-
-	//! Convert milliseconds to a normalised interval
-	DUCKDB_API static interval_t FromMicro(int64_t micros);
-
-	//! Get Interval in milliseconds
-	static int64_t GetMilli(const interval_t &val);
-
-	//! Get Interval in microseconds
-	static int64_t GetMicro(const interval_t &val);
-
-	//! Get Interval in Nanoseconds
-	static int64_t GetNanoseconds(const interval_t &val);
-
-	//! Returns the age between two timestamps (including 30 day months)
-	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
-
-	//! Returns the exact difference between two timestamps (days and seconds)
-	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
-
-	//! Returns the inverted interval
-	static interval_t Invert(interval_t interval);
-
-	//! Add an interval to a date
-	static date_t Add(date_t left, interval_t right);
-	//! Add an interval to a timestamp
-	static timestamp_t Add(timestamp_t left, interval_t right);
-	//! Add an interval to a time. In case the time overflows or underflows, modify the date by the overflow.
-	//! For example if we go from 23:00 to 02:00, we add a day to the date
-	static dtime_t Add(dtime_t left, interval_t right, date_t &date);
-
-	//! Comparison operators
-	static bool Equals(interval_t left, interval_t right);
-	static bool GreaterThan(interval_t left, interval_t right);
-	static bool GreaterThanEquals(interval_t left, interval_t right);
-};
-} // namespace duckdb
 
 
 
@@ -8807,6 +9172,7 @@ public:
 
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info);
+	virtual void UndoAlter(ClientContext &context, AlterInfo *info);
 
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context);
 
@@ -10798,6 +11164,8 @@ public:
 public:
 	bool HasGeneratedColumns() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
+	void UndoAlter(ClientContext &context, AlterInfo *info) override;
+
 	//! Returns whether or not a column with the given name exists
 	DUCKDB_API bool ColumnExists(const string &name);
 	//! Returns a reference to the column of the specified name. Throws an
@@ -10975,6 +11343,9 @@ public:
 	virtual bool RequireOptimizer() const {
 		return true;
 	}
+
+	//! Returns the set of table indexes of this operator
+	virtual vector<idx_t> GetTableIndex() const;
 
 protected:
 	//! Resolve types for this specific operator
@@ -13826,6 +14197,9 @@ public:
 	void Reset();
 	void ResetSink();
 	void ResetSource(bool force);
+	void ClearSource() {
+		source_state.reset();
+	}
 	void Schedule(shared_ptr<Event> &event);
 
 	//! Finalize this pipeline
@@ -15163,27 +15537,46 @@ namespace duckdb {
 struct AlterInfo;
 
 class ClientContext;
+struct MappingValue;
+struct EntryIndex;
 
 typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 
-struct MappingValue {
-	explicit MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
+struct EntryValue {
+	EntryValue() {
+		throw InternalException("EntryValue called without a catalog entry");
 	}
 
-	idx_t index;
-	transaction_t timestamp;
-	bool deleted;
-	unique_ptr<MappingValue> child;
-	MappingValue *parent;
+	explicit EntryValue(unique_ptr<CatalogEntry> entry_p) : entry(move(entry_p)), reference_count(0) {
+	}
+	//! enable move constructors
+	EntryValue(EntryValue &&other) noexcept {
+		Swap(other);
+	}
+	EntryValue &operator=(EntryValue &&other) noexcept {
+		Swap(other);
+		return *this;
+	}
+	void Swap(EntryValue &other) {
+		std::swap(entry, other.entry);
+		idx_t count = reference_count;
+		reference_count = other.reference_count.load();
+		other.reference_count = count;
+	}
+
+	unique_ptr<CatalogEntry> entry;
+	atomic<idx_t> reference_count;
 };
 
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
 	friend class DependencyManager;
 	friend class EntryDropper;
+	friend struct EntryIndex;
 
 public:
 	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
+	~CatalogSet();
 
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
@@ -15224,7 +15617,6 @@ public:
 	DUCKDB_API static bool HasConflict(ClientContext &context, transaction_t timestamp);
 	DUCKDB_API static bool UseTimestamp(ClientContext &context, transaction_t timestamp);
 
-	CatalogEntry *GetEntryFromIndex(idx_t index);
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
 
 private:
@@ -15237,29 +15629,32 @@ private:
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
 	CatalogEntry *GetCommittedEntry(CatalogEntry *current);
-	bool GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index, CatalogEntry *&entry);
-	bool GetEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry *&entry);
+	bool GetEntryInternal(ClientContext &context, const string &name, EntryIndex *entry_index, CatalogEntry *&entry);
+	bool GetEntryInternal(ClientContext &context, EntryIndex &entry_index, CatalogEntry *&entry);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
-	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade);
+	void DropEntryInternal(ClientContext &context, EntryIndex entry_index, CatalogEntry &entry, bool cascade);
 	CatalogEntry *CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry);
 	MappingValue *GetMapping(ClientContext &context, const string &name, bool get_latest = false);
-	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);
+	void PutMapping(ClientContext &context, const string &name, EntryIndex entry_index);
 	void DeleteMapping(ClientContext &context, const string &name);
-	void DropEntryDependencies(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade);
+	void DropEntryDependencies(ClientContext &context, EntryIndex &entry_index, CatalogEntry &entry, bool cascade);
 
 	//! Create all default entries
 	void CreateDefaultEntries(ClientContext &context, unique_lock<mutex> &lock);
 	//! Attempt to create a default entry with the specified name. Returns the entry if successful, nullptr otherwise.
 	CatalogEntry *CreateDefaultEntry(ClientContext &context, const string &name, unique_lock<mutex> &lock);
 
+	EntryIndex PutEntry(idx_t entry_index, unique_ptr<CatalogEntry> entry);
+	void PutEntry(EntryIndex index, unique_ptr<CatalogEntry> entry);
+
 private:
 	Catalog &catalog;
 	//! The catalog lock is used to make changes to the data
 	mutex catalog_lock;
+	//! The set of catalog entries
+	unordered_map<idx_t, EntryValue> entries;
 	//! Mapping of string to catalog entry
 	case_insensitive_map_t<unique_ptr<MappingValue>> mapping;
-	//! The set of catalog entries
-	unordered_map<idx_t, unique_ptr<CatalogEntry>> entries;
 	//! The current catalog entry index
 	idx_t current_entry = 0;
 	//! The generator used to generate default internal entries
@@ -17399,6 +17794,7 @@ public:
 namespace duckdb {
 
 struct string_t;
+struct interval_t;
 
 // efficient hash function that maximizes the avalanche effect and minimizes
 // bias
@@ -18546,12 +18942,19 @@ struct OperatorExtensionInfo {
 typedef BoundStatement (*bind_function_t)(ClientContext &context, Binder &binder, OperatorExtensionInfo *info,
                                           SQLStatement &statement);
 
+// forward declaration to avoid circular reference
+struct LogicalExtensionOperator;
+
 class OperatorExtension {
 public:
 	bind_function_t Bind;
 
 	//! Additional info passed to the CreatePlan & Bind functions
 	shared_ptr<OperatorExtensionInfo> operator_info;
+
+	virtual std::string GetName() = 0;
+	virtual std::unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state,
+	                                                              FieldReader &reader) = 0;
 
 	DUCKDB_API virtual ~OperatorExtension() {
 	}
@@ -18698,7 +19101,7 @@ public:
 	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
 	shared_ptr<Allocator> default_allocator;
 	//! Extensions made to binder
-	vector<OperatorExtension> operator_extensions;
+	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -19439,6 +19842,8 @@ DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
 
 /*!
 Fetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.
+
+The result must be destroyed with `duckdb_destroy_data_chunk`.
 
 This function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data`
 functions. It results in significantly better performance, and should be preferred in newer code-bases.
@@ -21096,145 +21501,6 @@ DUCKDB_API void duckdb_destroy_task_state(duckdb_task_state state);
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/date.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-
-
-namespace duckdb {
-
-//! The Date class is a static class that holds helper functions for the Date type.
-class Date {
-public:
-	static const char *PINF;  // NOLINT
-	static const char *NINF;  // NOLINT
-	static const char *EPOCH; // NOLINT
-
-	static const string_t MONTH_NAMES[12];
-	static const string_t MONTH_NAMES_ABBREVIATED[12];
-	static const string_t DAY_NAMES[7];
-	static const string_t DAY_NAMES_ABBREVIATED[7];
-	static const int32_t NORMAL_DAYS[13];
-	static const int32_t CUMULATIVE_DAYS[13];
-	static const int32_t LEAP_DAYS[13];
-	static const int32_t CUMULATIVE_LEAP_DAYS[13];
-	static const int32_t CUMULATIVE_YEAR_DAYS[401];
-	static const int8_t MONTH_PER_DAY_OF_YEAR[365];
-	static const int8_t LEAP_MONTH_PER_DAY_OF_YEAR[366];
-
-	// min date is 5877642-06-25 (BC) (-2^31+2)
-	constexpr static const int32_t DATE_MIN_YEAR = -5877641;
-	constexpr static const int32_t DATE_MIN_MONTH = 6;
-	constexpr static const int32_t DATE_MIN_DAY = 25;
-	// max date is 5881580-07-10 (2^31-2)
-	constexpr static const int32_t DATE_MAX_YEAR = 5881580;
-	constexpr static const int32_t DATE_MAX_MONTH = 7;
-	constexpr static const int32_t DATE_MAX_DAY = 10;
-	constexpr static const int32_t EPOCH_YEAR = 1970;
-
-	constexpr static const int32_t YEAR_INTERVAL = 400;
-	constexpr static const int32_t DAYS_PER_YEAR_INTERVAL = 146097;
-
-public:
-	//! Convert a string in the format "YYYY-MM-DD" to a date object
-	DUCKDB_API static date_t FromString(const string &str, bool strict = false);
-	//! Convert a string in the format "YYYY-MM-DD" to a date object
-	DUCKDB_API static date_t FromCString(const char *str, idx_t len, bool strict = false);
-	//! Convert a date object to a string in the format "YYYY-MM-DD"
-	DUCKDB_API static string ToString(date_t date);
-	//! Try to convert text in a buffer to a date; returns true if parsing was successful
-	//! If the date was a "special" value, the special flag will be set.
-	DUCKDB_API static bool TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special,
-	                                      bool strict = false);
-
-	//! Create a string "YYYY-MM-DD" from a specified (year, month, day)
-	//! combination
-	DUCKDB_API static string Format(int32_t year, int32_t month, int32_t day);
-
-	//! Extract the year, month and day from a given date object
-	DUCKDB_API static void Convert(date_t date, int32_t &out_year, int32_t &out_month, int32_t &out_day);
-	//! Create a Date object from a specified (year, month, day) combination
-	DUCKDB_API static date_t FromDate(int32_t year, int32_t month, int32_t day);
-	DUCKDB_API static bool TryFromDate(int32_t year, int32_t month, int32_t day, date_t &result);
-
-	//! Returns true if (year) is a leap year, and false otherwise
-	DUCKDB_API static bool IsLeapYear(int32_t year);
-
-	//! Returns true if the specified (year, month, day) combination is a valid
-	//! date
-	DUCKDB_API static bool IsValid(int32_t year, int32_t month, int32_t day);
-
-	//! Returns true if the specified date is finite
-	static inline bool IsFinite(date_t date) {
-		return date != date_t::infinity() && date != date_t::ninfinity();
-	}
-
-	//! The max number of days in a month of a given year
-	DUCKDB_API static int32_t MonthDays(int32_t year, int32_t month);
-
-	//! Extract the epoch from the date (seconds since 1970-01-01)
-	DUCKDB_API static int64_t Epoch(date_t date);
-	//! Extract the epoch from the date (nanoseconds since 1970-01-01)
-	DUCKDB_API static int64_t EpochNanoseconds(date_t date);
-	//! Extract the epoch from the date (microseconds since 1970-01-01)
-	DUCKDB_API static int64_t EpochMicroseconds(date_t date);
-	//! Convert the epoch (seconds since 1970-01-01) to a date_t
-	DUCKDB_API static date_t EpochToDate(int64_t epoch);
-
-	//! Extract the number of days since epoch (days since 1970-01-01)
-	DUCKDB_API static int32_t EpochDays(date_t date);
-	//! Convert the epoch number of days to a date_t
-	DUCKDB_API static date_t EpochDaysToDate(int32_t epoch);
-
-	//! Extract year of a date entry
-	DUCKDB_API static int32_t ExtractYear(date_t date);
-	//! Extract year of a date entry, but optimized to first try the last year found
-	DUCKDB_API static int32_t ExtractYear(date_t date, int32_t *last_year);
-	DUCKDB_API static int32_t ExtractYear(timestamp_t ts, int32_t *last_year);
-	//! Extract month of a date entry
-	DUCKDB_API static int32_t ExtractMonth(date_t date);
-	//! Extract day of a date entry
-	DUCKDB_API static int32_t ExtractDay(date_t date);
-	//! Extract the day of the week (1-7)
-	DUCKDB_API static int32_t ExtractISODayOfTheWeek(date_t date);
-	//! Extract the day of the year
-	DUCKDB_API static int32_t ExtractDayOfTheYear(date_t date);
-	//! Extract the ISO week number
-	//! ISO weeks start on Monday and the first week of a year
-	//! contains January 4 of that year.
-	//! In the ISO week-numbering system, it is possible for early-January dates
-	//! to be part of the 52nd or 53rd week of the previous year.
-	DUCKDB_API static void ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week);
-	DUCKDB_API static int32_t ExtractISOWeekNumber(date_t date);
-	DUCKDB_API static int32_t ExtractISOYearNumber(date_t date);
-	//! Extract the week number as Python handles it.
-	//! Either Monday or Sunday is the first day of the week,
-	//! and any date before the first Monday/Sunday returns week 0
-	//! This is a bit more consistent because week numbers in a year are always incrementing
-	DUCKDB_API static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
-	//! Returns the date of the monday of the current week.
-	DUCKDB_API static date_t GetMondayOfCurrentWeek(date_t date);
-
-	//! Helper function to parse two digits from a string (e.g. "30" -> 30, "03" -> 3, "3" -> 3)
-	DUCKDB_API static bool ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result);
-
-	DUCKDB_API static string ConversionError(const string &str);
-	DUCKDB_API static string ConversionError(string_t str);
-
-private:
-	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
-};
-} // namespace duckdb
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
 // duckdb/common/arrow/arrow_converter.hpp
 //
 //
@@ -21418,86 +21684,6 @@ public:
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/timestamp.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-
-namespace duckdb {
-
-//! The Timestamp class is a static class that holds helper functions for the Timestamp
-//! type.
-class Timestamp {
-public:
-	// min timestamp is 290308-12-22 (BC)
-	constexpr static const int32_t MIN_YEAR = -290308;
-	constexpr static const int32_t MIN_MONTH = 12;
-	constexpr static const int32_t MIN_DAY = 22;
-
-public:
-	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss[.f][-+TH[:tm]]" to a timestamp object
-	DUCKDB_API static timestamp_t FromString(const string &str);
-	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
-	//! If has_offset is true, then the result is an instant that was offset from UTC
-	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
-	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
-	                                             string_t &tz);
-	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
-	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len);
-	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
-	DUCKDB_API static string ToString(timestamp_t timestamp);
-
-	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
-
-	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
-	//! Create a Timestamp object from a specified (date, time) combination
-	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
-	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
-
-	//! Is the timestamp finite or infinite?
-	static inline bool IsFinite(timestamp_t timestamp) {
-		return timestamp != timestamp_t::infinity() && timestamp != timestamp_t::ninfinity();
-	}
-
-	//! Extract the date and time from a given timestamp object
-	DUCKDB_API static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
-	//! Returns current timestamp
-	DUCKDB_API static timestamp_t GetCurrentTimestamp();
-
-	//! Convert the epoch (in sec) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t ms);
-	//! Convert the epoch (in ms) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochMs(int64_t ms);
-	//! Convert the epoch (in microseconds) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochMicroSeconds(int64_t micros);
-	//! Convert the epoch (in nanoseconds) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t micros);
-
-	//! Convert the epoch (in seconds) to a timestamp
-	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
-	//! Convert the epoch (in ms) to a timestamp
-	DUCKDB_API static int64_t GetEpochMs(timestamp_t timestamp);
-	//! Convert a timestamp to epoch (in microseconds)
-	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
-	//! Convert a timestamp to epoch (in nanoseconds)
-	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
-
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
-	                                         int &minute_offset);
-
-	DUCKDB_API static string ConversionError(const string &str);
-	DUCKDB_API static string ConversionError(string_t str);
-};
-} // namespace duckdb
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
 // duckdb/common/types/time.hpp
 //
 //
@@ -21510,6 +21696,8 @@ public:
 
 
 namespace duckdb {
+
+struct dtime_t;
 
 //! The Time class is a static class that holds helper functions for the Time
 //! type.
@@ -21561,6 +21749,11 @@ class DuckDB;
 class TableCatalogEntry;
 class Connection;
 
+enum class AppenderType : uint8_t {
+	LOGICAL, // Cast input -> LogicalType
+	PHYSICAL // Cast input -> PhysicalType
+};
+
 //! The Appender class can be used to append elements to a table.
 class BaseAppender {
 protected:
@@ -21576,10 +21769,14 @@ protected:
 	DataChunk chunk;
 	//! The current column to append to
 	idx_t column = 0;
+	//! The type of the appender
+	AppenderType appender_type;
+
+protected:
+	DUCKDB_API BaseAppender(Allocator &allocator, AppenderType type);
+	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types, AppenderType type);
 
 public:
-	DUCKDB_API BaseAppender(Allocator &allocator);
-	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types);
 	DUCKDB_API virtual ~BaseAppender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
@@ -21627,6 +21824,8 @@ protected:
 	void AppendValueInternal(T value);
 	template <class SRC, class DST>
 	void AppendValueInternal(Vector &vector, SRC input);
+	template <class SRC, class DST>
+	void AppendDecimalValueInternal(Vector &vector, SRC input);
 
 	void AppendRowRecursive() {
 		EndRow();
