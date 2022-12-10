@@ -1,5 +1,9 @@
 name: Build static library dependencies
 on:
+  workflow_dispatch:
+    branches-ignore:
+      - master
+
   push:
     branches-ignore:
       - master
