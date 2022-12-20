@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -41,13 +42,46 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run("with invalid config", func(t *testing.T) {
-		db, _ := sql.Open("duckdb", "?threads=NaN")
-		err := db.Ping()
+		_, err := sql.Open("duckdb", "?threads=NaN")
 
 		if !errors.Is(err, prepareConfigError) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
+}
+
+func TestConnPool(t *testing.T) {
+	db := openDB(t)
+	db.SetMaxOpenConns(2) // set connection pool size greater than 1
+	defer db.Close()
+	createTable(db, t)
+
+	// Get two separate connections and check they're consistent
+	conn1, err := db.Conn(context.Background())
+	conn2, err := db.Conn(context.Background())
+
+	res, err := conn1.ExecContext(context.Background(), "INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+	require.NoError(t, err)
+	ra, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(2), ra)
+
+	require.NoError(t, err)
+	rows, err := conn1.QueryContext(context.Background(), "select bar from foo limit 1")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	require.NoError(t, err)
+	rows, err = conn2.QueryContext(context.Background(), "select bar from foo limit 1")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	err = conn1.Close()
+	require.NoError(t, err)
+	err = conn2.Close()
+	require.NoError(t, err)
 }
 
 func TestExec(t *testing.T) {
