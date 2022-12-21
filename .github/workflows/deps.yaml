@@ -6,7 +6,7 @@ on:
     branches-ignore:
       - master
     paths:
-      - ".github/workflows"
+      - ".github/workflows/**"
       - "duckdb.cpp"
       - "duckdb.h"
       - "duckdb.hpp"
