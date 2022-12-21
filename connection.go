@@ -13,7 +13,6 @@ import (
 )
 
 type conn struct {
-	db     *C.duckdb_database
 	con    *C.duckdb_connection
 	closed bool
 	tx     bool
@@ -88,8 +87,6 @@ func (c *conn) Close() error {
 	c.closed = true
 
 	C.duckdb_disconnect(c.con)
-	C.duckdb_close(c.db)
-	c.db = nil
 
 	return nil
 }
