@@ -34,6 +34,15 @@ func (d Driver) Open(dataSourceName string) (driver.Conn, error) {
 }
 
 func (Driver) OpenConnector(dataSourceName string) (driver.Connector, error) {
+	return createConnector(dataSourceName, func(execerContext driver.Execer) error { return nil })
+}
+
+// NewConnector creates a new Connector for the DuckDB database.
+func NewConnector(dsn string, connInitFn func(execer driver.Execer) error) (driver.Connector, error) {
+	return createConnector(dsn, connInitFn)
+}
+
+func createConnector(dataSourceName string, connInitFn func(execer driver.Execer) error) (driver.Connector, error) {
 	var db C.duckdb_database
 
 	parsedDSN, err := url.Parse(dataSourceName)
@@ -63,11 +72,12 @@ func (Driver) OpenConnector(dataSourceName string) (driver.Connector, error) {
 		}
 	}
 
-	return &connector{db: &db}, nil
+	return &connector{db: &db, connInitFn: connInitFn}, nil
 }
 
 type connector struct {
-	db *C.duckdb_database
+	db         *C.duckdb_database
+	connInitFn func(execer driver.Execer) error
 }
 
 func (c *connector) Driver() driver.Driver {
@@ -79,7 +89,13 @@ func (c *connector) Connect(context.Context) (driver.Conn, error) {
 	if state := C.duckdb_connect(*c.db, &con); state == C.DuckDBError {
 		return nil, openError
 	}
-	return &conn{con: &con}, nil
+	conn := &conn{con: &con}
+	// call the connection init function
+	err := c.connInitFn(conn)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
 
 func (c *connector) Close() error {

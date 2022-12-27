@@ -3,6 +3,7 @@ package duckdb
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -74,6 +75,61 @@ func TestConnPool(t *testing.T) {
 
 	require.NoError(t, err)
 	rows, err = conn2.QueryContext(context.Background(), "select bar from foo limit 1")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	err = conn1.Close()
+	require.NoError(t, err)
+	err = conn2.Close()
+	require.NoError(t, err)
+}
+
+func TestConnInit(t *testing.T) {
+	connector, err := NewConnector("", func(execer driver.Execer) error {
+		bootQueries := []string{
+			"INSTALL 'json'",
+			"LOAD 'json'",
+		}
+
+		for _, qry := range bootQueries {
+			_, err := execer.Exec(qry, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(2) // set connection pool size greater than 1
+	defer db.Close()
+
+	// Get two separate connections and check they're consistent
+	conn1, err := db.Conn(context.Background())
+	conn2, err := db.Conn(context.Background())
+
+	res, err := conn1.ExecContext(context.Background(), "CREATE TABLE example (j JSON)")
+	fmt.Println(err)
+	require.NoError(t, err)
+	ra, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), ra)
+
+	res, err = conn2.ExecContext(context.Background(), "INSERT INTO example VALUES(' { \"family\": \"anatidae\", \"species\": [ \"duck\", \"goose\", \"swan\", null ] }')")
+	require.NoError(t, err)
+	ra, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), ra)
+
+	require.NoError(t, err)
+	rows, err := conn1.QueryContext(context.Background(), "SELECT json_valid(j) FROM example")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	require.NoError(t, err)
+	rows, err = conn2.QueryContext(context.Background(), "SELECT json_valid(j) FROM example")
 	require.NoError(t, err)
 	require.True(t, rows.Next())
 	rows.Close()
