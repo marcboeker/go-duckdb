@@ -59,7 +59,9 @@ func TestConnPool(t *testing.T) {
 
 	// Get two separate connections and check they're consistent
 	conn1, err := db.Conn(context.Background())
+	require.NoError(t, err)
 	conn2, err := db.Conn(context.Background())
+	require.NoError(t, err)
 
 	res, err := conn1.ExecContext(context.Background(), "INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
 	require.NoError(t, err)
@@ -107,10 +109,11 @@ func TestConnInit(t *testing.T) {
 
 	// Get two separate connections and check they're consistent
 	conn1, err := db.Conn(context.Background())
+	require.NoError(t, err)
 	conn2, err := db.Conn(context.Background())
+	require.NoError(t, err)
 
 	res, err := conn1.ExecContext(context.Background(), "CREATE TABLE example (j JSON)")
-	fmt.Println(err)
 	require.NoError(t, err)
 	ra, err := res.RowsAffected()
 	require.NoError(t, err)
