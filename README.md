@@ -32,6 +32,33 @@ If you want to set specific [config options for DuckDB](https://duckdb.org/docs/
 db, err := sql.Open("duckdb", "/path/to/foo.db?access_mode=read_only&threads=4")
 ```
 
+Alternatively, you can also use `sql.OpenDB` when you want to perform some initialization before the connection is created and returned from the connection pool on call to `db.Conn`.
+Here's an example that installs and loads the JSON extension for each connection:
+
+```
+connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.Execer) error {
+  bootQueries := []string{
+    "INSTALL 'json'",
+    "LOAD 'json'",
+  }
+
+  for _, qry := range bootQueries {
+    _, err = execer.Exec(qry, nil)
+    if err != nil {
+      return err
+    }
+  }
+  return nil
+})
+if err != nil {
+  return nil, err
+}
+
+db := sql.OpenDB(connector)
+db.SetMaxOpenConns(poolsize)
+...
+```
+
 Please refer to the [database/sql](https://godoc.org/database/sql) GoDoc for further usage instructions.
 
 ## Linking DuckDB
