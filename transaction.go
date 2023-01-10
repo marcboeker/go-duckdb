@@ -1,7 +1,10 @@
 package duckdb
 
+import "context"
+
 type tx struct {
-	c *conn
+	ctx context.Context
+	c   *conn
 }
 
 func (t *tx) Commit() error {
@@ -10,7 +13,7 @@ func (t *tx) Commit() error {
 	}
 
 	t.c.tx = false
-	_, err := t.c.Exec("COMMIT TRANSACTION", nil)
+	_, err := t.c.ExecContext(t.ctx, "COMMIT TRANSACTION", nil)
 	t.c = nil
 
 	return err
@@ -22,7 +25,7 @@ func (t *tx) Rollback() error {
 	}
 
 	t.c.tx = false
-	_, err := t.c.Exec("ROLLBACK", nil)
+	_, err := t.c.ExecContext(t.ctx, "ROLLBACK", nil)
 	t.c = nil
 
 	return err

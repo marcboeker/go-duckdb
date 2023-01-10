@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"context"
 	"database/sql/driver"
 	"errors"
 	"math/big"
@@ -26,6 +27,7 @@ func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	return driver.ErrSkip
 }
 
+// Deprecated: Use ExecContext instead. This method is not used in this project anywhere.
 func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
@@ -43,6 +45,24 @@ func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {
 	return stmt.Exec(args)
 }
 
+func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if c.closed {
+		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
+	}
+
+	if len(args) == 0 {
+		return c.execUnprepared(query)
+	}
+
+	stmt, err := c.prepareStmt(query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+	return stmt.(driver.StmtExecContext).ExecContext(ctx, args)
+}
+
+// Deprecated: Use QueryContext instead. This method is not used in this project anywhere.
 func (c *conn) Query(cmd string, args []driver.Value) (driver.Rows, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
@@ -60,6 +80,23 @@ func (c *conn) Query(cmd string, args []driver.Value) (driver.Rows, error) {
 	return stmt.Query(args)
 }
 
+func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	if c.closed {
+		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
+	}
+
+	if len(args) == 0 {
+		return c.queryUnprepared(query)
+	}
+
+	stmt, err := c.prepareStmt(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return stmt.(driver.StmtQueryContext).QueryContext(ctx, args)
+}
+
 func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Prepare after Close")
@@ -67,6 +104,7 @@ func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	return c.prepareStmt(cmd)
 }
 
+// Deprecated: Use BeginTx instead. This method is not used in this project anywhere.
 func (c *conn) Begin() (driver.Tx, error) {
 	if c.tx {
 		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
@@ -77,7 +115,20 @@ func (c *conn) Begin() (driver.Tx, error) {
 	}
 
 	c.tx = true
-	return &tx{c}, nil
+	return &tx{context.Background(), c}, nil
+}
+
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	if c.tx {
+		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
+	}
+
+	if _, err := c.ExecContext(ctx, "BEGIN TRANSACTION", nil); err != nil {
+		return nil, err
+	}
+
+	c.tx = true
+	return &tx{ctx, c}, nil
 }
 
 func (c *conn) Close() error {

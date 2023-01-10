@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"context"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -148,6 +149,7 @@ func (s *stmt) start(args []driver.Value) error {
 	return nil
 }
 
+// Deprecated: Use ExecContext instead. This can be removed once driver.Execer implementation is removed from connection.go
 func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
@@ -175,6 +177,71 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	return &result{ra}, nil
 }
 
+func (s *stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
+	if s.closed {
+		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
+	}
+	if s.rows {
+		panic("database/sql/driver: misuse of duckdb driver: ExecContext with active Rows")
+	}
+
+	args, err := namedValueToValue(nargs)
+	if err != nil {
+		return nil, err
+	}
+	err = s.start(args)
+	if err != nil {
+		return nil, err
+	}
+
+	var pendingRes C.duckdb_pending_result
+	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
+		C.duckdb_destroy_pending(&pendingRes)
+		C.duckdb_destroy_prepare(s.stmt)
+		return nil, errors.New(dbErr)
+	}
+	defer C.duckdb_destroy_pending(&pendingRes)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			// continue
+		}
+		state := C.duckdb_pending_execute_task(pendingRes)
+		ready := false
+		switch state {
+		case C.DUCKDB_PENDING_RESULT_READY:
+			// we are done processing the query, now get the results
+			ready = true
+		case C.DUCKDB_PENDING_ERROR:
+			dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
+			return nil, errors.New(dbErr)
+		case C.DUCKDB_PENDING_RESULT_NOT_READY:
+			// we need to wait for the task to finish
+		default:
+			panic(fmt.Sprintf("found unkonwn state while pending execute: %T", state))
+		}
+		if ready {
+			break
+		}
+	}
+
+	var res C.duckdb_result
+	if state := C.duckdb_execute_pending(pendingRes, &res); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_result_error(&res))
+		C.duckdb_destroy_result(&res)
+		return nil, errors.New(dbErr)
+	}
+	defer C.duckdb_destroy_result(&res)
+
+	ra := int64(C.duckdb_value_int64(&res, 0, 0))
+	return &result{ra}, nil
+}
+
+// Deprecated: Use QueryContext instead. This can be removed once driver.Queryer implementation is removed from connection.go
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Query after Close")
@@ -198,6 +265,79 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	s.rows = true
 
 	return newRowsWithStmt(res, s), nil
+}
+
+func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
+	if s.closed {
+		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
+	}
+	if s.rows {
+		panic("database/sql/driver: misuse of duckdb driver: QueryContext with active Rows")
+	}
+
+	args, err := namedValueToValue(nargs)
+	if err != nil {
+		return nil, err
+	}
+	err = s.start(args)
+	if err != nil {
+		return nil, err
+	}
+
+	var pendingRes C.duckdb_pending_result
+	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
+		C.duckdb_destroy_pending(&pendingRes)
+		C.duckdb_destroy_prepare(s.stmt)
+		return nil, errors.New(dbErr)
+	}
+	defer C.duckdb_destroy_pending(&pendingRes)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			// continue
+		}
+		state := C.duckdb_pending_execute_task(pendingRes)
+		ready := false
+		switch state {
+		case C.DUCKDB_PENDING_RESULT_READY:
+			// we are done processing the query, now get the results
+			ready = true
+		case C.DUCKDB_PENDING_ERROR:
+			dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
+			return nil, errors.New(dbErr)
+		case C.DUCKDB_PENDING_RESULT_NOT_READY:
+			// we need to wait for the task to finish
+		default:
+			panic(fmt.Sprintf("found unkonwn state while pending execute: %T", state))
+		}
+		if ready {
+			break
+		}
+	}
+
+	var res C.duckdb_result
+	if state := C.duckdb_execute_pending(pendingRes, &res); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_result_error(&res))
+		C.duckdb_destroy_result(&res)
+		return nil, errors.New(dbErr)
+	}
+	s.rows = true
+	return newRowsWithStmt(res, s), nil
+}
+
+func namedValueToValue(named []driver.NamedValue) ([]driver.Value, error) {
+	args := make([]driver.Value, len(named))
+	for n, param := range named {
+		if len(param.Name) > 0 {
+			return nil, errors.New("sql: driver does not support the use of Named Parameters")
+		}
+		args[n] = param.Value
+	}
+	return args, nil
 }
 
 var (
