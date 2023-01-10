@@ -220,7 +220,7 @@ func (s *stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 			dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
 			return nil, errors.New(dbErr)
 		case C.DUCKDB_PENDING_RESULT_NOT_READY:
-			// we need to wait for the task to finish
+			// we are not done yet, continue to next task
 		default:
 			panic(fmt.Sprintf("found unkonwn state while pending execute: %T", state))
 		}
@@ -310,7 +310,7 @@ func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 			dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
 			return nil, errors.New(dbErr)
 		case C.DUCKDB_PENDING_RESULT_NOT_READY:
-			// we need to wait for the task to finish
+			// we are not done yet, continue to next task
 		default:
 			panic(fmt.Sprintf("found unkonwn state while pending execute: %T", state))
 		}
