@@ -179,6 +179,8 @@ func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 	return newRowsWithStmt(*res, s), nil
 }
 
+// This method executes the query in steps and checks if context is cancelled before executing each step.
+// It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
 func (s *stmt) executeWithCancellation(ctx context.Context, nargs []driver.NamedValue) (*C.duckdb_result, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
@@ -205,15 +207,16 @@ func (s *stmt) executeWithCancellation(ctx context.Context, nargs []driver.Named
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)
 
-	for {
+	ready := false
+	for !ready {
 		select {
+		// if context is cancelled or deadline exceeded, don't execute further
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
 			// continue
 		}
 		state := C.duckdb_pending_execute_task(pendingRes)
-		ready := false
 		switch state {
 		case C.DUCKDB_PENDING_RESULT_READY:
 			// we are done processing the query, now get the results
@@ -225,9 +228,6 @@ func (s *stmt) executeWithCancellation(ctx context.Context, nargs []driver.Named
 			// we are not done yet, continue to next task
 		default:
 			panic(fmt.Sprintf("found unknown state while pending execute: %v", state))
-		}
-		if ready {
-			break
 		}
 	}
 

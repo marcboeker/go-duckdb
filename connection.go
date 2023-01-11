@@ -34,6 +34,8 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	}
 
 	if len(args) == 0 {
+		// This should be removed once duckdb_extract_statements and related APIs are available to parse multiple statements
+		// so query cancellation works for this case as well
 		return c.execUnprepared(query)
 	}
 
@@ -51,6 +53,8 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 
 	if len(args) == 0 {
+		// This should be removed once duckdb_extract_statements and related APIs are available to parse multiple statements
+		// so query cancellation works for this case as well
 		return c.queryUnprepared(query)
 	}
 
