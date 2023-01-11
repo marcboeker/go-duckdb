@@ -43,13 +43,13 @@ func (s *stmt) NumInput() int {
 	return int(paramCount)
 }
 
-func (s *stmt) start(args []driver.Value) error {
+func (s *stmt) start(args []driver.NamedValue) error {
 	if s.NumInput() != len(args) {
 		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
 
 	for i, v := range args {
-		switch v := v.(type) {
+		switch v := v.Value.(type) {
 		case bool:
 			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), C.bool(v)); rv == C.DuckDBError {
 				return errCouldNotBind
@@ -155,7 +155,7 @@ func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 }
 
 func (s *stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
-	res, err := s.executeWithCancellation(ctx, nargs)
+	res, err := s.execute(ctx, nargs)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
-	res, err := s.executeWithCancellation(ctx, nargs)
+	res, err := s.execute(ctx, nargs)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *stmt) executeWithCancellation(ctx context.Context, nargs []driver.NamedValue) (*C.duckdb_result, error) {
+func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
 	}
@@ -189,11 +189,7 @@ func (s *stmt) executeWithCancellation(ctx context.Context, nargs []driver.Named
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
 
-	args, err := namedArgsToArgs(nargs)
-	if err != nil {
-		return nil, err
-	}
-	err = s.start(args)
+	err := s.start(args)
 	if err != nil {
 		return nil, err
 	}

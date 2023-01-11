@@ -44,7 +44,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 		return nil, err
 	}
 	defer stmt.Close()
-	return stmt.(driver.StmtExecContext).ExecContext(ctx, args)
+	return stmt.ExecContext(ctx, args)
 }
 
 func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -63,7 +63,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		return nil, err
 	}
 
-	return stmt.(driver.StmtQueryContext).QueryContext(ctx, args)
+	return stmt.QueryContext(ctx, args)
 }
 
 func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
@@ -112,7 +112,7 @@ func (c *conn) Close() error {
 	return nil
 }
 
-func (c *conn) prepareStmt(cmd string) (driver.Stmt, error) {
+func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 	cmdstr := C.CString(cmd)
 	defer C.free(unsafe.Pointer(cmdstr))
 
