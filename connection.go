@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"math/big"
@@ -27,24 +28,6 @@ func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	return driver.ErrSkip
 }
 
-// Deprecated: Use ExecContext instead. This method is not used in this project anywhere.
-func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
-	}
-
-	if len(args) == 0 {
-		return c.execUnprepared(cmd)
-	}
-
-	stmt, err := c.prepareStmt(cmd)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	return stmt.Exec(args)
-}
-
 func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
@@ -60,24 +43,6 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	}
 	defer stmt.Close()
 	return stmt.(driver.StmtExecContext).ExecContext(ctx, args)
-}
-
-// Deprecated: Use QueryContext instead. This method is not used in this project anywhere.
-func (c *conn) Query(cmd string, args []driver.Value) (driver.Rows, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
-	}
-
-	if len(args) == 0 {
-		return c.queryUnprepared(cmd)
-	}
-
-	stmt, err := c.prepareStmt(cmd)
-	if err != nil {
-		return nil, err
-	}
-
-	return stmt.Query(args)
 }
 
 func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -104,18 +69,9 @@ func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	return c.prepareStmt(cmd)
 }
 
-// Deprecated: Use BeginTx instead. This method is not used in this project anywhere.
+// Deprecated: Use BeginTx instead.
 func (c *conn) Begin() (driver.Tx, error) {
-	if c.tx {
-		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
-	}
-
-	if _, err := c.Exec("BEGIN TRANSACTION", nil); err != nil {
-		return nil, err
-	}
-
-	c.tx = true
-	return &tx{context.Background(), c}, nil
+	return c.BeginTx(context.Background(), driver.TxOptions{})
 }
 
 func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
@@ -123,12 +79,22 @@ func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
 	}
 
+	if opts.ReadOnly {
+		return nil, errors.New("read-only transactions are not supported")
+	}
+
+	switch sql.IsolationLevel(opts.Isolation) {
+	case sql.LevelDefault:
+	default:
+		return nil, errors.New("isolation levels other than default are not supported")
+	}
+
 	if _, err := c.ExecContext(ctx, "BEGIN TRANSACTION", nil); err != nil {
 		return nil, err
 	}
 
 	c.tx = true
-	return &tx{ctx, c}, nil
+	return &tx{c}, nil
 }
 
 func (c *conn) Close() error {
