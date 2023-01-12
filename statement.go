@@ -236,17 +236,6 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	return &res, nil
 }
 
-func namedArgsToArgs(named []driver.NamedValue) ([]driver.Value, error) {
-	args := make([]driver.Value, len(named))
-	for n, param := range named {
-		if len(param.Name) > 0 {
-			return nil, errors.New("duckdb: driver does not support the use of Named Parameters")
-		}
-		args[n] = param.Value
-	}
-	return args, nil
-}
-
 func argsToNamedArgs(values []driver.Value) []driver.NamedValue {
 	args := make([]driver.NamedValue, len(values))
 	for n, param := range values {
