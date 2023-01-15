@@ -88,14 +88,14 @@ func TestConnPool(t *testing.T) {
 }
 
 func TestConnInit(t *testing.T) {
-	connector, err := NewConnector("", func(execer driver.Execer) error {
+	connector, err := NewConnector("", func(execer driver.ExecerContext) error {
 		bootQueries := []string{
 			"INSTALL 'json'",
 			"LOAD 'json'",
 		}
 
 		for _, qry := range bootQueries {
-			_, err := execer.Exec(qry, nil)
+			_, err := execer.ExecContext(context.Background(), qry, nil)
 			if err != nil {
 				return err
 			}

@@ -34,15 +34,15 @@ func (d Driver) Open(dataSourceName string) (driver.Conn, error) {
 }
 
 func (Driver) OpenConnector(dataSourceName string) (driver.Connector, error) {
-	return createConnector(dataSourceName, func(execerContext driver.Execer) error { return nil })
+	return createConnector(dataSourceName, func(execerContext driver.ExecerContext) error { return nil })
 }
 
 // NewConnector creates a new Connector for the DuckDB database.
-func NewConnector(dsn string, connInitFn func(execer driver.Execer) error) (driver.Connector, error) {
+func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
 	return createConnector(dsn, connInitFn)
 }
 
-func createConnector(dataSourceName string, connInitFn func(execer driver.Execer) error) (driver.Connector, error) {
+func createConnector(dataSourceName string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
 	var db C.duckdb_database
 
 	parsedDSN, err := url.Parse(dataSourceName)
@@ -77,7 +77,7 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 
 type connector struct {
 	db         *C.duckdb_database
-	connInitFn func(execer driver.Execer) error
+	connInitFn func(execer driver.ExecerContext) error
 }
 
 func (c *connector) Driver() driver.Driver {
