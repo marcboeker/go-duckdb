@@ -428,9 +428,11 @@ func TestENUMs(t *testing.T) {
 	_, err = db.Exec("INSERT INTO vehicles VALUES (?, ?), (?, ?)", "Aircraft", "Air", "Boat", "Sea")
 	require.NoError(t, err)
 
-	var str string
-	require.NoError(t, db.QueryRow("SELECT name FROM vehicles WHERE environment = ?", "Air").Scan(&str))
-	require.Equal(t, "Aircraft", str)
+	var name string
+	var env string
+	require.NoError(t, db.QueryRow("SELECT name, CAST(environment AS text) FROM vehicles WHERE environment = ?", "Air").Scan(&name, &env))
+	require.Equal(t, "Aircraft", name)
+	require.Equal(t, "Air", env)
 }
 
 func TestHugeInt(t *testing.T) {
@@ -590,7 +592,6 @@ func TestJSON(t *testing.T) {
 		require.Equal(t, len(items), 2)
 		require.Equal(t, items, []string{"foo", "bar"})
 	})
-
 }
 
 // CAST(? as DATE) generate result of type Date (time.Time)
