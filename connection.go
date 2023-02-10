@@ -6,62 +6,64 @@ package duckdb
 import "C"
 
 import (
+	"context"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"math/big"
 	"unsafe"
 )
 
 type conn struct {
-	db     *C.duckdb_database
 	con    *C.duckdb_connection
 	closed bool
 	tx     bool
 }
 
 func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
-	switch v := nv.Value.(type) {
-	case HugeInt:
-		nv.Value = HugeInt(v)
-		return nil
-	case Interval:
-		nv.Value = Interval(v)
+	switch nv.Value.(type) {
+	case *big.Int, Interval:
 		return nil
 	}
 	return driver.ErrSkip
 }
 
-func (c *conn) Exec(cmd string, args []driver.Value) (driver.Result, error) {
+func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
+		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
 	}
 
 	if len(args) == 0 {
-		return c.execUnprepared(cmd)
+		// This should be removed once duckdb_extract_statements and related APIs are available to parse multiple statements
+		// so query cancellation works for this case as well
+		return c.execUnprepared(query)
 	}
 
-	stmt, err := c.prepareStmt(cmd)
+	stmt, err := c.prepareStmt(query)
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
-	return stmt.Exec(args)
+	return stmt.ExecContext(ctx, args)
 }
 
-func (c *conn) Query(cmd string, args []driver.Value) (driver.Rows, error) {
+func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Exec after Close")
+		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
 	}
 
 	if len(args) == 0 {
-		return c.queryUnprepared(cmd)
+		// This should be removed once duckdb_extract_statements and related APIs are available to parse multiple statements
+		// so query cancellation works for this case as well
+		return c.queryUnprepared(query)
 	}
 
-	stmt, err := c.prepareStmt(cmd)
+	stmt, err := c.prepareStmt(query)
 	if err != nil {
 		return nil, err
 	}
 
-	return stmt.Query(args)
+	return stmt.QueryContext(ctx, args)
 }
 
 func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
@@ -71,12 +73,27 @@ func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	return c.prepareStmt(cmd)
 }
 
+// Deprecated: Use BeginTx instead.
 func (c *conn) Begin() (driver.Tx, error) {
+	return c.BeginTx(context.Background(), driver.TxOptions{})
+}
+
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if c.tx {
 		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
 	}
 
-	if _, err := c.Exec("BEGIN TRANSACTION", nil); err != nil {
+	if opts.ReadOnly {
+		return nil, errors.New("read-only transactions are not supported")
+	}
+
+	switch sql.IsolationLevel(opts.Isolation) {
+	case sql.LevelDefault:
+	default:
+		return nil, errors.New("isolation levels other than default are not supported")
+	}
+
+	if _, err := c.ExecContext(ctx, "BEGIN TRANSACTION", nil); err != nil {
 		return nil, err
 	}
 
@@ -91,13 +108,11 @@ func (c *conn) Close() error {
 	c.closed = true
 
 	C.duckdb_disconnect(c.con)
-	C.duckdb_close(c.db)
-	c.db = nil
 
 	return nil
 }
 
-func (c *conn) prepareStmt(cmd string) (driver.Stmt, error) {
+func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 	cmdstr := C.CString(cmd)
 	defer C.free(unsafe.Pointer(cmdstr))
 

@@ -1,11 +1,14 @@
 package duckdb
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -41,13 +44,104 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run("with invalid config", func(t *testing.T) {
-		db, _ := sql.Open("duckdb", "?threads=NaN")
-		err := db.Ping()
+		_, err := sql.Open("duckdb", "?threads=NaN")
 
 		if !errors.Is(err, prepareConfigError) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
+}
+
+func TestConnPool(t *testing.T) {
+	db := openDB(t)
+	db.SetMaxOpenConns(2) // set connection pool size greater than 1
+	defer db.Close()
+	createTable(db, t)
+
+	// Get two separate connections and check they're consistent
+	conn1, err := db.Conn(context.Background())
+	require.NoError(t, err)
+	conn2, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	res, err := conn1.ExecContext(context.Background(), "INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+	require.NoError(t, err)
+	ra, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(2), ra)
+
+	require.NoError(t, err)
+	rows, err := conn1.QueryContext(context.Background(), "select bar from foo limit 1")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	require.NoError(t, err)
+	rows, err = conn2.QueryContext(context.Background(), "select bar from foo limit 1")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	err = conn1.Close()
+	require.NoError(t, err)
+	err = conn2.Close()
+	require.NoError(t, err)
+}
+
+func TestConnInit(t *testing.T) {
+	connector, err := NewConnector("", func(execer driver.ExecerContext) error {
+		bootQueries := []string{
+			"INSTALL 'json'",
+			"LOAD 'json'",
+		}
+
+		for _, qry := range bootQueries {
+			_, err := execer.ExecContext(context.Background(), qry, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(2) // set connection pool size greater than 1
+	defer db.Close()
+
+	// Get two separate connections and check they're consistent
+	conn1, err := db.Conn(context.Background())
+	require.NoError(t, err)
+	conn2, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	res, err := conn1.ExecContext(context.Background(), "CREATE TABLE example (j JSON)")
+	require.NoError(t, err)
+	ra, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), ra)
+
+	res, err = conn2.ExecContext(context.Background(), "INSERT INTO example VALUES(' { \"family\": \"anatidae\", \"species\": [ \"duck\", \"goose\", \"swan\", null ] }')")
+	require.NoError(t, err)
+	ra, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), ra)
+
+	require.NoError(t, err)
+	rows, err := conn1.QueryContext(context.Background(), "SELECT json_valid(j) FROM example")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	require.NoError(t, err)
+	rows, err = conn2.QueryContext(context.Background(), "SELECT json_valid(j) FROM example")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	rows.Close()
+
+	err = conn1.Close()
+	require.NoError(t, err)
+	err = conn2.Close()
+	require.NoError(t, err)
 }
 
 func TestExec(t *testing.T) {
@@ -335,9 +429,11 @@ func TestENUMs(t *testing.T) {
 	_, err = db.Exec("INSERT INTO vehicles VALUES (?, ?), (?, ?)", "Aircraft", "Air", "Boat", "Sea")
 	require.NoError(t, err)
 
-	var str string
-	require.NoError(t, db.QueryRow("SELECT name FROM vehicles WHERE environment = ?", "Air").Scan(&str))
-	require.Equal(t, "Aircraft", str)
+	var name string
+	var env string
+	require.NoError(t, db.QueryRow("SELECT name, CAST(environment AS text) FROM vehicles WHERE environment = ?", "Air").Scan(&name, &env))
+	require.Equal(t, "Aircraft", name)
+	require.Equal(t, "Air", env)
 }
 
 func TestHugeInt(t *testing.T) {
@@ -345,32 +441,45 @@ func TestHugeInt(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
 
-	t.Run("scan HugeInt", func(t *testing.T) {
-		for _, expected := range []int64{0, 1, -1, math.MaxInt64, math.MinInt64} {
-			t.Run(fmt.Sprintf("sum(%d)", expected), func(t *testing.T) {
-				var res HugeInt
-				err := db.QueryRow("SELECT SUM(?)", expected).Scan(&res)
+	t.Run("scan hugeint", func(t *testing.T) {
+		tests := []string{
+			"0",
+			"1",
+			"-1",
+			"9223372036854775807",
+			"-9223372036854775808",
+			"170141183460469231731687303715884105727",
+			"-170141183460469231731687303715884105727",
+		}
+		for _, expected := range tests {
+			t.Run(expected, func(t *testing.T) {
+				var res *big.Int
+				err := db.QueryRow(fmt.Sprintf("SELECT %s::HUGEINT", expected)).Scan(&res)
 				require.NoError(t, err)
-
-				expct, err := res.Int64()
-				require.NoError(t, err)
-				require.Equal(t, expected, expct)
+				require.Equal(t, expected, res.String())
 			})
 		}
 	})
 
-	t.Run("bind HugeInt", func(t *testing.T) {
+	t.Run("bind hugeint", func(t *testing.T) {
 		_, err := db.Exec("CREATE TABLE hugeint_test (number HUGEINT)")
 		require.NoError(t, err)
 
-		val := HugeInt{upper: 1, lower: 2}
+		val := big.NewInt(1)
+		val.SetBit(val, 101, 1)
 		_, err = db.Exec("INSERT INTO hugeint_test VALUES(?)", val)
 		require.NoError(t, err)
 
-		var res HugeInt
+		var res *big.Int
 		err = db.QueryRow("SELECT number FROM hugeint_test WHERE number = ?", val).Scan(&res)
 		require.NoError(t, err)
-		require.Equal(t, val, res)
+		require.Equal(t, val.String(), res.String())
+
+		tooHuge := big.NewInt(1)
+		tooHuge.SetBit(tooHuge, 129, 1)
+		_, err = db.Exec("INSERT INTO hugeint_test VALUES(?)", tooHuge)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "too big")
 	})
 }
 
@@ -471,7 +580,7 @@ func TestJSON(t *testing.T) {
 		}{
 			Foo: "bar",
 		})
-		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, val).Scan(&data))
+		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, string(val)).Scan(&data))
 		require.Equal(t, "bar", data)
 	})
 
@@ -484,7 +593,6 @@ func TestJSON(t *testing.T) {
 		require.Equal(t, len(items), 2)
 		require.Equal(t, items, []string{"foo", "bar"})
 	})
-
 }
 
 // CAST(? as DATE) generate result of type Date (time.Time)
@@ -1145,7 +1253,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		// DUCKDB_TYPE_HUGEINT
 		{
 			sql:      "SELECT 31::HUGEINT AS col",
-			value:    HugeInt{lower: 31, upper: 0},
+			value:    big.NewInt(31),
 			typeName: "HUGEINT",
 		},
 		// DUCKDB_TYPE_VARCHAR

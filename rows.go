@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"reflect"
 	"time"
 	"unsafe"
@@ -140,7 +141,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_INTERVAL:
 		return scanInterval(vector, rowIdx)
 	case C.DUCKDB_TYPE_HUGEINT:
-		return get[HugeInt](vector, rowIdx), nil
+		hi := get[C.duckdb_hugeint](vector, rowIdx)
+		return hugeIntToNative(hi), nil
 	case C.DUCKDB_TYPE_VARCHAR:
 		return scanString(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_BLOB:
@@ -160,7 +162,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_MAP:
 		return scanMap(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_UUID:
-		return get[HugeInt](vector, rowIdx).UUID(), nil
+		hi := get[C.duckdb_hugeint](vector, rowIdx)
+		return hugeIntToUUID(hi), nil
 	case C.DUCKDB_TYPE_JSON:
 		return scanString(vector, rowIdx), nil
 	default:
@@ -205,7 +208,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case C.DUCKDB_TYPE_INTERVAL:
 		return reflect.TypeOf(Interval{})
 	case C.DUCKDB_TYPE_HUGEINT:
-		return reflect.TypeOf(HugeInt{})
+		return reflect.TypeOf(big.NewInt(0))
 	case C.DUCKDB_TYPE_VARCHAR:
 		return reflect.TypeOf("")
 	case C.DUCKDB_TYPE_BLOB:

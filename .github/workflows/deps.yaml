@@ -1,9 +1,12 @@
 name: Build static library dependencies
 on:
+  workflow_dispatch:
+
   push:
     branches-ignore:
       - master
     paths:
+      - ".github/workflows/**"
       - "duckdb.cpp"
       - "duckdb.h"
       - "duckdb.hpp"
@@ -35,7 +38,7 @@ jobs:
           path: deps/darwin_arm64/libduckdb.a
           retention-days: 1
   linux_amd64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
         with:

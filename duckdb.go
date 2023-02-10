@@ -1,7 +1,7 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-// Package duckdb implements a databse/sql driver for the DuckDB database.
+// Package duckdb implements a database/sql driver for the DuckDB database.
 package duckdb
 
 /*
@@ -10,6 +10,7 @@ package duckdb
 import "C"
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -19,14 +20,30 @@ import (
 )
 
 func init() {
-	sql.Register("duckdb", impl{})
+	sql.Register("duckdb", Driver{})
 }
 
-type impl struct{}
+type Driver struct{}
 
-func (impl) Open(dataSourceName string) (driver.Conn, error) {
+func (d Driver) Open(dataSourceName string) (driver.Conn, error) {
+	connector, err := d.OpenConnector(dataSourceName)
+	if err != nil {
+		return nil, err
+	}
+	return connector.Connect(context.Background())
+}
+
+func (Driver) OpenConnector(dataSourceName string) (driver.Connector, error) {
+	return createConnector(dataSourceName, func(execerContext driver.ExecerContext) error { return nil })
+}
+
+// NewConnector creates a new Connector for the DuckDB database.
+func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
+	return createConnector(dsn, connInitFn)
+}
+
+func createConnector(dataSourceName string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
 	var db C.duckdb_database
-	var con C.duckdb_connection
 
 	parsedDSN, err := url.Parse(dataSourceName)
 	if err != nil {
@@ -58,11 +75,36 @@ func (impl) Open(dataSourceName string) (driver.Conn, error) {
 		}
 	}
 
-	if state := C.duckdb_connect(db, &con); state == C.DuckDBError {
+	return &connector{db: &db, connInitFn: connInitFn}, nil
+}
+
+type connector struct {
+	db         *C.duckdb_database
+	connInitFn func(execer driver.ExecerContext) error
+}
+
+func (c *connector) Driver() driver.Driver {
+	return Driver{}
+}
+
+func (c *connector) Connect(context.Context) (driver.Conn, error) {
+	var con C.duckdb_connection
+	if state := C.duckdb_connect(*c.db, &con); state == C.DuckDBError {
 		return nil, openError
 	}
+	conn := &conn{con: &con}
+	// call the connection init function
+	err := c.connInitFn(conn)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
 
-	return &conn{db: &db, con: &con}, nil
+func (c *connector) Close() error {
+	C.duckdb_close(c.db)
+	c.db = nil
+	return nil
 }
 
 func prepareConfig(options map[string][]string) (C.duckdb_config, error) {
