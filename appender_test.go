@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"testing"
@@ -35,11 +34,31 @@ func createAppenderTable(db *sql.DB, t *testing.T) *sql.Result {
 
 const (
 	numAppenderTestRows = 10000
+	epsilon32           = 0.0000002
+	epsilon64           = 0.0000000000002
 )
+
+func randInt(lo int64, hi int64) int64 {
+	return rand.Int63n(hi-lo+1) + lo
+}
+
+func randBool() bool {
+	return (rand.Int()%2 == 0)
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+func randString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
 
 func TestRandomizedAppender(t *testing.T) {
 	// t.Parallel()
-	tmpFile, err := ioutil.TempFile(os.TempDir(), "go-duckdb-*.db")
+	tmpFile, err := os.CreateTemp(os.TempDir(), "go-duckdb-*.db")
 	require.NoError(t, err)
 	pathname := tmpFile.Name()
 	tmpFile.Close()
