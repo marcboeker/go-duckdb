@@ -22,14 +22,14 @@ type Appender struct {
 	closed   bool
 }
 
-// NewAppenderFromConn returns a new Appender from a duckdb database connection.
-func NewAppenderFromConn(dbconn driver.Conn, schema string, table string) (*Appender, error) {
-	c, ok := dbconn.(*conn)
+// NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
+func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*Appender, error) {
+	dbConn, ok := driverConn.(*conn)
 	if !ok {
 		return nil, fmt.Errorf("not a duckdb driver connection")
 	}
 
-	if c.closed {
+	if dbConn.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Appender after Close")
 	}
 
@@ -43,17 +43,26 @@ func NewAppenderFromConn(dbconn driver.Conn, schema string, table string) (*Appe
 	defer C.free(unsafe.Pointer(tablestr))
 
 	var a C.duckdb_appender
-	if state := C.duckdb_appender_create(*c.con, schemastr, tablestr, &a); state == C.DuckDBError {
+	if state := C.duckdb_appender_create(*dbConn.con, schemastr, tablestr, &a); state == C.DuckDBError {
 		return nil, fmt.Errorf("can't create appender")
 	}
 
-	return &Appender{c: c, schema: schema, table: table, appender: &a}, nil
+	return &Appender{c: dbConn, schema: schema, table: table, appender: &a}, nil
 }
 
 // Error returns the last duckdb appender error.
 func (a *Appender) Error() error {
 	dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
 	return errors.New(dbErr)
+}
+
+// Flush the appender to the underlying table and clear the internal cache.
+func (a *Appender) Flush() error {
+	if state := C.duckdb_appender_flush(*a.appender); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
+		return errors.New(dbErr)
+	}
+	return nil
 }
 
 // Closes closes the appender.

@@ -3,28 +3,32 @@ package duckdb
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/georgysavva/scany/sqlscan"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	testAppenderTableDDL = `CREATE TABLE appdata(id BIGINT, u8 UTINYINT, i8 TINYINT, u16 USMALLINT, i16 SMALLINT,
-		u32 UINTEGER, i32 INTEGER, u64 UBIGINT, i64 BIGINT,
-		tm TIMESTAMP, f REAL, d DOUBLE, s VARCHAR, b BOOLEAN)`
+	testAppenderTableDDL = `
+  CREATE TABLE test(
+    id BIGINT,
+    uint8 UTINYINT,
+    int8 TINYINT,
+    uint16 USMALLINT,
+    int16 SMALLINT,
+		uint32 UINTEGER,
+    int32 INTEGER,
+    uint64 UBIGINT,
+    int64 BIGINT,
+		timestamp TIMESTAMP,
+    float REAL,
+    double DOUBLE,
+    string VARCHAR,
+    bool BOOLEAN
+  )`
 )
-
-func openAppenderDB(t *testing.T, pathname string) *sql.DB {
-	db, err := sql.Open("duckdb", pathname)
-	require.NoError(t, err)
-	require.NoError(t, db.Ping())
-	return db
-}
 
 func createAppenderTable(db *sql.DB, t *testing.T) *sql.Result {
 	res, err := db.Exec(testAppenderTableDDL)
@@ -32,11 +36,7 @@ func createAppenderTable(db *sql.DB, t *testing.T) *sql.Result {
 	return &res
 }
 
-const (
-	numAppenderTestRows = 10000
-	epsilon32           = 0.0000002
-	epsilon64           = 0.0000000000002
-)
+const numAppenderTestRows = 10000
 
 func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
@@ -56,94 +56,132 @@ func randString(n int) string {
 	return string(b)
 }
 
-func TestRandomizedAppender(t *testing.T) {
-	// t.Parallel()
-	tmpFile, err := os.CreateTemp(os.TempDir(), "go-duckdb-*.db")
+func TestAppender(t *testing.T) {
+	c, err := NewConnector("", nil)
 	require.NoError(t, err)
-	pathname := tmpFile.Name()
-	tmpFile.Close()
-	os.Remove(pathname)
-	defer os.Remove(pathname)
 
-	db := openAppenderDB(t, pathname)
-	defer db.Close()
+	db := sql.OpenDB(c)
 	createAppenderTable(db, t)
+	defer db.Close()
 
 	type dataRow struct {
-		ID  int       `db:"id"`
-		U8  uint8     `db:"u8"`
-		I8  int8      `db:"i8"`
-		U16 uint16    `db:"u16"`
-		I16 int16     `db:"i16"`
-		U32 uint32    `db:"u32"`
-		I32 int32     `db:"i32"`
-		U64 uint64    `db:"u64"`
-		I64 int64     `db:"i64"`
-		TM  time.Time `db:"tm"`
-		F   float32   `db:"f"`
-		D   float64   `db:"d"`
-		S   string    `db:"s"`
-		B   bool      `db:"b"`
+		ID        int
+		UInt8     uint8
+		Int8      int8
+		UInt16    uint16
+		Int16     int16
+		UInt32    uint32
+		Int32     int32
+		UInt64    uint64
+		Int64     int64
+		Timestamp time.Time
+		Float     float32
+		Double    float64
+		String    string
+		Bool      bool
 	}
-	nextId := 1
-	randRow := func() dataRow {
-		id := nextId
-		nextId++
+	randRow := func(i int) dataRow {
 		u64 := rand.Uint64()
 		// go sql doesn't support uint64 values with high bit set (see for example https://github.com/lib/pq/issues/72)
 		if u64 > 9223372036854775807 {
 			u64 = 9223372036854775807
 		}
 		return dataRow{
-			ID:  id,
-			U8:  uint8(randInt(0, 255)),
-			I8:  int8(randInt(-128, 127)),
-			U16: uint16(randInt(0, 65535)),
-			I16: int16(randInt(-32768, 32767)),
-			U32: uint32(randInt(0, 4294967295)),
-			I32: int32(randInt(-2147483648, 2147483647)),
-			U64: u64,
-			I64: rand.Int63(),
-			TM:  time.UnixMilli(randInt(0, time.Now().UnixMilli())).UTC(),
-			F:   rand.Float32(),
-			D:   rand.Float64(),
-			S:   randString(int(randInt(0, 128))),
-			B:   randBool(),
+			ID:        i,
+			UInt8:     uint8(randInt(0, 255)),
+			Int8:      int8(randInt(-128, 127)),
+			UInt16:    uint16(randInt(0, 65535)),
+			Int16:     int16(randInt(-32768, 32767)),
+			UInt32:    uint32(randInt(0, 4294967295)),
+			Int32:     int32(randInt(-2147483648, 2147483647)),
+			UInt64:    u64,
+			Int64:     rand.Int63(),
+			Timestamp: time.UnixMilli(randInt(0, time.Now().UnixMilli())).UTC(),
+			Float:     rand.Float32(),
+			Double:    rand.Float64(),
+			String:    randString(int(randInt(0, 128))),
+			Bool:      randBool(),
 		}
 	}
 	rows := []dataRow{}
 	for i := 0; i < numAppenderTestRows; i++ {
-		row := randRow()
-		rows = append(rows, row)
+		rows = append(rows, randRow(i))
 	}
-	dbconn, err := db.Conn(context.Background())
-	require.NoError(t, err)
-	err = dbconn.Raw(func(driverConn any) error {
-		drvConn, ok := driverConn.(driver.Conn)
-		require.True(t, ok)
 
-		appender, err := NewAppenderFromConn(drvConn, "", "appdata")
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+	defer appender.Close()
+
+	for _, row := range rows {
+		err := appender.AppendRow(
+			row.ID,
+			row.UInt8,
+			row.Int8,
+			row.UInt16,
+			row.Int16,
+			row.UInt32,
+			row.Int32,
+			row.UInt64,
+			row.Int64,
+			row.Timestamp,
+			row.Float,
+			row.Double,
+			row.String,
+			row.Bool,
+		)
 		require.NoError(t, err)
-		// NOTE: we don't defer the call to appender.Close(), but call it explicitly because appended data
-		// may be cached and not inserted into the db immediately. The Close() call flushes the cache.
-
-		for _, row := range rows {
-			err := appender.AppendRow(row.ID, row.U8, row.I8, row.U16, row.I16, row.U32, row.I32, row.U64, row.I64,
-				row.TM, row.F, row.D, row.S, row.B)
-			require.NoError(t, err)
-		}
-		appender.Close()
-
-		var readRows []dataRow
-		require.NoError(t, sqlscan.Select(context.Background(), db, &readRows,
-			"SELECT id, u8, i8, u16, i16, u32, i32, u64, i64, tm, f, d, s, b FROM appdata ORDER BY id"))
-
-		require.Len(t, readRows, len(rows))
-		for i := 0; i < len(rows); i++ {
-			require.Equal(t, rows[i], readRows[i])
-		}
-
-		return nil
-	})
+	}
+	err = appender.Flush()
 	require.NoError(t, err)
+
+	res, err := db.QueryContext(
+		context.Background(), `
+			SELECT  id,
+							uint8,
+							int8,
+							uint16,
+							int16,
+							uint32,
+							int32,
+							uint64,
+							int64,
+							timestamp,
+							float,
+							double,
+							string,
+							bool
+      FROM test
+      ORDER BY id`)
+	require.NoError(t, err)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		r := dataRow{}
+		err := res.Scan(
+			&r.ID,
+			&r.UInt8,
+			&r.Int8,
+			&r.UInt16,
+			&r.Int16,
+			&r.UInt32,
+			&r.Int32,
+			&r.UInt64,
+			&r.Int64,
+			&r.Timestamp,
+			&r.Float,
+			&r.Double,
+			&r.String,
+			&r.Bool,
+		)
+		require.NoError(t, err)
+		require.Equal(t, rows[i], r)
+		i++
+	}
+	// Ensure that the number of fetched rows equals the number of inserted rows.
+	require.Equal(t, i, numAppenderTestRows)
 }

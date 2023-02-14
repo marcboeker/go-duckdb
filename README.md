@@ -61,6 +61,40 @@ db.SetMaxOpenConns(poolsize)
 
 Please refer to the [database/sql](https://godoc.org/database/sql) GoDoc for further usage instructions.
 
+## DuckDB Appender API
+
+If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new Appender by supplying a DuckDB connection to `NewAppenderFromConn()`.
+
+```
+c, err := NewConnector("test.db", nil)
+if err != {
+  ...
+}
+conn, err := c.Connect(context.Background())
+if err != {
+  ...
+}
+defer conn.Close()
+
+// Retrieve appender from connection.
+appender, err := NewAppenderFromConn(conn, "", "test")
+if err != {
+  ...
+}
+defer appender.Close()
+
+err = appender.AppendRow(...)
+if err != {
+  ...
+}
+
+// Optional, if you want to access the appended rows immediately.
+err = appender.Flush()
+if err != {
+  ...
+}
+```
+
 ## Linking DuckDB
 
 By default, `go-duckdb` statically links DuckDB into your binary. Statically linking DuckDB adds around 30 MB to your binary size. On Linux (Intel) and macOS (Intel and ARM), `go-duckdb` bundles pre-compiled static libraries for fast builds. On other platforms, it falls back to compiling DuckDB from source, which takes around 10 minutes. You can force `go-duckdb` to build DuckDB from source by passing `-tags=duckdb_from_source` to `go build`.
