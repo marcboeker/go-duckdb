@@ -164,8 +164,6 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_UUID:
 		hi := get[C.duckdb_hugeint](vector, rowIdx)
 		return hugeIntToUUID(hi), nil
-	case C.DUCKDB_TYPE_JSON:
-		return scanString(vector, rowIdx), nil
 	default:
 		return nil, fmt.Errorf("unsupported type %d", typeId)
 	}
@@ -229,8 +227,6 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(Map{})
 	case C.DUCKDB_TYPE_UUID:
 		return reflect.TypeOf([]byte{})
-	case C.DUCKDB_TYPE_JSON:
-		return reflect.TypeOf("")
 	default:
 		return nil
 	}
@@ -284,6 +280,7 @@ func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (
 	}
 
 	out := Map{}
+	fmt.Println(out)
 	keys := data["key"].([]any)
 	values := data["value"].([]any)
 	for i := 0; i < len(keys); i++ {
@@ -440,8 +437,6 @@ func typeName(t C.duckdb_type) string {
 		return "MAP"
 	case C.DUCKDB_TYPE_UUID:
 		return "UUID"
-	case C.DUCKDB_TYPE_JSON:
-		return "JSON"
 	default:
 		// Should never happen
 		return ""
