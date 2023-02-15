@@ -164,8 +164,6 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_UUID:
 		hi := get[C.duckdb_hugeint](vector, rowIdx)
 		return hugeIntToUUID(hi), nil
-	case C.DUCKDB_TYPE_JSON:
-		return scanString(vector, rowIdx), nil
 	default:
 		return nil, fmt.Errorf("unsupported type %d", typeId)
 	}
@@ -229,8 +227,6 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(Map{})
 	case C.DUCKDB_TYPE_UUID:
 		return reflect.TypeOf([]byte{})
-	case C.DUCKDB_TYPE_JSON:
-		return reflect.TypeOf("")
 	default:
 		return nil
 	}
@@ -278,16 +274,23 @@ func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
 }
 
 func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Map, error) {
-	data, err := scanStruct(ty, vector, rowIdx)
+	list, err := scanList(vector, rowIdx)
 	if err != nil {
 		return nil, err
 	}
 
 	out := Map{}
-	keys := data["key"].([]any)
-	values := data["value"].([]any)
-	for i := 0; i < len(keys); i++ {
-		out[keys[i]] = values[i]
+	for i := 0; i < len(list); i++ {
+		mapItem := list[i].(map[string]any)
+		key, ok := mapItem["key"]
+		if !ok {
+			return nil, errMissingKeyOrValue
+		}
+		val, ok := mapItem["value"]
+		if !ok {
+			return nil, errMissingKeyOrValue
+		}
+		out[key] = val
 	}
 
 	return out, nil
@@ -373,7 +376,8 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 }
 
 var (
-	errInvalidType = errors.New("invalid data type")
+	errInvalidType       = errors.New("invalid data type")
+	errMissingKeyOrValue = errors.New("missing key and/or value for map item")
 )
 
 func typeName(t C.duckdb_type) string {
@@ -440,8 +444,6 @@ func typeName(t C.duckdb_type) string {
 		return "MAP"
 	case C.DUCKDB_TYPE_UUID:
 		return "UUID"
-	case C.DUCKDB_TYPE_JSON:
-		return "JSON"
 	default:
 		// Should never happen
 		return ""
