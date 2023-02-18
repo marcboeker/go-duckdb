@@ -16,26 +16,26 @@ go get github.com/marcboeker/go-duckdb
 
 `go-duckdb` hooks into the `database/sql` interface provided by the Go stdlib. To open a connection, simply specify the driver type as `duckdb`:
 
-```
+```go
 db, err := sql.Open("duckdb", "")
 ```
 
 This creates an in-memory instance of DuckDB. If you would like to store the data on the filesystem, you need to specify the path where to store the database:
 
-```
+```go
 db, err := sql.Open("duckdb", "/path/to/foo.db")
 ```
 
 If you want to set specific [config options for DuckDB](https://duckdb.org/docs/sql/configuration), you can add them as query style parameters in the form of `name=value` to the DSN, like:
 
-```
+```go
 db, err := sql.Open("duckdb", "/path/to/foo.db?access_mode=read_only&threads=4")
 ```
 
 Alternatively, you can also use `sql.OpenDB` when you want to perform some initialization before the connection is created and returned from the connection pool on call to `db.Conn`.
 Here's an example that installs and loads the JSON extension for each connection:
 
-```
+```go
 connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.Execer) error {
   bootQueries := []string{
     "INSTALL 'json'",
@@ -65,12 +65,12 @@ Please refer to the [database/sql](https://godoc.org/database/sql) GoDoc for fur
 
 If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new Appender by supplying a DuckDB connection to `NewAppenderFromConn()`.
 
-```
-c, err := NewConnector("test.db", nil)
+```go
+connector, err := NewConnector("test.db", nil)
 if err != {
   ...
 }
-conn, err := c.Connect(context.Background())
+conn, err := connector.Connect(context.Background())
 if err != {
   ...
 }
@@ -101,7 +101,7 @@ By default, `go-duckdb` statically links DuckDB into your binary. Statically lin
 
 Alternatively, you can dynamically link DuckDB by passing `-tags=duckdb_use_lib` to `go build`. You must have a copy of `libduckdb` available on your system (`.so` on Linux or `.dylib` on macOS), which you can download from the DuckDB [releases page](https://github.com/duckdb/duckdb/releases). For example:
 
-```
+```sh
 # On Linux
 CGO_ENABLED=1 CGO_LDFLAGS="-L/path/to/libs" go build -tags=duckdb_use_lib main.go
 LD_LIBRARY_PATH=/path/to/libs ./main
