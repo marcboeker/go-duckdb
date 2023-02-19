@@ -279,6 +279,20 @@ func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (
 		return nil, err
 	}
 
+	// DuckDB supports more map key types than Go, which only supports comparable types.
+	// To avoid a panic, we check that the map key type is comparable.
+	// All keys in a DuckDB map have the same type, so we just do this check for the first value.
+	if len(list) > 0 {
+		mapItem := list[0].(map[string]any)
+		key, ok := mapItem["key"]
+		if !ok {
+			return nil, errMissingKeyOrValue
+		}
+		if !reflect.TypeOf(key).Comparable() {
+			return nil, errUnsupportedMapKeyType
+		}
+	}
+
 	out := Map{}
 	for i := 0; i < len(list); i++ {
 		mapItem := list[i].(map[string]any)
@@ -376,8 +390,9 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 }
 
 var (
-	errInvalidType       = errors.New("invalid data type")
-	errMissingKeyOrValue = errors.New("missing key and/or value for map item")
+	errInvalidType           = errors.New("invalid data type")
+	errMissingKeyOrValue     = errors.New("missing key and/or value for map item")
+	errUnsupportedMapKeyType = errors.New("map key type not supported by driver")
 )
 
 func typeName(t C.duckdb_type) string {
