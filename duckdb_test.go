@@ -286,6 +286,12 @@ func TestMap(t *testing.T) {
 		}, m)
 	})
 
+	t.Run("select nested map", func(t *testing.T) {
+		var m Map
+		err := db.QueryRow("SELECT map([map([1], [1]), map([2], [2])], ['a', 'e'])").Scan(&m)
+		require.ErrorIs(t, err, errUnsupportedMapKeyType)
+	})
+
 	t.Run("insert map", func(t *testing.T) {
 		tests := []struct {
 			sqlType string
