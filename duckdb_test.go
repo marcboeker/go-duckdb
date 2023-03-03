@@ -865,7 +865,12 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		{
 			sql:      "SELECT {'key1': 'string', 'key2': 1, 'key3': 12.345::DOUBLE} AS col",
 			value:    map[string]any{"key1": "string", "key2": int32(1), "key3": float64(12.345)},
-			typeName: "STRUCT(key1 VARCHAR, key2 INTEGER, key3 DOUBLE)",
+			typeName: `STRUCT("key1" VARCHAR, "key2" INTEGER, "key3" DOUBLE)`,
+		},
+		{
+			sql:      `SELECT {'key1 (,) \ \" "" "': 1} AS col`,
+			value:    map[string]any{`key1 (,) \ \" "" "`: int32(1)},
+			typeName: `STRUCT("key1 (,) \ \"" """" """ INTEGER)`,
 		},
 		// DUCKDB_TYPE_MAP
 		{

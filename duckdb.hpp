@@ -11,8 +11,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "f7827396d7"
-#define DUCKDB_VERSION "v0.7.0"
+#define DUCKDB_SOURCE_ID "b00b93f0b1"
+#define DUCKDB_VERSION "v0.7.1"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -1479,6 +1479,16 @@ public:
 	}
 };
 
+class MissingExtensionException : public IOException {
+public:
+	DUCKDB_API explicit MissingExtensionException(const string &msg);
+
+	template <typename... Args>
+	explicit MissingExtensionException(const string &msg, Args... params)
+	    : IOException(ConstructMessage(msg, params...)) {
+	}
+};
+
 class SerializationException : public Exception {
 public:
 	DUCKDB_API explicit SerializationException(const string &msg);
@@ -2027,6 +2037,7 @@ public:
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API virtual vector<string> Glob(const string &path, ClientContext &context);
+	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
@@ -3143,8 +3154,15 @@ public:
 	DUCKDB_API static string Replace(string source, const string &from, const string &to);
 
 	//! Get the levenshtein distance from two strings
-	DUCKDB_API static idx_t LevenshteinDistance(const string &s1, const string &s2);
+	//! The not_equal_penalty is the penalty given when two characters in a string are not equal
+	//! The regular levenshtein distance has a not equal penalty of 1, which means changing a character is as expensive
+	//! as adding or removing one For similarity searches we often want to give extra weight to changing a character For
+	//! example: with an equal penalty of 1, "pg_am" is closer to "depdelay" than "depdelay_minutes"
+	//! with an equal penalty of 3, "depdelay_minutes" is closer to "depdelay" than to "pg_am"
+	DUCKDB_API static idx_t LevenshteinDistance(const string &s1, const string &s2, idx_t not_equal_penalty = 1);
 
+	//! Returns the similarity score between two strings
+	DUCKDB_API static idx_t SimilarityScore(const string &s1, const string &s2);
 	//! Get the top-n strings (sorted by the given score distance) from a set of scores.
 	//! At least one entry is returned (if there is one).
 	//! Strings are only returned if they have a score less than the threshold.
@@ -3247,6 +3265,8 @@ struct timestamp_ns_t : public timestamp_t {};  // NOLINT
 struct timestamp_ms_t : public timestamp_t {};  // NOLINT
 struct timestamp_sec_t : public timestamp_t {}; // NOLINT
 
+enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };
+
 //! The Timestamp class is a static class that holds helper functions for the Timestamp
 //! type.
 class Timestamp {
@@ -3264,7 +3284,7 @@ public:
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
 	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
 	                                             string_t &tz);
-	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
+	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
 	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	DUCKDB_API static string ToString(timestamp_t timestamp);
@@ -3315,6 +3335,8 @@ public:
 
 	DUCKDB_API static string ConversionError(const string &str);
 	DUCKDB_API static string ConversionError(string_t str);
+	DUCKDB_API static string UnsupportedTimezoneError(const string &str);
+	DUCKDB_API static string UnsupportedTimezoneError(string_t str);
 };
 
 } // namespace duckdb
@@ -9324,6 +9346,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_TRANSACTION = 134,
 	LOGICAL_CREATE_TYPE = 135,
 	LOGICAL_ATTACH = 136,
+	LOGICAL_DETACH = 137,
 
 	// -----------------------------
 	// Explain
@@ -11025,11 +11048,12 @@ enum class StatementType : uint8_t {
 	RELATION_STATEMENT,
 	EXTENSION_STATEMENT,
 	LOGICAL_PLAN_STATEMENT,
-	ATTACH_STATEMENT
+	ATTACH_STATEMENT,
+	DETACH_STATEMENT
 
 };
 
-string StatementTypeToString(StatementType type);
+DUCKDB_API string StatementTypeToString(StatementType type);
 
 enum class StatementReturnType : uint8_t {
 	QUERY_RESULT, // the statement returns a query result (e.g. for display to the user)
@@ -11605,6 +11629,7 @@ struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
+struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
@@ -11713,6 +11738,9 @@ public:
 	//! Creates a collation in the catalog
 	DUCKDB_API CatalogEntry *CreateCollation(CatalogTransaction transaction, CreateCollationInfo *info);
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+	//! Creates an index in the catalog
+	DUCKDB_API CatalogEntry *CreateIndex(CatalogTransaction transaction, CreateIndexInfo *info);
+	DUCKDB_API CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
 
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(CatalogTransaction transaction, SchemaCatalogEntry *schema,
@@ -11729,7 +11757,7 @@ public:
 	//! Create a scalar or aggregate function in the catalog
 	DUCKDB_API CatalogEntry *CreateFunction(CatalogTransaction transaction, SchemaCatalogEntry *schema,
 	                                        CreateFunctionInfo *info);
-	//! Creates a table in the catalog.
+	//! Creates a view in the catalog
 	DUCKDB_API CatalogEntry *CreateView(CatalogTransaction transaction, SchemaCatalogEntry *schema,
 	                                    CreateViewInfo *info);
 	//! Creates a table in the catalog.
@@ -11826,6 +11854,8 @@ public:
 	DUCKDB_API static vector<SchemaCatalogEntry *> GetAllSchemas(ClientContext &context);
 
 	virtual void Verify();
+
+	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
 
 protected:
 	//! Reference to the database
@@ -11989,6 +12019,7 @@ enum class PhysicalOperatorType : uint8_t {
 	TRANSACTION,
 	CREATE_TYPE,
 	ATTACH,
+	DETACH,
 
 	// -----------------------------
 	// Helpers
@@ -18849,12 +18880,12 @@ protected:
 	SQLStatement(const SQLStatement &other) = default;
 
 public:
-	virtual string ToString() const {
+	DUCKDB_API virtual string ToString() const {
 		throw InternalException("ToString not supported for this type of SQLStatement: '%s'",
 		                        StatementTypeToString(type));
 	}
 	//! Create a copy of this SelectStatement
-	virtual unique_ptr<SQLStatement> Copy() const = 0;
+	DUCKDB_API virtual unique_ptr<SQLStatement> Copy() const = 0;
 };
 } // namespace duckdb
 
@@ -19456,44 +19487,6 @@ struct ReplacementScan {
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/create_database_extension.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-namespace duckdb {
-
-class ClientContext;
-class TableFunctionRef;
-
-struct CreateDatabaseExtensionData {
-	virtual ~CreateDatabaseExtensionData() {
-	}
-};
-
-typedef unique_ptr<TableFunctionRef> (*create_database_t)(ClientContext &context, const string &extension_name,
-                                                          const string &database_name, const string &source_path,
-                                                          CreateDatabaseExtensionData *data);
-
-struct CreateDatabaseExtension {
-	explicit CreateDatabaseExtension(create_database_t function,
-	                                 unique_ptr<CreateDatabaseExtensionData> data_p = nullptr)
-	    : function(function), data(std::move(data_p)) {
-	}
-
-	create_database_t function;
-	unique_ptr<CreateDatabaseExtensionData> data;
-};
-
-} // namespace duckdb
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
 // duckdb/optimizer/optimizer_extension.hpp
 //
 //
@@ -20084,7 +20077,7 @@ class QueryNode;
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
 public:
-	SelectStatement() : SQLStatement(StatementType::SELECT_STATEMENT) {
+	DUCKDB_API SelectStatement() : SQLStatement(StatementType::SELECT_STATEMENT) {
 	}
 
 	//! The main query node
@@ -20095,9 +20088,9 @@ protected:
 
 public:
 	//! Convert the SELECT statement to a string
-	string ToString() const override;
+	DUCKDB_API string ToString() const override;
 	//! Create a copy of this SelectStatement
-	unique_ptr<SQLStatement> Copy() const override;
+	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
 	//! Serializes a SelectStatement to a stand-alone binary blob
 	void Serialize(Serializer &serializer) const;
 	//! Deserializes a blob back into a SelectStatement, returns nullptr if
@@ -20210,6 +20203,7 @@ class AttachStatement;
 class CallStatement;
 class CopyStatement;
 class CreateStatement;
+class DetachStatement;
 class DeleteStatement;
 class DropStatement;
 class ExtensionStatement;
@@ -21051,6 +21045,9 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry *schema);
+
+	vector<unique_ptr<Expression>> BindCreateIndexExpressions(TableCatalogEntry *table, CreateIndexInfo *info);
+
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 	SchemaCatalogEntry *BindCreateFunctionInfo(CreateInfo &info);
@@ -21190,6 +21187,7 @@ private:
 	BoundStatement Bind(LoadStatement &stmt);
 	BoundStatement Bind(LogicalPlanStatement &stmt);
 	BoundStatement Bind(AttachStatement &stmt);
+	BoundStatement Bind(DetachStatement &stmt);
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
 	                             idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
@@ -21427,6 +21425,8 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
+	//! Directory to store extension binaries in
+	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
 	//! Enable emitting FSST Vectors
@@ -21475,8 +21475,6 @@ public:
 	vector<std::unique_ptr<OperatorExtension>> operator_extensions;
 	//! Extensions made to storage
 	case_insensitive_map_t<std::unique_ptr<StorageExtension>> storage_extensions;
-	//! Extensions made to binder to implement the create_database functionality
-	vector<CreateDatabaseExtension> create_database_extensions;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -22528,7 +22526,7 @@ protected:
 	CopyStatement(const CopyStatement &other);
 
 public:
-	unique_ptr<SQLStatement> Copy() const override;
+	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
 
 private:
 };

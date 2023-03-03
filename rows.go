@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -501,7 +502,7 @@ func logicalTypeNameStruct(lt C.duckdb_logical_type) string {
 		defer C.duckdb_destroy_logical_type(&clt)
 
 		// Add comma if not at end of list
-		name += C.GoString(cn) + " " + logicalTypeName(clt)
+		name += escapeStructFieldName(C.GoString(cn)) + " " + logicalTypeName(clt)
 		if i != count-1 {
 			name += ", "
 		}
@@ -519,4 +520,9 @@ func logicalTypeNameMap(lt C.duckdb_logical_type) string {
 	defer C.duckdb_destroy_logical_type(&vlt)
 
 	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(klt), logicalTypeName(vlt))
+}
+
+// DuckDB escapes struct field names by doubling double quotes, then wrapping in double quotes.
+func escapeStructFieldName(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
