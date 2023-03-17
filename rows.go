@@ -56,6 +56,7 @@ func (r *rows) Columns() []string {
 
 func (r *rows) Next(dst []driver.Value) error {
 	for r.chunkRowIdx == r.chunkRowCount {
+		C.duckdb_destroy_data_chunk(&r.chunk)
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
@@ -257,6 +258,7 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 }
 
 func (r *rows) Close() error {
+	C.duckdb_destroy_data_chunk(&r.chunk)
 	C.duckdb_destroy_result(&r.res)
 
 	if r.stmt != nil {
