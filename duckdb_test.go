@@ -42,6 +42,17 @@ func TestOpen(t *testing.T) {
 		require.Equal(t, "read_write", accessMode)
 	})
 
+	t.Run("existing sqlite database", func(t *testing.T) {
+		db, err := sql.Open("duckdb", "sqlite:testdata/pets.sqlite")
+		require.NoError(t, err)
+		defer db.Close()
+
+		var species string
+		res := db.QueryRow("SELECT species FROM pets WHERE id=1")
+		require.NoError(t, res.Scan(&species))
+		require.Equal(t, "Gopher", species)
+	})
+
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
 
