@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"unsafe"
 )
 
@@ -50,15 +51,15 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 		return nil, fmt.Errorf("%w: %s", parseConfigError, err.Error())
 	}
 
-	path := C.CString(parsedDSN.Path)
-	defer C.free(unsafe.Pointer(path))
+	connectionString := C.CString(extractConnectionString(dataSourceName))
+	defer C.free(unsafe.Pointer(connectionString))
 
 	// Check for config options.
 	if len(parsedDSN.RawQuery) == 0 {
 		errMsg := C.CString("")
 		defer C.duckdb_free(unsafe.Pointer(errMsg))
-		
-		if state := C.duckdb_open_ext(path, &db, nil, &errMsg); state == C.DuckDBError {
+
+		if state := C.duckdb_open_ext(connectionString, &db, nil, &errMsg); state == C.DuckDBError {
 			return nil, fmt.Errorf("%w: %s", openError, C.GoString(errMsg))
 		}
 	} else {
@@ -70,7 +71,7 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 		errMsg := C.CString("")
 		defer C.duckdb_free(unsafe.Pointer(errMsg))
 
-		if state := C.duckdb_open_ext(path, &db, config, &errMsg); state == C.DuckDBError {
+		if state := C.duckdb_open_ext(connectionString, &db, config, &errMsg); state == C.DuckDBError {
 			return nil, fmt.Errorf("%w: %s", openError, C.GoString(errMsg))
 		}
 	}
@@ -107,6 +108,14 @@ func (c *connector) Close() error {
 	C.duckdb_close(c.db)
 	c.db = nil
 	return nil
+}
+
+func extractConnectionString(dataSourceName string) string {
+	var queryIndex = strings.Index(dataSourceName, "?")
+	if queryIndex < 0 {
+		queryIndex = len(dataSourceName)
+	}
+	return dataSourceName[0:queryIndex]
 }
 
 func prepareConfig(options map[string][]string) (C.duckdb_config, error) {
