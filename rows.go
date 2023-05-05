@@ -214,7 +214,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case C.DUCKDB_TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
 	case C.DUCKDB_TYPE_DECIMAL:
-		return reflect.TypeOf(float64(0))
+		return reflect.TypeOf(Decimal{})
 	case C.DUCKDB_TYPE_TIMESTAMP_S:
 		return reflect.TypeOf(time.Time{})
 	case C.DUCKDB_TYPE_TIMESTAMP_MS:
@@ -360,7 +360,13 @@ func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t
 	return data, nil
 }
 
-func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (float64, error) {
+type Decimal struct {
+	Width uint8
+	Scale uint8
+	Value *big.Int
+}
+
+func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Decimal, error) {
 	scale := C.duckdb_decimal_scale(ty)
 	width := C.duckdb_decimal_width(ty)
 	var value C.duckdb_hugeint
@@ -376,10 +382,15 @@ func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_
 		value.lower = i.lower
 		value.upper = i.upper
 	default:
-		return 0, errInvalidType
+		return Decimal{}, errInvalidType
 	}
-	decimal := C.duckdb_decimal{width, scale, value}
-	return float64(C.duckdb_decimal_to_double(decimal)), nil
+
+	nativeValue := hugeIntToNative(value)
+	if nativeValue == nil {
+		return Decimal{}, fmt.Errorf("unable to convert hugeint to native type")
+	}
+
+	return Decimal{Width: uint8(width), Scale: uint8(scale), Value: nativeValue}, nil
 }
 
 func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
