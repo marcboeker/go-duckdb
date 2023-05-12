@@ -714,20 +714,6 @@ func TestEmpty(t *testing.T) {
 	require.NoError(t, rows.Err())
 }
 
-func TestMultiple(t *testing.T) {
-	t.Parallel()
-
-	db := openDB(t)
-	defer db.Close()
-
-	_, err := db.Exec("CREATE TABLE foo (x text); CREATE TABLE bar (x text);")
-	require.NoError(t, err)
-
-	_, err = db.Exec("INSERT INTO foo VALUES (?); INSERT INTO bar VALUES (?);", "hello", "world")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Cannot prepare multiple statements at once")
-}
-
 func TestTypeNamesAndScanTypes(t *testing.T) {
 	tests := []struct {
 		sql      string
@@ -914,6 +900,86 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			require.Equal(t, test.value, val)
 		})
 	}
+}
+
+// Running multiple statements in a single query. All statements except the last one are executed and if no error then last statement is executed with args and result returned.
+func TestMultipleStatements(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("CREATE TABLE foo (x text); CREATE TABLE bar (x text);")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO foo VALUES (?); INSERT INTO bar VALUES (?);", "hello", "world")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "incorrect argument count for command: have 0 want 1")
+
+	conn, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	res, err := conn.ExecContext(context.Background(), "CREATE TABLE IF NOT EXISTS foo1(bar VARCHAR, baz INTEGER); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+	require.NoError(t, err)
+	ra, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(2), ra)
+
+	require.NoError(t, err)
+	rows, err := conn.QueryContext(context.Background(), "select bar from foo1 limit 1")
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	err = rows.Close()
+	require.NoError(t, err)
+
+	// args are only applied to the last statement
+	res, err = conn.ExecContext(context.Background(), "INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "incorrect argument count for command: have 0 want 2")
+
+	rows, err = conn.QueryContext(context.Background(), "CREATE TABLE foo2(bar VARCHAR, baz INTEGER); INSERT INTO foo2 VALUES ('lala', 12345); select bar from foo2 limit 1")
+	require.NoError(t, err)
+	var bar string
+	require.True(t, rows.Next())
+	err = rows.Scan(&bar)
+	require.NoError(t, err)
+	require.Equal(t, "lala", bar)
+	require.False(t, rows.Next())
+	err = rows.Close()
+	require.NoError(t, err)
+
+	// Trying select with ExecContext also works but we don't get the result
+	res, err = conn.ExecContext(context.Background(), "CREATE TABLE foo3(bar VARCHAR, baz INTEGER); INSERT INTO foo3 VALUES ('lala', 12345); select bar from foo3 limit 1")
+	require.NoError(t, err)
+	ra, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), ra)
+
+	// multiple selects, but we get results only for the last one
+	rows, err = conn.QueryContext(context.Background(), "INSERT INTO foo3 VALUES ('lalo', 1234); select bar from foo3 where baz=12345; select bar from foo3 where baz=$1", 1234)
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	err = rows.Scan(&bar)
+	require.NoError(t, err)
+	require.Equal(t, "lalo", bar)
+	require.False(t, rows.Next())
+	err = rows.Close()
+	require.NoError(t, err)
+
+	// test json extension
+	rows, err = conn.QueryContext(context.Background(), `INSTALL 'json'; LOAD 'json'; CREATE TABLE example (id int, j JSON); 
+		INSERT INTO example VALUES(123, ' { "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }');
+		SELECT j->'$.family' FROM example WHERE id=$1`, 123)
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	var family string
+	err = rows.Scan(&family)
+	require.NoError(t, err)
+	require.Equal(t, "\"anatidae\"", family)
+	require.False(t, rows.Next())
+	err = rows.Close()
+	require.NoError(t, err)
+
+	err = conn.Close()
+	require.NoError(t, err)
 }
 
 func openDB(t *testing.T) *sql.DB {
