@@ -907,7 +907,27 @@ func TestMultipleStatements(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
 
-	_, err := db.Exec("CREATE TABLE foo (x text); CREATE TABLE bar (x text);")
+	// test empty query
+	_, err := db.Exec("")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no statements found")
+
+	// test invalid query
+	_, err = db.Exec("abc;")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "syntax error at or near \"abc\"")
+
+	// test valid + invalid query
+	_, err = db.Exec("CREATE TABLE foo (x text); abc;")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "syntax error at or near \"abc\"")
+
+	// test invalid + valid query
+	_, err = db.Exec("abc; CREATE TABLE foo (x text);")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "syntax error at or near \"abc\"")
+
+	_, err = db.Exec("CREATE TABLE foo (x text); CREATE TABLE bar (x text);")
 	require.NoError(t, err)
 
 	_, err = db.Exec("INSERT INTO foo VALUES (?); INSERT INTO bar VALUES (?);", "hello", "world")

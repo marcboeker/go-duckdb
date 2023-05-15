@@ -33,9 +33,9 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
 	}
 
-	stmts, size := c.extractStmts(query)
-	if size == 0 {
-		return nil, errors.New("no statements found")
+	stmts, size, err := c.extractStmts(query)
+	if err != nil {
+		return nil, err
 	}
 
 	// execute all statements but the last one, apply args only to last statement and return result of last statement
@@ -44,9 +44,12 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 		if err != nil {
 			return nil, err
 		}
-		defer stmt.Close()
 		// send nil args to execute statement and ignore result
 		_, err = stmt.ExecContext(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		err = stmt.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -57,6 +60,8 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 		return nil, err
 	}
 	defer stmt.Close()
+
+	C.duckdb_destroy_extracted(&stmts)
 	return stmt.ExecContext(ctx, args)
 }
 
@@ -65,9 +70,9 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
 	}
 
-	stmts, size := c.extractStmts(query)
-	if size == 0 {
-		return nil, errors.New("no statements found")
+	stmts, size, err := c.extractStmts(query)
+	if err != nil {
+		return nil, err
 	}
 
 	// execute all statements but the last one, apply args only to last statement and return result of last statement
@@ -77,7 +82,15 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 			return nil, err
 		}
 		// send nil args to execute statement and ignore result
-		_, err = stmt.QueryContext(ctx, nil)
+		rows, err := stmt.QueryContext(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		err = rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		err = stmt.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -88,6 +101,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		return nil, err
 	}
 
+	C.duckdb_destroy_extracted(&stmts)
 	return stmt.QueryContext(ctx, args)
 }
 
@@ -152,15 +166,25 @@ func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 	return &stmt{c: c, stmt: &s}, nil
 }
 
-func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t) {
+func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
 	cquery := C.CString(query)
 	defer C.free(unsafe.Pointer(cquery))
 
 	var stmts C.duckdb_extracted_statements
-	var stmtCount C.idx_t
-	stmtCount = C.duckdb_extract_statements(*c.con, cquery, &stmts)
+	var stmtsCount C.idx_t
+	stmtsCount = C.duckdb_extract_statements(*c.con, cquery, &stmts)
+	err := C.GoString(C.duckdb_extract_statements_error(stmts))
 
-	return stmts, stmtCount
+	if err != "" {
+		C.duckdb_destroy_extracted(&stmts)
+		return nil, 0, errors.New(err)
+	}
+	if stmtsCount == 0 {
+		C.duckdb_destroy_extracted(&stmts)
+		return nil, 0, errors.New("no statements found")
+	}
+
+	return stmts, stmtsCount, nil
 }
 
 func (c *conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
