@@ -34,6 +34,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	}
 
 	stmts, size, err := c.extractStmts(query)
+	defer C.duckdb_destroy_extracted(&stmts)
 	if err != nil {
 		return nil, err
 	}
@@ -46,10 +47,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 		}
 		// send nil args to execute statement and ignore result
 		_, err = stmt.ExecContext(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		err = stmt.Close()
+		stmt.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -60,8 +58,6 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 		return nil, err
 	}
 	defer stmt.Close()
-
-	C.duckdb_destroy_extracted(&stmts)
 	return stmt.ExecContext(ctx, args)
 }
 
@@ -71,6 +67,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 
 	stmts, size, err := c.extractStmts(query)
+	defer C.duckdb_destroy_extracted(&stmts)
 	if err != nil {
 		return nil, err
 	}
@@ -83,14 +80,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		}
 		// send nil args to execute statement and ignore result
 		rows, err := stmt.QueryContext(ctx, nil)
-		if err != nil {
-			return nil, err
-		}
-		err = rows.Close()
-		if err != nil {
-			return nil, err
-		}
-		err = stmt.Close()
+		rows.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +91,6 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		return nil, err
 	}
 
-	C.duckdb_destroy_extracted(&stmts)
 	return stmt.QueryContext(ctx, args)
 }
 
@@ -173,14 +162,14 @@ func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 	var stmts C.duckdb_extracted_statements
 	var stmtsCount C.idx_t
 	stmtsCount = C.duckdb_extract_statements(*c.con, cquery, &stmts)
-	err := C.GoString(C.duckdb_extract_statements_error(stmts))
 
-	if err != "" {
-		C.duckdb_destroy_extracted(&stmts)
-		return nil, 0, errors.New(err)
-	}
 	if stmtsCount == 0 {
+		err := C.GoString(C.duckdb_extract_statements_error(stmts))
 		C.duckdb_destroy_extracted(&stmts)
+
+		if err != "" {
+			return nil, 0, errors.New(err)
+		}
 		return nil, 0, errors.New("no statements found")
 	}
 
