@@ -91,6 +91,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	// prepare and execute last statement with args and return result
 	stmt, err := c.prepareExtractedStmt(stmts, size-1)
 	if err != nil {
+		stmt.Close()
 		return nil, err
 	}
 
