@@ -34,10 +34,10 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	}
 
 	stmts, size, err := c.extractStmts(query)
-	defer C.duckdb_destroy_extracted(&stmts)
 	if err != nil {
 		return nil, err
 	}
+	defer C.duckdb_destroy_extracted(&stmts)
 
 	// execute all statements but the last one, apply args only to last statement and return result of last statement
 	for i := C.idx_t(0); i < size-1; i++ {
@@ -67,10 +67,10 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 
 	stmts, size, err := c.extractStmts(query)
-	defer C.duckdb_destroy_extracted(&stmts)
 	if err != nil {
 		return nil, err
 	}
+	defer C.duckdb_destroy_extracted(&stmts)
 
 	// execute all statements but the last one, apply args only to last statement and return result of last statement
 	for i := C.idx_t(0); i < size-1; i++ {
@@ -80,9 +80,12 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		}
 		// send nil args to execute statement and ignore result
 		rows, err := stmt.QueryContext(ctx, nil)
-		rows.Close()
+		// if there is an error rows will be nil so close the stmt otherwise close the rows
 		if err != nil {
+			stmt.Close()
 			return nil, err
+		} else {
+			rows.Close()
 		}
 	}
 	// prepare and execute last statement with args and return result
