@@ -262,8 +262,10 @@ func (r *rows) Close() error {
 	C.duckdb_destroy_result(&r.res)
 
 	if r.stmt != nil {
-		C.duckdb_destroy_prepare(r.stmt.stmt)
 		r.stmt.rows = false
+		if r.stmt.closeOnRowsClose {
+			r.stmt.Close()
+		}
 		r.stmt = nil
 	}
 

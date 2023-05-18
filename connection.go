@@ -39,7 +39,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	}
 	defer C.duckdb_destroy_extracted(&stmts)
 
-	// execute all statements but the last one, apply args only to last statement and return result of last statement
+	// execute all statements without args, except the last one
 	for i := C.idx_t(0); i < size-1; i++ {
 		stmt, err := c.prepareExtractedStmt(stmts, i)
 		if err != nil {
@@ -52,6 +52,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 			return nil, err
 		}
 	}
+
 	// prepare and execute last statement with args and return result
 	stmt, err := c.prepareExtractedStmt(stmts, size-1)
 	if err != nil {
@@ -72,30 +73,35 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 	defer C.duckdb_destroy_extracted(&stmts)
 
-	// execute all statements but the last one, apply args only to last statement and return result of last statement
+	// execute all statements without args, except the last one
 	for i := C.idx_t(0); i < size-1; i++ {
 		stmt, err := c.prepareExtractedStmt(stmts, i)
 		if err != nil {
 			return nil, err
 		}
-		// send nil args to execute statement and ignore result
-		rows, err := stmt.QueryContext(ctx, nil)
-		// if there is an error rows will be nil so close the stmt otherwise close the rows
+		// send nil args to execute statement and ignore result (using ExecContext since we're ignoring the result anyway)
+		_, err = stmt.ExecContext(ctx, nil)
+		stmt.Close()
 		if err != nil {
-			stmt.Close()
 			return nil, err
-		} else {
-			rows.Close()
 		}
 	}
+
 	// prepare and execute last statement with args and return result
 	stmt, err := c.prepareExtractedStmt(stmts, size-1)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.QueryContext(ctx, args)
 	if err != nil {
 		stmt.Close()
 		return nil, err
 	}
 
-	return stmt.QueryContext(ctx, args)
+	// we can't close the statement before the query result rows are closed
+	stmt.closeOnRowsClose = true
+	return rows, err
 }
 
 func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
@@ -152,7 +158,6 @@ func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 	if state := C.duckdb_prepare(*c.con, cmdstr, &s); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_prepare_error(s))
 		C.duckdb_destroy_prepare(&s)
-
 		return nil, errors.New(dbErr)
 	}
 
@@ -164,13 +169,10 @@ func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 	defer C.free(unsafe.Pointer(cquery))
 
 	var stmts C.duckdb_extracted_statements
-	var stmtsCount C.idx_t
-	stmtsCount = C.duckdb_extract_statements(*c.con, cquery, &stmts)
-
+	stmtsCount := C.duckdb_extract_statements(*c.con, cquery, &stmts)
 	if stmtsCount == 0 {
 		err := C.GoString(C.duckdb_extract_statements_error(stmts))
 		C.duckdb_destroy_extracted(&stmts)
-
 		if err != "" {
 			return nil, 0, errors.New(err)
 		}
@@ -185,7 +187,6 @@ func (c *conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements
 	if state := C.duckdb_prepare_extracted_statement(*c.con, extractedStmts, index, &s); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_prepare_error(s))
 		C.duckdb_destroy_prepare(&s)
-
 		return nil, errors.New(dbErr)
 	}
 
