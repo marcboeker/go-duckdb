@@ -261,15 +261,16 @@ func (r *rows) Close() error {
 	C.duckdb_destroy_data_chunk(&r.chunk)
 	C.duckdb_destroy_result(&r.res)
 
+	var err error
 	if r.stmt != nil {
 		r.stmt.rows = false
 		if r.stmt.closeOnRowsClose {
-			r.stmt.Close()
+			err = r.stmt.Close()
 		}
 		r.stmt = nil
 	}
 
-	return nil
+	return err
 }
 
 func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
