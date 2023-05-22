@@ -3,7 +3,6 @@
 package duckdb
 
 /*
-#cgo CFLAGS: -DNDEBUG
 #cgo LDFLAGS: -lduckdb
 #include <duckdb.h>
 */

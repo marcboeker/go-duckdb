@@ -3,7 +3,6 @@
 package duckdb
 
 /*
-#cgo CFLAGS: -DNDEBUG
 #cgo LDFLAGS: -lduckdb
 #cgo darwin,amd64 LDFLAGS: -lc++ -L${SRCDIR}/deps/darwin_amd64
 #cgo darwin,arm64 LDFLAGS: -lc++ -L${SRCDIR}/deps/darwin_arm64
