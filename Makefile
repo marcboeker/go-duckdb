@@ -1,4 +1,4 @@
-DUCKDB_VERSION=0.7.1
+DUCKDB_VERSION=0.8.0
 
 .PHONY: install
 install:
@@ -23,20 +23,20 @@ deps.source:
 .PHONY: deps.darwin.amd64
 deps.darwin.amd64:
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "darwin" ]; then echo "Error: must run build on darwin"; false; fi
-	g++ -std=c++11 -O3 --target=x86_64-apple-macos11 -DGODUCKDB_FROM_SOURCE -c duckdb.cpp
+	g++ -std=c++11 -O3 --target=x86_64-apple-macos11 -DGODUCKDB_FROM_SOURCE -DNDEBUG -c duckdb.cpp
 	ar rvs libduckdb.a duckdb.o
 	mv libduckdb.a deps/darwin_amd64/libduckdb.a
 
 .PHONY: deps.darwin.arm64
 deps.darwin.arm64:
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "darwin" ]; then echo "Error: must run build on darwin"; false; fi
-	g++ -std=c++11 -O3 --target=arm64-apple-macos11 -DGODUCKDB_FROM_SOURCE -c duckdb.cpp
+	g++ -std=c++11 -O3 --target=arm64-apple-macos11 -DGODUCKDB_FROM_SOURCE -DNDEBUG -c duckdb.cpp
 	ar rvs libduckdb.a duckdb.o
 	mv libduckdb.a deps/darwin_arm64/libduckdb.a
 
 .PHONY: deps.linux.amd64
 deps.linux.amd64:
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
-	g++ -std=c++11 -O3 -DGODUCKDB_FROM_SOURCE -c duckdb.cpp
+	g++ -std=c++11 -O3 -DGODUCKDB_FROM_SOURCE -DNDEBUG -c duckdb.cpp
 	ar rvs libduckdb.a duckdb.o
 	mv libduckdb.a deps/linux_amd64/libduckdb.a
