@@ -40,3 +40,10 @@ deps.linux.amd64:
 	g++ -std=c++11 -O3 -DGODUCKDB_FROM_SOURCE -DNDEBUG -c duckdb.cpp
 	ar rvs libduckdb.a duckdb.o
 	mv libduckdb.a deps/linux_amd64/libduckdb.a
+
+.PHONY: deps.linux.arm64
+deps.linux.arm64:
+	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
+	aarch64-linux-gnu-g++ -std=c++11 -O3 -DGODUCKDB_FROM_SOURCE -DNDEBUG -c duckdb.cpp
+	aarch64-linux-gnu-gcc-ar rvs libduckdb.a duckdb.o
+	mv libduckdb.a deps/linux_arm64/libduckdb.a
