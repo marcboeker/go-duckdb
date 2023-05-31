@@ -361,7 +361,7 @@ func TestList(t *testing.T) {
 func compareDecimal(t *testing.T, want Decimal, got Decimal) {
 	require.Equal(t, want.Scale, got.Scale)
 	require.Equal(t, want.Width, got.Width)
-	require.Equal(t, want.Value.String(), got.Value.String())
+	require.True(t, want.Value.Cmp(got.Value) == 0)
 }
 
 func TestDecimal(t *testing.T) {
@@ -377,41 +377,42 @@ func TestDecimal(t *testing.T) {
 		}
 	})
 
-	t.Run("multiple rows", func(t *testing.T) {
+	t.Run("multiple decimal types", func(t *testing.T) {
 		rows, err := db.Query(`SELECT * FROM (VALUES
-			(1.23 :: DECIMAL(3, 2)),
-			(123.45 :: DECIMAL(5, 2)),
-			(123456789.01 :: DECIMAL(11, 2)),
-			(1234567890123456789.234 :: DECIMAL(22, 3)),
+			(1.23::DECIMAL(3, 2)),
+			(123.45::DECIMAL(5, 2)),
+			(123456789.01::DECIMAL(11, 2)),
+			(1234567890123456789.234::DECIMAL(22, 3)),
 		) v
 		ORDER BY v ASC`)
 		require.NoError(t, err)
 		defer rows.Close()
 
-		// TODO: We get lower precision numbers here? It's currently 1234567890123456774148.
 		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
 		require.True(t, success, "failed to parse big number")
-		want := []Decimal{
-			{Value: big.NewInt(1230), Width: 22, Scale: 3},
-			{Value: big.NewInt(123450), Width: 22, Scale: 3},
-			{Value: big.NewInt(123456789010), Width: 22, Scale: 3},
-			{Value: bigNumber, Width: 22, Scale: 3}}
-		i := 0
-		for rows.Next() {
+		tests := []struct {
+			input string
+			want  Decimal
+		}{
+			{input: "1.23::DECIMAL(3, 2)", want: Decimal{Value: big.NewInt(123), Width: 3, Scale: 2}},
+			{input: "123.45::DECIMAL(5, 2)", want: Decimal{Value: big.NewInt(12345), Width: 5, Scale: 2}},
+			{input: "123456789.01::DECIMAL(11, 2)", want: Decimal{Value: big.NewInt(12345678901), Width: 11, Scale: 2}},
+			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNumber, Width: 22, Scale: 3}},
+		}
+		for _, tc := range tests {
+			row := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input))
 			var fs Decimal
-			require.NoError(t, rows.Scan(&fs))
-			compareDecimal(t, want[i], fs)
-			i++
+			require.NoError(t, row.Scan(&fs))
+			compareDecimal(t, tc.want, fs)
 		}
 	})
 
 	t.Run("huge decimal", func(t *testing.T) {
-		// TODO: We get lower precision numbers here? It's currently 12345678901234566028553355273
 		bigNumber, success := new(big.Int).SetString("12345678901234567890123456789", 10)
 		require.True(t, success, "failed to parse big number")
 		var f Decimal
-		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789 :: DECIMAL(38, 20)").Scan(&f))
-		compareDecimal(t, Decimal{Value: bigNumber, Width: 38, Scale: 20}, f)
+		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
+		compareDecimal(t, Decimal{Value: bigNumber, Width: 29, Scale: 20}, f)
 	})
 }
 
@@ -1000,7 +1001,7 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	// test json extension
-	rows, err = conn.QueryContext(context.Background(), `INSTALL 'json'; LOAD 'json'; CREATE TABLE example (id int, j JSON); 
+	rows, err = conn.QueryContext(context.Background(), `INSTALL 'json'; LOAD 'json'; CREATE TABLE example (id int, j JSON);
 		INSERT INTO example VALUES(123, ' { "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }');
 		SELECT j->'$.family' FROM example WHERE id=$1`, 123)
 	require.NoError(t, err)
