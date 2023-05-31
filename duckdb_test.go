@@ -361,7 +361,7 @@ func TestList(t *testing.T) {
 func compareDecimal(t *testing.T, want Decimal, got Decimal) {
 	require.Equal(t, want.Scale, got.Scale)
 	require.Equal(t, want.Width, got.Width)
-	require.True(t, want.Value.Cmp(got.Value) == 0)
+	require.Equal(t, want.Value.String(), got.Value.String())
 }
 
 func TestDecimal(t *testing.T) {
