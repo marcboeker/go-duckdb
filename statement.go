@@ -16,10 +16,11 @@ import (
 )
 
 type stmt struct {
-	c      *conn
-	stmt   *C.duckdb_prepared_statement
-	closed bool
-	rows   bool
+	c                *conn
+	stmt             *C.duckdb_prepared_statement
+	closeOnRowsClose bool
+	closed           bool
+	rows             bool
 }
 
 func (s *stmt) Close() error {
@@ -198,7 +199,6 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
 		C.duckdb_destroy_pending(&pendingRes)
-		C.duckdb_destroy_prepare(s.stmt)
 		return nil, errors.New(dbErr)
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)

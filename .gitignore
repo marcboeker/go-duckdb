@@ -3,3 +3,4 @@
 run.sh
 duckdb/
 /lib
+.idea
