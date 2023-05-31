@@ -79,3 +79,9 @@ func (s Composite[T]) Get() T {
 func (s *Composite[T]) Scan(v any) error {
 	return mapstructure.Decode(v, &s.t)
 }
+
+type Decimal struct {
+	Width uint8
+	Scale uint8
+	Value *big.Int
+}

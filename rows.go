@@ -363,12 +363,6 @@ func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t
 	return data, nil
 }
 
-type Decimal struct {
-	Width uint8
-	Scale uint8
-	Value *big.Int
-}
-
 func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Decimal, error) {
 	scale := C.duckdb_decimal_scale(ty)
 	width := C.duckdb_decimal_width(ty)
