@@ -730,6 +730,24 @@ func TestEmpty(t *testing.T) {
 	require.NoError(t, rows.Err())
 }
 
+func TestEmptyArrow(t *testing.T) {
+	t.Parallel()
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	arrowQuery, err := NewArrowQueryFromConn(conn)
+	require.NoError(t, err)
+
+	r, err := arrowQuery.QueryContext(context.Background(), `SELECT 1 WHERE 1 = 0`)
+	require.NoError(t, err)
+	defer r.Release()
+	require.Equal(t, 1, r.NumRows())
+}
+
 func TestTypeNamesAndScanTypes(t *testing.T) {
 	tests := []struct {
 		sql      string

@@ -12,6 +12,9 @@ import (
 	"errors"
 	"math/big"
 	"unsafe"
+
+	"github.com/apache/arrow/go/v12/arrow"
+	"github.com/apache/arrow/go/v12/arrow/cdata"
 )
 
 type conn struct {
@@ -26,6 +29,43 @@ func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 		return nil
 	}
 	return driver.ErrSkip
+}
+
+func (c *conn) QueryArrowContext(ctx context.Context, query string) (arrow.Record, error) {
+	cquery := C.CString(query)
+	defer C.free(unsafe.Pointer(cquery))
+
+	var duckdbArrow C.duckdb_arrow
+	state := C.duckdb_query_arrow(*c.con, cquery, &duckdbArrow)
+	if state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_query_arrow_error(duckdbArrow))
+		C.duckdb_destroy_arrow(&duckdbArrow)
+		return nil, errors.New(dbErr)
+	}
+	defer C.duckdb_destroy_arrow(&duckdbArrow)
+
+	var duckDbArrowSchema C.duckdb_arrow_schema
+	if state := C.duckdb_query_arrow_schema(duckdbArrow, &duckDbArrowSchema); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_query_arrow_error(duckdbArrow))
+		C.duckdb_destroy_arrow(&duckdbArrow)
+		return nil, errors.New(dbErr)
+	}
+
+	var duckDbArrowArray C.duckdb_arrow_array
+	if state := C.duckdb_query_arrow_array(duckdbArrow, &duckDbArrowArray); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_query_arrow_error(duckdbArrow))
+		C.duckdb_destroy_arrow(&duckdbArrow)
+		return nil, errors.New(dbErr)
+	}
+
+	arrSchema := (*cdata.CArrowSchema)(unsafe.Pointer(&duckDbArrowSchema))
+	arrData := (*cdata.CArrowArray)(unsafe.Pointer(&duckDbArrowArray))
+	data, err := cdata.ImportCRecordBatch(arrData, arrSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
 
 func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
