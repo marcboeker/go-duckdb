@@ -145,7 +145,8 @@ func (a *Appender) AppendRowArray(args []driver.Value) error {
 			return fmt.Errorf("couldn't append unsupported parameter %d (type %T)", i, v)
 		}
 		if rv == C.DuckDBError {
-			return fmt.Errorf("couldn't append parameter %d (type %T)", i, v)
+			dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
+			return fmt.Errorf("couldn't append parameter %d (type %T): %s", i, v, dbErr)
 		}
 	}
 
@@ -157,6 +158,4 @@ func (a *Appender) AppendRowArray(args []driver.Value) error {
 	return nil
 }
 
-var (
-	errCouldNotAppend = errors.New("could not append parameter")
-)
+var errCouldNotAppend = errors.New("could not append parameter")
