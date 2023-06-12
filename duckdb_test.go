@@ -730,6 +730,102 @@ func TestEmpty(t *testing.T) {
 	require.NoError(t, rows.Err())
 }
 
+func TestArrow(t *testing.T) {
+	t.Parallel()
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	arrowQuery, err := NewArrowQueryFromConn(conn)
+	require.NoError(t, err)
+
+	records, err := arrowQuery.QueryContext(context.Background(), `SELECT 1`)
+	require.NoError(t, err)
+	defer func() {
+		for _, record := range records {
+			record.Release()
+		}
+	}()
+	require.Equal(t, int64(1), records[0].NumRows())
+}
+
+func BenchmarkArrow(b *testing.B) {
+	c, err := NewConnector("", nil)
+	require.NoError(b, err)
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(b, err)
+	defer conn.Close()
+
+	arrowQuery, err := NewArrowQueryFromConn(conn)
+	require.NoError(b, err)
+
+	fmt.Println("Running benchmark")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fmt.Printf("Running iteration %d\n", i)
+		records, err := arrowQuery.QueryContext(context.Background(), `SELECT 1`)
+		require.NoError(b, err)
+		for _, record := range records {
+			record.Release()
+		}
+	}
+}
+
+func TestMultipleArrowRecords(t *testing.T) {
+	t.Parallel()
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	db := sql.OpenDB(c)
+
+	_, err = db.Exec("CREATE TABLE integers AS SELECT * FROM range(0, 100000, 1) t(i);")
+	require.NoError(t, err)
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	arrowQuery, err := NewArrowQueryFromConn(conn)
+	require.NoError(t, err)
+
+	records, err := arrowQuery.QueryContext(context.Background(), `SELECT i FROM integers ORDER BY i ASC`)
+	require.NoError(t, err)
+	defer func() {
+		for _, record := range records {
+			record.Release()
+		}
+	}()
+	require.Greater(t, len(records), 1)
+	require.Greater(t, records[0].NumRows(), int64(1))
+}
+
+func TestEmptyArrow(t *testing.T) {
+	t.Parallel()
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	arrowQuery, err := NewArrowQueryFromConn(conn)
+	require.NoError(t, err)
+
+	records, err := arrowQuery.QueryContext(context.Background(), `SELECT 1 WHERE 1 = 0`)
+	require.NoError(t, err)
+	defer func() {
+		for _, record := range records {
+			record.Release()
+		}
+	}()
+	require.Equal(t, 1, len(records))
+	require.Equal(t, int64(0), records[0].NumRows())
+}
+
 func TestTypeNamesAndScanTypes(t *testing.T) {
 	tests := []struct {
 		sql      string
