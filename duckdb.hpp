@@ -11,8 +11,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "e8e4cea5ec"
-#define DUCKDB_VERSION "v0.8.0"
+#define DUCKDB_SOURCE_ID "6536a77232"
+#define DUCKDB_VERSION "v0.8.1"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -359,6 +359,36 @@ typedef idx_t column_t;
 //! Type used for storage (column) identifiers
 typedef idx_t storage_t;
 
+template <class SRC>
+data_ptr_t data_ptr_cast(SRC *src) {
+	return reinterpret_cast<data_ptr_t>(src);
+}
+
+template <class SRC>
+const_data_ptr_t const_data_ptr_cast(const SRC *src) {
+	return reinterpret_cast<const_data_ptr_t>(src);
+}
+
+template <class SRC>
+char *char_ptr_cast(SRC *src) {
+	return reinterpret_cast<char *>(src);
+}
+
+template <class SRC>
+const char *const_char_ptr_cast(const SRC *src) {
+	return reinterpret_cast<const char *>(src);
+}
+
+template <class SRC>
+const unsigned char *const_uchar_ptr_cast(const SRC *src) {
+	return reinterpret_cast<const unsigned char *>(src);
+}
+
+template <class SRC>
+uintptr_t CastPointerToValue(SRC *src) {
+	return uintptr_t(src);
+}
+
 } // namespace duckdb
 
 
@@ -370,8 +400,8 @@ enum class PhysicalType : uint8_t;
 struct LogicalType;
 struct hugeint_t;
 
-inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
-                                     const char *fname, int linenr) {
+inline void assert_restrict_function(const void *left_start, const void *left_end, const void *right_start,
+                                     const void *right_end, const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {
@@ -453,6 +483,9 @@ public:
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
+		const std::size_t num_args = sizeof...(Args);
+		if (num_args == 0)
+			return msg;
 		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -1609,12 +1642,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -2041,9 +2074,6 @@ public:
 	DUCKDB_API static LogicalType GetType(ClientContext &context, const string &catalog_name, const string &schema,
 	                                      const string &name);
 
-	static bool TypeExists(ClientContext &context, const string &catalog_name, const string &schema,
-	                       const string &name);
-
 	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
 	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
@@ -2145,13 +2175,13 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -2194,16 +2224,16 @@ public:
 	void Write(T element) {
 		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
 
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	//! Write data from a string buffer directly (without length prefix)
 	void WriteBufferData(const string &str) {
-		WriteData((const_data_ptr_t)str.c_str(), str.size());
+		WriteData(const_data_ptr_cast(str.c_str()), str.size());
 	}
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		WriteStringLen((const_data_ptr_t)val.c_str(), val.size());
+		WriteStringLen(const_data_ptr_cast(val.c_str()), val.size());
 	}
 	void WriteStringLen(const_data_ptr_t val, idx_t len) {
 		Write<uint32_t>((uint32_t)len);
@@ -2275,7 +2305,7 @@ public:
 	template <class T>
 	T Read() {
 		T value;
-		ReadData((data_ptr_t)&value, sizeof(T));
+		ReadData(data_ptr_cast(&value), sizeof(T));
 		return value;
 	}
 
@@ -2516,6 +2546,17 @@ public:
 
 	string GetPath() const {
 		return path;
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 
 public:
@@ -4391,22 +4432,12 @@ struct timestamp_t { // NOLINT
 	};
 
 	// arithmetic operators
-	inline timestamp_t operator+(const double &value) const {
-		return timestamp_t(this->value + int64_t(value));
-	};
-	inline int64_t operator-(const timestamp_t &other) const {
-		return this->value - other.value;
-	};
+	timestamp_t operator+(const double &value) const;
+	int64_t operator-(const timestamp_t &other) const;
 
 	// in-place operators
-	inline timestamp_t &operator+=(const int64_t &value) {
-		this->value += value;
-		return *this;
-	};
-	inline timestamp_t &operator-=(const int64_t &value) {
-		this->value -= value;
-		return *this;
-	};
+	timestamp_t &operator+=(const int64_t &delta);
+	timestamp_t &operator-=(const int64_t &delta);
 
 	// special values
 	static timestamp_t infinity() { // NOLINT
@@ -4611,7 +4642,7 @@ public:
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);
 #endif
-			value.pointer.ptr = (char *)data;
+			value.pointer.ptr = (char *)data; // NOLINT
 		}
 	}
 	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
@@ -4625,14 +4656,14 @@ public:
 	}
 
 	const char *GetData() const {
-		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+		return IsInlined() ? const_char_ptr_cast(value.inlined.inlined) : value.pointer.ptr;
 	}
 	const char *GetDataUnsafe() const {
 		return GetData();
 	}
 
 	char *GetDataWriteable() const {
-		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
+		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr; // NOLINT
 	}
 
 	const char *GetPrefix() const {
@@ -4666,7 +4697,7 @@ public:
 		} else {
 			// copy the data into the prefix
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			auto dataptr = (char *)GetData();
+			auto dataptr = GetData();
 			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);
@@ -4684,15 +4715,15 @@ public:
 				return false;
 			return (memcmp(a.GetData(), b.GetData(), a.GetSize()) == 0);
 #endif
-			uint64_t A = Load<uint64_t>((const_data_ptr_t)&a);
-			uint64_t B = Load<uint64_t>((const_data_ptr_t)&b);
+			uint64_t A = Load<uint64_t>(const_data_ptr_cast(&a));
+			uint64_t B = Load<uint64_t>(const_data_ptr_cast(&b));
 			if (A != B) {
 				// Either length or prefix are different -> not equal
 				return false;
 			}
 			// they have the same length and same prefix!
-			A = Load<uint64_t>((const_data_ptr_t)&a + 8u);
-			B = Load<uint64_t>((const_data_ptr_t)&b + 8u);
+			A = Load<uint64_t>(const_data_ptr_cast(&a) + 8u);
+			B = Load<uint64_t>(const_data_ptr_cast(&b) + 8u);
 			if (A == B) {
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
 				return true;
@@ -4715,8 +4746,8 @@ public:
 			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			uint32_t A = Load<uint32_t>((const_data_ptr_t)left.GetPrefix());
-			uint32_t B = Load<uint32_t>((const_data_ptr_t)right.GetPrefix());
+			uint32_t A = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
+			uint32_t B = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
 
 			// Utility to move 0xa1b2c3d4 into 0xd4c3b2a1, basically inverting the order byte-a-byte
 			auto bswap = [](uint32_t v) -> uint32_t {
@@ -5380,7 +5411,7 @@ public:
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	DUCKDB_API static Value BLOB(const_data_ptr_t data, idx_t len);
 	static Value BLOB_RAW(const string &data) { // NOLINT
-		return Value::BLOB((const_data_ptr_t)data.c_str(), data.size());
+		return Value::BLOB(const_data_ptr_cast(data.c_str()), data.size());
 	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);
@@ -5819,6 +5850,17 @@ struct PrivateAllocatorData {
 	virtual ~PrivateAllocatorData();
 
 	unique_ptr<AllocatorDebugInfo> debug_info;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 typedef data_ptr_t (*allocate_function_ptr_t)(PrivateAllocatorData *private_data, idx_t size);
@@ -5878,14 +5920,14 @@ public:
 		return AllocatedData(*this, AllocateData(size), size);
 	}
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-		return (data_ptr_t)malloc(size);
+		return data_ptr_cast(malloc(size));
 	}
 	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 		free(pointer);
 	}
 	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	                                    idx_t size) {
-		return (data_ptr_t)realloc(pointer, size);
+		return data_ptr_cast(realloc(pointer, size));
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
@@ -5913,7 +5955,7 @@ T *AllocateArray(idx_t size) {
 
 template <class T>
 void DeleteArray(T *ptr, idx_t size) {
-	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, size * sizeof(T));
+	Allocator::DefaultAllocator().FreeData(data_ptr_cast(ptr), size * sizeof(T));
 }
 
 template <typename T, typename... ARGS>
@@ -5925,7 +5967,7 @@ T *AllocateObject(ARGS &&... args) {
 template <typename T>
 void DestroyObject(T *ptr) {
 	ptr->~T();
-	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, sizeof(T));
+	Allocator::DefaultAllocator().FreeData(data_ptr_cast(ptr), sizeof(T));
 }
 
 //! The BufferAllocator is a wrapper around the global allocator class that sends any allocations made through the
@@ -6208,7 +6250,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -6216,7 +6258,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -6277,6 +6319,18 @@ protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
 	unsafe_unique_array<data_t> data;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The DictionaryBuffer holds a selection vector
@@ -6310,7 +6364,7 @@ private:
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
-	VectorStringBuffer(VectorBufferType type);
+	explicit VectorStringBuffer(VectorBufferType type);
 
 public:
 	string_t AddString(const char *data, idx_t len) {
@@ -6363,7 +6417,7 @@ private:
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
-	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
@@ -6382,8 +6436,8 @@ private:
 
 class VectorListBuffer : public VectorBuffer {
 public:
-	VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
-	VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
 	~VectorListBuffer() override;
 
 public:
@@ -6436,6 +6490,15 @@ struct UnifiedVectorFormat {
 	data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
+
+	template <class T>
+	static inline const T *GetData(const UnifiedVectorFormat &format) {
+		return reinterpret_cast<const T *>(format.data);
+	}
+	template <class T>
+	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
+		return reinterpret_cast<T *>(format.data);
+	}
 };
 
 class VectorCache;
@@ -7538,7 +7601,7 @@ struct BinaryLambdaWrapperWithNulls {
 struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static void ExecuteFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                            RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
@@ -7652,7 +7715,7 @@ struct BinaryExecutor {
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	static void ExecuteGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	static void ExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                               RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
 	                               const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lvalidity,
 	                               ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
@@ -7689,8 +7752,9 @@ struct BinaryExecutor {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
-		    (LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
-		    rdata.validity, FlatVector::Validity(result), fun);
+		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
+		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result),
+		    fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
@@ -7768,7 +7832,7 @@ public:
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
 	          bool HAS_FALSE_SEL>
-	static inline idx_t SelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	static inline idx_t SelectFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                                   const SelectionVector *sel, idx_t count, ValidityMask &validity_mask,
 	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
@@ -7832,7 +7896,7 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static inline idx_t SelectFlatLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	static inline idx_t SelectFlatLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                                         const SelectionVector *sel, idx_t count, ValidityMask &mask,
 	                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
@@ -7887,10 +7951,10 @@ public:
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 	static inline idx_t
-	SelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, const SelectionVector *__restrict lsel,
-	                  const SelectionVector *__restrict rsel, const SelectionVector *__restrict result_sel, idx_t count,
-	                  ValidityMask &lvalidity, ValidityMask &rvalidity, SelectionVector *true_sel,
-	                  SelectionVector *false_sel) {
+	SelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                  const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
+	                  const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
+	                  ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto result_idx = result_sel->get_index(i);
@@ -7915,7 +7979,7 @@ public:
 	}
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
 	static inline idx_t
-	SelectGenericLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	SelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                           const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
 	                           ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -7934,7 +7998,7 @@ public:
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 	static inline idx_t
-	SelectGenericLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	SelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                        const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                        const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
 	                        ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -7955,9 +8019,9 @@ public:
 		left.ToUnifiedFormat(count, ldata);
 		right.ToUnifiedFormat(count, rdata);
 
-		return SelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data,
-		                                                          ldata.sel, rdata.sel, sel, count, ldata.validity,
-		                                                          rdata.validity, true_sel, false_sel);
+		return SelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>(
+		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata), ldata.sel,
+		    rdata.sel, sel, count, ldata.validity, rdata.validity, true_sel, false_sel);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
@@ -8029,11 +8093,11 @@ struct TernaryLambdaWrapperWithNulls {
 struct TernaryExecutor {
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
-	static inline void ExecuteLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
-	                               RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
-	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
-	                               ValidityMask &bvalidity, ValidityMask &cvalidity, ValidityMask &result_validity,
-	                               FUN fun) {
+	static inline void ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
+	                               const C_TYPE *__restrict cdata, RESULT_TYPE *__restrict result_data, idx_t count,
+	                               const SelectionVector &asel, const SelectionVector &bsel,
+	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
+	                               ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
 		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
@@ -8083,9 +8147,10 @@ public:
 			c.ToUnifiedFormat(count, cdata);
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data,
-			    FlatVector::GetData<RESULT_TYPE>(result), count, *adata.sel, *bdata.sel, *cdata.sel, adata.validity,
-			    bdata.validity, cdata.validity, FlatVector::Validity(result), fun);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetData<RESULT_TYPE>(result), count,
+			    *adata.sel, *bdata.sel, *cdata.sel, adata.validity, bdata.validity, cdata.validity,
+			    FlatVector::Validity(result), fun);
 		}
 	}
 
@@ -8110,11 +8175,11 @@ public:
 
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-	static inline idx_t SelectLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
-	                               const SelectionVector *result_sel, idx_t count, const SelectionVector &asel,
-	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
-	                               ValidityMask &bvalidity, ValidityMask &cvalidity, SelectionVector *true_sel,
-	                               SelectionVector *false_sel) {
+	static inline idx_t SelectLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
+	                               const C_TYPE *__restrict cdata, const SelectionVector *result_sel, idx_t count,
+	                               const SelectionVector &asel, const SelectionVector &bsel,
+	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
+	                               ValidityMask &cvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto result_idx = result_sel->get_index(i);
@@ -8146,17 +8211,20 @@ private:
 	                                        SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, true>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else if (true_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, false>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else {
 			D_ASSERT(false_sel);
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, false, true>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		}
 	}
 
@@ -8251,7 +8319,7 @@ struct UnaryStringOperator {
 struct UnaryExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
-	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	static inline void ExecuteLoop(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
 	                               ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
 #ifdef DEBUG
@@ -8288,7 +8356,7 @@ private:
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
-	static inline void ExecuteFlat(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               ValidityMask &mask, ValidityMask &result_mask, void *dataptr, bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
@@ -8368,7 +8436,7 @@ private:
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-			auto ldata = (INPUT_TYPE *)vdata.data;
+			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel, vdata.validity,
 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
@@ -8910,19 +8978,13 @@ public:
 	//! Expression::Equals() returns true), that their hash value is identical as well.
 	virtual hash_t Hash() const = 0;
 	//! Returns true if this expression is equal to another expression
-	virtual bool Equals(const BaseExpression *other) const;
+	virtual bool Equals(const BaseExpression &other) const;
 
-	static bool Equals(const BaseExpression *left, const BaseExpression *right) {
-		if (left == right) {
-			return true;
-		}
-		if (!left || !right) {
-			return false;
-		}
-		return left->Equals(right);
+	static bool Equals(const BaseExpression &left, const BaseExpression &right) {
+		return left.Equals(right);
 	}
 	bool operator==(const BaseExpression &rhs) {
-		return this->Equals(&rhs);
+		return Equals(rhs);
 	}
 
 	virtual void Verify() const;
@@ -8933,7 +8995,7 @@ public:
 		if (expression_class != TARGET::TYPE) {
 			throw InternalException("Failed to cast expression to type - expression type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -8941,7 +9003,7 @@ public:
 		if (expression_class != TARGET::TYPE) {
 			throw InternalException("Failed to cast expression to type - expression type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -9143,7 +9205,7 @@ public:
 	bool IsScalar() const override;
 	bool HasParameter() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	//! Create a copy of this expression
@@ -9160,6 +9222,10 @@ public:
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
+
+	static bool Equals(const unique_ptr<ParsedExpression> &left, const unique_ptr<ParsedExpression> &right);
+	static bool ListEquals(const vector<unique_ptr<ParsedExpression>> &left,
+	                       const vector<unique_ptr<ParsedExpression>> &right);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,
@@ -9352,17 +9418,17 @@ struct FunctionData {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 	// FIXME: this function should be removed in the future
 	template <class TARGET>
 	TARGET &CastNoConst() const {
-		return (TARGET &)*this;
+		return const_cast<TARGET &>(reinterpret_cast<const TARGET &>(*this));
 	}
 };
 
@@ -9498,6 +9564,18 @@ public:
 	DUCKDB_API ClientContext &GetContext();
 
 	void Verify(ExpressionExecutorState &root);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct ExecuteFunctionState : public ExpressionState {
@@ -9507,8 +9585,8 @@ struct ExecuteFunctionState : public ExpressionState {
 	unique_ptr<FunctionLocalState> local_state;
 
 public:
-	static FunctionLocalState *GetFunctionState(ExpressionState &state) {
-		return ((ExecuteFunctionState &)state).local_state.get();
+	static optional_ptr<FunctionLocalState> GetFunctionState(ExpressionState &state) {
+		return state.Cast<ExecuteFunctionState>().local_state.get();
 	}
 };
 
@@ -9524,6 +9602,183 @@ struct ExpressionExecutorState {
 
 } // namespace duckdb
 
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/planner/plan_serialization.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/enums/logical_operator_type.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// Logical Operator Types
+//===--------------------------------------------------------------------===//
+enum class LogicalOperatorType : uint8_t {
+	LOGICAL_INVALID = 0,
+	LOGICAL_PROJECTION = 1,
+	LOGICAL_FILTER = 2,
+	LOGICAL_AGGREGATE_AND_GROUP_BY = 3,
+	LOGICAL_WINDOW = 4,
+	LOGICAL_UNNEST = 5,
+	LOGICAL_LIMIT = 6,
+	LOGICAL_ORDER_BY = 7,
+	LOGICAL_TOP_N = 8,
+	LOGICAL_COPY_TO_FILE = 10,
+	LOGICAL_DISTINCT = 11,
+	LOGICAL_SAMPLE = 12,
+	LOGICAL_LIMIT_PERCENT = 13,
+	LOGICAL_PIVOT = 14,
+
+	// -----------------------------
+	// Data sources
+	// -----------------------------
+	LOGICAL_GET = 25,
+	LOGICAL_CHUNK_GET = 26,
+	LOGICAL_DELIM_GET = 27,
+	LOGICAL_EXPRESSION_GET = 28,
+	LOGICAL_DUMMY_SCAN = 29,
+	LOGICAL_EMPTY_RESULT = 30,
+	LOGICAL_CTE_REF = 31,
+	// -----------------------------
+	// Joins
+	// -----------------------------
+	LOGICAL_JOIN = 50,
+	LOGICAL_DELIM_JOIN = 51,
+	LOGICAL_COMPARISON_JOIN = 52,
+	LOGICAL_ANY_JOIN = 53,
+	LOGICAL_CROSS_PRODUCT = 54,
+	LOGICAL_POSITIONAL_JOIN = 55,
+	LOGICAL_ASOF_JOIN = 56,
+	// -----------------------------
+	// SetOps
+	// -----------------------------
+	LOGICAL_UNION = 75,
+	LOGICAL_EXCEPT = 76,
+	LOGICAL_INTERSECT = 77,
+	LOGICAL_RECURSIVE_CTE = 78,
+
+	// -----------------------------
+	// Updates
+	// -----------------------------
+	LOGICAL_INSERT = 100,
+	LOGICAL_DELETE = 101,
+	LOGICAL_UPDATE = 102,
+
+	// -----------------------------
+	// Schema
+	// -----------------------------
+	LOGICAL_ALTER = 125,
+	LOGICAL_CREATE_TABLE = 126,
+	LOGICAL_CREATE_INDEX = 127,
+	LOGICAL_CREATE_SEQUENCE = 128,
+	LOGICAL_CREATE_VIEW = 129,
+	LOGICAL_CREATE_SCHEMA = 130,
+	LOGICAL_CREATE_MACRO = 131,
+	LOGICAL_DROP = 132,
+	LOGICAL_PRAGMA = 133,
+	LOGICAL_TRANSACTION = 134,
+	LOGICAL_CREATE_TYPE = 135,
+	LOGICAL_ATTACH = 136,
+	LOGICAL_DETACH = 137,
+
+	// -----------------------------
+	// Explain
+	// -----------------------------
+	LOGICAL_EXPLAIN = 150,
+
+	// -----------------------------
+	// Show
+	// -----------------------------
+	LOGICAL_SHOW = 160,
+
+	// -----------------------------
+	// Helpers
+	// -----------------------------
+	LOGICAL_PREPARE = 175,
+	LOGICAL_EXECUTE = 176,
+	LOGICAL_EXPORT = 177,
+	LOGICAL_VACUUM = 178,
+	LOGICAL_SET = 179,
+	LOGICAL_LOAD = 180,
+	LOGICAL_RESET = 181,
+
+	LOGICAL_EXTENSION_OPERATOR = 255
+};
+
+DUCKDB_API string LogicalOperatorToString(LogicalOperatorType type);
+
+} // namespace duckdb
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/planner/bound_parameter_map.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+namespace duckdb {
+
+struct BoundParameterData;
+
+using bound_parameter_map_t = unordered_map<idx_t, shared_ptr<BoundParameterData>>;
+
+} // namespace duckdb
+
+
+namespace duckdb {
+class ClientContext;
+class LogicalOperator;
+struct BoundParameterData;
+
+struct PlanDeserializationState {
+	PlanDeserializationState(ClientContext &context);
+	~PlanDeserializationState();
+
+	ClientContext &context;
+	bound_parameter_map_t parameter_data;
+};
+
+struct LogicalDeserializationState {
+	LogicalDeserializationState(PlanDeserializationState &gstate, LogicalOperatorType type,
+	                            vector<unique_ptr<LogicalOperator>> &children);
+
+	PlanDeserializationState &gstate;
+	LogicalOperatorType type;
+	vector<unique_ptr<LogicalOperator>> &children;
+};
+
+struct ExpressionDeserializationState {
+	ExpressionDeserializationState(PlanDeserializationState &gstate, ExpressionType type);
+
+	PlanDeserializationState &gstate;
+	ExpressionType type;
+};
+
+} // namespace duckdb
 
 //===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -10377,12 +10632,12 @@ struct FunctionLocalState {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -10417,7 +10672,7 @@ typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyL
 
 typedef void (*function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                      const ScalarFunction &function);
-typedef unique_ptr<FunctionData> (*function_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*function_deserialize_t)(PlanDeserializationState &state, FieldReader &reader,
                                                            ScalarFunction &function);
 
 class ScalarFunction : public BaseScalarFunction {
@@ -10581,6 +10836,16 @@ public:
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/function/aggregate_state.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
 
 
 //===----------------------------------------------------------------------===//
@@ -10643,6 +10908,89 @@ public:
 	bool has_max_cardinality;
 	//! The max possible cardinality at the specified node
 	idx_t max_cardinality;
+};
+
+} // namespace duckdb
+
+
+namespace duckdb {
+
+enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
+//! Whether or not the input order influences the result of the aggregate
+enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
+
+class BoundAggregateExpression;
+
+struct AggregateInputData {
+	AggregateInputData(optional_ptr<FunctionData> bind_data_p, Allocator &allocator_p)
+	    : bind_data(bind_data_p), allocator(allocator_p) {
+	}
+	optional_ptr<FunctionData> bind_data;
+	Allocator &allocator;
+};
+
+struct AggregateUnaryInput {
+	AggregateUnaryInput(AggregateInputData &input_p, ValidityMask &input_mask_p)
+	    : input(input_p), input_mask(input_mask_p), input_idx(0) {
+	}
+
+	AggregateInputData &input;
+	ValidityMask &input_mask;
+	idx_t input_idx;
+
+	inline bool RowIsValid() {
+		return input_mask.RowIsValid(input_idx);
+	}
+};
+
+struct AggregateBinaryInput {
+	AggregateBinaryInput(AggregateInputData &input_p, ValidityMask &left_mask_p, ValidityMask &right_mask_p)
+	    : input(input_p), left_mask(left_mask_p), right_mask(right_mask_p) {
+	}
+
+	AggregateInputData &input;
+	ValidityMask &left_mask;
+	ValidityMask &right_mask;
+	idx_t lidx;
+	idx_t ridx;
+};
+
+struct AggregateFinalizeData {
+	AggregateFinalizeData(Vector &result_p, AggregateInputData &input_p)
+	    : result(result_p), input(input_p), result_idx(0) {
+	}
+
+	Vector &result;
+	AggregateInputData &input;
+	idx_t result_idx;
+
+	inline void ReturnNull() {
+		switch (result.GetVectorType()) {
+		case VectorType::FLAT_VECTOR:
+			FlatVector::SetNull(result, result_idx, true);
+			break;
+		case VectorType::CONSTANT_VECTOR:
+			ConstantVector::SetNull(result, true);
+			break;
+		default:
+			throw InternalException("Invalid result vector type for aggregate");
+		}
+	}
+
+	inline string_t ReturnString(string_t value) {
+		return StringVector::AddStringOrBlob(result, value);
+	}
+};
+
+struct AggregateStatisticsInput {
+	AggregateStatisticsInput(optional_ptr<FunctionData> bind_data_p, vector<BaseStatistics> &child_stats_p,
+	                         optional_ptr<NodeStatistics> node_stats_p)
+	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
+	}
+
+	optional_ptr<FunctionData> bind_data;
+	vector<BaseStatistics> &child_stats;
+	optional_ptr<NodeStatistics> node_stats;
 };
 
 } // namespace duckdb
@@ -10729,7 +11077,7 @@ public:
 
 public:
 	//! Returns true if the two result modifiers are equivalent
-	virtual bool Equals(const ResultModifier *other) const;
+	virtual bool Equals(const ResultModifier &other) const;
 
 	//! Create a copy of this ResultModifier
 	virtual unique_ptr<ResultModifier> Copy() const = 0;
@@ -10742,6 +11090,23 @@ public:
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! Single node in ORDER BY statement
@@ -10768,6 +11133,9 @@ public:
 
 class LimitModifier : public ResultModifier {
 public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_MODIFIER;
+
+public:
 	LimitModifier() : ResultModifier(ResultModifierType::LIMIT_MODIFIER) {
 	}
 
@@ -10777,7 +11145,7 @@ public:
 	unique_ptr<ParsedExpression> offset;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
@@ -10788,6 +11156,9 @@ public:
 
 class OrderModifier : public ResultModifier {
 public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::ORDER_MODIFIER;
+
+public:
 	OrderModifier() : ResultModifier(ResultModifierType::ORDER_MODIFIER) {
 	}
 
@@ -10795,16 +11166,21 @@ public:
 	vector<OrderByNode> orders;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+
+	static bool Equals(const unique_ptr<OrderModifier> &left, const unique_ptr<OrderModifier> &right);
 };
 
 class DistinctModifier : public ResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::DISTINCT_MODIFIER;
+
 public:
 	DistinctModifier() : ResultModifier(ResultModifierType::DISTINCT_MODIFIER) {
 	}
@@ -10813,7 +11189,7 @@ public:
 	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
@@ -10824,6 +11200,9 @@ public:
 
 class LimitPercentModifier : public ResultModifier {
 public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_PERCENT_MODIFIER;
+
+public:
 	LimitPercentModifier() : ResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
 	}
 
@@ -10833,7 +11212,7 @@ public:
 	unique_ptr<ParsedExpression> offset;
 
 public:
-	bool Equals(const ResultModifier *other) const override;
+	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
@@ -10882,182 +11261,6 @@ struct BoundStatement {
 
 
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/planner/plan_serialization.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/enums/logical_operator_type.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-namespace duckdb {
-
-//===--------------------------------------------------------------------===//
-// Logical Operator Types
-//===--------------------------------------------------------------------===//
-enum class LogicalOperatorType : uint8_t {
-	LOGICAL_INVALID = 0,
-	LOGICAL_PROJECTION = 1,
-	LOGICAL_FILTER = 2,
-	LOGICAL_AGGREGATE_AND_GROUP_BY = 3,
-	LOGICAL_WINDOW = 4,
-	LOGICAL_UNNEST = 5,
-	LOGICAL_LIMIT = 6,
-	LOGICAL_ORDER_BY = 7,
-	LOGICAL_TOP_N = 8,
-	LOGICAL_COPY_TO_FILE = 10,
-	LOGICAL_DISTINCT = 11,
-	LOGICAL_SAMPLE = 12,
-	LOGICAL_LIMIT_PERCENT = 13,
-	LOGICAL_PIVOT = 14,
-
-	// -----------------------------
-	// Data sources
-	// -----------------------------
-	LOGICAL_GET = 25,
-	LOGICAL_CHUNK_GET = 26,
-	LOGICAL_DELIM_GET = 27,
-	LOGICAL_EXPRESSION_GET = 28,
-	LOGICAL_DUMMY_SCAN = 29,
-	LOGICAL_EMPTY_RESULT = 30,
-	LOGICAL_CTE_REF = 31,
-	// -----------------------------
-	// Joins
-	// -----------------------------
-	LOGICAL_JOIN = 50,
-	LOGICAL_DELIM_JOIN = 51,
-	LOGICAL_COMPARISON_JOIN = 52,
-	LOGICAL_ANY_JOIN = 53,
-	LOGICAL_CROSS_PRODUCT = 54,
-	LOGICAL_POSITIONAL_JOIN = 55,
-	LOGICAL_ASOF_JOIN = 56,
-	// -----------------------------
-	// SetOps
-	// -----------------------------
-	LOGICAL_UNION = 75,
-	LOGICAL_EXCEPT = 76,
-	LOGICAL_INTERSECT = 77,
-	LOGICAL_RECURSIVE_CTE = 78,
-
-	// -----------------------------
-	// Updates
-	// -----------------------------
-	LOGICAL_INSERT = 100,
-	LOGICAL_DELETE = 101,
-	LOGICAL_UPDATE = 102,
-
-	// -----------------------------
-	// Schema
-	// -----------------------------
-	LOGICAL_ALTER = 125,
-	LOGICAL_CREATE_TABLE = 126,
-	LOGICAL_CREATE_INDEX = 127,
-	LOGICAL_CREATE_SEQUENCE = 128,
-	LOGICAL_CREATE_VIEW = 129,
-	LOGICAL_CREATE_SCHEMA = 130,
-	LOGICAL_CREATE_MACRO = 131,
-	LOGICAL_DROP = 132,
-	LOGICAL_PRAGMA = 133,
-	LOGICAL_TRANSACTION = 134,
-	LOGICAL_CREATE_TYPE = 135,
-	LOGICAL_ATTACH = 136,
-	LOGICAL_DETACH = 137,
-
-	// -----------------------------
-	// Explain
-	// -----------------------------
-	LOGICAL_EXPLAIN = 150,
-
-	// -----------------------------
-	// Show
-	// -----------------------------
-	LOGICAL_SHOW = 160,
-
-	// -----------------------------
-	// Helpers
-	// -----------------------------
-	LOGICAL_PREPARE = 175,
-	LOGICAL_EXECUTE = 176,
-	LOGICAL_EXPORT = 177,
-	LOGICAL_VACUUM = 178,
-	LOGICAL_SET = 179,
-	LOGICAL_LOAD = 180,
-	LOGICAL_RESET = 181,
-
-	LOGICAL_EXTENSION_OPERATOR = 255
-};
-
-DUCKDB_API string LogicalOperatorToString(LogicalOperatorType type);
-
-} // namespace duckdb
-
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/planner/bound_parameter_map.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-namespace duckdb {
-
-struct BoundParameterData;
-
-using bound_parameter_map_t = unordered_map<idx_t, shared_ptr<BoundParameterData>>;
-
-} // namespace duckdb
-
-
-namespace duckdb {
-class ClientContext;
-class LogicalOperator;
-struct BoundParameterData;
-
-struct PlanDeserializationState {
-	PlanDeserializationState(ClientContext &context);
-	~PlanDeserializationState();
-
-	ClientContext &context;
-	bound_parameter_map_t parameter_data;
-};
-
-struct LogicalDeserializationState {
-	LogicalDeserializationState(PlanDeserializationState &gstate, LogicalOperatorType type,
-	                            vector<unique_ptr<LogicalOperator>> &children);
-
-	PlanDeserializationState &gstate;
-	LogicalOperatorType type;
-	vector<unique_ptr<LogicalOperator>> &children;
-};
-
-struct ExpressionDeserializationState {
-	ExpressionDeserializationState(PlanDeserializationState &gstate, ExpressionType type);
-
-	PlanDeserializationState &gstate;
-	ExpressionType type;
-};
-
-} // namespace duckdb
 
 
 namespace duckdb {
@@ -11089,19 +11292,17 @@ public:
 
 	hash_t Hash() const override;
 
-	bool Equals(const BaseExpression *other) const override {
+	bool Equals(const BaseExpression &other) const override {
 		if (!BaseExpression::Equals(other)) {
 			return false;
 		}
-		return return_type == ((Expression *)other)->return_type;
-	}
-
-	static bool Equals(const Expression *left, const Expression *right) {
-		return BaseExpression::Equals((const BaseExpression *)left, (const BaseExpression *)right);
+		return return_type == ((Expression &)other).return_type;
 	}
 	static bool Equals(const Expression &left, const Expression &right) {
-		return left.Equals(&right);
+		return left.Equals(right);
 	}
+	static bool Equals(const unique_ptr<Expression> &left, const unique_ptr<Expression> &right);
+	static bool ListEquals(const vector<unique_ptr<Expression>> &left, const vector<unique_ptr<Expression>> &right);
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;
 
@@ -11138,9 +11339,29 @@ public:
 	virtual ~BoundResultModifier();
 
 	ResultModifierType type;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast result modifier to type - result modifier type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct BoundOrderByNode {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::ORDER_MODIFIER;
+
 public:
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression);
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression,
@@ -11162,6 +11383,9 @@ public:
 
 class BoundLimitModifier : public BoundResultModifier {
 public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_MODIFIER;
+
+public:
 	BoundLimitModifier();
 
 	//! LIMIT
@@ -11176,18 +11400,28 @@ public:
 
 class BoundOrderModifier : public BoundResultModifier {
 public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::ORDER_MODIFIER;
+
+public:
 	BoundOrderModifier();
 
 	//! List of order nodes
 	vector<BoundOrderByNode> orders;
 
 	unique_ptr<BoundOrderModifier> Copy() const;
-	static bool Equals(const BoundOrderModifier *left, const BoundOrderModifier *right);
+	static bool Equals(const BoundOrderModifier &left, const BoundOrderModifier &right);
+	static bool Equals(const unique_ptr<BoundOrderModifier> &left, const unique_ptr<BoundOrderModifier> &right);
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BoundOrderModifier> Deserialize(Deserializer &source, PlanDeserializationState &state);
 };
 
 enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };
 
 class BoundDistinctModifier : public BoundResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::DISTINCT_MODIFIER;
+
 public:
 	BoundDistinctModifier();
 
@@ -11198,6 +11432,9 @@ public:
 };
 
 class BoundLimitPercentModifier : public BoundResultModifier {
+public:
+	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_PERCENT_MODIFIER;
+
 public:
 	BoundLimitPercentModifier();
 
@@ -11228,6 +11465,7 @@ public:
 
 
 
+
 namespace duckdb {
 
 struct AggregateInputData;
@@ -11240,7 +11478,7 @@ private:
 	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
 	                                   idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Operation<STATE_TYPE, OP>(states[i], aggr_input_data, i);
+			OP::template Operation<STATE_TYPE, OP>(*states[i], aggr_input_data, i);
 		}
 	}
 
@@ -11250,24 +11488,25 @@ private:
 
 		for (idx_t i = 0; i < count; i++) {
 			auto sidx = ssel.get_index(i);
-			OP::template Operation<STATE_TYPE, OP>(states[sidx], aggr_input_data, sidx);
+			OP::template Operation<STATE_TYPE, OP>(*states[sidx], aggr_input_data, sidx);
 		}
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryFlatLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
-		if (!mask.AllValid()) {
-			idx_t base_idx = 0;
+		if (OP::IgnoreNull() && !mask.AllValid()) {
+			AggregateUnaryInput input(aggr_input_data, mask);
+			auto &base_idx = input.input_idx;
+			base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
 			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 				auto validity_entry = mask.GetValidityEntry(entry_idx);
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
-				if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
+				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
 					for (; base_idx < next; base_idx++) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], aggr_input_data, idata,
-						                                                   mask, base_idx);
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], idata[base_idx], input);
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
@@ -11278,46 +11517,52 @@ private:
 					idx_t start = base_idx;
 					for (; base_idx < next; base_idx++) {
 						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], aggr_input_data, idata,
-							                                                   mask, base_idx);
+							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], idata[base_idx],
+							                                                   input);
 						}
 					}
 				}
 			}
 		} else {
-			for (idx_t i = 0; i < count; i++) {
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[i], aggr_input_data, idata, mask, i);
+			AggregateUnaryInput input(aggr_input_data, mask);
+			auto &i = input.input_idx;
+			for (i = 0; i < count; i++) {
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[i], idata[i], input);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryScatterLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
 	                                    const SelectionVector &ssel, ValidityMask &mask, idx_t count) {
 		if (OP::IgnoreNull() && !mask.AllValid()) {
 			// potential NULL values and NULL values are ignored
+			AggregateUnaryInput input(aggr_input_data, mask);
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = isel.get_index(i);
+				input.input_idx = isel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				if (mask.RowIsValid(idx)) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[sidx], aggr_input_data, idata, mask, idx);
+				if (mask.RowIsValid(input.input_idx)) {
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], idata[input.input_idx], input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
+			AggregateUnaryInput input(aggr_input_data, mask);
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = isel.get_index(i);
+				input.input_idx = isel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[sidx], aggr_input_data, idata, mask, idx);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], idata[input.input_idx], input);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryFlatUpdateLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
-		idx_t base_idx = 0;
+		AggregateUnaryInput input(aggr_input_data, mask);
+		auto &base_idx = input.input_idx;
+		base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = mask.GetValidityEntry(entry_idx);
@@ -11325,7 +11570,7 @@ private:
 			if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
 				for (; base_idx < next; base_idx++) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, aggr_input_data, idata, mask, base_idx);
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[base_idx], input);
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
@@ -11336,8 +11581,7 @@ private:
 				idx_t start = base_idx;
 				for (; base_idx < next; base_idx++) {
 					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, aggr_input_data, idata, mask,
-						                                                   base_idx);
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[base_idx], input);
 					}
 				}
 			}
@@ -11345,77 +11589,80 @@ private:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryUpdateLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                   STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask,
 	                                   const SelectionVector &__restrict sel_vector) {
+		AggregateUnaryInput input(aggr_input_data, mask);
 		if (OP::IgnoreNull() && !mask.AllValid()) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel_vector.get_index(i);
-				if (mask.RowIsValid(idx)) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, aggr_input_data, idata, mask, idx);
+				input.input_idx = sel_vector.get_index(i);
+				if (mask.RowIsValid(input.input_idx)) {
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[input.input_idx], input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel_vector.get_index(i);
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, aggr_input_data, idata, mask, idx);
+				input.input_idx = sel_vector.get_index(i);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[input.input_idx], input);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryScatterLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
-	                                     B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
+	static inline void BinaryScatterLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                                     const B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
 	                                     const SelectionVector &asel, const SelectionVector &bsel,
 	                                     const SelectionVector &ssel, ValidityMask &avalidity,
 	                                     ValidityMask &bvalidity) {
+		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx)) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], aggr_input_data, adata, bdata,
-					                                                       avalidity, bvalidity, aidx, bidx);
+				if (avalidity.RowIsValid(input.lidx) && bvalidity.RowIsValid(input.ridx)) {
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*states[sidx], adata[input.lidx],
+					                                                       bdata[input.ridx], input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], aggr_input_data, adata, bdata,
-				                                                       avalidity, bvalidity, aidx, bidx);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*states[sidx], adata[input.lidx],
+				                                                       bdata[input.ridx], input);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
-	                                    B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
+	static inline void BinaryUpdateLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                                    const B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
 	                                    const SelectionVector &asel, const SelectionVector &bsel,
 	                                    ValidityMask &avalidity, ValidityMask &bvalidity) {
+		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
-				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx)) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, aggr_input_data, adata, bdata,
-					                                                       avalidity, bvalidity, aidx, bidx);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
+				if (avalidity.RowIsValid(input.lidx) && bvalidity.RowIsValid(input.ridx)) {
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*state, adata[input.lidx], bdata[input.ridx],
+					                                                       input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, aggr_input_data, adata, bdata, avalidity,
-				                                                       bvalidity, aidx, bidx);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*state, adata[input.lidx], bdata[input.ridx],
+				                                                       input);
 			}
 		}
 	}
@@ -11425,7 +11672,7 @@ public:
 	static void NullaryScatter(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			OP::template ConstantOperation<STATE_TYPE, OP>(*sdata, aggr_input_data, count);
+			OP::template ConstantOperation<STATE_TYPE, OP>(**sdata, aggr_input_data, count);
 		} else if (states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, aggr_input_data, count);
@@ -11438,7 +11685,7 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void NullaryUpdate(data_ptr_t state, AggregateInputData &aggr_input_data, idx_t count) {
-		OP::template ConstantOperation<STATE_TYPE, OP>((STATE_TYPE *)state, aggr_input_data, count);
+		OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(state), aggr_input_data, count);
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
@@ -11452,8 +11699,8 @@ public:
 			// regular constant: get first state
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*sdata, aggr_input_data, idata,
-			                                                           ConstantVector::Validity(input), count);
+			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(**sdata, *idata, input_data, count);
 		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
@@ -11464,9 +11711,9 @@ public:
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
 			states.ToUnifiedFormat(count, sdata);
-			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data,
-			                                             (STATE_TYPE **)sdata.data, *idata.sel, *sdata.sel,
-			                                             idata.validity, count);
+			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
+			                                             aggr_input_data, (STATE_TYPE **)sdata.data, *idata.sel,
+			                                             *sdata.sel, idata.validity, count);
 		}
 	}
 
@@ -11478,8 +11725,9 @@ public:
 				return;
 			}
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>((STATE_TYPE *)state, aggr_input_data, idata,
-			                                                           ConstantVector::Validity(input), count);
+			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(state), *idata,
+			                                                           input_data, count);
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
@@ -11491,8 +11739,9 @@ public:
 		default: {
 			UnifiedVectorFormat idata;
 			input.ToUnifiedFormat(count, idata);
-			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data, (STATE_TYPE *)state,
-			                                            count, idata.validity, *idata.sel);
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
+			                                            aggr_input_data, (STATE_TYPE *)state, count, idata.validity,
+			                                            *idata.sel);
 			break;
 		}
 		}
@@ -11506,9 +11755,9 @@ public:
 		b.ToUnifiedFormat(count, bdata);
 		states.ToUnifiedFormat(count, sdata);
 
-		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, aggr_input_data, (B_TYPE *)bdata.data,
-		                                                  (STATE_TYPE **)sdata.data, count, *adata.sel, *bdata.sel,
-		                                                  *sdata.sel, adata.validity, bdata.validity);
+		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
+		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+		    (STATE_TYPE **)sdata.data, count, *adata.sel, *bdata.sel, *sdata.sel, adata.validity, bdata.validity);
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
@@ -11518,9 +11767,9 @@ public:
 		a.ToUnifiedFormat(count, adata);
 		b.ToUnifiedFormat(count, bdata);
 
-		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, aggr_input_data, (B_TYPE *)bdata.data,
-		                                                 (STATE_TYPE *)state, count, *adata.sel, *bdata.sel,
-		                                                 adata.validity, bdata.validity);
+		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
+		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+		    (STATE_TYPE *)state, count, *adata.sel, *bdata.sel, adata.validity, bdata.validity);
 	}
 
 	template <class STATE_TYPE, class OP>
@@ -11530,7 +11779,7 @@ public:
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i], aggr_input_data);
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i], *tdata[i], aggr_input_data);
 		}
 	}
 
@@ -11542,17 +11791,41 @@ public:
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, *sdata, rdata,
-			                                               ConstantVector::Validity(result), 0);
+			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(**sdata, *rdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+			AggregateFinalizeData finalize_data(result, aggr_input_data);
 			for (idx_t i = 0; i < count; i++) {
-				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata,
-				                                               FlatVector::Validity(result), i + offset);
+				finalize_data.result_idx = i + offset;
+				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(*sdata[i], rdata[finalize_data.result_idx],
+				                                               finalize_data);
+			}
+		}
+	}
+
+	template <class STATE_TYPE, class OP>
+	static void VoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                         idx_t offset) {
+		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
+			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			OP::template Finalize<STATE_TYPE>(**sdata, finalize_data);
+		} else {
+			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+
+			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			for (idx_t i = 0; i < count; i++) {
+				finalize_data.result_idx = i + offset;
+				OP::template Finalize<STATE_TYPE>(*sdata[i], finalize_data);
 			}
 		}
 	}
@@ -11564,15 +11837,15 @@ public:
 
 		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - bias;
 		const auto &ivalid = FlatVector::Validity(input);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, (STATE *)state,
-		                                                    frame, prev, result, rid, bias);
+		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(
+		    idata, ifilter, ivalid, aggr_input_data, *reinterpret_cast<STATE *>(state), frame, prev, result, rid, bias);
 	}
 
 	template <class STATE_TYPE, class OP>
 	static void Destroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Destroy<STATE_TYPE>(aggr_input_data, sdata[i]);
+			OP::template Destroy<STATE_TYPE>(*sdata[i], aggr_input_data);
 		}
 	}
 };
@@ -11581,31 +11854,6 @@ public:
 
 
 namespace duckdb {
-
-enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
-//! Whether or not the input order influences the result of the aggregate
-enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
-
-class BoundAggregateExpression;
-
-struct AggregateInputData {
-	AggregateInputData(FunctionData *bind_data_p, Allocator &allocator_p)
-	    : bind_data(bind_data_p), allocator(allocator_p) {
-	}
-	FunctionData *bind_data;
-	Allocator &allocator;
-};
-
-struct AggregateStatisticsInput {
-	AggregateStatisticsInput(FunctionData *bind_data_p, vector<BaseStatistics> &child_stats_p,
-	                         NodeStatistics *node_stats_p)
-	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
-	}
-
-	FunctionData *bind_data;
-	vector<BaseStatistics> &child_stats;
-	NodeStatistics *node_stats;
-};
 
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
@@ -11641,7 +11889,7 @@ typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_m
 
 typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                       const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
                                                             AggregateFunction &function);
 
 class AggregateFunction : public BaseScalarFunction {
@@ -11780,7 +12028,7 @@ public:
 
 	template <class STATE, class OP>
 	static void StateInitialize(data_ptr_t state) {
-		OP::Initialize((STATE *)state);
+		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 
 	template <class STATE, class OP>
@@ -11844,6 +12092,12 @@ public:
 	static void StateFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                          idx_t offset) {
 		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, aggr_input_data, result, count, offset);
+	}
+
+	template <class STATE, class OP>
+	static void StateVoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                              idx_t offset) {
+		AggregateExecutor::VoidFinalize<STATE, OP>(states, aggr_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>
@@ -12732,6 +12986,32 @@ struct StatementProperties {
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/arrow_options.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+namespace duckdb {
+
+enum ArrowOffsetSize { REGULAR, LARGE };
+
+struct ArrowOptions {
+	explicit ArrowOptions(ArrowOffsetSize offset_size_p) : offset_size(offset_size_p) {
+	}
+	ArrowOptions(ArrowOffsetSize offset_size_p, string timezone_p) : offset_size(offset_size_p), time_zone(timezone_p) {
+	}
+	ArrowOptions() {
+	}
+	ArrowOffsetSize offset_size = ArrowOffsetSize::REGULAR;
+	string time_zone = "UTC";
+};
+} // namespace duckdb
+
 
 namespace duckdb {
 struct BoxRendererConfig;
@@ -12740,7 +13020,11 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {
+	ClientProperties(string time_zone_p, ArrowOffsetSize arrow_offset_size_p)
+	    : time_zone(std::move(time_zone_p)), arrow_offset_size(arrow_offset_size_p) {
+	}
 	string time_zone;
+	ArrowOffsetSize arrow_offset_size;
 };
 
 class BaseQueryResult {
@@ -12810,6 +13094,23 @@ public:
 	CurrentChunk current_chunk;
 
 public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+public:
 	//! Returns the name of the column for the given index
 	DUCKDB_API const string &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
@@ -12844,6 +13145,7 @@ public:
 		}
 	}
 
+	static ArrowOptions GetArrowOptions(QueryResult &query_result);
 	static string GetConfigTimezone(QueryResult &query_result);
 
 private:
@@ -12933,6 +13235,9 @@ namespace duckdb {
 class ClientContext;
 
 class MaterializedQueryResult : public QueryResult {
+public:
+	static constexpr const QueryResultType TYPE = QueryResultType::MATERIALIZED_RESULT;
+
 public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
@@ -13393,7 +13698,7 @@ struct ExpressionHashFunction {
 template <class T>
 struct ExpressionEquality {
 	bool operator()(const reference<T> &a, const reference<T> &b) const {
-		return a.get().Equals(&b.get());
+		return a.get().Equals(b.get());
 	}
 };
 
@@ -13638,9 +13943,9 @@ namespace duckdb_hll {
 #define HLL_C_OK  0
 #define HLL_C_ERR -1
 
-typedef struct {
+struct robj {
 	void *ptr;
-} robj;
+};
 
 //! Create a new empty HyperLogLog object
 robj *hll_create(void);
@@ -13675,6 +13980,10 @@ void AddToSingleLogInternal(UnifiedVectorFormat &vdata, idx_t count, uint64_t in
 
 // LICENSE_CHANGE_END
 
+
+namespace duckdb_hll {
+struct robj;
+}
 
 namespace duckdb {
 
@@ -13722,9 +14031,9 @@ public:
 	void AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
 
 private:
-	explicit HyperLogLog(void *hll);
+	explicit HyperLogLog(duckdb_hll::robj *hll);
 
-	void *hll;
+	duckdb_hll::robj *hll;
 	mutex lock;
 };
 } // namespace duckdb
@@ -13823,6 +14132,23 @@ public:
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &source);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (filter_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast table to type - table filter type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (filter_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast table to type - table filter type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class TableFilterSet {
@@ -14165,12 +14491,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -14182,12 +14508,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -14203,12 +14529,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -14223,12 +14549,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -14244,12 +14570,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -14261,12 +14587,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -14323,6 +14649,9 @@ class MetaPipeline;
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan
 class PhysicalOperator {
+public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
+
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
@@ -14477,7 +14806,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -14485,7 +14814,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -14541,6 +14870,7 @@ private:
 //
 //
 //===----------------------------------------------------------------------===//
+
 
 
 
@@ -14603,7 +14933,7 @@ public:
 	string GetName() const override;
 	string ToString() const override;
 
-	static bool Equal(const ColumnRefExpression *a, const ColumnRefExpression *b);
+	static bool Equal(const ColumnRefExpression &a, const ColumnRefExpression &b);
 	hash_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
@@ -14825,12 +15155,12 @@ public:
 		static_assert(std::is_trivially_destructible<T>(), "WriteField object must be trivially destructible");
 
 		AddField();
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		WriteStringLen((const_data_ptr_t)val.c_str(), val.size());
+		WriteStringLen(const_data_ptr_cast(val.c_str()), val.size());
 	}
 	void WriteStringLen(const_data_ptr_t val, idx_t len) {
 		AddField();
@@ -14926,7 +15256,7 @@ public:
 private:
 	template <class T>
 	void Write(const T &element) {
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size);
@@ -15195,7 +15525,7 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
@@ -15426,8 +15756,8 @@ protected:
 	                          const LogicalType &list_child_type);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
-	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
+	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
 	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type);
@@ -15513,9 +15843,29 @@ public:
 	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 	virtual optional_ptr<StandardEntry> GetStandardEntry();
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (binding_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast binding to type - binding type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (binding_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast binding to type - binding type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct EntryBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::CATALOG_ENTRY;
+
 public:
 	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
 	             StandardEntry &entry);
@@ -15528,6 +15878,10 @@ public:
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::TABLE;
+
+public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
 	             vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
 	             bool add_row_id = false);
@@ -15552,6 +15906,8 @@ protected:
 //! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
 //! parameters.
 struct DummyBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::DUMMY;
 	// NOTE: changing this string conflicts with the storage version
 	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
@@ -15612,7 +15968,7 @@ public:
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
 	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
-	BindResult BindColumn(PositionalReferenceExpression &ref, idx_t depth);
+	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &table_name, const string &column_name);
 
@@ -15652,7 +16008,7 @@ public:
 	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery);
 	//! Adds a binding to a catalog entry with a given alias to the BindContext.
 	void AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
-	                     const vector<LogicalType> &types, StandardEntry *entry);
+	                     const vector<LogicalType> &types, StandardEntry &entry);
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
 	                       const vector<LogicalType> &types);
@@ -15806,6 +16162,11 @@ public:
 		return true;
 	}
 
+	//! Allows LogicalOperators to opt out of serialization
+	virtual bool SupportSerialization() const {
+		return true;
+	};
+
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;
 
@@ -15819,7 +16180,7 @@ public:
 		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -15827,11 +16188,10 @@ public:
 		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb
-
 
 
 
@@ -15850,12 +16210,12 @@ struct TableFunctionInfo {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -15874,12 +16234,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -15889,12 +16249,12 @@ struct LocalTableFunctionState {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -16023,7 +16383,7 @@ typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 typedef void (*table_function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                            const TableFunction &function);
-typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
                                                                  TableFunction &function);
 
 class TableFunction : public SimpleNamedParameterFunction {
@@ -16084,6 +16444,7 @@ public:
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
+	bool verify_serialization = true;
 
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
@@ -16536,6 +16897,9 @@ class PendingQueryResult : public BaseQueryResult {
 	friend class ClientContext;
 
 public:
+	static constexpr const QueryResultType TYPE = QueryResultType::PENDING_RESULT;
+
+public:
 	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
 	                              vector<LogicalType> types, bool allow_stream_result);
 	DUCKDB_API explicit PendingQueryResult(PreservedError error_message);
@@ -16960,13 +17324,13 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -17239,7 +17603,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -17247,7 +17611,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb
@@ -17736,12 +18100,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -18070,6 +18434,9 @@ class PreparedStatementData;
 
 class StreamQueryResult : public QueryResult {
 	friend class ClientContext;
+
+public:
+	static constexpr const QueryResultType TYPE = QueryResultType::STREAM_RESULT;
 
 public:
 	//! Create a successful StreamQueryResult. StreamQueryResults should always be successful initially (it makes no
@@ -21223,6 +21590,9 @@ namespace duckdb {
 //! SQLStatement is the base class of any type of SQL statement.
 class SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::INVALID_STATEMENT;
+
+public:
 	explicit SQLStatement(StatementType type) : type(type) {
 	}
 	virtual ~SQLStatement() {
@@ -21256,18 +21626,18 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		if (type != TARGET::TYPE) {
+		if (type != TARGET::TYPE && TARGET::TYPE != StatementType::INVALID_STATEMENT) {
 			throw InternalException("Failed to cast statement to type - statement type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		if (type != TARGET::TYPE) {
+		if (type != TARGET::TYPE && TARGET::TYPE != StatementType::INVALID_STATEMENT) {
 			throw InternalException("Failed to cast statement to type - statement type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb
@@ -21441,6 +21811,18 @@ public:
 
 protected:
 	DUCKDB_API string RenderWhitespace(idx_t depth);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 } // namespace duckdb
@@ -21853,6 +22235,17 @@ struct FunctionLocalState;
 //! Extra data that can be attached to a bind function of a cast, and is available during binding
 struct BindCastInfo {
 	DUCKDB_API virtual ~BindCastInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! Extra data that can be returned by the bind of a cast, and is available during execution of a cast
@@ -21864,12 +22257,12 @@ struct BoundCastData {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -22543,7 +22936,8 @@ public:
 	string BaseToString(string result, const vector<string> &column_name_alias) const;
 	void Print();
 
-	virtual bool Equals(const TableRef *other) const;
+	virtual bool Equals(const TableRef &other) const;
+	static bool Equals(const unique_ptr<TableRef> &left, const unique_ptr<TableRef> &right);
 
 	virtual unique_ptr<TableRef> Copy() = 0;
 
@@ -22565,7 +22959,7 @@ public:
 		if (type != TARGET::TYPE && TARGET::TYPE != TableReferenceType::INVALID) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -22573,7 +22967,7 @@ public:
 		if (type != TARGET::TYPE && TARGET::TYPE != TableReferenceType::INVALID) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb
@@ -22612,7 +23006,7 @@ public:
 	//! deserialization is not possible
 	static unique_ptr<SelectStatement> Deserialize(Deserializer &source);
 	//! Whether or not the statements are equivalent
-	bool Equals(const SQLStatement *other) const;
+	bool Equals(const SQLStatement &other) const;
 
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<SelectStatement> FormatDeserialize(FormatDeserializer &deserializer);
@@ -22717,7 +23111,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast query node to type - query node type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -22725,7 +23119,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast query node to type - query node type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -22782,7 +23176,7 @@ public:
 	string ToString() const override;
 	string GetName() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<Expression> Copy() override;
@@ -23168,6 +23562,7 @@ public:
 } // namespace duckdb
 
 
+
 namespace duckdb {
 class BufferPool;
 class CastFunctionSet;
@@ -23274,6 +23669,8 @@ struct DBConfigOptions {
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
+	//! Whether Arrow Arrays use Large or Regular buffers
+	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -23290,6 +23687,8 @@ struct DBConfigOptions {
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
+	//! Whether or not the configuration settings can be altered
+	bool lock_configuration = false;
 	//! Whether to print bindings when printing the plan (debug mode only)
 	static bool debug_print_bindings;
 
@@ -24843,6 +25242,8 @@ typedef AdbcStatusCode (*AdbcDriverInitFunc)(int version, void *driver, struct A
 
 
 
+#include <string>
+
 namespace duckdb_adbc {
 
 AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error);
@@ -24915,6 +25316,9 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
                                           struct AdbcPartitions *partitions, int64_t *rows_affected,
                                           struct AdbcError *error);
 
+void SetError(struct AdbcError *error, const std::string &message);
+
+void InitiliazeADBCError(AdbcError *error);
 } // namespace duckdb_adbc
 //===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -24928,24 +25332,6 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
 
 
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/arrow/arrow_options.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-namespace duckdb {
-
-enum ArrowOffsetSize { REGULAR, LARGE };
-
-struct ArrowOptions {
-	ArrowOffsetSize offset_size = ArrowOffsetSize::LARGE;
-};
-} // namespace duckdb
 
 
 struct ArrowSchema;
@@ -24954,9 +25340,8 @@ namespace duckdb {
 
 struct ArrowConverter {
 	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-	                                     const vector<string> &names, const string &config_timezone,
-	                                     ArrowOptions options = ArrowOptions());
-	DUCKDB_API static void ToArrowArray(DataChunk &input, ArrowArray *out_array, ArrowOptions options = ArrowOptions());
+	                                     const vector<string> &names, const ArrowOptions &options);
+	DUCKDB_API static void ToArrowArray(DataChunk &input, ArrowArray *out_array, ArrowOptions options);
 };
 
 } // namespace duckdb
@@ -25162,6 +25547,8 @@ public:
 
 	DUCKDB_API static dtime_t FromTimeMs(int64_t time_ms);
 	DUCKDB_API static dtime_t FromTimeNs(int64_t time_ns);
+
+	DUCKDB_API static bool IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds);
 
 private:
 	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict);
@@ -25558,12 +25945,12 @@ struct LocalFunctionData {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -25574,12 +25961,12 @@ struct GlobalFunctionData {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -25590,12 +25977,12 @@ struct PreparedBatchData {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
