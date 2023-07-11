@@ -732,14 +732,10 @@ func TestEmpty(t *testing.T) {
 
 func TestArrow(t *testing.T) {
 	t.Parallel()
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
+	db := openDB(t)
+	defer db.Close()
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	arrowQuery, err := NewArrowQueryFromConn(conn)
+	arrowQuery, err := NewArrowQueryFromDb(context.Background(), db)
 	require.NoError(t, err)
 
 	records, err := arrowQuery.QueryContext(context.Background(), `SELECT 1`)
@@ -753,14 +749,12 @@ func TestArrow(t *testing.T) {
 }
 
 func BenchmarkArrow(b *testing.B) {
-	c, err := NewConnector("", nil)
+	db, err := sql.Open("duckdb", "")
 	require.NoError(b, err)
+	require.NoError(b, db.Ping())
+	defer db.Close()
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(b, err)
-	defer conn.Close()
-
-	arrowQuery, err := NewArrowQueryFromConn(conn)
+	arrowQuery, err := NewArrowQueryFromDb(context.Background(), db)
 	require.NoError(b, err)
 
 	fmt.Println("Running benchmark")
@@ -777,19 +771,13 @@ func BenchmarkArrow(b *testing.B) {
 
 func TestMultipleArrowRecords(t *testing.T) {
 	t.Parallel()
-	c, err := NewConnector("", nil)
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("CREATE TABLE integers AS SELECT * FROM range(0, 100000, 1) t(i);")
 	require.NoError(t, err)
 
-	db := sql.OpenDB(c)
-
-	_, err = db.Exec("CREATE TABLE integers AS SELECT * FROM range(0, 100000, 1) t(i);")
-	require.NoError(t, err)
-
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	arrowQuery, err := NewArrowQueryFromConn(conn)
+	arrowQuery, err := NewArrowQueryFromDb(context.Background(), db)
 	require.NoError(t, err)
 
 	records, err := arrowQuery.QueryContext(context.Background(), `SELECT i FROM integers ORDER BY i ASC`)
@@ -805,14 +793,10 @@ func TestMultipleArrowRecords(t *testing.T) {
 
 func TestEmptyArrow(t *testing.T) {
 	t.Parallel()
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
+	db := openDB(t)
+	defer db.Close()
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	arrowQuery, err := NewArrowQueryFromConn(conn)
+	arrowQuery, err := NewArrowQueryFromDb(context.Background(), db)
 	require.NoError(t, err)
 
 	records, err := arrowQuery.QueryContext(context.Background(), `SELECT 1 WHERE 1 = 0`)

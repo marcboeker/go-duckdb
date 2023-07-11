@@ -6,7 +6,7 @@ package duckdb
 import "C"
 import (
 	"context"
-	"database/sql/driver"
+	"database/sql"
 	"fmt"
 
 	"github.com/apache/arrow/go/v12/arrow"
@@ -14,23 +14,53 @@ import (
 
 // ArrowQuery holds the duckdb Arrow Query interface. It allows querying and receiving Arrow records.
 type ArrowQuery struct {
-	c *conn
+	db *sql.DB
 }
 
-// NewArrowQueryFromConn returns a new ArrowQuery from a DuckDB driver connection.
-func NewArrowQueryFromConn(driverConn driver.Conn) (*ArrowQuery, error) {
-	dbConn, ok := driverConn.(*conn)
-	if !ok {
-		return nil, fmt.Errorf("not a duckdb driver connection")
+// NewArrowQueryFromConn returns a new ArrowQuery from a DuckDB database.
+func NewArrowQueryFromDb(ctx context.Context, db *sql.DB) (*ArrowQuery, error) {
+	sqlConn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer sqlConn.Close()
+
+	err = sqlConn.Raw(func(driverConn any) error {
+		dbConn, ok := driverConn.(*conn)
+		if !ok {
+			return fmt.Errorf("not a duckdb driver connection")
+		}
+		if dbConn.closed {
+			return fmt.Errorf("database/sql/driver: misuse of duckdb driver: ArrowQuery after Close")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	if dbConn.closed {
-		panic("database/sql/driver: misuse of duckdb driver: ArrowQuery after Close")
-	}
-
-	return &ArrowQuery{c: dbConn}, nil
+	return &ArrowQuery{db: db}, nil
 }
 
 func (aq *ArrowQuery) QueryContext(ctx context.Context, query string) ([]arrow.Record, error) {
-	return aq.c.QueryArrowContext(ctx, query)
+	var results []arrow.Record
+	sqlConn, err := aq.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer sqlConn.Close()
+	err = sqlConn.Raw(func(driverConn any) error {
+		dbConn, ok := driverConn.(*conn)
+		if !ok {
+			return fmt.Errorf("not a duckdb driver connection")
+		}
+		if dbConn.closed {
+			return fmt.Errorf("database/sql/driver: misuse of duckdb driver: ArrowQuery after Close")
+		}
+		var err error
+		results, err = dbConn.QueryArrowContext(ctx, query)
+		return err
+	})
+
+	return results, err
 }
