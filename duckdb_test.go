@@ -414,6 +414,14 @@ func TestDecimal(t *testing.T) {
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
 		compareDecimal(t, Decimal{Value: bigNumber, Width: 29, Scale: 20}, f)
 	})
+
+	t.Run("decimal to float64", func(t *testing.T) {
+		var d Decimal
+		require.NoError(t, db.QueryRow("SELECT 123.456::DECIMAL").Scan(&d))
+		f, err := d.Float64()
+		require.NoError(t, err)
+		require.Equal(t, float64(123.456), f)
+	})
 }
 
 func TestUUID(t *testing.T) {

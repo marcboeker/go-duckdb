@@ -85,3 +85,17 @@ type Decimal struct {
 	Scale uint8
 	Value *big.Int
 }
+
+func (d *Decimal) Float64() (float64, error) {
+	var x C.duckdb_decimal
+	x.width = C.uint8_t(d.Width)
+	x.scale = C.uint8_t(d.Scale)
+
+	value, err := hugeIntFromNative(d.Value)
+	if err != nil {
+		return 0, err
+	}
+
+	x.value = value
+	return float64(C.duckdb_decimal_to_double(x)), nil
+}
