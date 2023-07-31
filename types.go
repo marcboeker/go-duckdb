@@ -87,15 +87,10 @@ type Decimal struct {
 }
 
 func (d *Decimal) Float64() (float64, error) {
-	var x C.duckdb_decimal
-	x.width = C.uint8_t(d.Width)
-	x.scale = C.uint8_t(d.Scale)
-
-	value, err := hugeIntFromNative(d.Value)
-	if err != nil {
-		return 0, err
-	}
-
-	x.value = value
-	return float64(C.duckdb_decimal_to_double(x)), nil
+	scale := big.NewInt(int64(d.Scale))
+	factor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), scale, nil))
+	value := new(big.Float).SetInt(d.Value)
+	value.Quo(value, factor)
+	f, _ := value.Float64()
+	return f, nil
 }
