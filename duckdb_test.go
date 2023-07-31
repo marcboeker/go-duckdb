@@ -414,6 +414,27 @@ func TestDecimal(t *testing.T) {
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
 		compareDecimal(t, Decimal{Value: bigNumber, Width: 29, Scale: 20}, f)
 	})
+
+	t.Run("decimal to float64", func(t *testing.T) {
+		tests := []struct {
+			input string
+			want  float64
+		}{
+			{input: "1.23::DECIMAL(3, 2)", want: 1.23},
+			{input: "123.45::DECIMAL(5, 2)", want: 123.45},
+			{input: "123456789.01::DECIMAL(11, 2)", want: 123456789.01},
+			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: 1234567890123456789.234},
+			{input: "123456789.01234567890123456789::DECIMAL(29, 20)", want: 123456789.01234567890123456789},
+		}
+		for _, tc := range tests {
+			row := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input))
+			var fs Decimal
+			require.NoError(t, row.Scan(&fs))
+			f, err := fs.Float64()
+			require.NoError(t, err)
+			require.Equal(t, tc.want, f)
+		}
+	})
 }
 
 func TestUUID(t *testing.T) {
