@@ -430,9 +430,7 @@ func TestDecimal(t *testing.T) {
 			row := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input))
 			var fs Decimal
 			require.NoError(t, row.Scan(&fs))
-			f, err := fs.Float64()
-			require.NoError(t, err)
-			require.Equal(t, tc.want, f)
+			require.Equal(t, tc.want, fs.Float64())
 		}
 	})
 }
