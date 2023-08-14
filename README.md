@@ -80,7 +80,7 @@ if err != {
 }
 defer conn.Close()
 
-// Retrieve appender from connection.
+// Retrieve appender from connection (note that you have to create the table 'test' beforehand).
 appender, err := NewAppenderFromConn(conn, "", "test")
 if err != {
   ...
