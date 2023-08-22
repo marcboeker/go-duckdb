@@ -366,23 +366,24 @@ func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t
 func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Decimal, error) {
 	scale := C.duckdb_decimal_scale(ty)
 	width := C.duckdb_decimal_width(ty)
-	var value C.duckdb_hugeint
+	var nativeValue *big.Int
 	switch C.duckdb_decimal_internal_type(ty) {
 	case C.DUCKDB_TYPE_SMALLINT:
-		value.lower = C.uint64_t(get[uint16](vector, rowIdx))
+		nativeValue = big.NewInt(int64(get[int16](vector, rowIdx)))
 	case C.DUCKDB_TYPE_INTEGER:
-		value.lower = C.uint64_t(get[uint32](vector, rowIdx))
+		nativeValue = big.NewInt(int64(get[int32](vector, rowIdx)))
 	case C.DUCKDB_TYPE_BIGINT:
-		value.lower = C.uint64_t(get[uint64](vector, rowIdx))
+		nativeValue = big.NewInt(int64(get[int64](vector, rowIdx)))
 	case C.DUCKDB_TYPE_HUGEINT:
 		i := get[C.duckdb_hugeint](vector, rowIdx)
-		value.lower = i.lower
-		value.upper = i.upper
+		nativeValue = hugeIntToNative(C.duckdb_hugeint{
+			lower: i.lower,
+			upper: i.upper,
+		})
 	default:
 		return Decimal{}, errInvalidType
 	}
 
-	nativeValue := hugeIntToNative(value)
 	if nativeValue == nil {
 		return Decimal{}, fmt.Errorf("unable to convert hugeint to native type")
 	}
