@@ -1,4 +1,4 @@
-//go:build !duckdb_use_lib && (duckdb_from_source || !(darwin || (linux && (amd64 || arm64))))
+//go:build !(duckdb_use_lib || duckdb_use_staticlib) && (duckdb_from_source || !(darwin || (linux && (amd64 || arm64))))
 
 package duckdb
 
