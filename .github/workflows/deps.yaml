@@ -79,8 +79,6 @@ jobs:
         run: |
           rm -f deps/darwin_amd64/libduckdb.a
           rm -f deps/darwin_arm64/libduckdb.a
-          rm -f deps/linux_amd64/libduckdb.a
-          rm -f deps/linux_arm64/libduckdb.a
       - uses: actions/download-artifact@v3
         with:
           name: darwin_amd64
@@ -89,14 +87,6 @@ jobs:
         with:
           name: darwin_arm64
           path: deps/darwin_arm64
-      - uses: actions/download-artifact@v3
-        with:
-          name: linux_amd64
-          path: deps/linux_amd64
-      - uses: actions/download-artifact@v3
-        with:
-          name: linux_arm64
-          path: deps/linux_arm64
       - name: Push static libraries
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
