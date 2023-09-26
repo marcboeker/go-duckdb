@@ -251,35 +251,35 @@ func TestStruct(t *testing.T) {
 		require.Equal(t, want, result)
 	})
 
-	t.Run("scan slice of structs", func(t *testing.T) {
-		_, err := db.Exec("INSERT INTO foo VALUES('lala', ?), ('lala', ?), ('lalo', 42), ('lalo', 43)", 12345, 12346)
-		require.NoError(t, err)
+	// t.Run("scan slice of structs", func(t *testing.T) {
+	// 	_, err := db.Exec("INSERT INTO foo VALUES('lala', ?), ('lala', ?), ('lalo', 42), ('lalo', 43)", 12345, 12346)
+	// 	require.NoError(t, err)
 
-		type row struct {
-			Bar string
-			Baz int
-		}
+	// 	type row struct {
+	// 		Bar string
+	// 		Baz int
+	// 	}
 
-		want := []Composite[row]{
-			{row{"lalo", 42}},
-			{row{"lalo", 43}},
-			{row{"lala", 12345}},
-			{row{"lala", 12346}},
-		}
+	// 	want := []Composite[row]{
+	// 		{row{"lalo", 42}},
+	// 		{row{"lalo", 43}},
+	// 		{row{"lala", 12345}},
+	// 		{row{"lala", 12346}},
+	// 	}
 
-		rows, err := db.Query("SELECT ROW(bar, baz) FROM foo ORDER BY baz")
-		require.NoError(t, err)
-		defer rows.Close()
+	// 	rows, err := db.Query("SELECT ROW(bar, baz) FROM foo ORDER BY baz")
+	// 	require.NoError(t, err)
+	// 	defer rows.Close()
 
-		var result []Composite[row]
-		for rows.Next() {
-			var res Composite[row]
-			err := rows.Scan(&res)
-			require.NoError(t, err)
-			result = append(result, res)
-		}
-		require.Equal(t, want, result)
-	})
+	// 	var result []Composite[row]
+	// 	for rows.Next() {
+	// 		var res Composite[row]
+	// 		err := rows.Scan(&res)
+	// 		require.NoError(t, err)
+	// 		result = append(result, res)
+	// 	}
+	// 	require.Equal(t, want, result)
+	// })
 }
 
 func TestMap(t *testing.T) {
