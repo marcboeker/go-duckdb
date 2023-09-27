@@ -203,11 +203,12 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)
 
-	ready := false
-	for !ready {
+	for {
 		select {
 		// if context is cancelled or deadline exceeded, don't execute further
 		case <-ctx.Done():
+			// interrupt the running query
+			C.duckdb_interrupt(*s.c.con)
 			return nil, ctx.Err()
 		default:
 			// continue
