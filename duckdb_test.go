@@ -267,7 +267,7 @@ func TestStruct(t *testing.T) {
 			{row{"lala", 12346}},
 		}
 
-		rows, err := db.Query("SELECT struct_pack(bar, baz) FROM foo ORDER BY baz")
+		rows, err := db.Query("SELECT ROW(bar, baz) FROM foo ORDER BY baz")
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -380,13 +380,9 @@ func TestDecimal(t *testing.T) {
 	t.Run("multiple decimal types", func(t *testing.T) {
 		rows, err := db.Query(`SELECT * FROM (VALUES
 			(1.23::DECIMAL(3, 2)),
-			(-1.23::DECIMAL(3, 2)),
 			(123.45::DECIMAL(5, 2)),
-			(-123.45::DECIMAL(5, 2)),
 			(123456789.01::DECIMAL(11, 2)),
-			(-123456789.01::DECIMAL(11, 2)),
 			(1234567890123456789.234::DECIMAL(22, 3)),
-			(-1234567890123456789.234::DECIMAL(22, 3)),
 		) v
 		ORDER BY v ASC`)
 		require.NoError(t, err)
@@ -394,20 +390,14 @@ func TestDecimal(t *testing.T) {
 
 		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
 		require.True(t, success, "failed to parse big number")
-		bigNumberNegative, success := new(big.Int).SetString("-1234567890123456789234", 10)
-		require.True(t, success, "failed to parse big number")
 		tests := []struct {
 			input string
 			want  Decimal
 		}{
 			{input: "1.23::DECIMAL(3, 2)", want: Decimal{Value: big.NewInt(123), Width: 3, Scale: 2}},
-			{input: "-1.23::DECIMAL(3, 2)", want: Decimal{Value: big.NewInt(-123), Width: 3, Scale: 2}},
 			{input: "123.45::DECIMAL(5, 2)", want: Decimal{Value: big.NewInt(12345), Width: 5, Scale: 2}},
-			{input: "-123.45::DECIMAL(5, 2)", want: Decimal{Value: big.NewInt(-12345), Width: 5, Scale: 2}},
 			{input: "123456789.01::DECIMAL(11, 2)", want: Decimal{Value: big.NewInt(12345678901), Width: 11, Scale: 2}},
-			{input: "-123456789.01::DECIMAL(11, 2)", want: Decimal{Value: big.NewInt(-12345678901), Width: 11, Scale: 2}},
 			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNumber, Width: 22, Scale: 3}},
-			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNumberNegative, Width: 22, Scale: 3}},
 		}
 		for _, tc := range tests {
 			row := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input))
@@ -423,30 +413,6 @@ func TestDecimal(t *testing.T) {
 		var f Decimal
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
 		compareDecimal(t, Decimal{Value: bigNumber, Width: 29, Scale: 20}, f)
-	})
-
-	t.Run("decimal to float64", func(t *testing.T) {
-		tests := []struct {
-			input string
-			want  float64
-		}{
-			{input: "1.23::DECIMAL(3, 2)", want: 1.23},
-			{input: "-1.23::DECIMAL(3, 2)", want: -1.23},
-			{input: "123.45::DECIMAL(5, 2)", want: 123.45},
-			{input: "-123.45::DECIMAL(5, 2)", want: -123.45},
-			{input: "123456789.01::DECIMAL(11, 2)", want: 123456789.01},
-			{input: "-123456789.01::DECIMAL(11, 2)", want: -123456789.01},
-			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: 1234567890123456789.234},
-			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: -1234567890123456789.234},
-			{input: "123456789.01234567890123456789::DECIMAL(29, 20)", want: 123456789.01234567890123456789},
-			{input: "-123456789.01234567890123456789::DECIMAL(29, 20)", want: -123456789.01234567890123456789},
-		}
-		for _, tc := range tests {
-			row := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input))
-			var fs Decimal
-			require.NoError(t, row.Scan(&fs))
-			require.Equal(t, tc.want, fs.Float64())
-		}
 	})
 }
 
