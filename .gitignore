@@ -2,5 +2,6 @@
 .DS_Store
 run.sh
 duckdb/
+duckdb-src/
 /lib
 .idea
