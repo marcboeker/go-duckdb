@@ -7,9 +7,7 @@ on:
       - master
     paths:
       - ".github/workflows/**"
-      - "duckdb.cpp"
-      - "duckdb.h"
-      - "duckdb.hpp"
+      - "lib/**"
 jobs:
   darwin_amd64:
     runs-on: macos-latest
