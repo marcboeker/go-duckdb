@@ -1,4 +1,4 @@
-DUCKDB_VERSION=0.8.1
+DUCKDB_VERSION=0.9.0
 
 .PHONY: install
 install:
@@ -14,11 +14,20 @@ test:
 
 .PHONY: deps.source
 deps.source:
-	curl -Lo libduckdb.zip https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/libduckdb-src.zip
-	unzip -o libduckdb.zip
-	rm libduckdb.zip
-	echo '#ifdef GODUCKDB_FROM_SOURCE' > duckdb.hpp.tmp; cat duckdb.hpp >> duckdb.hpp.tmp; echo '\n#endif' >> duckdb.hpp.tmp; mv duckdb.hpp.tmp duckdb.hpp
-	echo '#ifdef GODUCKDB_FROM_SOURCE' > duckdb.cpp.tmp; cat duckdb.cpp >> duckdb.cpp.tmp; echo '\n#endif' >> duckdb.cpp.tmp; mv duckdb.cpp.tmp duckdb.cpp
+	# We cannot download the tagged release as it thinks it is a dev release
+	# and therefore has no extensions available. They are only available in
+	# the tagged Git branch.
+	# curl -Lo duckdb.zip https://github.com/duckdb/duckdb/archive/refs/tags/v${DUCKDB_VERSION}.zip
+	# unzip -q -o duckdb.zip || true
+	# mv duckdb-${DUCKDB_VERSION} duckdb
+	# rm duckdb.zip
+
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
+	cd duckdb/ && python3 scripts/amalgamation.py --extended && cd ..
+	echo '#ifdef GODUCKDB_FROM_SOURCE' > duckdb.hpp.tmp; cat duckdb/src/amalgamation/duckdb.hpp >> duckdb.hpp.tmp; echo '\n#endif' >> duckdb.hpp.tmp; mv duckdb.hpp.tmp duckdb.hpp
+	echo '#ifdef GODUCKDB_FROM_SOURCE' > duckdb.cpp.tmp; cat duckdb/src/amalgamation/duckdb.cpp >> duckdb.cpp.tmp; echo '\n#endif' >> duckdb.cpp.tmp; mv duckdb.cpp.tmp duckdb.cpp
+	cp duckdb/src/include/duckdb.h duckdb.h
+	rm -rfv duckdb
 
 .PHONY: deps.darwin.amd64
 deps.darwin.amd64:

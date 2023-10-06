@@ -85,3 +85,12 @@ type Decimal struct {
 	Scale uint8
 	Value *big.Int
 }
+
+func (d *Decimal) Float64() float64 {
+	scale := big.NewInt(int64(d.Scale))
+	factor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), scale, nil))
+	value := new(big.Float).SetInt(d.Value)
+	value.Quo(value, factor)
+	f, _ := value.Float64()
+	return f
+}
