@@ -10,7 +10,7 @@ on:
       - "Makefile"
       - "cgo_*.go"
 jobs:
-  update_sources:
+  prepare:
       runs-on: ubuntu-20.04
       steps:
         - uses: actions/checkout@v3
@@ -20,8 +20,8 @@ jobs:
           run: make deps.sources
         - uses: actions/upload-artifact@v3
           with:
-            name: lib
-            path: lib/
+            name: duckdb
+            path: duckdb/
             retention-days: 1
         - uses: actions/upload-artifact@v3
           with:
@@ -29,7 +29,7 @@ jobs:
             path: duckdb.h
             retention-days: 1
   darwin_amd64:
-    needs: update_sources
+    needs: prepare
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -37,8 +37,8 @@ jobs:
           ref: ${{ github.head_ref }}
       - uses: actions/download-artifact@v3
         with:
-          name: lib
-          path: lib/
+          name: duckdb
+          path: duckdb/
       - shell: bash
         run: make deps.darwin.amd64
       - uses: actions/upload-artifact@v3
@@ -47,7 +47,7 @@ jobs:
           path: deps/darwin_amd64/libduckdb.a
           retention-days: 1
   darwin_arm64:
-    needs: update_sources
+    needs: prepare
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -55,8 +55,8 @@ jobs:
           ref: ${{ github.head_ref }}
       - uses: actions/download-artifact@v3
         with:
-          name: lib
-          path: lib/
+          name: duckdb
+          path: duckdb/
       - shell: bash
         run: make deps.darwin.arm64
       - uses: actions/upload-artifact@v3
@@ -65,7 +65,7 @@ jobs:
           path: deps/darwin_arm64/libduckdb.a
           retention-days: 1
   linux_amd64:
-    needs: update_sources
+    needs: prepare
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
@@ -73,8 +73,8 @@ jobs:
           ref: ${{ github.head_ref }}
       - uses: actions/download-artifact@v3
         with:
-          name: lib
-          path: lib/
+          name: duckdb
+          path: duckdb/
       - shell: bash
         run: make deps.linux.amd64
       - uses: actions/upload-artifact@v3
@@ -83,7 +83,7 @@ jobs:
           path: deps/linux_amd64/libduckdb.a
           retention-days: 1
   linux_arm64:
-    needs: update_sources
+    needs: prepare
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
@@ -91,8 +91,8 @@ jobs:
           ref: ${{ github.head_ref }}
       - uses: actions/download-artifact@v3
         with:
-          name: lib
-          path: lib/
+          name: duckdb
+          path: duckdb/
       - name: Install cross compile toolchain
         shell: bash
         run: |
