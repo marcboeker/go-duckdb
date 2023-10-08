@@ -76,7 +76,7 @@ jobs:
         shell: bash
         run: |
           sudo apt update
-          sudo apt install -y g++-aarch64-linux-gnu
+          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
       - shell: bash
         run: make deps.linux.arm64
       - uses: actions/upload-artifact@v3

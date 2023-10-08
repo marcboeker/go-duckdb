@@ -26,7 +26,7 @@ deps.darwin.amd64:
 
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
-	make -j 8 && \
+	CFLAGS="-target x86_64-apple-macos11" CXXFLAGS="-target x86_64-apple-macos11" make -j 2 && \
 	mkdir -p lib && \
 	for f in `find . -name '*.o'`; do cp $$f lib; done && \
 	cd lib && \
@@ -40,7 +40,7 @@ deps.darwin.arm64:
 
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
-	make -j 8 && \
+	CFLAGS="-target arm64-apple-macos11" CXXFLAGS="-target arm64-apple-macos11" make -j 2 && \
 	mkdir -p lib && \
 	for f in `find . -name '*.o'`; do cp $$f lib; done && \
 	cd lib && \
@@ -54,7 +54,7 @@ deps.linux.amd64:
 
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
-	make -j 8 && \
+	make -j 2 && \
 	mkdir -p lib && \
 	for f in `find . -name '*.o'`; do cp $$f lib; done && \
 	cd lib && \
@@ -64,11 +64,11 @@ deps.linux.amd64:
 
 .PHONY: deps.linux.arm64
 deps.linux.arm64:
-	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
+	# if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
 
-	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
+	# git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
-	make -j 8 && \
+	CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make -j 2 && \
 	mkdir -p lib && \
 	for f in `find . -name '*.o'`; do cp $$f lib; done && \
 	cd lib && \
