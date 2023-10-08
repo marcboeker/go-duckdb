@@ -16,7 +16,7 @@ SRC_DIR := duckdb/src/amalgamation
 FILES := $(wildcard $(SRC_DIR)/*)
 
 .PHONY: deps.source
-deps.source:
+deps.header:
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cp duckdb/src/include/duckdb.h duckdb.h
 
@@ -24,6 +24,7 @@ deps.source:
 deps.darwin.amd64:
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "darwin" ]; then echo "Error: must run build on darwin"; false; fi
 
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
 	make -j 8 && \
 	mkdir -p lib && \
@@ -37,6 +38,7 @@ deps.darwin.amd64:
 deps.darwin.arm64:
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "darwin" ]; then echo "Error: must run build on darwin"; false; fi
 
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
 	make -j 8 && \
 	mkdir -p lib && \
@@ -50,6 +52,7 @@ deps.darwin.arm64:
 deps.linux.amd64:
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
 
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
 	make -j 8 && \
 	mkdir -p lib && \
@@ -63,6 +66,7 @@ deps.linux.amd64:
 deps.linux.arm64:
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
 
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
 	make -j 8 && \
 	mkdir -p lib && \

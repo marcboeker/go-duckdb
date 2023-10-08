@@ -17,12 +17,7 @@ jobs:
           with:
             ref: ${{ github.head_ref }}
         - shell: bash
-          run: make deps.source
-        - uses: actions/upload-artifact@v3
-          with:
-            name: duckdb
-            path: duckdb/
-            retention-days: 1
+          run: make deps.header
         - uses: actions/upload-artifact@v3
           with:
             name: duckdb_h
@@ -35,10 +30,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
-      - uses: actions/download-artifact@v3
-        with:
-          name: duckdb
-          path: duckdb/
       - shell: bash
         run: make deps.darwin.amd64
       - uses: actions/upload-artifact@v3
@@ -53,10 +44,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
-      - uses: actions/download-artifact@v3
-        with:
-          name: duckdb
-          path: duckdb/
       - shell: bash
         run: make deps.darwin.arm64
       - uses: actions/upload-artifact@v3
@@ -71,10 +58,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
-      - uses: actions/download-artifact@v3
-        with:
-          name: duckdb
-          path: duckdb/
       - shell: bash
         run: make deps.linux.amd64
       - uses: actions/upload-artifact@v3
@@ -89,10 +72,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
-      - uses: actions/download-artifact@v3
-        with:
-          name: duckdb
-          path: duckdb/
       - name: Install cross compile toolchain
         shell: bash
         run: |
