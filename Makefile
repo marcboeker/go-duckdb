@@ -64,9 +64,9 @@ deps.linux.amd64:
 
 .PHONY: deps.linux.arm64
 deps.linux.arm64:
-	# if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
+	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "linux" ]; then echo "Error: must run build on linux"; false; fi
 
-	# git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
 	CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make -j 2 && \
 	mkdir -p lib && \
