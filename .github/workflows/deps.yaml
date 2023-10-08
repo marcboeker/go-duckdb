@@ -17,7 +17,7 @@ jobs:
           with:
             ref: ${{ github.head_ref }}
         - shell: bash
-          run: make deps.sources
+          run: make deps.source
         - uses: actions/upload-artifact@v3
           with:
             name: duckdb
