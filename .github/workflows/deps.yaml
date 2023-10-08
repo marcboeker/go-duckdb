@@ -101,7 +101,7 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: duckdb_h
-          path: duckdb.h
+          path: .
       - uses: actions/download-artifact@v3
         with:
           name: darwin_amd64
