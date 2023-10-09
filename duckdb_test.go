@@ -55,7 +55,7 @@ func TestOpen(t *testing.T) {
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
 
-		if !errors.Is(err, prepareConfigError) {
+		if !errors.Is(err, errPrepareConfig) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
@@ -1001,7 +1001,7 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	// args are only applied to the last statement
-	res, err = conn.ExecContext(context.Background(), "INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+	_, err = conn.ExecContext(context.Background(), "INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "incorrect argument count for command: have 0 want 2")
 
