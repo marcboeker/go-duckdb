@@ -15,7 +15,7 @@ test:
 SRC_DIR := duckdb/src/amalgamation
 FILES := $(wildcard $(SRC_DIR)/*)
 
-.PHONY: deps.source
+.PHONY: deps.header
 deps.header:
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cp duckdb/src/include/duckdb.h duckdb.h
