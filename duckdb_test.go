@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -1049,6 +1050,34 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	err = conn.Close()
+	require.NoError(t, err)
+}
+
+func TestParquetExtension(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("CREATE TABLE users (id int, name varchar, age int);")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO users VALUES (1, 'Jane', 30);")
+	require.NoError(t, err)
+
+	_, err = db.Exec("COPY (SELECT * FROM users) TO './users.parquet' (FORMAT 'parquet');")
+	require.NoError(t, err)
+
+	type res struct {
+		ID   int
+		Name string
+		Age  int
+	}
+	row := db.QueryRow("SELECT * FROM read_parquet('./users.parquet');")
+	var r res
+	err = row.Scan(&r.ID, &r.Name, &r.Age)
+	require.NoError(t, err)
+	require.Equal(t, res{ID: 1, Name: "Jane", Age: 30}, r)
+
+	err = os.Remove("./users.parquet")
 	require.NoError(t, err)
 }
 
