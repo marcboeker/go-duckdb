@@ -101,7 +101,7 @@ if err != {
 
 ## Linking DuckDB
 
-By default, `go-duckdb` statically links DuckDB into your binary. Statically linking DuckDB adds around 30 MB to your binary size. On Linux (Intel) and macOS (Intel and ARM), `go-duckdb` bundles pre-compiled static libraries for fast builds. On other platforms, it falls back to compiling DuckDB from source, which takes around 10 minutes. You can force `go-duckdb` to build DuckDB from source by passing `-tags=duckdb_from_source` to `go build`.
+By default, `go-duckdb` statically links DuckDB into your binary. Statically linking DuckDB adds around 30 MB to your binary size. On Linux (Intel) and macOS (Intel and ARM), `go-duckdb` bundles pre-compiled static libraries for fast builds.
 
 Alternatively, you can dynamically link DuckDB by passing `-tags=duckdb_use_lib` to `go build`. You must have a copy of `libduckdb` available on your system (`.so` on Linux or `.dylib` on macOS), which you can download from the DuckDB [releases page](https://github.com/duckdb/duckdb/releases). For example:
 

@@ -48,7 +48,7 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 
 	parsedDSN, err := url.Parse(dataSourceName)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", parseConfigError, err.Error())
+		return nil, fmt.Errorf("%w: %s", errParseConfig, err.Error())
 	}
 
 	connectionString := C.CString(extractConnectionString(dataSourceName))
@@ -60,7 +60,7 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 		defer C.duckdb_free(unsafe.Pointer(errMsg))
 
 		if state := C.duckdb_open_ext(connectionString, &db, nil, &errMsg); state == C.DuckDBError {
-			return nil, fmt.Errorf("%w: %s", openError, C.GoString(errMsg))
+			return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errMsg))
 		}
 	} else {
 		config, err := prepareConfig(parsedDSN.Query())
@@ -72,7 +72,7 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 		defer C.duckdb_free(unsafe.Pointer(errMsg))
 
 		if state := C.duckdb_open_ext(connectionString, &db, config, &errMsg); state == C.DuckDBError {
-			return nil, fmt.Errorf("%w: %s", openError, C.GoString(errMsg))
+			return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errMsg))
 		}
 	}
 
@@ -91,7 +91,7 @@ func (c *connector) Driver() driver.Driver {
 func (c *connector) Connect(context.Context) (driver.Conn, error) {
 	var con C.duckdb_connection
 	if state := C.duckdb_connect(*c.db, &con); state == C.DuckDBError {
-		return nil, openError
+		return nil, errOpen
 	}
 	conn := &conn{con: &con}
 
@@ -121,14 +121,14 @@ func extractConnectionString(dataSourceName string) string {
 func prepareConfig(options map[string][]string) (C.duckdb_config, error) {
 	var config C.duckdb_config
 	if state := C.duckdb_create_config(&config); state == C.DuckDBError {
-		return nil, createConfigError
+		return nil, errCreateConfig
 	}
 
 	for k, v := range options {
 		if len(v) > 0 {
 			state := C.duckdb_set_config(config, C.CString(k), C.CString(v[0]))
 			if state == C.DuckDBError {
-				return nil, fmt.Errorf("%w: affected config option %s=%s", prepareConfigError, k, v[0])
+				return nil, fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, k, v[0])
 			}
 		}
 	}
@@ -137,8 +137,8 @@ func prepareConfig(options map[string][]string) (C.duckdb_config, error) {
 }
 
 var (
-	openError          = errors.New("could not open database")
-	parseConfigError   = errors.New("could not parse config for database")
-	createConfigError  = errors.New("could not create config for database")
-	prepareConfigError = errors.New("could not set config for database")
+	errOpen          = errors.New("could not open database")
+	errParseConfig   = errors.New("could not parse config for database")
+	errCreateConfig  = errors.New("could not create config for database")
+	errPrepareConfig = errors.New("could not set config for database")
 )

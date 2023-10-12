@@ -7,11 +7,23 @@ on:
       - master
     paths:
       - ".github/workflows/**"
-      - "duckdb.cpp"
-      - "duckdb.h"
-      - "duckdb.hpp"
+      - "Makefile"
 jobs:
+  prepare:
+      runs-on: ubuntu-20.04
+      steps:
+        - uses: actions/checkout@v3
+          with:
+            ref: ${{ github.head_ref }}
+        - shell: bash
+          run: make deps.header
+        - uses: actions/upload-artifact@v3
+          with:
+            name: duckdb_h
+            path: duckdb.h
+            retention-days: 1
   darwin_amd64:
+    needs: prepare
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -25,6 +37,7 @@ jobs:
           path: deps/darwin_amd64/libduckdb.a
           retention-days: 1
   darwin_arm64:
+    needs: prepare
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -38,6 +51,7 @@ jobs:
           path: deps/darwin_arm64/libduckdb.a
           retention-days: 1
   linux_amd64:
+    needs: prepare
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
@@ -51,6 +65,7 @@ jobs:
           path: deps/linux_amd64/libduckdb.a
           retention-days: 1
   linux_arm64:
+    needs: prepare
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
@@ -60,7 +75,7 @@ jobs:
         shell: bash
         run: |
           sudo apt update
-          sudo apt install -y g++-aarch64-linux-gnu
+          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
       - shell: bash
         run: make deps.linux.arm64
       - uses: actions/upload-artifact@v3
@@ -81,6 +96,11 @@ jobs:
           rm -f deps/darwin_arm64/libduckdb.a
           rm -f deps/linux_amd64/libduckdb.a
           rm -f deps/linux_arm64/libduckdb.a
+          rm -f duckdb.h
+      - uses: actions/download-artifact@v3
+        with:
+          name: duckdb_h
+          path: .
       - uses: actions/download-artifact@v3
         with:
           name: darwin_amd64
