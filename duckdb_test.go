@@ -498,9 +498,20 @@ func TestENUMs(t *testing.T) {
 
 	var name string
 	var env string
-	require.NoError(t, db.QueryRow("SELECT name, CAST(environment AS text) FROM vehicles WHERE environment = ?", "Air").Scan(&name, &env))
+	require.NoError(t, db.QueryRow("SELECT name, environment FROM vehicles WHERE environment = ?", "Air").Scan(&name, &env))
 	require.Equal(t, "Aircraft", name)
 	require.Equal(t, "Air", env)
+
+	// enum list
+	_, err = db.Exec("CREATE TABLE all_enums (environments element[])")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO all_enums VALUES (['Air', 'Sea', 'Land'])")
+	require.NoError(t, err)
+
+	var row Composite[[]string]
+	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
+	require.Equal(t, 3, len(row.Get()))
 }
 
 func TestHugeInt(t *testing.T) {

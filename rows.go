@@ -147,6 +147,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return hugeIntToNative(hi), nil
 	case C.DUCKDB_TYPE_VARCHAR:
 		return scanString(vector, rowIdx), nil
+	case C.DUCKDB_TYPE_ENUM:
+		return scanENUM(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_BLOB:
 		return scanBlob(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DECIMAL:
@@ -210,6 +212,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case C.DUCKDB_TYPE_HUGEINT:
 		return reflect.TypeOf(big.NewInt(0))
 	case C.DUCKDB_TYPE_VARCHAR:
+		return reflect.TypeOf("")
+	case C.DUCKDB_TYPE_ENUM:
 		return reflect.TypeOf("")
 	case C.DUCKDB_TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
@@ -399,6 +403,27 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 		Micros: int64(i.micros),
 	}
 	return data, nil
+}
+
+func scanENUM(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (string, error) {
+	var nativeValue uint64
+	int_type := C.duckdb_enum_internal_type(ty)
+	switch int_type {
+	case C.DUCKDB_TYPE_UTINYINT:
+		nativeValue = uint64(get[uint8](vector, rowIdx))
+	case C.DUCKDB_TYPE_USMALLINT:
+		nativeValue = uint64(get[uint16](vector, rowIdx))
+	case C.DUCKDB_TYPE_UINTEGER:
+		nativeValue = uint64(get[uint32](vector, rowIdx))
+	case C.DUCKDB_TYPE_UBIGINT:
+		nativeValue = get[uint64](vector, rowIdx)
+	default:
+		return "", errInvalidType
+	}
+
+	val := C.duckdb_enum_dictionary_value(ty, (C.idx_t)(nativeValue))
+	defer C.duckdb_free(unsafe.Pointer(val))
+	return C.GoString(val), nil
 }
 
 var (
