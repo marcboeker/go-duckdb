@@ -406,22 +406,22 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 }
 
 func scanENUM(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (string, error) {
-	var nativeValue uint64
-	int_type := C.duckdb_enum_internal_type(ty)
-	switch int_type {
+	var idx uint64
+	internalType := C.duckdb_enum_internal_type(ty)
+	switch internalType {
 	case C.DUCKDB_TYPE_UTINYINT:
-		nativeValue = uint64(get[uint8](vector, rowIdx))
+		idx = uint64(get[uint8](vector, rowIdx))
 	case C.DUCKDB_TYPE_USMALLINT:
-		nativeValue = uint64(get[uint16](vector, rowIdx))
+		idx = uint64(get[uint16](vector, rowIdx))
 	case C.DUCKDB_TYPE_UINTEGER:
-		nativeValue = uint64(get[uint32](vector, rowIdx))
+		idx = uint64(get[uint32](vector, rowIdx))
 	case C.DUCKDB_TYPE_UBIGINT:
-		nativeValue = get[uint64](vector, rowIdx)
+		idx = get[uint64](vector, rowIdx)
 	default:
 		return "", errInvalidType
 	}
 
-	val := C.duckdb_enum_dictionary_value(ty, (C.idx_t)(nativeValue))
+	val := C.duckdb_enum_dictionary_value(ty, (C.idx_t)(idx))
 	defer C.duckdb_free(unsafe.Pointer(val))
 	return C.GoString(val), nil
 }

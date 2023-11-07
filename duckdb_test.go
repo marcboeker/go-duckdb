@@ -511,7 +511,7 @@ func TestENUMs(t *testing.T) {
 
 	var row Composite[[]string]
 	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
-	require.Equal(t, 3, len(row.Get()))
+	require.ElementsMatch(t, []string{"Air", "Land", "Sea"}, row.Get())
 }
 
 func TestHugeInt(t *testing.T) {
