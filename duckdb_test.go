@@ -484,6 +484,13 @@ func TestUUID(t *testing.T) {
 func TestENUMs(t *testing.T) {
 	t.Parallel()
 
+	type environment string
+	const (
+		Sea  environment = "Sea"
+		Air  environment = "Air"
+		Land environment = "Land"
+	)
+
 	db := openDB(t)
 	defer db.Close()
 
@@ -493,25 +500,25 @@ func TestENUMs(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE vehicles (name text, environment element)")
 	require.NoError(t, err)
 
-	_, err = db.Exec("INSERT INTO vehicles VALUES (?, ?), (?, ?)", "Aircraft", "Air", "Boat", "Sea")
+	_, err = db.Exec("INSERT INTO vehicles VALUES (?, ?), (?, ?)", "Aircraft", Air, "Boat", Sea)
 	require.NoError(t, err)
 
 	var name string
-	var env string
-	require.NoError(t, db.QueryRow("SELECT name, environment FROM vehicles WHERE environment = ?", "Air").Scan(&name, &env))
+	var env environment
+	require.NoError(t, db.QueryRow("SELECT name, environment FROM vehicles WHERE environment = ?", Air).Scan(&name, &env))
 	require.Equal(t, "Aircraft", name)
-	require.Equal(t, "Air", env)
+	require.Equal(t, Air, env)
 
 	// enum list
 	_, err = db.Exec("CREATE TABLE all_enums (environments element[])")
 	require.NoError(t, err)
 
-	_, err = db.Exec("INSERT INTO all_enums VALUES (['Air', 'Sea', 'Land'])")
+	_, err = db.Exec("INSERT INTO all_enums VALUES ([?, ?, ?])", Air, Land, Sea)
 	require.NoError(t, err)
 
-	var row Composite[[]string]
+	var row Composite[[]environment]
 	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
-	require.ElementsMatch(t, []string{"Air", "Land", "Sea"}, row.Get())
+	require.ElementsMatch(t, []environment{Air, Sea, Land}, row.Get())
 }
 
 func TestHugeInt(t *testing.T) {
