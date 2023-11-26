@@ -93,7 +93,7 @@ func (c *connector) Connect(context.Context) (driver.Conn, error) {
 	if state := C.duckdb_connect(*c.db, &con); state == C.DuckDBError {
 		return nil, errOpen
 	}
-	conn := &conn{con: &con}
+	conn := &Conn{con: &con}
 
 	// Call the connection init function if defined
 	if c.connInitFn != nil {
