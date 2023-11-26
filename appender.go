@@ -33,7 +33,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*
 		panic("database/sql/driver: misuse of duckdb driver: Appender after Close")
 	}
 
-	var schemastr *(C.char)
+	var schemastr *C.char
 	if schema != "" {
 		schemastr = C.CString(schema)
 		defer C.free(unsafe.Pointer(schemastr))
