@@ -277,5 +277,3 @@ func (a *Appender) appendChunks() error {
 	}
 	return nil
 }
-
-var errCouldNotAppend = errors.New("could not append parameter")
