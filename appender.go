@@ -154,5 +154,3 @@ func (a *Appender) AppendRowArray(args []driver.Value) error {
 
 	return nil
 }
-
-var errCouldNotAppend = errors.New("could not append parameter")
