@@ -65,7 +65,7 @@ func (a *Appender) Flush() error {
 	return nil
 }
 
-// Closes closes the appender.
+// Close closes the appender.
 func (a *Appender) Close() error {
 	if a.closed {
 		panic("database/sql/driver: misuse of duckdb driver: double Close of Appender")
