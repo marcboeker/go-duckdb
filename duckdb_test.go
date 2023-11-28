@@ -229,6 +229,62 @@ func TestQuery(t *testing.T) {
 	})
 }
 
+func TestQueryArrowContext(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+	createTable(db, t)
+
+	t.Run("simple", func(t *testing.T) {
+		_, err := db.Exec("INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+		require.NoError(t, err)
+
+		conn, err := db.Conn(context.Background())
+		require.NoError(t, err)
+		defer conn.Close()
+
+		err = conn.Raw(func(driverConn any) error {
+			duckdbConn, ok := driverConn.(*Conn)
+			require.True(t, ok)
+
+			rdr, err := duckdbConn.QueryArrowContext(context.Background(), "SELECT bar, baz FROM foo WHERE baz > ?", 12344)
+			require.NoError(t, err, "should query arrow")
+			defer rdr.Release()
+
+			for rdr.Next() {
+				rec := rdr.Record()
+				require.Equal(t, int64(1), rec.NumRows())
+				bs, err := rec.MarshalJSON()
+				require.NoError(t, err)
+
+				t.Log(string(bs))
+			}
+
+			require.NoError(t, rdr.Err())
+
+			return nil
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		conn, err := db.Conn(context.Background())
+		require.NoError(t, err)
+		defer conn.Close()
+
+		err = conn.Raw(func(driverConn any) error {
+			duckdbConn, ok := driverConn.(*Conn)
+			require.True(t, ok)
+
+			_, err := duckdbConn.QueryArrowContext(context.Background(), "select bar")
+			require.Error(t, err)
+
+			return nil
+		})
+		require.NoError(t, err)
+	})
+}
+
 func TestStruct(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)

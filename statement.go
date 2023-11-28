@@ -190,8 +190,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
 
-	err := s.start(args)
-	if err != nil {
+	if err := s.start(args); err != nil {
 		return nil, err
 	}
 
@@ -230,7 +229,46 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	return &res, nil
 }
 
+// executeArrow executes the prepared statement with the given bound parameters, and returns an arrow query result.
+// If the query fails to execute, returns error from DuckDB by calling duckdb_query_arrow_error.
+// Note that after running queryArrow, C.duckdb_destroy_arrow must be called on the result object if there is no error.
+func (s *stmt) executeArrow(args ...any) (*C.duckdb_arrow, error) {
+	if s.closed {
+		panic("database/sql/driver: misuse of duckdb driver: executeArrow after Close")
+	}
+
+	if err := s.start(anyArgsToNamedArgs(args)); err != nil {
+		return nil, err
+	}
+
+	var res C.duckdb_arrow
+	if state := C.duckdb_execute_prepared_arrow(*s.stmt, &res); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_query_arrow_error(res))
+		C.duckdb_destroy_arrow(&res)
+		return nil, fmt.Errorf("duckdb_execute_prepared_arrow: %v", dbErr)
+	}
+
+	return &res, nil
+}
+
+func anyArgsToNamedArgs(args []any) []driver.NamedValue {
+	if len(args) == 0 {
+		return nil
+	}
+
+	values := make([]driver.Value, len(args))
+	for i, arg := range args {
+		values[i] = arg
+	}
+
+	return argsToNamedArgs(values)
+}
+
 func argsToNamedArgs(values []driver.Value) []driver.NamedValue {
+	if len(values) == 0 {
+		return nil
+	}
+
 	args := make([]driver.NamedValue, len(values))
 	for n, param := range values {
 		args[n].Value = param
