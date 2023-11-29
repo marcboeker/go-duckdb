@@ -56,7 +56,7 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 
 	// Check for config options.
 	if len(parsedDSN.RawQuery) == 0 {
-		errMsg := C.CString("")
+		var errMsg *C.char
 		defer C.duckdb_free(unsafe.Pointer(errMsg))
 
 		if state := C.duckdb_open_ext(connectionString, &db, nil, &errMsg); state == C.DuckDBError {
@@ -68,7 +68,7 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 			return nil, err
 		}
 
-		errMsg := C.CString("")
+		var errMsg *C.char
 		defer C.duckdb_free(unsafe.Pointer(errMsg))
 
 		if state := C.duckdb_open_ext(connectionString, &db, config, &errMsg); state == C.DuckDBError {
