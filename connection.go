@@ -12,7 +12,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"unsafe"
 
@@ -166,7 +165,11 @@ func (c *Conn) QueryArrowContext(ctx context.Context, query string, args ...any)
 		}
 	}()
 
-	for {
+	rowCount := uint64(C.duckdb_arrow_row_count(*res))
+
+	var retrievedRows uint64
+
+	for retrievedRows < rowCount {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -175,14 +178,12 @@ func (c *Conn) QueryArrowContext(ctx context.Context, query string, args ...any)
 
 		rec, err := queryArrowArray(res, sc)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-
 			return nil, err
 		}
 
 		recs = append(recs, rec)
+
+		retrievedRows += uint64(rec.NumRows())
 	}
 
 	return array.NewRecordReader(sc, recs)
@@ -215,7 +216,6 @@ func queryArrowSchema(res *C.duckdb_arrow) (*arrow.Schema, error) {
 //
 // This function can be called multiple time to get next chunks,
 // which will free the previous out_array.
-// It will return io.EOF when the end of the result is reached.
 func queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Record, error) {
 	cdArr := (*cdata.CArrowArray)(unsafe.Pointer(C.malloc(C.sizeof_struct_ArrowArray)))
 	defer func() {
@@ -228,10 +228,6 @@ func queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Record, error
 		(*C.duckdb_arrow_array)(unsafe.Pointer(&cdArr)),
 	); state == C.DuckDBError {
 		return nil, errors.New("duckdb_query_arrow_array")
-	}
-
-	if (*C.struct_ArrowArray)(unsafe.Pointer(cdArr)).length == 0 {
-		return nil, io.EOF
 	}
 
 	rec, err := cdata.ImportCRecordBatchWithSchema(cdArr, sc)
