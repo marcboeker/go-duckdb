@@ -110,13 +110,13 @@ func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	return rows, err
 }
 
-// QueryArrowContext prepares statements, executes them, returns Apache Arrow array.RecordReader as a result of the last
+// QueryArrow prepares statements, executes them, returns Apache Arrow array.RecordReader as a result of the last
 // executed statement. Arguments are bound to the last statement.
 // https://duckdb.org/docs/api/c/api#arrow-interface
 // NOTE: Experimental interface.
-func (c *Conn) QueryArrowContext(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
+func (c *Conn) QueryArrow(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: QueryArrowContext after Close")
+		panic("database/sql/driver: misuse of duckdb driver: QueryArrow after Close")
 	}
 
 	stmts, size, err := c.extractStmts(query)

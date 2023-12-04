@@ -243,7 +243,7 @@ func TestQueryArrowContext(t *testing.T) {
 			duckdbConn, ok := driverConn.(*Conn)
 			require.True(t, ok)
 
-			rdr, err := duckdbConn.QueryArrowContext(context.Background(), "SELECT * FROM generate_series(1, 10)")
+			rdr, err := duckdbConn.QueryArrow(context.Background(), "SELECT * FROM generate_series(1, 10)")
 			require.NoError(t, err, "should query arrow")
 			defer rdr.Release()
 
@@ -272,7 +272,7 @@ func TestQueryArrowContext(t *testing.T) {
 			duckdbConn, ok := driverConn.(*Conn)
 			require.True(t, ok)
 
-			rdr, err := duckdbConn.QueryArrowContext(context.Background(), "SELECT * FROM generate_series(1, 10000)")
+			rdr, err := duckdbConn.QueryArrow(context.Background(), "SELECT * FROM generate_series(1, 10000)")
 			require.NoError(t, err, "should query arrow")
 			defer rdr.Release()
 
@@ -302,7 +302,7 @@ func TestQueryArrowContext(t *testing.T) {
 			duckdbConn, ok := driverConn.(*Conn)
 			require.True(t, ok)
 
-			rdr, err := duckdbConn.QueryArrowContext(context.Background(), "SELECT bar, baz FROM foo WHERE baz > ?", 12344)
+			rdr, err := duckdbConn.QueryArrow(context.Background(), "SELECT bar, baz FROM foo WHERE baz > ?", 12344)
 			require.NoError(t, err, "should query arrow")
 			defer rdr.Release()
 
@@ -331,7 +331,7 @@ func TestQueryArrowContext(t *testing.T) {
 			duckdbConn, ok := driverConn.(*Conn)
 			require.True(t, ok)
 
-			_, err := duckdbConn.QueryArrowContext(context.Background(), "select bar")
+			_, err := duckdbConn.QueryArrow(context.Background(), "select bar")
 			require.Error(t, err)
 
 			return nil
