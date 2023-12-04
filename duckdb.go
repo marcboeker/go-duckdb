@@ -126,14 +126,27 @@ func prepareConfig(options map[string][]string) (C.duckdb_config, error) {
 
 	for k, v := range options {
 		if len(v) > 0 {
-			state := C.duckdb_set_config(config, C.CString(k), C.CString(v[0]))
-			if state == C.DuckDBError {
-				return nil, fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, k, v[0])
+			if err := setConfig(config, k, v[0]); err != nil {
+				return nil, err
 			}
 		}
 	}
 
 	return config, nil
+}
+
+func setConfig(config C.duckdb_config, name, option string) error {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	cOption := C.CString(option)
+	defer C.free(unsafe.Pointer(cOption))
+
+	if state := C.duckdb_set_config(config, cName, cOption); state == C.DuckDBError {
+		return fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, name, option)
+	}
+
+	return nil
 }
 
 var (
