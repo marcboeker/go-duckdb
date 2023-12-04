@@ -191,7 +191,7 @@ func (c *Conn) QueryArrow(ctx context.Context, query string, args ...any) (array
 
 // queryArrowSchema fetches the internal arrow schema from the arrow result.
 func queryArrowSchema(res *C.duckdb_arrow) (*arrow.Schema, error) {
-	cdSchema := (*cdata.CArrowSchema)(unsafe.Pointer(C.malloc(C.sizeof_struct_ArrowSchema)))
+	cdSchema := (*cdata.CArrowSchema)(unsafe.Pointer(C.calloc(1, C.sizeof_struct_ArrowSchema)))
 	defer func() {
 		cdata.ReleaseCArrowSchema(cdSchema)
 		C.free(unsafe.Pointer(cdSchema))
@@ -217,7 +217,7 @@ func queryArrowSchema(res *C.duckdb_arrow) (*arrow.Schema, error) {
 // This function can be called multiple time to get next chunks,
 // which will free the previous out_array.
 func queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Record, error) {
-	cdArr := (*cdata.CArrowArray)(unsafe.Pointer(C.malloc(C.sizeof_struct_ArrowArray)))
+	cdArr := (*cdata.CArrowArray)(unsafe.Pointer(C.calloc(1, C.sizeof_struct_ArrowArray)))
 	defer func() {
 		cdata.ReleaseCArrowArray(cdArr)
 		C.free(unsafe.Pointer(cdArr))
