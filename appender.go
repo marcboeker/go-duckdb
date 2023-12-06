@@ -155,4 +155,104 @@ func (a *Appender) AppendRowArray(args []driver.Value) error {
 	return nil
 }
 
+// Create an array of duckdb types from a list of go types
+func createDuckDBTypes(args []driver.Value) *C.duckdb_logical_type {
+	defaultLogicalType := C.duckdb_create_logical_type(0)
+	argsTypes := C.malloc(C.size_t(len(args)) * C.size_t(unsafe.Sizeof(defaultLogicalType)))
+
+	a := (*[1<<30 - 1]C.duckdb_logical_type)(argsTypes)
+
+	for i, v := range args {
+		switch v := v.(type) {
+		case uint8:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UTINYINT)
+		case int8:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_TINYINT)
+		case uint16:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_USMALLINT)
+		case int16:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_SMALLINT)
+		case uint32:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UINTEGER)
+		case int32:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_INTEGER)
+		case uint64, uint:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UBIGINT)
+		case int64, int:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BIGINT)
+		case float32:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_FLOAT)
+		case float64:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_DOUBLE)
+		case bool:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN)
+		case []byte:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
+		case string:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
+		case time.Time:
+			a[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP)
+		default:
+			panic(fmt.Sprintf("couldn't append unsupported parameter %T", v))
+		}
+	}
+
+	return (*C.duckdb_logical_type)(argsTypes)
+}
+
+// AppendChunk loads a column of values into the appender. The values are provided as separate arguments.
+func (a *Appender) AppendChunk(args ...driver.Value) error {
+	return a.AppendChunkArray(args)
+}
+
+func (a *Appender) AppendChunkArray(inputColumns []driver.Value) error {
+	if a.closed {
+		panic("database/sql/driver: misuse of duckdb driver: use of closed Appender")
+	}
+
+	var dataChunk C.duckdb_data_chunk
+	// duckdb_create_data_chunk takes an array of duckdb_logical_type and a column count
+	dataChunk = C.duckdb_create_data_chunk(createDuckDBTypes(inputColumns), C.uint64_t(len(inputColumns)))
+	C.duckdb_data_chunk_set_size(dataChunk, C.uint64_t(len(inputColumns)))
+
+	for i, v := range inputColumns {
+		var vector = C.duckdb_data_chunk_get_vector(dataChunk, C.uint64_t(i))
+		var colData = C.duckdb_vector_get_data(vector)
+
+		if colData == nil {
+			return fmt.Errorf("couldn't append parameter %d", 0)
+		}
+
+		switch v := v.(type) {
+		case uint8:
+			writeableCol := (*[1<<30 - 1]C.uint8_t)(colData)
+			writeableCol[0] = C.uint8_t(v)
+		case int8:
+			writeableCol := (*[1<<30 - 1]C.int8_t)(colData)
+			writeableCol[0] = C.int8_t(v)
+		case int32:
+			writeableCol := (*[1<<30 - 1]C.int32_t)(colData)
+			writeableCol[0] = C.int32_t(v)
+		case int:
+			writeableCol := (*[1<<30 - 1]C.int64_t)(colData)
+			writeableCol[0] = C.int64_t(v)
+		case int64:
+			writeableCol := (*[1<<30 - 1]C.int64_t)(colData)
+			writeableCol[0] = C.int64_t(v)
+		}
+
+	}
+
+	var rv C.duckdb_state
+	//rv = C.duckdb_append_uint8(*a.appender, C.uint8_t(v))
+	rv = C.duckdb_append_data_chunk(*a.appender, dataChunk)
+
+	if rv == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
+		return fmt.Errorf("couldn't append parameter: %s", dbErr)
+	}
+
+	return nil
+}
+
 var errCouldNotAppend = errors.New("could not append parameter")
