@@ -965,7 +965,8 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 
 			var val any
 			require.True(t, rows.Next())
-			rows.Scan(&val)
+			err = rows.Scan(&val)
+			require.NoError(t, err)
 			require.Equal(t, test.value, val)
 		})
 	}
