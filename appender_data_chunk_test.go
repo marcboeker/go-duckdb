@@ -3,29 +3,29 @@ package duckdb
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
+	"time"
 )
 
 const (
 	testDataChunkTableDDL = `
 	create table test(
--- 		id BIGINT,
+		id BIGINT,
 		uint8 UTINYINT,
--- 		int8 TINYINT,
--- 		uint16 USMALLINT,
--- 		int16 SMALLINT,
--- 		uint32 UINTEGER,
--- 		int32 INTEGER,
--- 		uint64 UBIGINT,
--- 		int64 BIGINT,
--- 		timestamp TIMESTAMP,
--- 		float REAL,
--- 		double DOUBLE,
--- 		string VARCHAR,
--- 		bool BOOLEAN
+		int8 TINYINT,
+		uint16 USMALLINT,
+		int16 SMALLINT,
+		uint32 UINTEGER,
+		int32 INTEGER,
+		uint64 UBIGINT,
+		int64 BIGINT,
+		float REAL,
+		double DOUBLE,
+		bool BOOLEAN,
+		string VARCHAR,
+		timestamp TIMESTAMP,
 	);`
 )
 
@@ -44,20 +44,20 @@ func TestDataChunkAppender(t *testing.T) {
 	defer db.Close()
 
 	type dataRow struct {
-		//ID    int
-		UInt8 uint8
-		//Int8  int8
-		//UInt16    uint16
-		//Int16     int16
-		//UInt32    uint32
-		//Int32     int32
-		//UInt64    uint64
-		//Int64     int64
-		//Timestamp time.Time
-		//Float     float32
-		//Double    float64
-		//String    string
-		//Bool      bool
+		ID        int
+		UInt8     uint8
+		Int8      int8
+		UInt16    uint16
+		Int16     int16
+		UInt32    uint32
+		Int32     int32
+		UInt64    uint64
+		Int64     int64
+		Float     float32
+		Double    float64
+		Bool      bool
+		String    string
+		Timestamp time.Time
 	}
 
 	randRow := func(i int) dataRow {
@@ -67,25 +67,25 @@ func TestDataChunkAppender(t *testing.T) {
 			u64 = 9223372036854775807
 		}
 		return dataRow{
-			//ID:    i,
-			UInt8: uint8(randInt(0, 255)),
-			//Int8:  int8(randInt(-128, 127)),
-			//UInt16:    uint16(randInt(0, 65535)),
-			//Int16:     int16(randInt(-32768, 32767)),
-			//UInt32:    uint32(randInt(0, 4294967295)),
-			//Int32:     int32(randInt(-2147483648, 2147483647)),
-			//UInt64:    u64,
-			//Int64:     rand.Int63(),
-			//Timestamp: time.UnixMilli(randInt(0, time.Now().UnixMilli())).UTC(),
-			//Float:     rand.Float32(),
-			//Double:    rand.Float64(),
-			//String:    randString(int(randInt(0, 128))),
-			//Bool:      randBool(),
+			ID:        i,
+			UInt8:     uint8(randInt(0, 255)),
+			Int8:      int8(randInt(-128, 127)),
+			UInt16:    uint16(randInt(0, 65535)),
+			Int16:     int16(randInt(-32768, 32767)),
+			UInt32:    uint32(randInt(0, 4294967295)),
+			Int32:     int32(randInt(-2147483648, 2147483647)),
+			UInt64:    u64,
+			Int64:     rand.Int63(),
+			Float:     rand.Float32(),
+			Double:    rand.Float64(),
+			Bool:      randBool(),
+			String:    randString(int(randInt(0, 128))),
+			Timestamp: time.UnixMilli(randInt(0, time.Now().UnixMilli())).UTC(),
 		}
 	}
 
 	rows := []dataRow{}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 2048; i++ {
 		rows = append(rows, randRow(i))
 	}
 
@@ -97,22 +97,31 @@ func TestDataChunkAppender(t *testing.T) {
 	require.NoError(t, err)
 	defer appender.Close()
 
-	for _, row := range rows {
-		err = appender.AppendChunk(
-			//row.ID,
-			row.UInt8,
-			//row.Int8,
-		)
-		require.NoError(t, err)
-	}
+	err = appender.AppendRows(rows)
+	require.NoError(t, err)
 	err = appender.Flush()
 	require.NoError(t, err)
+
+	// FOR 1 ROW
+	//var (
+	//	id        int
+	//	small_int uint8
+	//)
+	//row := db.QueryRow(`SELECT * FROM test`)
+	//err = row.Scan(&id, &small_int)
+	//if errors.Is(err, sql.ErrNoRows) {
+	//	log.Println("no rows")
+	//} else if err != nil {
+	//	log.Fatal(err)
+	//}
+	//require.Equal(t, rows[0].ID, id)
+	//require.Equal(t, rows[0].UInt8, small_int)
 
 	res, err := db.QueryContext(
 		context.Background(), `
 			SELECT  *
-      FROM test,
---       ORDER BY id`,
+	 FROM test,
+	 --ORDER BY id`,
 	)
 	require.NoError(t, err)
 	defer res.Close()
@@ -121,22 +130,21 @@ func TestDataChunkAppender(t *testing.T) {
 	for res.Next() {
 		r := dataRow{}
 		err := res.Scan(
-			//&r.ID,
+			&r.ID,
 			&r.UInt8,
-			//&r.Int8,
-			//&r.UInt16,
-			//&r.Int16,
-			//&r.UInt32,
-			//&r.Int32,
-			//&r.UInt64,
-			//&r.Int64,
-			//&r.Timestamp,
-			//&r.Float,
-			//&r.Double,
-			//&r.String,
-			//&r.Bool,
+			&r.Int8,
+			&r.UInt16,
+			&r.Int16,
+			&r.UInt32,
+			&r.Int32,
+			&r.UInt64,
+			&r.Int64,
+			&r.Float,
+			&r.Double,
+			&r.Bool,
+			&r.String,
+			&r.Timestamp,
 		)
-		fmt.Println(r)
 		require.NoError(t, err)
 		require.Equal(t, rows[i], r)
 		i++
