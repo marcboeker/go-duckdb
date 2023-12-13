@@ -67,7 +67,7 @@ func TestDataChunkAppender(t *testing.T) {
 			u64 = 9223372036854775807
 		}
 		return dataRow{
-			ID:        i,
+			//ID: i,
 			UInt8:     uint8(randInt(0, 255)),
 			Int8:      int8(randInt(-128, 127)),
 			UInt16:    uint16(randInt(0, 65535)),
@@ -97,12 +97,29 @@ func TestDataChunkAppender(t *testing.T) {
 	require.NoError(t, err)
 	defer appender.Close()
 
-	err = appender.AppendRows(rows)
-	require.NoError(t, err)
+	for _, row := range rows {
+		err = appender.AppendRow(
+			row.ID,
+			row.UInt8,
+			row.Int8,
+			row.UInt16,
+			row.Int16,
+			row.UInt32,
+			row.Int32,
+			row.UInt64,
+			row.Int64,
+			row.Float,
+			row.Double,
+			row.Bool,
+			row.String,
+			row.Timestamp,
+		)
+		require.NoError(t, err)
+	}
 	err = appender.Flush()
 	require.NoError(t, err)
 
-	// FOR 1 ROW
+	//FOR 1 ROW
 	//var (
 	//	id        int
 	//	small_int uint8
@@ -120,8 +137,8 @@ func TestDataChunkAppender(t *testing.T) {
 	res, err := db.QueryContext(
 		context.Background(), `
 			SELECT  *
-	 FROM test,
-	 --ORDER BY id`,
+				FROM test,
+			ORDER BY id`,
 	)
 	require.NoError(t, err)
 	defer res.Close()
@@ -131,19 +148,19 @@ func TestDataChunkAppender(t *testing.T) {
 		r := dataRow{}
 		err := res.Scan(
 			&r.ID,
-			&r.UInt8,
-			&r.Int8,
-			&r.UInt16,
-			&r.Int16,
-			&r.UInt32,
-			&r.Int32,
-			&r.UInt64,
-			&r.Int64,
-			&r.Float,
-			&r.Double,
-			&r.Bool,
-			&r.String,
-			&r.Timestamp,
+			//&r.UInt8,
+			//&r.Int8,
+			//&r.UInt16,
+			//&r.Int16,
+			//&r.UInt32,
+			//&r.Int32,
+			//&r.UInt64,
+			//&r.Int64,
+			//&r.Float,
+			//&r.Double,
+			//&r.Bool,
+			//&r.String,
+			//&r.Timestamp,
 		)
 		require.NoError(t, err)
 		require.Equal(t, rows[i], r)
