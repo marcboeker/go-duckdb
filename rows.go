@@ -355,8 +355,13 @@ func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
 
 func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (map[string]any, error) {
 	data := map[string]any{}
+
 	for j := C.idx_t(0); j < C.duckdb_struct_type_child_count(ty); j++ {
-		name := C.GoString(C.duckdb_struct_type_child_name(ty, j))
+
+		ptrToChildName := C.duckdb_struct_type_child_name(ty, j)
+		name := C.GoString(ptrToChildName)
+		C.duckdb_free(unsafe.Pointer(ptrToChildName))
+
 		child := C.duckdb_struct_vector_get_child(vector, j)
 		value, err := scan(child, rowIdx)
 		if err != nil {
@@ -529,19 +534,19 @@ func logicalTypeNameStruct(lt C.duckdb_logical_type) string {
 	count := int(C.duckdb_struct_type_child_count(lt))
 	name := "STRUCT("
 	for i := 0; i < count; i++ {
-		// Child name
-		cn := C.duckdb_struct_type_child_name(lt, C.idx_t(i))
-		defer C.duckdb_free(unsafe.Pointer(cn))
 
-		// Child logical type
-		clt := C.duckdb_struct_type_child_type(lt, C.idx_t(i))
-		defer C.duckdb_destroy_logical_type(&clt)
+		ptrToChildName := C.duckdb_struct_type_child_name(lt, C.idx_t(i))
+		childName := C.GoString(ptrToChildName)
+		childLogicalType := C.duckdb_struct_type_child_type(lt, C.idx_t(i))
 
 		// Add comma if not at end of list
-		name += escapeStructFieldName(C.GoString(cn)) + " " + logicalTypeName(clt)
+		name += escapeStructFieldName(childName) + " " + logicalTypeName(childLogicalType)
 		if i != count-1 {
 			name += ", "
 		}
+
+		C.duckdb_free(unsafe.Pointer(ptrToChildName))
+		C.duckdb_destroy_logical_type(&childLogicalType)
 	}
 	return name + ")"
 }
