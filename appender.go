@@ -25,7 +25,7 @@ type Appender struct {
 	chunks           []C.duckdb_data_chunk
 	chunkVectors     []C.duckdb_vector
 	currentChunkIdx  int
-	currentChunkSize int
+	currentChunkSize C.idx_t
 	chunkTypes       *C.duckdb_logical_type
 }
 
@@ -54,7 +54,9 @@ func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*
 		return nil, fmt.Errorf("can't create appender")
 	}
 
-	return &Appender{c: dbConn, schema: schema, table: table, appender: &a}, nil
+	var chunkSize = C.duckdb_vector_size()
+
+	return &Appender{c: dbConn, schema: schema, table: table, appender: &a, currentRow: 0, currentChunkIdx: 0, currentChunkSize: chunkSize}, nil
 }
 
 // Error returns the last duckdb appender error.
@@ -65,7 +67,7 @@ func (a *Appender) Error() error {
 
 // Flush the appender to the underlying table and clear the internal cache.
 func (a *Appender) Flush() error {
-	C.duckdb_data_chunk_set_size(a.chunks[a.currentChunkIdx], C.uint64_t(a.currentRow+1))
+	C.duckdb_data_chunk_set_size(a.chunks[a.currentChunkIdx], C.uint64_t(a.currentRow))
 
 	var rv C.duckdb_state
 	for i, chunk := range a.chunks {
@@ -74,6 +76,11 @@ func (a *Appender) Flush() error {
 			dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
 			return fmt.Errorf("duckdb error appending chunk %d of %d: %s", i+1, a.currentChunkIdx+1, dbErr)
 		}
+	}
+
+	if state := C.duckdb_appender_flush(*a.appender); state == C.DuckDBError {
+		dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
+		return errors.New(dbErr)
 	}
 
 	return nil
@@ -141,8 +148,6 @@ func (a *Appender) initializeChunkTypes(args []driver.Value) {
 
 func (a *Appender) AddChunk(colCount int) error {
 	a.currentRow = 0
-	a.currentChunkSize = 2048
-	a.currentChunkIdx++
 
 	var dataChunk C.duckdb_data_chunk
 	// duckdb_create_data_chunk takes an array of duckdb_logical_type and a column count
@@ -175,10 +180,10 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	// Initialize the chunk on the first call
 	if len(a.chunks) == 0 {
 		a.initializeChunkTypes(args)
-		a.currentChunkIdx = -1
 		ret = a.AddChunk(len(args))
 	} else if a.currentRow == C.duckdb_vector_size() {
 		// If the current chunk is full, create a new one
+		a.currentChunkIdx++
 		ret = a.AddChunk(len(args))
 	}
 
@@ -230,7 +235,7 @@ func (a *Appender) AppendRowArray(args []driver.Value) error {
 			set[[]byte](a.chunkVectors[i], a.currentRow, v)
 		case string:
 			str := C.CString(v)
-			C.duckdb_vector_assign_string_element(a.chunkVectors[i], C.uint64_t(i), str)
+			C.duckdb_vector_assign_string_element(a.chunkVectors[i], C.uint64_t(a.currentRow), str)
 			C.free(unsafe.Pointer(str))
 		case time.Time:
 			var dt C.duckdb_timestamp
