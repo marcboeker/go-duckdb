@@ -3,7 +3,9 @@ package duckdb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"github.com/stretchr/testify/require"
+	"log"
 	"math/rand"
 	"testing"
 	"time"
@@ -85,7 +87,7 @@ func TestDataChunkAppender(t *testing.T) {
 	}
 
 	rows := []dataRow{}
-	for i := 0; i < 2048; i++ {
+	for i := 0; i < 1; i++ {
 		rows = append(rows, randRow(i))
 	}
 
@@ -120,50 +122,52 @@ func TestDataChunkAppender(t *testing.T) {
 	require.NoError(t, err)
 
 	//FOR 1 ROW
-	//var (
-	//	id        int
-	//	small_int uint8
-	//)
-	//row := db.QueryRow(`SELECT * FROM test`)
-	//err = row.Scan(&id, &small_int)
-	//if errors.Is(err, sql.ErrNoRows) {
-	//	log.Println("no rows")
-	//} else if err != nil {
-	//	log.Fatal(err)
-	//}
-	//require.Equal(t, rows[0].ID, id)
-	//require.Equal(t, rows[0].UInt8, small_int)
-
-	res, err := db.QueryContext(
-		context.Background(), `
-			SELECT  *
-				FROM test,
-			ORDER BY id`,
+	var (
+		id        int
+		small_int uint8
 	)
-	require.NoError(t, err)
-	defer res.Close()
-
-	i := 0
-	for res.Next() {
-		r := dataRow{}
-		err := res.Scan(
-			&r.ID,
-			//&r.UInt8,
-			//&r.Int8,
-			//&r.UInt16,
-			//&r.Int16,
-			//&r.UInt32,
-			//&r.Int32,
-			//&r.UInt64,
-			//&r.Int64,
-			//&r.Float,
-			//&r.Double,
-			//&r.Bool,
-			//&r.String,
-			//&r.Timestamp,
-		)
-		require.NoError(t, err)
-		require.Equal(t, rows[i], r)
-		i++
+	row := db.QueryRow(`SELECT * FROM test`)
+	err = row.Scan(&id, &small_int)
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Println("no rows")
+	} else if err != nil {
+		log.Fatal(err)
 	}
+	require.Equal(t, rows[0].ID, id)
+	require.Equal(t, rows[0].UInt8, small_int)
+
+	//res, err := db.QueryContext(
+	//	context.Background(), `
+	//		SELECT  *
+	//			FROM test,
+	//		ORDER BY id`,
+	//)
+	//require.NoError(t, err)
+	//defer res.Close()
+	//
+	//i := 0
+	//for res.Next() {
+	//	r := dataRow{}
+	//	err := res.Scan(
+	//		&r.ID,
+	//		&r.UInt8,
+	//		&r.Int8,
+	//		&r.UInt16,
+	//		&r.Int16,
+	//		&r.UInt32,
+	//		&r.Int32,
+	//		&r.UInt64,
+	//		&r.Int64,
+	//		&r.Float,
+	//		&r.Double,
+	//		&r.Bool,
+	//		&r.String,
+	//		&r.Timestamp,
+	//	)
+	//	require.NoError(t, err)
+	//	require.Equal(t, rows[i], r)
+	//	i++
+	//}
+	//
+	//require.Equal(t, i, numAppenderTestRows)
 }

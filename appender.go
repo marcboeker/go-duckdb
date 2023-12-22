@@ -75,6 +75,7 @@ func (a *Appender) Flush() error {
 			return fmt.Errorf("duckdb error appending chunk %d of %d: %s", i+1, a.currentChunkIdx+1, dbErr)
 		}
 	}
+
 	return nil
 }
 
@@ -176,11 +177,9 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 		a.initializeChunkTypes(args)
 		a.currentChunkIdx = -1
 		ret = a.AddChunk(len(args))
-	} else if a.currentRow == 2048 {
-		// If the current chunk is full, add a new one
+	} else if a.currentRow == C.duckdb_vector_size() {
+		// If the current chunk is full, create a new one
 		ret = a.AddChunk(len(args))
-	} else {
-		a.currentRow++
 	}
 
 	if ret != nil {
@@ -243,6 +242,7 @@ func (a *Appender) AppendRowArray(args []driver.Value) error {
 		}
 	}
 
+	a.currentRow++
 	return nil
 }
 
