@@ -18,7 +18,7 @@ FILES := $(wildcard $(SRC_DIR)/*)
 .PHONY: deps.header
 deps.header:
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
-	cp duckdb/src/include/duckdb.h duckdb.h
+	sed 's/__declspec(dllimport)//g' duckdb/src/include/duckdb.h > duckdb.h
 
 .PHONY: deps.darwin.amd64
 deps.darwin.amd64:
