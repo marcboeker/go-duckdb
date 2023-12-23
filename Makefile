@@ -102,10 +102,10 @@ deps.windows.amd64:
 	-DBUILD_FTS=1 \
 	-DCMAKE_BUILD_TYPE=Release -B build && \
 	cd build && \
-	MAKEFLAGS=-j2 cmake --build . --config Release && \
+	MAKEFLAGS=-j4 cmake --build . --config Release && \
 	cd .. && \
 	mkdir -p lib && \
-	find ./build -name '*.obj' | xargs cp {} -t ./lib && \
+	for f in `find ./build -name '*.obj'`; do cp $$f lib; done && \
 	cd lib && \
 	gcc-ar rvs libduckdb.a *.obj
 	mv libduckdb.a ../../deps/windows_amd64/libduckdb.a
