@@ -13,7 +13,7 @@ import (
 	"unsafe"
 )
 
-// Appender holds the duckdb appender. It allows to load bulk data into a DuckDB database.
+// Appender holds the DuckDB appender. It allows to load bulk data into a DuckDB database.
 type Appender struct {
 	c        *conn
 	schema   string
@@ -59,7 +59,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*
 	return &Appender{c: dbConn, schema: schema, table: table, appender: &a, currentRow: 0, currentChunkIdx: 0, currentChunkSize: chunkSize}, nil
 }
 
-// Error returns the last duckdb appender error.
+// Error returns the last DuckDB appender error.
 func (a *Appender) Error() error {
 	dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
 	return errors.New(dbErr)
@@ -71,10 +71,10 @@ func (a *Appender) Flush() error {
 	C.duckdb_data_chunk_set_size(a.chunks[a.currentChunkIdx], C.uint64_t(a.currentRow))
 
 	// append all chunks to the appender and destroy them
-	var rv C.duckdb_state
+	var state C.duckdb_state
 	for i, chunk := range a.chunks {
-		rv = C.duckdb_append_data_chunk(*a.appender, chunk)
-		if rv == C.DuckDBError {
+		state = C.duckdb_append_data_chunk(*a.appender, chunk)
+		if state == C.DuckDBError {
 			dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
 			return fmt.Errorf("duckdb error appending chunk %d of %d: %s", i+1, a.currentChunkIdx+1, dbErr)
 		}
@@ -104,9 +104,32 @@ func (a *Appender) Close() error {
 	return nil
 }
 
+// AppendRow loads a row of values into the appender. The values are provided as separate arguments.
+func (a *Appender) AppendRow(args ...driver.Value) error {
+	if a.closed {
+		panic("database/sql/driver: misuse of duckdb driver: use of closed Appender")
+	}
+
+	var err error
+	// Initialize the chunk on the first call
+	if len(a.chunks) == 0 {
+		a.initializeChunkTypes(args)
+		err = a.addChunk(len(args))
+		// If the current chunk is full, create a new one
+	} else if a.currentRow == C.duckdb_vector_size() {
+		a.currentChunkIdx++
+		err = a.addChunk(len(args))
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return a.appendRowArray(args)
+}
+
 // Create an array of duckdb types from a list of go types
 func (a *Appender) initializeChunkTypes(args []driver.Value) {
-
 	defaultLogicalType := C.duckdb_create_logical_type(0)
 	rowTypes := C.malloc(C.size_t(len(args)) * C.size_t(unsafe.Sizeof(defaultLogicalType)))
 
@@ -146,23 +169,24 @@ func (a *Appender) initializeChunkTypes(args []driver.Value) {
 			panic(fmt.Sprintf("couldn't append unsupported parameter %T", v))
 		}
 	}
+
 	a.chunkTypes = (*C.duckdb_logical_type)(rowTypes)
 }
 
-func (a *Appender) AddChunk(colCount int) error {
+func (a *Appender) addChunk(colCount int) error {
 	a.currentRow = 0
 
-	var dataChunk C.duckdb_data_chunk
 	// duckdb_create_data_chunk takes an array of duckdb_logical_type and a column count
-	dataChunk = C.duckdb_create_data_chunk(a.chunkTypes, C.uint64_t(colCount))
+	dataChunk := C.duckdb_create_data_chunk(a.chunkTypes, C.uint64_t(colCount))
 	C.duckdb_data_chunk_set_size(dataChunk, C.uint64_t(a.currentChunkSize))
 
 	// reset the chunkVectors array if they've been previously set
 	if a.chunkVectors != nil {
 		a.chunkVectors = nil
 	}
+
 	for i := 0; i < colCount; i++ {
-		var vector = C.duckdb_data_chunk_get_vector(dataChunk, C.uint64_t(i))
+		vector := C.duckdb_data_chunk_get_vector(dataChunk, C.uint64_t(i))
 		if vector == nil {
 			return fmt.Errorf("error while appending column %d", i)
 		}
@@ -173,35 +197,11 @@ func (a *Appender) AddChunk(colCount int) error {
 	return nil
 }
 
-// AppendRow loads a row of values into the appender. The values are provided as separate arguments.
-func (a *Appender) AppendRow(args ...driver.Value) error {
-	if a.closed {
-		panic("database/sql/driver: misuse of duckdb driver: use of closed Appender")
-	}
-
-	var ret error
-	// Initialize the chunk on the first call
-	if len(a.chunks) == 0 {
-		a.initializeChunkTypes(args)
-		ret = a.AddChunk(len(args))
-	} else if a.currentRow == C.duckdb_vector_size() {
-		// If the current chunk is full, create a new one
-		a.currentChunkIdx++
-		ret = a.AddChunk(len(args))
-	}
-
-	if ret != nil {
-		return ret
-	}
-
-	return a.AppendRowArray(args)
-}
-
-// AppendRowArray loads a row of values into the appender. The values are provided as an array.
-func (a *Appender) AppendRowArray(args []driver.Value) error {
+// appendRowArray loads a row of values into the appender. The values are provided as an array.
+func (a *Appender) appendRowArray(args []driver.Value) error {
 	for i, v := range args {
 		if v == nil {
-			if rv := C.duckdb_append_null(*a.appender); rv == C.DuckDBError {
+			if state := C.duckdb_append_null(*a.appender); state == C.DuckDBError {
 				return fmt.Errorf("couldn't append parameter %d", v)
 			}
 			continue
@@ -244,7 +244,6 @@ func (a *Appender) AppendRowArray(args []driver.Value) error {
 			var dt C.duckdb_timestamp
 			dt.micros = C.int64_t(v.UTC().UnixMicro())
 			set[C.duckdb_timestamp](a.chunkVectors[i], a.currentRow, dt)
-
 		default:
 			return fmt.Errorf("couldn't append unsupported parameter %d (type %T)", i, v)
 		}
