@@ -15,7 +15,7 @@
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
-#define DUCKDB_API __declspec(dllimport)
+#define DUCKDB_API 
 #endif
 #else
 #define DUCKDB_API
