@@ -79,8 +79,6 @@ deps.linux.arm64:
 
 .PHONY: deps.windows.amd64
 deps.windows.amd64:
-	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "windows" ]; then echo "Error: must run build on Windows"; false; fi
-
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
 	cd duckdb && \
 	mkdir -p build && \
