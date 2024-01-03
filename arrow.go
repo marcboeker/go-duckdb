@@ -9,7 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/apache/arrow/go/v13/arrow"
+	"github.com/apache/arrow/go/v14/arrow"
 )
 
 // ArrowQuery holds the duckdb Arrow Query interface. It allows querying and receiving Arrow records.
