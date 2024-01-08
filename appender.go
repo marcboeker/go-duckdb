@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 	"unsafe"
 )
@@ -27,6 +28,19 @@ type Appender struct {
 	currentChunkIdx  int
 	currentChunkSize C.idx_t
 	chunkTypes       *C.duckdb_logical_type
+
+	structInfo map[int]StructInfo
+}
+
+type StructInfo struct {
+	structType  reflect.Type
+	structValue reflect.Value
+
+	childVectors []C.duckdb_vector
+
+	currentRow C.idx_t
+
+	structInfo map[int]StructInfo
 }
 
 // NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
@@ -56,7 +70,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*
 
 	var chunkSize = C.duckdb_vector_size()
 
-	return &Appender{c: dbConn, schema: schema, table: table, appender: &a, currentRow: 0, currentChunkIdx: 0, currentChunkSize: chunkSize}, nil
+	return &Appender{c: dbConn, schema: schema, table: table, appender: &a, currentRow: 0, currentChunkIdx: 0, currentChunkSize: chunkSize, structInfo: make(map[int]StructInfo)}, nil
 }
 
 // Error returns the last DuckDB appender error.
@@ -128,6 +142,78 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	return a.appendRowArray(args)
 }
 
+func (a Appender) CreateDuckDBLogicalType(val driver.Value, col int) C.duckdb_logical_type {
+	v := reflect.ValueOf(val)
+	switch v.Kind() {
+	case reflect.Uint8:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UTINYINT)
+	case reflect.Int8:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_TINYINT)
+	case reflect.Uint16:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_USMALLINT)
+	case reflect.Int16:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_SMALLINT)
+	case reflect.Uint32:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UINTEGER)
+	case reflect.Int32:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_INTEGER)
+	case reflect.Uint64, reflect.Uint:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UBIGINT)
+	case reflect.Int64, reflect.Int:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BIGINT)
+	case reflect.Float32:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_FLOAT)
+	case reflect.Float64:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_DOUBLE)
+	case reflect.Bool:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN)
+	case reflect.String:
+		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
+	case reflect.Slice:
+		// Check if it's []byte
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
+		}
+
+		// Otherwise, it's a list
+		return C.duckdb_create_list_type(a.CreateDuckDBLogicalType(v.Index(0).Interface(), col))
+	case reflect.Struct:
+		// Check if it's time.Time
+		if (v.Type() == reflect.TypeOf(time.Time{})) {
+			return C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP)
+		}
+
+		// Otherwise, it's a struct
+		s := StructInfo{structType: v.Type(), structValue: v, currentRow: 0}
+
+		// Create an array of the struct fields TYPES
+		// and an array of the struct fields NAMES
+		fieldTypes := make([]C.duckdb_logical_type, s.structType.NumField())
+		fieldNames := make([]*C.char, s.structType.NumField())
+		for i := 0; i < s.structType.NumField(); i++ {
+			fieldTypes[i] = a.CreateDuckDBLogicalType(s.structValue.Field(i).Interface(), i)
+			fieldNames[i] = C.CString(s.structType.Field(i).Name)
+		}
+
+		fieldTypesPtr := (*C.duckdb_logical_type)(unsafe.Pointer(&fieldTypes[0]))
+		fieldNamesPtr := (**C.char)(unsafe.Pointer(&fieldNames[0]))
+
+		structLogicalType := C.duckdb_create_struct_type(fieldTypesPtr, fieldNamesPtr, C.uint64_t(s.structType.NumField()))
+
+		for i := 0; i < s.structType.NumField(); i++ {
+			C.free(unsafe.Pointer(fieldNames[i]))
+			C.free(unsafe.Pointer(fieldTypes[i]))
+		}
+		a.structInfo[col] = s
+
+		return structLogicalType
+	default:
+		panic(fmt.Sprintf("couldn't append unsupported parameter %T", v))
+	}
+
+	return C.duckdb_create_logical_type(C.DUCKDB_TYPE_INVALID)
+}
+
 // Create an array of duckdb types from a list of go types
 func (a *Appender) initializeChunkTypes(args []driver.Value) {
 	defaultLogicalType := C.duckdb_create_logical_type(0)
@@ -136,38 +222,7 @@ func (a *Appender) initializeChunkTypes(args []driver.Value) {
 	tmpChunkTypes := (*[1<<30 - 1]C.duckdb_logical_type)(rowTypes)
 
 	for i, val := range args {
-		switch v := val.(type) {
-		case uint8:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UTINYINT)
-		case int8:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_TINYINT)
-		case uint16:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_USMALLINT)
-		case int16:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_SMALLINT)
-		case uint32:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UINTEGER)
-		case int32:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_INTEGER)
-		case uint64, uint:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UBIGINT)
-		case int64, int:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BIGINT)
-		case float32:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_FLOAT)
-		case float64:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_DOUBLE)
-		case bool:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN)
-		case []byte:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
-		case string:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
-		case time.Time:
-			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP)
-		default:
-			panic(fmt.Sprintf("couldn't append unsupported parameter %T", v))
-		}
+		tmpChunkTypes[i] = a.CreateDuckDBLogicalType(val, i)
 	}
 
 	a.chunkTypes = (*C.duckdb_logical_type)(rowTypes)
@@ -190,10 +245,127 @@ func (a *Appender) addChunk(colCount int) error {
 		if vector == nil {
 			return fmt.Errorf("error while appending column %d", i)
 		}
+		// check if its a struct and create a child vector for each field
+		if _, ok := a.structInfo[i]; ok {
+			s := a.structInfo[i]
+			for j := 0; j < a.structInfo[i].structType.NumField(); j++ {
+				childVector := C.duckdb_struct_vector_get_child(vector, C.idx_t(j))
+				s.childVectors = append(s.childVectors, childVector)
+			}
+			a.structInfo[i] = s
+		}
 		a.chunkVectors = append(a.chunkVectors, vector)
 	}
 
 	a.chunks = append(a.chunks, dataChunk)
+	return nil
+}
+
+func (a *Appender) setSlice(refVal reflect.Value, chunckVector C.duckdb_vector, row C.idx_t, col int) error {
+	// Convert the refVal to []interface{} to be able to iterate over it
+	interfaceSlice := make([]interface{}, refVal.Len())
+	for i := 0; i < refVal.Len(); i++ {
+		interfaceSlice[i] = refVal.Index(i).Interface()
+	}
+
+	childVectorSize := C.duckdb_list_vector_get_size(chunckVector)
+
+	// Set the offset of the list vector using the current size of the child vector
+	set[uint64](chunckVector, row*2, uint64(childVectorSize))
+
+	// Set the length of the list vector
+	set[uint64](chunckVector, row*2+1, uint64(refVal.Len()))
+
+	C.duckdb_list_vector_set_size(chunckVector, C.uint64_t(refVal.Len())+childVectorSize)
+
+	childVector := C.duckdb_list_vector_get_child(chunckVector)
+	// Insert the values into the child vector
+	for i, e := range interfaceSlice {
+		childVectorRow := C.idx_t(i) + childVectorSize
+		// Increase the child vector capacity if over standard vector size by standard vector size
+		if childVectorRow%C.duckdb_vector_size() == 0 {
+			C.duckdb_list_vector_reserve(chunckVector, childVectorRow+C.duckdb_vector_size())
+		}
+		err := a.setRow(e, childVector, childVectorRow, col)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *Appender) setRow(val driver.Value, chunckVector C.duckdb_vector, row C.idx_t, col int) error {
+	refVal := reflect.ValueOf(val)
+	switch refVal.Kind() {
+	case reflect.Uint8:
+		set[uint8](chunckVector, row, val.(uint8))
+	case reflect.Int8:
+		set[int8](chunckVector, row, val.(int8))
+	case reflect.Uint16:
+		set[uint16](chunckVector, row, val.(uint16))
+	case reflect.Int16:
+		set[int16](chunckVector, row, val.(int16))
+	case reflect.Uint32:
+		set[uint32](chunckVector, row, val.(uint32))
+	case reflect.Int32:
+		set[int32](chunckVector, row, val.(int32))
+	case reflect.Uint64:
+		set[uint64](chunckVector, row, val.(uint64))
+	case reflect.Int64:
+		set[int64](chunckVector, row, val.(int64))
+	case reflect.Uint:
+		set[uint](chunckVector, row, val.(uint))
+	case reflect.Int:
+		set[int](chunckVector, row, val.(int))
+	case reflect.Float32:
+		set[float32](chunckVector, row, val.(float32))
+	case reflect.Float64:
+		set[float64](chunckVector, row, val.(float64))
+	case reflect.Bool:
+		set[bool](chunckVector, row, val.(bool))
+	case reflect.String:
+		str := C.CString(val.(string))
+		C.duckdb_vector_assign_string_element(chunckVector, C.uint64_t(row), str)
+		C.free(unsafe.Pointer(str))
+	case reflect.Slice:
+		// Check if it's []byte
+		if refVal.Type().Elem().Kind() == reflect.Uint8 {
+			set[[]byte](chunckVector, row, val.([]byte))
+			return nil
+		}
+
+		// Otherwise, it's a list
+		if refVal.Type().Elem().Kind() != reflect.Interface {
+			return a.setSlice(refVal, chunckVector, row, col)
+		}
+	case reflect.Struct:
+		// Check if it's time.Time
+		if (refVal.Type() == reflect.TypeOf(time.Time{})) {
+			var dt C.duckdb_timestamp
+			dt.micros = C.int64_t(val.(time.Time).UTC().UnixMicro())
+			set[C.duckdb_timestamp](chunckVector, row, dt)
+			return nil
+		}
+
+		// Otherwise, it's a struct
+		// Get current struct info
+		s := a.structInfo[col]
+
+		// Get the child vector
+		for i := 0; i < s.structType.NumField(); i++ {
+			err := a.setRow(s.structValue.Field(i).Interface(), s.childVectors[i], s.currentRow, i)
+			if err != nil {
+				return err
+			}
+		}
+
+		s.currentRow++
+		a.structInfo[col] = s
+	default:
+		return fmt.Errorf("couldn't append unsupported parameter %d (type %T)", row, val)
+	}
+
 	return nil
 }
 
@@ -207,45 +379,9 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 			continue
 		}
 
-		switch v := v.(type) {
-		case uint8:
-			set[uint8](a.chunkVectors[i], a.currentRow, v)
-		case int8:
-			set[int8](a.chunkVectors[i], a.currentRow, v)
-		case uint16:
-			set[uint16](a.chunkVectors[i], a.currentRow, v)
-		case int16:
-			set[int16](a.chunkVectors[i], a.currentRow, v)
-		case uint32:
-			set[uint32](a.chunkVectors[i], a.currentRow, v)
-		case int32:
-			set[int32](a.chunkVectors[i], a.currentRow, v)
-		case uint64:
-			set[uint64](a.chunkVectors[i], a.currentRow, v)
-		case int64:
-			set[int64](a.chunkVectors[i], a.currentRow, v)
-		case uint:
-			set[uint](a.chunkVectors[i], a.currentRow, v)
-		case int:
-			set[int](a.chunkVectors[i], a.currentRow, v)
-		case float32:
-			set[float32](a.chunkVectors[i], a.currentRow, v)
-		case float64:
-			set[float64](a.chunkVectors[i], a.currentRow, v)
-		case bool:
-			set[bool](a.chunkVectors[i], a.currentRow, v)
-		case []byte:
-			set[[]byte](a.chunkVectors[i], a.currentRow, v)
-		case string:
-			str := C.CString(v)
-			C.duckdb_vector_assign_string_element(a.chunkVectors[i], C.uint64_t(a.currentRow), str)
-			C.free(unsafe.Pointer(str))
-		case time.Time:
-			var dt C.duckdb_timestamp
-			dt.micros = C.int64_t(v.UTC().UnixMicro())
-			set[C.duckdb_timestamp](a.chunkVectors[i], a.currentRow, dt)
-		default:
-			return fmt.Errorf("couldn't append unsupported parameter %d (type %T)", i, v)
+		err := a.setRow(v, a.chunkVectors[i], a.currentRow, i)
+		if err != nil {
+			return err
 		}
 	}
 
