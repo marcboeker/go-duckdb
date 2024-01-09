@@ -207,6 +207,8 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 		select {
 		// if context is cancelled or deadline exceeded, don't execute further
 		case <-ctx.Done():
+			// also need to interrupt to cancel the query
+			C.duckdb_interrupt(*s.c.con)
 			return nil, ctx.Err()
 		default:
 			// continue
