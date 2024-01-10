@@ -15,6 +15,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"unsafe"
@@ -35,15 +36,20 @@ func (d Driver) Open(dataSourceName string) (driver.Conn, error) {
 }
 
 func (Driver) OpenConnector(dataSourceName string) (driver.Connector, error) {
-	return createConnector(dataSourceName, func(execerContext driver.ExecerContext) error { return nil })
+	return openConnector(dataSourceName, func(execerContext driver.ExecerContext) error { return nil })
 }
 
-// NewConnector creates a new Connector for the DuckDB database.
-func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
-	return createConnector(dsn, connInitFn)
+type ConnectorCloser interface {
+	driver.Connector
+	io.Closer
 }
 
-func createConnector(dataSourceName string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
+// OpenConnector opens a new connector for the DuckDB database.
+func OpenConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (ConnectorCloser, error) {
+	return openConnector(dsn, connInitFn)
+}
+
+func openConnector(dataSourceName string, connInitFn func(execer driver.ExecerContext) error) (*connector, error) {
 	var db C.duckdb_database
 
 	parsedDSN, err := url.Parse(dataSourceName)
@@ -93,7 +99,8 @@ func (c *connector) Connect(context.Context) (driver.Conn, error) {
 	if state := C.duckdb_connect(*c.db, &con); state == C.DuckDBError {
 		return nil, errOpen
 	}
-	conn := &Conn{con: &con}
+
+	conn := &conn{con: &con}
 
 	// Call the connection init function if defined
 	if c.connInitFn != nil {

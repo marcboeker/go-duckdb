@@ -70,33 +70,131 @@ Please refer to the [database/sql](https://godoc.org/database/sql) GoDoc for fur
 If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new Appender by supplying a DuckDB connection to `NewAppenderFromConn()`.
 
 ```go
-connector, err := NewConnector("test.db", nil)
-if err != {
-  ...
-}
-conn, err := connector.Connect(context.Background())
-if err != {
-  ...
-}
-defer conn.Close()
+package main
 
-// Retrieve appender from connection (note that you have to create the table 'test' beforehand).
-appender, err := NewAppenderFromConn(conn, "", "test")
-if err != {
-  ...
-}
-defer appender.Close()
+import (
+	"context"
+	"database/sql"
 
-err = appender.AppendRow(...)
-if err != {
-  ...
+	"github.com/marcboeker/go-duckdb"
+)
+
+func main() {
+	connector, err := duckdb.OpenConnector("test.db", nil)
+	if err != nil {
+		panic(err)
+	}
+	driverConn, err := connector.Connect(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	defer driverConn.Close()
+
+	// Retrieve appender from connection (note that you have to create the table 'test' beforehand).
+	appender, err := duckdb.NewAppenderFromConn(driverConn, "", "test")
+	if err != nil {
+		panic(err)
+	}
+	defer appender.Close()
+
+	err = appender.AppendRow(1, "a")
+	if err != nil {
+		panic(err)
+	}
+
+	// Optional, if you want to access the appended rows immediately.
+	err = appender.Flush()
+	if err != nil {
+		panic(err)
+	}
+
+	// Alternatively, you can use Raw method of sql.Conn to obtain the driver connection.
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	err = conn.Raw(func(driverConn any) error {
+		// Notice usage of driverConn 
+		appender, err := duckdb.NewAppenderFromConn(driverConn, "", "test")
+		if err != nil {
+			panic(err)
+		}
+		defer appender.Close()
+
+		err = appender.AppendRow(...)
+		if err != nil {
+			panic(err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 
-// Optional, if you want to access the appended rows immediately.
-err = appender.Flush()
-if err != {
-  ...
+```
+
+## DuckDB Apache Arrow Interface
+
+If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new Arrow by supplying a DuckDB connection to `NewArrowFromConn()`.
+
+```go
+package main
+
+import (
+	"context"
+	"database/sql"
+
+	"github.com/marcboeker/go-duckdb"
+)
+
+func main() {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	// Use Raw method of sql.Conn to obtain the driver connection.
+	err = conn.Raw(func(driverConn any) error {
+		// Create Arrow interface from the connection.
+		ar, err := duckdb.NewArrowFromConn(driverConn)
+		if err != nil {
+			panic(err)
+		}
+
+		rdr, err := ar.Query(context.Background(), "SELECT * FROM generate_series(1, 10)")
+		if err != nil {
+			panic(err)
+		}
+		defer rdr.Release()
+
+		for rdr.Next() { 
+			// Process records.
+		}
+		
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 }
+
 ```
 
 ## Linking DuckDB

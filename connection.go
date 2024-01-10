@@ -2,7 +2,6 @@ package duckdb
 
 /*
 #include <duckdb.h>
-#include <arrow.h>
 */
 import "C"
 
@@ -11,22 +10,17 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"fmt"
 	"math/big"
 	"unsafe"
-
-	"github.com/apache/arrow/go/v14/arrow"
-	"github.com/apache/arrow/go/v14/arrow/array"
-	"github.com/apache/arrow/go/v14/arrow/cdata"
 )
 
-type Conn struct {
+type conn struct {
 	con    *C.duckdb_connection
 	closed bool
 	tx     bool
 }
 
-func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
+func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
 	case *big.Int, Interval:
 		return nil
@@ -34,7 +28,7 @@ func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	return driver.ErrSkip
 }
 
-func (c *Conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
 	}
@@ -68,7 +62,7 @@ func (c *Conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	return stmt.ExecContext(ctx, args)
 }
 
-func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
 	}
@@ -110,135 +104,7 @@ func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	return rows, err
 }
 
-// QueryArrow prepares statements, executes them, returns Apache Arrow array.RecordReader as a result of the last
-// executed statement. Arguments are bound to the last statement.
-// https://duckdb.org/docs/api/c/api#arrow-interface
-// NOTE: Experimental interface.
-func (c *Conn) QueryArrow(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: QueryArrow after Close")
-	}
-
-	stmts, size, err := c.extractStmts(query)
-	if err != nil {
-		return nil, err
-	}
-	defer C.duckdb_destroy_extracted(&stmts)
-
-	// execute all statements without args, except the last one
-	for i := C.idx_t(0); i < size-1; i++ {
-		stmt, err := c.prepareExtractedStmt(stmts, i)
-		if err != nil {
-			return nil, err
-		}
-		// send nil args to execute statement and ignore result (using ExecContext since we're ignoring the result anyway)
-		_, err = stmt.ExecContext(ctx, nil)
-		stmt.Close()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// prepare and execute last statement with args and return result
-	stmt, err := c.prepareExtractedStmt(stmts, size-1)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-
-	res, err := stmt.executeArrow(args...)
-	if err != nil {
-		return nil, err
-	}
-
-	defer C.duckdb_destroy_arrow(res)
-
-	sc, err := queryArrowSchema(res)
-	if err != nil {
-		return nil, err
-	}
-
-	var recs []arrow.Record
-	defer func() {
-		for _, r := range recs {
-			r.Release()
-		}
-	}()
-
-	rowCount := uint64(C.duckdb_arrow_row_count(*res))
-
-	var retrievedRows uint64
-
-	for retrievedRows < rowCount {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		rec, err := queryArrowArray(res, sc)
-		if err != nil {
-			return nil, err
-		}
-
-		recs = append(recs, rec)
-
-		retrievedRows += uint64(rec.NumRows())
-	}
-
-	return array.NewRecordReader(sc, recs)
-}
-
-// queryArrowSchema fetches the internal arrow schema from the arrow result.
-func queryArrowSchema(res *C.duckdb_arrow) (*arrow.Schema, error) {
-	cdSchema := (*cdata.CArrowSchema)(unsafe.Pointer(C.calloc(1, C.sizeof_struct_ArrowSchema)))
-	defer func() {
-		cdata.ReleaseCArrowSchema(cdSchema)
-		C.free(unsafe.Pointer(cdSchema))
-	}()
-
-	if state := C.duckdb_query_arrow_schema(
-		*res,
-		(*C.duckdb_arrow_schema)(unsafe.Pointer(&cdSchema)),
-	); state == C.DuckDBError {
-		return nil, errors.New("duckdb_query_arrow_schema")
-	}
-
-	sc, err := cdata.ImportCArrowSchema(cdSchema)
-	if err != nil {
-		return nil, fmt.Errorf("%w: ImportCArrowSchema", err)
-	}
-
-	return sc, nil
-}
-
-// queryArrowArray fetches an internal arrow array from the arrow result.
-//
-// This function can be called multiple time to get next chunks,
-// which will free the previous out_array.
-func queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Record, error) {
-	cdArr := (*cdata.CArrowArray)(unsafe.Pointer(C.calloc(1, C.sizeof_struct_ArrowArray)))
-	defer func() {
-		cdata.ReleaseCArrowArray(cdArr)
-		C.free(unsafe.Pointer(cdArr))
-	}()
-
-	if state := C.duckdb_query_arrow_array(
-		*res,
-		(*C.duckdb_arrow_array)(unsafe.Pointer(&cdArr)),
-	); state == C.DuckDBError {
-		return nil, errors.New("duckdb_query_arrow_array")
-	}
-
-	rec, err := cdata.ImportCRecordBatchWithSchema(cdArr, sc)
-	if err != nil {
-		return nil, fmt.Errorf("%w: ImportCRecordBatchWithSchema", err)
-	}
-
-	return rec, nil
-}
-
-func (c *Conn) Prepare(cmd string) (driver.Stmt, error) {
+func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Prepare after Close")
 	}
@@ -246,11 +112,11 @@ func (c *Conn) Prepare(cmd string) (driver.Stmt, error) {
 }
 
 // Deprecated: Use BeginTx instead.
-func (c *Conn) Begin() (driver.Tx, error) {
+func (c *conn) Begin() (driver.Tx, error) {
 	return c.BeginTx(context.Background(), driver.TxOptions{})
 }
 
-func (c *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if c.tx {
 		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
 	}
@@ -273,7 +139,7 @@ func (c *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 	return &tx{c}, nil
 }
 
-func (c *Conn) Close() error {
+func (c *conn) Close() error {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Close of already closed connection")
 	}
@@ -284,7 +150,7 @@ func (c *Conn) Close() error {
 	return nil
 }
 
-func (c *Conn) prepareStmt(cmd string) (*stmt, error) {
+func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 	cmdstr := C.CString(cmd)
 	defer C.free(unsafe.Pointer(cmdstr))
 
@@ -298,7 +164,7 @@ func (c *Conn) prepareStmt(cmd string) (*stmt, error) {
 	return &stmt{c: c, stmt: &s}, nil
 }
 
-func (c *Conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
+func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
 	cquery := C.CString(query)
 	defer C.free(unsafe.Pointer(cquery))
 
@@ -316,7 +182,7 @@ func (c *Conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 	return stmts, stmtsCount, nil
 }
 
-func (c *Conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
+func (c *conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
 	var s C.duckdb_prepared_statement
 	if state := C.duckdb_prepare_extracted_statement(*c.con, extractedStmts, index, &s); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_prepare_error(s))

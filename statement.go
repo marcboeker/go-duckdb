@@ -16,7 +16,7 @@ import (
 )
 
 type stmt struct {
-	c                *Conn
+	c                *conn
 	stmt             *C.duckdb_prepared_statement
 	closeOnRowsClose bool
 	closed           bool
