@@ -25,7 +25,10 @@ const (
 	intList INT[],
     charList VARCHAR[],
     nestedIntList INT[][],
-    s1 STRUCT(I INT, V VARCHAR)
+    s1 STRUCT(I INT, V VARCHAR),
+    s2 STRUCT(I INT, INNER_STRUCT STRUCT(I INT, V VARCHAR)),
+	structList STRUCT(I INT, V VARCHAR)[],
+	listStruct STRUCT(L INT[])
   )`
 )
 
@@ -82,6 +85,19 @@ func createStruct1(i int) struct1 {
 	return struct1{I: int32(i), V: letter}
 }
 
+func createStructSlice(i int) []struct1 {
+	if i <= 0 {
+		i = 1
+	}
+
+	var l []struct1
+	var j int
+	for j = 0; j < i; j++ {
+		l = append(l, createStruct1(j))
+	}
+	return l
+}
+
 func TestNestedAppender(t *testing.T) {
 
 	c, err := NewConnector("", nil)
@@ -98,6 +114,8 @@ func TestNestedAppender(t *testing.T) {
 		nestedIntList [][]int32
 		s1            struct1
 		s2            struct2
+		structList    []struct1
+		listStruct    list_struct
 	}
 	randRow := func(i int) dataRow {
 
@@ -108,6 +126,8 @@ func TestNestedAppender(t *testing.T) {
 			nestedIntList: createNestedIntSlice(rand.Int31n(100)),
 			s1:            createStruct1(i),
 			s2:            struct2{I: int32(i), INNER_STRUCT: createStruct1(i)},
+			structList:    createStructSlice(rand.Intn(100)),
+			listStruct:    list_struct{createIntSlice(rand.Int31n(3000))},
 		}
 	}
 	rows := []dataRow{}
@@ -131,6 +151,8 @@ func TestNestedAppender(t *testing.T) {
 			row.nestedIntList,
 			row.s1,
 			row.s2,
+			row.structList,
+			row.listStruct,
 		)
 		require.NoError(t, err)
 	}
@@ -141,11 +163,13 @@ func TestNestedAppender(t *testing.T) {
 		context.Background(), `
 			SELECT  
 			    id,
-					intList,
-					charList,
-					nestedIntList,
-					s1,
-					s2
+				intList,
+				charList,
+				nestedIntList,
+				s1,
+				s2,
+				structList,
+				listStruct
       FROM test
       ORDER BY id
       `)
@@ -160,6 +184,8 @@ func TestNestedAppender(t *testing.T) {
 		var nestedIntSlice []interface{}
 		var s1 interface{}
 		var s2 interface{}
+		var structList []interface{}
+		var listStruct interface{}
 		err := res.Scan(
 			&r.ID,
 			&intSlice,
@@ -167,6 +193,8 @@ func TestNestedAppender(t *testing.T) {
 			&nestedIntSlice,
 			&s1,
 			&s2,
+			&structList,
+			&listStruct,
 		)
 		require.NoError(t, err)
 		r.intList = convertInterfaceToIntSlice(intSlice)
@@ -174,6 +202,8 @@ func TestNestedAppender(t *testing.T) {
 		r.nestedIntList = convertInterfaceToNestedIntSlice(nestedIntSlice)
 		r.s1 = convertDuckDBStructToStruct1(s1)
 		r.s2 = convertDuckDBStructToStruct2(s2)
+		r.structList = convertDuckDBStructToStructSlice(structList)
+		r.listStruct = convertDuckDBListStructToListStruct(listStruct)
 		require.Equal(t, rows[i], r)
 		i++
 	}
@@ -224,4 +254,12 @@ func convertDuckDBStructToStruct2(i interface{}) struct2 {
 	s.I = innerStruct["I"].(int32)
 	s.INNER_STRUCT = convertDuckDBStructToStruct1(innerStruct["INNER_STRUCT"])
 	return s
+}
+
+func convertDuckDBStructToStructSlice(i interface{}) []struct1 {
+	var l []struct1
+	for _, v := range i.([]interface{}) {
+		l = append(l, convertDuckDBStructToStruct1(v))
+	}
+	return l
 }

@@ -277,12 +277,6 @@ func (r *rows) Close() error {
 	return err
 }
 
-func set[T any](vector C.duckdb_vector, rowIdx C.idx_t, value T) {
-	ptr := C.duckdb_vector_get_data(vector)
-	xs := (*[1 << 31]T)(ptr)
-	xs[rowIdx] = value
-}
-
 func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
 	ptr := C.duckdb_vector_get_data(vector)
 	xs := (*[1 << 31]T)(ptr)
