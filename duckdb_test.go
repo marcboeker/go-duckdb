@@ -1101,7 +1101,6 @@ func TestParquetExtension(t *testing.T) {
 }
 
 func TestQueryTimeout(t *testing.T) {
-	t.Skip("TODO: fix blocking in duckdb_pending_execute_task first.")
 	db := openDB(t)
 	defer db.Close()
 
