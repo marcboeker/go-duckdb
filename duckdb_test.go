@@ -1100,6 +1100,22 @@ func TestParquetExtension(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestQueryTimeout(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*250)
+	defer cancel()
+
+	now := time.Now()
+	_, err := db.ExecContext(ctx, "CREATE TABLE test AS SELECT * FROM range(10000000) t1, range(1000000) t2;")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	// a very defensive time check, but should be good enough
+	// the query takes much longer than 10 seconds
+	require.Less(t, time.Since(now), 10*time.Second)
+}
+
 func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
