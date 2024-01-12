@@ -18,7 +18,7 @@ FILES := $(wildcard $(SRC_DIR)/*)
 .PHONY: deps.header
 deps.header:
 	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
-	cp duckdb/src/include/duckdb.h duckdb.h
+	sed 's/__declspec(dllimport)//g' duckdb/src/include/duckdb.h > duckdb.h
 
 .PHONY: deps.darwin.amd64
 deps.darwin.amd64:
@@ -76,3 +76,21 @@ deps.linux.arm64:
 	ar rvs ../libduckdb.a *.o && \
 	cd .. && \
 	mv libduckdb.a ../deps/linux_arm64/libduckdb.a
+
+.PHONY: deps.windows.amd64
+deps.windows.amd64:
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
+	cd duckdb && \
+	mkdir -p build && \
+	cmake -G "MinGW Makefiles" \
+	-DENABLE_EXTENSION_AUTOLOADING=1 \
+	-DENABLE_EXTENSION_AUTOINSTALL=1 \
+	-DBUILD_SHELL=0 \
+	-DBUILD_UNITTESTS=0 \
+	-DCMAKE_BUILD_TYPE=Release -B build && \
+	cd build && \
+	MAKEFLAGS=-j4 cmake --build . --config Release && \
+	cd ../build && \
+	for f in `find . -name '*.obj'`; do gcc-ar rvs ../libduckdb.a $$f; done && \
+	cd .. && \
+	mv libduckdb.a ../deps/windows_amd64/libduckdb.a
