@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/stretchr/testify/require"
+	"math/rand"
 	"testing"
 )
 
@@ -41,7 +42,7 @@ func createTwoIntsStructSlice(i int) []two_ints {
 	return l
 }
 
-const totalRows = 2
+const totalRows = 1000
 
 func TestNestedStructInListAppender(t *testing.T) {
 
@@ -56,9 +57,8 @@ func TestNestedStructInListAppender(t *testing.T) {
 		structList []two_ints
 	}
 	randRow := func(i int) dataRow {
-
 		return dataRow{
-			structList: createTwoIntsStructSlice(5),
+			structList: createTwoIntsStructSlice(rand.Intn(3000)),
 		}
 	}
 	rows := []dataRow{}
