@@ -76,3 +76,18 @@ deps.linux.arm64:
 	ar rvs ../libduckdb.a *.o && \
 	cd .. && \
 	mv libduckdb.a ../deps/linux_arm64/libduckdb.a
+
+.PHONY: deps.freebsd.amd64
+deps.freebsd.amd64:
+	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "freebsd" ]; then echo "Error: must run build on freebsd"; false; fi
+
+	git clone -b v${DUCKDB_VERSION} --depth 1 https://github.com/duckdb/duckdb.git
+	cd duckdb && \
+	CFLAGS="-O3" CXXFLAGS="-O3" gmake -j 2 && \
+	BUILD_SHELL=0 BUILD_UNITTESTS=0 gmake -j 2 && \
+	mkdir -p lib && \
+	for f in `find . -name '*.o'`; do cp $$f lib; done && \
+	cd lib && \
+	ar rvs ../libduckdb.a *.o && \
+	cd .. && \
+	mv libduckdb.a ../deps/freebsd_amd64/libduckdb.a
