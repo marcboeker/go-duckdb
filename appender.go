@@ -30,7 +30,7 @@ type Appender struct {
 }
 
 // NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
-func NewAppenderFromConn(driverConn any, schema, table string) (*Appender, error) {
+func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*Appender, error) {
 	dbConn, ok := driverConn.(*conn)
 	if !ok {
 		return nil, fmt.Errorf("not a duckdb driver connection")
@@ -40,7 +40,7 @@ func NewAppenderFromConn(driverConn any, schema, table string) (*Appender, error
 		panic("database/sql/driver: misuse of duckdb driver: Appender after Close")
 	}
 
-	var schemastr *C.char
+	var schemastr *(C.char)
 	if schema != "" {
 		schemastr = C.CString(schema)
 		defer C.free(unsafe.Pointer(schemastr))

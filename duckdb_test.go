@@ -99,7 +99,7 @@ func TestConnPool(t *testing.T) {
 }
 
 func TestConnInit(t *testing.T) {
-	connector, err := OpenConnector("", func(execer driver.ExecerContext) error {
+	connector, err := NewConnector("", func(execer driver.ExecerContext) error {
 		bootQueries := []string{
 			"INSTALL 'json'",
 			"LOAD 'json'",
@@ -114,8 +114,6 @@ func TestConnInit(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	defer connector.Close()
-
 	db := sql.OpenDB(connector)
 	db.SetMaxOpenConns(2) // set connection pool size greater than 1
 	defer db.Close()

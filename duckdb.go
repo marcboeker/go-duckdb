@@ -15,7 +15,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"strings"
 	"unsafe"
@@ -36,20 +35,15 @@ func (d Driver) Open(dataSourceName string) (driver.Conn, error) {
 }
 
 func (Driver) OpenConnector(dataSourceName string) (driver.Connector, error) {
-	return openConnector(dataSourceName, func(execerContext driver.ExecerContext) error { return nil })
+	return createConnector(dataSourceName, func(execerContext driver.ExecerContext) error { return nil })
 }
 
-type ConnectorCloser interface {
-	driver.Connector
-	io.Closer
+// NewConnector creates a new Connector for the DuckDB database.
+func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
+	return createConnector(dsn, connInitFn)
 }
 
-// OpenConnector opens a new connector for the DuckDB database.
-func OpenConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (ConnectorCloser, error) {
-	return openConnector(dsn, connInitFn)
-}
-
-func openConnector(dataSourceName string, connInitFn func(execer driver.ExecerContext) error) (*connector, error) {
+func createConnector(dataSourceName string, connInitFn func(execer driver.ExecerContext) error) (driver.Connector, error) {
 	var db C.duckdb_database
 
 	parsedDSN, err := url.Parse(dataSourceName)
@@ -99,7 +93,6 @@ func (c *connector) Connect(context.Context) (driver.Conn, error) {
 	if state := C.duckdb_connect(*c.db, &con); state == C.DuckDBError {
 		return nil, errOpen
 	}
-
 	conn := &conn{con: &con}
 
 	// Call the connection init function if defined
@@ -133,27 +126,14 @@ func prepareConfig(options map[string][]string) (C.duckdb_config, error) {
 
 	for k, v := range options {
 		if len(v) > 0 {
-			if err := setConfig(config, k, v[0]); err != nil {
-				return nil, err
+			state := C.duckdb_set_config(config, C.CString(k), C.CString(v[0]))
+			if state == C.DuckDBError {
+				return nil, fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, k, v[0])
 			}
 		}
 	}
 
 	return config, nil
-}
-
-func setConfig(config C.duckdb_config, name, option string) error {
-	cName := C.CString(name)
-	defer C.free(unsafe.Pointer(cName))
-
-	cOption := C.CString(option)
-	defer C.free(unsafe.Pointer(cOption))
-
-	if state := C.duckdb_set_config(config, cName, cOption); state == C.DuckDBError {
-		return fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, name, option)
-	}
-
-	return nil
 }
 
 var (

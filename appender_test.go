@@ -59,26 +59,12 @@ func randString(n int) string {
 }
 
 func TestAppender(t *testing.T) {
-	connector, err := OpenConnector("", nil)
+	c, err := NewConnector("", nil)
 	require.NoError(t, err)
-	defer connector.Close()
 
-	db := sql.OpenDB(connector)
+	db := sql.OpenDB(c)
 	createAppenderTable(db, t)
 	defer db.Close()
-
-	// Test that appender can be opened from the connector directly
-	driverConn, err := connector.Connect(context.Background())
-	require.NoError(t, err)
-
-	appender, err := NewAppenderFromConn(driverConn, "", "test")
-	require.NoError(t, err)
-
-	err = appender.Close()
-	require.NoError(t, err)
-
-	err = driverConn.Close()
-	require.NoError(t, err)
 
 	type dataRow struct {
 		ID        int
@@ -127,49 +113,44 @@ func TestAppender(t *testing.T) {
 			Bool:      randBool(),
 		}
 	}
-	var rows []dataRow
+	rows := []dataRow{}
 	for i := 0; i < numAppenderTestRows; i++ {
 		rows = append(rows, randRow(i))
 	}
 
-	conn, err := db.Conn(context.Background())
+	conn, err := c.Connect(context.Background())
 	require.NoError(t, err)
 	defer conn.Close()
 
-	err = conn.Raw(func(driverConn any) error {
-		appender, err := NewAppenderFromConn(driverConn, "", "test")
-		require.NoError(t, err)
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
 
 	for i, row := range rows {
-		if i%1024 == 0 {
+			if i%1024 == 0 {
 			err = appender.Flush()
 			require.NoError(t, err)
 		}
 
 		err := appender.AppendRow(
-				row.ID,
-				row.UUID, row.UInt8,
-				row.Int8,
-				row.UInt16,
-				row.Int16,
-				row.UInt32,
-				row.Int32,
-				row.UInt64,
-				row.Int64,
-				row.Timestamp,
-				row.Float,
-				row.Double,
-				row.String,
-				row.Bool,
-			)
-			require.NoError(t, err)
-		}
-
-		err = appender.Close()
+			row.ID,
+			row.UUID, row.UInt8,
+			row.Int8,
+			row.UInt16,
+			row.Int16,
+			row.UInt32,
+			row.Int32,
+			row.UInt64,
+			row.Int64,
+			row.Timestamp,
+			row.Float,
+			row.Double,
+			row.String,
+			row.Bool,
+		)
 		require.NoError(t, err)
-
-		return nil
-	})
+	}
+	err = appender.Close()
 	require.NoError(t, err)
 
 	res, err := db.QueryContext(
