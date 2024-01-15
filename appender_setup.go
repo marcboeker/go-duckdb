@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+package duckdb
+
+import (
+"context"
+"database/sql"
+"github.com/stretchr/testify/require"
+"testing"
+)
+
 const (
 	testAppenderTableNested = `
 CREATE TABLE test(
@@ -25,10 +34,16 @@ CREATE TABLE test(
 )`
 )
 
-func createAppenderNestedTable(db *sql.DB, t *testing.T) *sql.Result {
+func createAppenderNestedTable(db *sql.DB) *sql.Result {
 	res, err := db.Exec(testAppenderTableNested)
-	require.NoError(t, err)
+	checkIfSucceded(err)
 	return &res
+}
+
+func checkIfSucceded(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 type dataRowInterface struct {
@@ -74,10 +89,10 @@ func (dR *dataRow) Convert(i dataRowInterface) {
 	dR.mixList = dR.mix.ListFillFromInterface(i.mixList)
 }
 
-func TestNestedAppender(t *testing.T) {
+func setupAppenderNested() *sql.DB {
 
 	c, err := NewConnector("", nil)
-	require.NoError(t, err)
+	checkIfSucceded(err)
 
 	db := sql.OpenDB(c)
 	createAppenderNestedTable(db, t)
@@ -131,6 +146,10 @@ func TestNestedAppender(t *testing.T) {
 	err = appender.Flush()
 	require.NoError(t, err)
 
+	return db
+}
+
+func compareAppenderNested(db *sql.DB) {
 	res, err := db.QueryContext(
 		context.Background(), `
 			SELECT * FROM test ORDER BY id

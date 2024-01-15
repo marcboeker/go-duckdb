@@ -5,43 +5,42 @@ package duckdb
 //	"context"
 //	"database/sql"
 //	"github.com/stretchr/testify/require"
-//	"math/rand"
 //	"testing"
 //)
 //
 //const (
-//	testAppenderTableNestedListInStruct = `
+//	testAppenderSMOL = `
 //  CREATE TABLE test(
-//	listStruct STRUCT(L INT[])
+//    smolList STRUCT(I INT)[]
 //  )`
 //)
 //
-//func createAppenderNestedListInStruct(db *sql.DB, t *testing.T) *sql.Result {
-//	res, err := db.Exec(testAppenderTableNestedListInStruct)
+//func createAppenderSMOL(db *sql.DB, t *testing.T) *sql.Result {
+//	res, err := db.Exec(testAppenderSMOL)
 //	require.NoError(t, err)
 //	return &res
 //}
 //
-//func TestNestedListInStructAppender(t *testing.T) {
+//func TestNestedAppenderSMOL(t *testing.T) {
 //
 //	c, err := NewConnector("", nil)
 //	require.NoError(t, err)
 //
 //	db := sql.OpenDB(c)
-//	createAppenderNestedListInStruct(db, t)
+//	createAppenderSMOL(db, t)
 //	defer db.Close()
 //
 //	type dataRow struct {
-//		listStruct list_struct
+//		smolList []smol
 //	}
 //	randRow := func(i int) dataRow {
 //
 //		return dataRow{
-//			listStruct: list_struct{createIntSlice(rand.Int31n(3000))},
+//			smolList: fillSMOL(100),
 //		}
 //	}
 //	rows := []dataRow{}
-//	for i := 0; i < totalRows; i++ {
+//	for i := 0; i < 100; i++ {
 //		rows = append(rows, randRow(i))
 //	}
 //
@@ -55,7 +54,7 @@ package duckdb
 //
 //	for _, row := range rows {
 //		err := appender.AppendRow(
-//			row.listStruct,
+//			row.smolList,
 //		)
 //		require.NoError(t, err)
 //	}
@@ -65,7 +64,7 @@ package duckdb
 //	res, err := db.QueryContext(
 //		context.Background(), `
 //			SELECT
-//				listStruct
+//				smolList,
 //      FROM test
 //      `)
 //	require.NoError(t, err)
@@ -74,23 +73,15 @@ package duckdb
 //	i := 0
 //	for res.Next() {
 //		r := dataRow{}
-//		var listStruct interface{}
+//		var sml []interface{}
 //		err := res.Scan(
-//			&listStruct,
+//			&sml,
 //		)
 //		require.NoError(t, err)
-//		r.listStruct = convertDuckDBListStructToListStruct(listStruct)
+//		r.smolList = convertToSmol(sml)
 //		require.Equal(t, rows[i], r)
 //		i++
 //	}
 //	// Ensure that the number of fetched rows equals the number of inserted rows.
-//	require.Equal(t, i, totalRows)
-//}
-//
-//func convertDuckDBListStructToListStruct(s interface{}) list_struct {
-//	var listStruct list_struct
-//	innerList := s.(map[string]interface{})["L"]
-//
-//	listStruct.L = convertInterfaceToIntSlice(innerList.([]interface{}))
-//	return listStruct
+//	require.Equal(t, i, 100)
 //}
