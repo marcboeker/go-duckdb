@@ -85,7 +85,7 @@ func (a *Arrow) Query(query string, args ...any) (array.RecordReader, error) {
 	return a.QueryContext(context.Background(), query, args)
 }
 
-// Query prepares statements, executes them, returns Apache Arrow array.RecordReader as a result of the last
+// QueryContext prepares statements, executes them, returns Apache Arrow array.RecordReader as a result of the last
 // executed statement. Arguments are bound to the last statement.
 func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
 	if a.c.closed {
@@ -139,7 +139,8 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 
 	rowCount := uint64(C.duckdb_arrow_row_count(*res))
 
-	var retrievedRows uint64 = 0
+	var retrievedRows uint64
+
 	for retrievedRows < rowCount {
 		select {
 		case <-ctx.Done():
@@ -153,6 +154,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		}
 
 		recs = append(recs, rec)
+
 		retrievedRows += uint64(rec.NumRows())
 	}
 
