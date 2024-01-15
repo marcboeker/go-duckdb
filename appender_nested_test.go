@@ -15,13 +15,13 @@ CREATE TABLE test(
 	intList INT[],
 	nestedListInt INT[][],
 	tripleNestedListInt INT[][][],
-	Base STRUCT(I INT, V VARCHAR),
-	Wrapper STRUCT(Base STRUCT(I INT, V VARCHAR)),
-	TopWrapper STRUCT(Wrapper STRUCT(Base STRUCT(I INT, V VARCHAR))),
+	base STRUCT(I INT, V VARCHAR),
+	wrapper STRUCT(Base STRUCT(I INT, V VARCHAR)),
+	topWrapper STRUCT(Wrapper STRUCT(Base STRUCT(I INT, V VARCHAR))),
 	structList STRUCT(I INT, V VARCHAR)[],
 	listStruct STRUCT(L INT[]),
-	mix STRUCT(A STRUCT(V VARCHAR[]), B STRUCT(L INT[])[]),
-	mixList STRUCT(A STRUCT(V VARCHAR[]), B STRUCT(L INT[])[])[]
+	mix STRUCT(A STRUCT(L VARCHAR[]), B STRUCT(L INT[])[]),
+	mixList STRUCT(A STRUCT(L VARCHAR[]), B STRUCT(L INT[])[])[]
 )`
 )
 

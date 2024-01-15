@@ -141,19 +141,19 @@ func TestAppender(t *testing.T) {
 	res, err := db.QueryContext(
 		context.Background(), `
 			SELECT  id,
-							uint8,
-							int8,
-							uint16,
-							int16,
-							uint32,
-							int32,
-							uint64,
-							int64,
-							timestamp,
-							float,
-							double,
-							string,
-							bool
+					uint8,
+					int8,
+					uint16,
+					int16,
+					uint32,
+					int32,
+					uint64,
+					int64,
+					timestamp,
+					float,
+					double,
+					string,
+					bool
       FROM test
       ORDER BY id`)
 	require.NoError(t, err)

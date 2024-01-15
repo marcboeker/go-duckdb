@@ -5,6 +5,24 @@ import "strconv"
 const standardListSize = 3000
 const standardNestedListSize = 30
 
+type ListString struct {
+	L []string
+}
+
+func (l *ListString) Fill() ListString {
+	for j := 0; j < standardListSize; j++ {
+		l.L = append(l.L, strconv.Itoa(j)+" ducks are cool")
+	}
+	return *l
+}
+
+func (l *ListString) FillFromInterface(i []interface{}) ListString {
+	for _, v := range i {
+		l.L = append(l.L, v.(string))
+	}
+	return *l
+}
+
 type ListInt struct {
 	L []int32
 }
@@ -29,31 +47,13 @@ func (l *ListInt) FillInnerFromInterface(i []interface{}) ListInt {
 	return *l
 }
 
-type ListString struct {
-	L []string
-}
-
-func (l *ListString) Fill() ListString {
-	for j := 0; j < standardListSize; j++ {
-		l.L = append(l.L, strconv.Itoa(j)+" ducks are cool")
-	}
-	return *l
-}
-
-func (l *ListString) FillFromInterface(i []interface{}) ListString {
-	for _, v := range i {
-		l.L = append(l.L, v.(string))
-	}
-	return *l
-}
-
 type NestedListInt struct {
 	L [][]int32
 }
 
 func (l *NestedListInt) Fill() NestedListInt {
-	inner := ListInt{}
 	for j := 0; j < standardNestedListSize; j++ {
+		inner := ListInt{}
 		l.L = append(l.L, inner.Fill().L)
 	}
 	return *l
@@ -72,8 +72,8 @@ type TripleNestedListInt struct {
 }
 
 func (l *TripleNestedListInt) Fill() TripleNestedListInt {
-	inner := NestedListInt{}
-	for j := 0; j < standardNestedListSize; j++ {
+	for j := 0; j < standardNestedListSize/3; j++ {
+		inner := NestedListInt{}
 		l.L = append(l.L, inner.Fill().L)
 	}
 	return *l
@@ -184,8 +184,8 @@ type Mix struct {
 
 func (m *Mix) Fill() Mix {
 	m.A.Fill()
-	l := ListInt{}
 	for j := 0; j < standardNestedListSize; j++ {
+		l := ListInt{}
 		m.B = append(m.B, l.Fill())
 	}
 	return *m
@@ -193,7 +193,8 @@ func (m *Mix) Fill() Mix {
 
 func (m *Mix) FillFromInterface(i interface{}) Mix {
 	inner := i.(map[string]interface{})
-	m.A.FillFromInterface(inner["A"].([]interface{}))
+	innerA := inner["A"].(map[string]interface{})
+	m.A.FillFromInterface(innerA["L"].([]interface{}))
 	for _, v := range inner["B"].([]interface{}) {
 		l := ListInt{}
 		m.B = append(m.B, l.FillFromInterface(v))
