@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,6 +15,7 @@ const (
 	testAppenderTableDDL = `
   CREATE TABLE test(
     id BIGINT,
+	uuid UUID,
     uint8 UTINYINT,
     int8 TINYINT,
     uint16 USMALLINT,
@@ -36,7 +38,7 @@ func createAppenderTable(db *sql.DB, t *testing.T) *sql.Result {
 	return &res
 }
 
-const numAppenderTestRows = 10000
+const numAppenderTestRows = 100000
 
 func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
@@ -66,6 +68,7 @@ func TestAppender(t *testing.T) {
 
 	type dataRow struct {
 		ID        int
+		UUID      [16]byte
 		UInt8     uint8
 		Int8      int8
 		UInt16    uint16
@@ -86,9 +89,16 @@ func TestAppender(t *testing.T) {
 		if u64 > 9223372036854775807 {
 			u64 = 9223372036854775807
 		}
+
+		b, err := uuid.New().MarshalBinary()
+		require.NoError(t, err)
+		var uuidBytes [16]byte
+		copy(uuidBytes[:], b)
+
 		return dataRow{
 			ID:        i,
 			UInt8:     uint8(randInt(0, 255)),
+			UUID:      uuidBytes,
 			Int8:      int8(randInt(-128, 127)),
 			UInt16:    uint16(randInt(0, 65535)),
 			Int16:     int16(randInt(-32768, 32767)),
@@ -114,11 +124,15 @@ func TestAppender(t *testing.T) {
 
 	appender, err := NewAppenderFromConn(conn, "", "test")
 	require.NoError(t, err)
-	defer appender.Close()
 
-	for _, row := range rows {
+	for i, row := range rows {
+		if i%1024 == 0 {
+			err = appender.Flush()
+			require.NoError(t, err)
+		}
 		err := appender.AppendRow(
 			row.ID,
+			row.UUID,
 			row.UInt8,
 			row.Int8,
 			row.UInt16,
@@ -135,12 +149,13 @@ func TestAppender(t *testing.T) {
 		)
 		require.NoError(t, err)
 	}
-	err = appender.Flush()
+	err = appender.Close()
 	require.NoError(t, err)
 
 	res, err := db.QueryContext(
 		context.Background(), `
 			SELECT  id,
+							uuid,
 							uint8,
 							int8,
 							uint16,
@@ -160,10 +175,12 @@ func TestAppender(t *testing.T) {
 	defer res.Close()
 
 	i := 0
+	var scannedUUID []byte
 	for res.Next() {
 		r := dataRow{}
 		err := res.Scan(
 			&r.ID,
+			&scannedUUID,
 			&r.UInt8,
 			&r.Int8,
 			&r.UInt16,
@@ -179,6 +196,7 @@ func TestAppender(t *testing.T) {
 			&r.Bool,
 		)
 		require.NoError(t, err)
+		copy(r.UUID[:], scannedUUID)
 		require.Equal(t, rows[i], r)
 		i++
 	}

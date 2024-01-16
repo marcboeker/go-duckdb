@@ -67,6 +67,9 @@ func (a *Appender) Error() error {
 
 // Flush the appender to the underlying table and clear the internal cache.
 func (a *Appender) Flush() error {
+	if a.currentChunkIdx == 0 && a.currentRow == 0 {
+		return nil
+	}
 	// set the size of the current chunk to the current row
 	C.duckdb_data_chunk_set_size(a.chunks[a.currentChunkIdx], C.uint64_t(a.currentRow))
 
@@ -86,6 +89,9 @@ func (a *Appender) Flush() error {
 		return errors.New(dbErr)
 	}
 
+	a.currentRow = 0
+	a.currentChunkIdx = 0
+	a.chunks = a.chunks[:0]
 	return nil
 }
 
@@ -96,6 +102,9 @@ func (a *Appender) Close() error {
 	}
 
 	a.closed = true
+	if err := a.Flush(); err != nil {
+		return err
+	}
 
 	if state := C.duckdb_appender_destroy(a.appender); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
@@ -161,6 +170,8 @@ func (a *Appender) initializeChunkTypes(args []driver.Value) {
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN)
 		case []byte:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
+		case [16]byte:
+			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID)
 		case string:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
 		case time.Time:
@@ -236,6 +247,8 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 			set[bool](a.chunkVectors[i], a.currentRow, v)
 		case []byte:
 			set[[]byte](a.chunkVectors[i], a.currentRow, v)
+		case [16]byte:
+			set[C.duckdb_hugeint](a.chunkVectors[i], a.currentRow, uuidToHugeInt(v))
 		case string:
 			str := C.CString(v)
 			C.duckdb_vector_assign_string_element(a.chunkVectors[i], C.uint64_t(a.currentRow), str)
