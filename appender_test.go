@@ -14,21 +14,21 @@ import (
 const (
 	testAppenderTableDDL = `
   CREATE TABLE test(
-    id BIGINT,
-	uuid UUID,
-    uint8 UTINYINT,
-    int8 TINYINT,
-    uint16 USMALLINT,
-    int16 SMALLINT,
+		id BIGINT,
+		uuid UUID,
+		uint8 UTINYINT,
+		int8 TINYINT,
+		uint16 USMALLINT,
+		int16 SMALLINT,
 		uint32 UINTEGER,
-    int32 INTEGER,
-    uint64 UBIGINT,
-    int64 BIGINT,
+		int32 INTEGER,
+		uint64 UBIGINT,
+		int64 BIGINT,
 		timestamp TIMESTAMP,
-    float REAL,
-    double DOUBLE,
-    string VARCHAR,
-    bool BOOLEAN
+		float REAL,
+		double DOUBLE,
+		string VARCHAR,
+		bool BOOLEAN
   )`
 )
 
