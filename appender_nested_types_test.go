@@ -107,8 +107,7 @@ func (b *Base) FillFromInterface(i interface{}) Base {
 
 func (b *Base) ListFill(i int) []Base {
 	var l []Base
-	var j int
-	for j = 0; j < i; j++ {
+	for j := 0; j < i; j++ {
 		b := Base{}
 		l = append(l, b.Fill(j))
 	}

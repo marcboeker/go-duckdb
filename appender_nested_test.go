@@ -11,7 +11,7 @@ const (
 	testAppenderTableNested = `
 CREATE TABLE test(
 	id BIGINT,
-	charList VARCHAR[],
+	stringList VARCHAR[],
 	intList INT[],
 	nestedListInt INT[][],
 	tripleNestedListInt INT[][][],
@@ -32,7 +32,7 @@ func createAppenderNestedTable(db *sql.DB, t *testing.T) *sql.Result {
 }
 
 type dataRowInterface struct {
-	charList            []interface{}
+	stringList          []interface{}
 	intList             []interface{}
 	nestedListInt       []interface{}
 	tripleNestedListInt []interface{}
@@ -47,7 +47,7 @@ type dataRowInterface struct {
 
 type dataRow struct {
 	ID                  int
-	charList            ListString
+	stringList          ListString
 	intList             ListInt
 	nestedListInt       NestedListInt
 	tripleNestedListInt TripleNestedListInt
@@ -60,8 +60,8 @@ type dataRow struct {
 	mixList             []Mix
 }
 
-func (dR *dataRow) Convert(i dataRowInterface) {
-	dR.charList.FillFromInterface(i.charList)
+func (dR *dataRow) Convert(i *dataRowInterface) {
+	dR.stringList.FillFromInterface(i.stringList)
 	dR.intList.FillInnerFromInterface(i.intList)
 	dR.nestedListInt.FillFromInterface(i.nestedListInt)
 	dR.tripleNestedListInt.FillFromInterface(i.tripleNestedListInt)
@@ -83,9 +83,9 @@ func TestNestedAppender(t *testing.T) {
 	createAppenderNestedTable(db, t)
 	defer db.Close()
 
-	randRow := func(i int) dataRow {
+	initRow := func(i int) dataRow {
 		dR := dataRow{ID: i}
-		dR.charList.Fill()
+		dR.stringList.Fill()
 		dR.intList.Fill()
 		dR.nestedListInt.Fill()
 		dR.tripleNestedListInt.Fill()
@@ -98,9 +98,9 @@ func TestNestedAppender(t *testing.T) {
 		dR.mixList = dR.mix.ListFill(10)
 		return dR
 	}
-	rows := []dataRow{}
+	rows := make([]dataRow, 100)
 	for i := 0; i < 100; i++ {
-		rows = append(rows, randRow(i))
+		rows[i] = initRow(i)
 	}
 
 	conn, err := c.Connect(context.Background())
@@ -114,7 +114,7 @@ func TestNestedAppender(t *testing.T) {
 	for _, row := range rows {
 		err := appender.AppendRow(
 			row.ID,
-			row.charList.L,
+			row.stringList.L,
 			row.intList.L,
 			row.nestedListInt.L,
 			row.tripleNestedListInt.L,
@@ -144,7 +144,7 @@ func TestNestedAppender(t *testing.T) {
 		interfaces := dataRowInterface{}
 		err := res.Scan(
 			&r.ID,
-			&interfaces.charList,
+			&interfaces.stringList,
 			&interfaces.intList,
 			&interfaces.nestedListInt,
 			&interfaces.tripleNestedListInt,
@@ -157,7 +157,7 @@ func TestNestedAppender(t *testing.T) {
 			&interfaces.mixList,
 		)
 		require.NoError(t, err)
-		r.Convert(interfaces)
+		r.Convert(&interfaces)
 		require.Equal(t, rows[i], r)
 		i++
 	}
