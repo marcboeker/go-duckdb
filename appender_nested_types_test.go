@@ -2,15 +2,16 @@ package duckdb
 
 import "strconv"
 
-const standardListSize = 3000
-const standardNestedListSize = 30
+const childLength = 3000
+const parentLength = 30
+const topLength = 3
 
 type ListString struct {
 	L []string
 }
 
 func (l *ListString) Fill() ListString {
-	for j := 0; j < standardListSize; j++ {
+	for j := 0; j < childLength; j++ {
 		l.L = append(l.L, strconv.Itoa(j)+" ducks are cool")
 	}
 	return *l
@@ -23,68 +24,65 @@ func (l *ListString) FillFromInterface(i []interface{}) ListString {
 	return *l
 }
 
+type Int32List []int32
 type ListInt struct {
-	L []int32
+	L Int32List
 }
 
-func (l *ListInt) Fill() ListInt {
-	for j := 0; j < standardListSize; j++ {
-		l.L = append(l.L, int32(j))
+func (l *Int32List) Fill() {
+	*l = make(Int32List, childLength)
+	for j := int32(0); j < childLength; j++ {
+		(*l)[j] = j
 	}
-	return *l
 }
 
-func (l *ListInt) FillFromInterface(i interface{}) ListInt {
+func (l *Int32List) FillFromInterface(i interface{}) {
 	inner := i.(map[string]interface{})["L"]
 	l.FillInnerFromInterface(inner.([]interface{}))
-	return *l
 }
 
-func (l *ListInt) FillInnerFromInterface(i []interface{}) ListInt {
-	for _, v := range i {
-		l.L = append(l.L, v.(int32))
+func (l *Int32List) FillInnerFromInterface(i []interface{}) {
+	*l = make(Int32List, len(i))
+	for j, v := range i {
+		(*l)[j] = v.(int32)
 	}
-	return *l
 }
 
-type NestedListInt struct {
-	L [][]int32
-}
+type Int32ListList []Int32List
 
-func (l *NestedListInt) Fill() NestedListInt {
-	for j := 0; j < standardNestedListSize; j++ {
-		inner := ListInt{}
-		l.L = append(l.L, inner.Fill().L)
+func (l *Int32ListList) Fill() {
+	*l = make(Int32ListList, parentLength)
+	for j := 0; j < parentLength; j++ {
+		(*l)[j].Fill()
 	}
-	return *l
 }
 
-func (l *NestedListInt) FillFromInterface(i []interface{}) NestedListInt {
-	for _, v := range i {
-		inner := ListInt{}
-		l.L = append(l.L, inner.FillInnerFromInterface(v.([]interface{})).L)
+func (l *Int32ListList) FillFromInterface(i []interface{}) {
+	*l = make(Int32ListList, len(i))
+	for j, v := range i {
+		(*l)[j].FillInnerFromInterface(v.([]interface{}))
 	}
-	return *l
 }
 
-type TripleNestedListInt struct {
-	L [][][]int32
-}
+type Int32ListListList []Int32ListList
 
-func (l *TripleNestedListInt) Fill() TripleNestedListInt {
-	for j := 0; j < standardNestedListSize/3; j++ {
-		inner := NestedListInt{}
-		l.L = append(l.L, inner.Fill().L)
+func (l *Int32ListListList) Fill() {
+	*l = make(Int32ListListList, topLength)
+	for j := 0; j < topLength; j++ {
+		(*l)[j].Fill()
 	}
-	return *l
 }
 
-func (l *TripleNestedListInt) FillFromInterface(i []interface{}) TripleNestedListInt {
-	for _, v := range i {
-		inner := NestedListInt{}
-		l.L = append(l.L, inner.FillFromInterface(v.([]interface{})).L)
+func (l *Int32ListListList) FillFromInterface(i []interface{}) {
+	*l = make(Int32ListListList, len(i))
+	for j, v := range i {
+		(*l)[j].FillFromInterface(v.([]interface{}))
 	}
-	return *l
+}
+
+type BaseList []Base
+type ListBase struct {
+	L BaseList
 }
 
 type Base struct {
@@ -105,23 +103,19 @@ func (b *Base) FillFromInterface(i interface{}) Base {
 	return *b
 }
 
-func (b *Base) ListFill(i int) []Base {
-	var l []Base
-	for j := 0; j < i; j++ {
-		b := Base{}
-		l = append(l, b.Fill(j))
+func (b *BaseList) ListFill() {
+	*b = make(BaseList, childLength)
+	for j := 0; j < childLength; j++ {
+		(*b)[j].Fill(j)
 	}
-	return l
 }
 
-func (b *Base) ListFillFromInterface(i interface{}) []Base {
-	var l []Base
+func (b *BaseList) ListFillFromInterface(i interface{}) {
 	inner := i.([]interface{})
-	for _, v := range inner {
-		tmpB := Base{}
-		l = append(l, tmpB.FillFromInterface(v))
+	*b = make(BaseList, len(inner))
+	for j, v := range inner {
+		(*b)[j].FillFromInterface(v)
 	}
-	return l
 }
 
 type Wrapper struct {
@@ -154,28 +148,7 @@ func (w *TopWrapper) FillFromInterface(i interface{}) TopWrapper {
 	return *w
 }
 
-type ListBase struct {
-	L []Base
-}
-
-func (l *ListBase) Fill() ListBase {
-	for j := 0; j < standardListSize; j++ {
-		b := Base{}
-		b.Fill(j)
-		l.L = append(l.L, b)
-	}
-	return *l
-}
-
-func (l *ListBase) FillFromInterface(i interface{}) ListBase {
-	inner := i.(map[string]interface{})
-	for _, v := range inner["L"].([]interface{}) {
-		b := Base{}
-		l.L = append(l.L, b.FillFromInterface(v))
-	}
-	return *l
-}
-
+type MixList []Mix
 type Mix struct {
 	A ListString
 	B []ListInt
@@ -183,9 +156,9 @@ type Mix struct {
 
 func (m *Mix) Fill() Mix {
 	m.A.Fill()
-	for j := 0; j < standardNestedListSize; j++ {
-		l := ListInt{}
-		m.B = append(m.B, l.Fill())
+	m.B = make([]ListInt, parentLength)
+	for j := 0; j < parentLength; j++ {
+		m.B[j].L.Fill()
 	}
 	return *m
 }
@@ -194,29 +167,25 @@ func (m *Mix) FillFromInterface(i interface{}) Mix {
 	inner := i.(map[string]interface{})
 	innerA := inner["A"].(map[string]interface{})
 	m.A.FillFromInterface(innerA["L"].([]interface{}))
-	for _, v := range inner["B"].([]interface{}) {
-		l := ListInt{}
-		m.B = append(m.B, l.FillFromInterface(v))
+	innerB := inner["B"].([]interface{})
+	m.B = make([]ListInt, len(innerB))
+	for j, v := range innerB {
+		m.B[j].L.FillFromInterface(v)
 	}
 	return *m
 }
 
-func (m *Mix) ListFill(i int) []Mix {
-	var l []Mix
-	var j int
-	for j = 0; j < i; j++ {
-		m := Mix{}
-		l = append(l, m.Fill())
+func (m *MixList) ListFill() {
+	*m = make(MixList, topLength)
+	for j := int32(0); j < topLength; j++ {
+		(*m)[j].Fill()
 	}
-	return l
 }
 
-func (m *Mix) ListFillFromInterface(i interface{}) []Mix {
-	var l []Mix
+func (m *MixList) ListFillFromInterface(i interface{}) {
 	inner := i.([]interface{})
-	for _, v := range inner {
-		tmpM := Mix{}
-		l = append(l, tmpM.FillFromInterface(v))
+	*m = make(MixList, len(inner))
+	for j, v := range inner {
+		(*m)[j].FillFromInterface(v)
 	}
-	return l
 }

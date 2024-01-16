@@ -48,16 +48,16 @@ type dataRowInterface struct {
 type dataRow struct {
 	ID                  int
 	stringList          ListString
-	intList             ListInt
-	nestedListInt       NestedListInt
-	tripleNestedListInt TripleNestedListInt
+	intList             Int32List
+	nestedListInt       Int32ListList
+	tripleNestedListInt Int32ListListList
 	base                Base
 	wrapper             Wrapper
 	topWrapper          TopWrapper
-	structList          []Base
+	structList          BaseList
 	listStruct          ListInt
 	mix                 Mix
-	mixList             []Mix
+	mixList             MixList
 }
 
 func (dR *dataRow) Convert(i *dataRowInterface) {
@@ -68,10 +68,10 @@ func (dR *dataRow) Convert(i *dataRowInterface) {
 	dR.base.FillFromInterface(i.base)
 	dR.wrapper.FillFromInterface(i.wrapper)
 	dR.topWrapper.FillFromInterface(i.topWrapper)
-	dR.structList = dR.base.ListFillFromInterface(i.structList)
-	dR.listStruct = dR.listStruct.FillFromInterface(i.listStruct)
+	dR.structList.ListFillFromInterface(i.structList)
+	dR.listStruct.L.FillFromInterface(i.listStruct)
 	dR.mix.FillFromInterface(i.mix)
-	dR.mixList = dR.mix.ListFillFromInterface(i.mixList)
+	dR.mixList.ListFillFromInterface(i.mixList)
 }
 
 func TestNestedAppender(t *testing.T) {
@@ -92,10 +92,10 @@ func TestNestedAppender(t *testing.T) {
 		dR.base.Fill(i)
 		dR.wrapper.Fill(i)
 		dR.topWrapper.Fill(i)
-		dR.structList = dR.base.ListFill(10)
-		dR.listStruct.Fill()
+		dR.structList.ListFill()
+		dR.listStruct.L.Fill()
 		dR.mix.Fill()
-		dR.mixList = dR.mix.ListFill(10)
+		dR.mixList.ListFill()
 		return dR
 	}
 	rows := make([]dataRow, 100)
@@ -115,9 +115,9 @@ func TestNestedAppender(t *testing.T) {
 		err := appender.AppendRow(
 			row.ID,
 			row.stringList.L,
-			row.intList.L,
-			row.nestedListInt.L,
-			row.tripleNestedListInt.L,
+			row.intList,
+			row.nestedListInt,
+			row.tripleNestedListInt,
 			row.base,
 			row.wrapper,
 			row.topWrapper,
