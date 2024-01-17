@@ -132,9 +132,9 @@ func TestNestedAppender(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := db.QueryContext(
-		context.Background(), `
-			SELECT * FROM test ORDER BY id
-    `)
+		context.Background(),
+		`SELECT * FROM test ORDER BY id`,
+	)
 	require.NoError(t, err)
 	defer res.Close()
 
@@ -162,5 +162,5 @@ func TestNestedAppender(t *testing.T) {
 		i++
 	}
 	// Ensure that the number of fetched rows equals the number of inserted rows.
-	require.Equal(t, i, 100)
+	require.Equal(t, 100, i)
 }
