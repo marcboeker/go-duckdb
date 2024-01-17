@@ -81,9 +81,6 @@ func (l *Int32ListListList) FillFromInterface(i []interface{}) {
 }
 
 type BaseList []Base
-type ListBase struct {
-	L BaseList
-}
 
 type Base struct {
 	I int32
