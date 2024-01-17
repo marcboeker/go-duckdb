@@ -235,7 +235,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 		C.duckdb_destroy_result(&res)
 		return nil, errors.New(dbErr)
 	}
-	
+
 	return &res, nil
 }
 
