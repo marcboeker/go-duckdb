@@ -230,10 +230,12 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
+
 		dbErr := C.GoString(C.duckdb_result_error(&res))
 		C.duckdb_destroy_result(&res)
 		return nil, errors.New(dbErr)
 	}
+	
 	return &res, nil
 }
 
