@@ -13,8 +13,6 @@ import (
 	"unsafe"
 )
 
-type UUID [16]byte
-
 // Appender holds the DuckDB appender. It allows to load bulk data into a DuckDB database.
 type Appender struct {
 	c        *conn
