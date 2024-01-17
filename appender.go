@@ -67,18 +67,13 @@ func (a *Appender) Error() error {
 
 // Flush the appender to the underlying table and clear the internal cache.
 func (a *Appender) Flush() error {
-	// set the size of the current chunk to the current row
-	C.duckdb_data_chunk_set_size(a.chunks[a.currentChunkIdx], C.uint64_t(a.currentRow))
+	if a.currentChunkIdx == 0 && a.currentRow == 0 {
+		return nil
+	}
 
-	// append all chunks to the appender and destroy them
-	var state C.duckdb_state
-	for i, chunk := range a.chunks {
-		state = C.duckdb_append_data_chunk(*a.appender, chunk)
-		if state == C.DuckDBError {
-			dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
-			return fmt.Errorf("duckdb error appending chunk %d of %d: %s", i+1, a.currentChunkIdx+1, dbErr)
-		}
-		C.duckdb_destroy_data_chunk(&chunk)
+	err := a.appendChunks()
+	if err != nil {
+		return err
 	}
 
 	if state := C.duckdb_appender_flush(*a.appender); state == C.DuckDBError {
@@ -86,6 +81,9 @@ func (a *Appender) Flush() error {
 		return errors.New(dbErr)
 	}
 
+	a.currentRow = 0
+	a.currentChunkIdx = 0
+	a.chunks = a.chunks[:0]
 	return nil
 }
 
@@ -96,6 +94,12 @@ func (a *Appender) Close() error {
 	}
 
 	a.closed = true
+	// append chunks if not already done via flush
+	if a.currentChunkIdx != 0 || a.currentRow != 0 {
+		if err := a.appendChunks(); err != nil {
+			return err
+		}
+	}
 
 	if state := C.duckdb_appender_destroy(a.appender); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
@@ -161,6 +165,8 @@ func (a *Appender) initializeChunkTypes(args []driver.Value) {
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN)
 		case []byte:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
+		case UUID:
+			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID)
 		case string:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
 		case time.Time:
@@ -236,6 +242,8 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 			set[bool](a.chunkVectors[i], a.currentRow, v)
 		case []byte:
 			set[[]byte](a.chunkVectors[i], a.currentRow, v)
+		case UUID:
+			set[C.duckdb_hugeint](a.chunkVectors[i], a.currentRow, uuidToHugeInt(v))
 		case string:
 			str := C.CString(v)
 			C.duckdb_vector_assign_string_element(a.chunkVectors[i], C.uint64_t(a.currentRow), str)
@@ -250,6 +258,23 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 	}
 
 	a.currentRow++
+	return nil
+}
+
+func (a *Appender) appendChunks() error {
+	// set the size of the current chunk to the current row
+	C.duckdb_data_chunk_set_size(a.chunks[a.currentChunkIdx], C.uint64_t(a.currentRow))
+
+	// append all chunks to the appender and destroy them
+	var state C.duckdb_state
+	for i, chunk := range a.chunks {
+		state = C.duckdb_append_data_chunk(*a.appender, chunk)
+		if state == C.DuckDBError {
+			dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
+			return fmt.Errorf("duckdb error appending chunk %d of %d: %s", i+1, a.currentChunkIdx+1, dbErr)
+		}
+		C.duckdb_destroy_data_chunk(&chunk)
+	}
 	return nil
 }
 
