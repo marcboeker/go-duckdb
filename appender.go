@@ -13,6 +13,8 @@ import (
 	"unsafe"
 )
 
+type UUID [16]byte
+
 // Appender holds the DuckDB appender. It allows to load bulk data into a DuckDB database.
 type Appender struct {
 	c        *conn
@@ -165,7 +167,7 @@ func (a *Appender) initializeChunkTypes(args []driver.Value) {
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN)
 		case []byte:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
-		case [16]byte:
+		case UUID:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID)
 		case string:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
@@ -242,7 +244,7 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 			set[bool](a.chunkVectors[i], a.currentRow, v)
 		case []byte:
 			set[[]byte](a.chunkVectors[i], a.currentRow, v)
-		case [16]byte:
+		case UUID:
 			set[C.duckdb_hugeint](a.chunkVectors[i], a.currentRow, uuidToHugeInt(v))
 		case string:
 			str := C.CString(v)

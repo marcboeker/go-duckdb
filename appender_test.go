@@ -68,7 +68,7 @@ func TestAppender(t *testing.T) {
 
 	type dataRow struct {
 		ID        int
-		UUID      [16]byte
+		UUID      UUID
 		UInt8     uint8
 		Int8      int8
 		UInt16    uint16
@@ -98,7 +98,7 @@ func TestAppender(t *testing.T) {
 		return dataRow{
 			ID:        i,
 			UInt8:     uint8(randInt(0, 255)),
-			UUID:      uuidBytes,
+			UUID:      UUID(uuidBytes),
 			Int8:      int8(randInt(-128, 127)),
 			UInt16:    uint16(randInt(0, 65535)),
 			Int16:     int16(randInt(-32768, 32767)),

@@ -24,7 +24,7 @@ func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
 	return uuid[:]
 }
 
-func uuidToHugeInt(uuid [16]byte) C.duckdb_hugeint {
+func uuidToHugeInt(uuid UUID) C.duckdb_hugeint {
 	var dt C.duckdb_hugeint
 	upper := binary.BigEndian.Uint64(uuid[:8])
 	// flip the sign bit
