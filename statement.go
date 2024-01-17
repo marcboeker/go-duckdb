@@ -203,13 +203,19 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)
 
-	done := make(chan bool)
+	done := make(chan struct{})
 	defer close(done)
+	queryComplete := false
 
 	go func() {
 		select {
 		case <-ctx.Done():
-			// also need to interrupt to cancel the query
+			// sometimes this goroutine is not scheduled immediately and by that time if another query is scheduled on this connection
+			// this can cancel that query so need to handle cases when original query was complete.
+			if queryComplete {
+				return
+			}
+			// need to interrupt to cancel the query
 			C.duckdb_interrupt(*s.c.con)
 			return
 		case <-done:
@@ -218,16 +224,16 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	}()
 
 	var res C.duckdb_result
-	if state := C.duckdb_execute_pending(pendingRes, &res); state == C.DuckDBError {
+	state := C.duckdb_execute_pending(pendingRes, &res)
+	queryComplete = true
+	if state == C.DuckDBError {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-
 		dbErr := C.GoString(C.duckdb_result_error(&res))
 		C.duckdb_destroy_result(&res)
 		return nil, errors.New(dbErr)
 	}
-
 	return &res, nil
 }
 
