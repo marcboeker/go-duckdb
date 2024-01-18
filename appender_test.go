@@ -125,9 +125,8 @@ func TestAppender(t *testing.T) {
 	appender, err := NewAppenderFromConn(conn, "", "test")
 	require.NoError(t, err)
 
-
 	for i, row := range rows {
-			if i%1024 == 0 {
+		if i%1024 == 0 {
 			err = appender.Flush()
 			require.NoError(t, err)
 		}
