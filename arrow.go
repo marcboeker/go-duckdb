@@ -80,11 +80,6 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	return &Arrow{c: dbConn}, nil
 }
 
-// Deprecated: Use QueryContext instead.
-func (a *Arrow) Query(query string, args ...any) (array.RecordReader, error) {
-	return a.QueryContext(context.Background(), query, args)
-}
-
 // QueryContext prepares statements, executes them, returns Apache Arrow array.RecordReader as a result of the last
 // executed statement. Arguments are bound to the last statement.
 func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
