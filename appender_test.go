@@ -130,6 +130,7 @@ func TestAppender(t *testing.T) {
 			err = appender.Flush()
 			require.NoError(t, err)
 		}
+
 		err := appender.AppendRow(
 			row.ID,
 			row.UUID,

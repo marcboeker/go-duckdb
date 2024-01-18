@@ -190,8 +190,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
 
-	err := s.start(args)
-	if err != nil {
+	if err := s.start(args); err != nil {
 		return nil, err
 	}
 

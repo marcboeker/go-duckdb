@@ -70,32 +70,64 @@ Please refer to the [database/sql](https://godoc.org/database/sql) GoDoc for fur
 If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new Appender by supplying a DuckDB connection to `NewAppenderFromConn()`.
 
 ```go
-connector, err := NewConnector("test.db", nil)
-if err != {
+connector, err := duckdb.NewConnector("test.db", nil)
+if err != nil {
   ...
 }
 conn, err := connector.Connect(context.Background())
-if err != {
+if err != nil {
   ...
 }
 defer conn.Close()
 
 // Retrieve appender from connection (note that you have to create the table 'test' beforehand).
 appender, err := NewAppenderFromConn(conn, "", "test")
-if err != {
+if err != nil {
   ...
 }
 defer appender.Close()
 
 err = appender.AppendRow(...)
-if err != {
+if err != nil {
   ...
 }
 
 // Optional, if you want to access the appended rows immediately.
 err = appender.Flush()
-if err != {
+if err != nil {
   ...
+}
+```
+
+## DuckDB Apache Arrow Interface
+
+If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new Arrow by supplying a DuckDB connection to `NewArrowFromConn()`.
+
+```go
+connector, err := duckdb.NewConnector("", nil)
+if err != nil {
+  ...
+}
+conn, err := connector.Connect(context.Background())
+if err != nil {
+  ...
+}
+defer conn.Close()
+
+// Retrieve Arrow from connection.
+ar, err := duckdb.NewArrowFromConn(conn)
+if err != nil {
+  ...
+}
+
+rdr, err := ar.QueryContext(context.Background(), "SELECT * FROM generate_series(1, 10)")
+if err != nil {
+  ...
+}
+defer rdr.Release()
+
+for rdr.Next() {
+  // Process records.
 }
 ```
 
