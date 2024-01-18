@@ -77,17 +77,18 @@ func TestArrow(t *testing.T) {
 			ar, err := NewArrowFromConn(conn)
 			require.NoError(t, err)
 
-			reader, err := ar.QueryContext(context.Background(), "SELECT bar, baz FROM foo WHERE baz > ?", 12344)
+			_, err = db.ExecContext(context.Background(), "INSERT INTO foo (bar, baz) VALUES ('lala', 2), ('dada', 3)")
+			require.NoError(t, err)
+
+			reader, err := ar.QueryContext(context.Background(), "SELECT bar, baz FROM foo WHERE baz > ?", 1)
 			require.NoError(t, err)
 			defer reader.Release()
 
 			for reader.Next() {
 				rec := reader.Record()
-				require.Equal(t, int64(1), rec.NumRows())
-				bs, err := rec.MarshalJSON()
-				require.NoError(t, err)
-
-				t.Log(string(bs))
+				require.Equal(t, int64(2), rec.NumRows())
+				require.Equal(t, "lala", rec.Column(0).ValueStr(0))
+				require.Equal(t, "dada", rec.Column(0).ValueStr(1))
 			}
 			require.NoError(t, reader.Err())
 			return nil
