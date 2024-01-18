@@ -46,6 +46,7 @@ type Appender struct {
 	chunks           []C.duckdb_data_chunk
 	currentChunkSize C.idx_t
 	columnTypes      *C.duckdb_logical_type
+	columnTypesPtr   *[1073741823]C.duckdb_logical_type
 
 	columnInfos []ColumnInfo
 }
@@ -101,6 +102,10 @@ func (a *Appender) Flush() error {
 	}
 
 	// free the column types
+	for i := range a.columnInfos {
+		C.duckdb_destroy_logical_type(&a.columnTypesPtr[i])
+	}
+
 	C.free(unsafe.Pointer(a.columnTypes))
 
 	if state := C.duckdb_appender_flush(*a.appender); state == C.DuckDBError {
@@ -258,14 +263,14 @@ func (a *Appender) InitializeColumnTypesAndInfos(val driver.Value, colIdx int) (
 		structType := v.Type()
 		structValue := v
 
-		callbackColumn := ColumnInfo{function: f, colType: STRUCT, columnInfos: make([]ColumnInfo, v.NumField()), fields: v.NumField()}
+		columnInfo := ColumnInfo{function: f, colType: STRUCT, columnInfos: make([]ColumnInfo, v.NumField()), fields: v.NumField()}
 
 		// Create an array of the struct fields TYPES
 		// and an array of the struct fields NAMES
 		fieldTypes := make([]C.duckdb_logical_type, structType.NumField())
 		fieldNames := make([]*C.char, structType.NumField())
 		for i := 0; i < structType.NumField(); i++ {
-			fieldTypes[i], callbackColumn.columnInfos[i] = a.InitializeColumnTypesAndInfos(structValue.Field(i).Interface(), i)
+			fieldTypes[i], columnInfo.columnInfos[i] = a.InitializeColumnTypesAndInfos(structValue.Field(i).Interface(), i)
 			fieldNames[i] = C.CString(structType.Field(i).Name)
 		}
 
@@ -279,9 +284,11 @@ func (a *Appender) InitializeColumnTypesAndInfos(val driver.Value, colIdx int) (
 			C.free(unsafe.Pointer(fieldTypes[i]))
 		}
 
-		return structLogicalType, callbackColumn
+		return structLogicalType, columnInfo
+	case reflect.Map:
+		panic(fmt.Sprintf("%T: the appender currently doesn't support maps", val))
 	default:
-		panic(fmt.Sprintf("couldn't append unsupported parameter %T", v))
+		panic(fmt.Sprintf("couldn't append unsupported parameter %T", val))
 	}
 
 	return C.duckdb_create_logical_type(C.DUCKDB_TYPE_INVALID), ColumnInfo{}
@@ -293,10 +300,10 @@ func (a *Appender) initializeColumnTypes(args []driver.Value) {
 	defaultLogicalType := C.duckdb_create_logical_type(0)
 	columnTypes := C.malloc(C.size_t(len(args)) * C.size_t(unsafe.Sizeof(defaultLogicalType)))
 
-	columnTypesPtr := (*[1<<30 - 1]C.duckdb_logical_type)(columnTypes)
+	a.columnTypesPtr = (*[1<<30 - 1]C.duckdb_logical_type)(columnTypes)
 
 	for i, val := range args {
-		columnTypesPtr[i], a.columnInfos[i] = a.InitializeColumnTypesAndInfos(val, i)
+		a.columnTypesPtr[i], a.columnInfos[i] = a.InitializeColumnTypesAndInfos(val, i)
 	}
 
 	a.columnTypes = (*C.duckdb_logical_type)(columnTypes)
