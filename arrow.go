@@ -158,20 +158,20 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 
 // queryArrowSchema fetches the internal arrow schema from the arrow result.
 func (a *Arrow) queryArrowSchema(res *C.duckdb_arrow) (*arrow.Schema, error) {
-	cdSchema := (*cdata.CArrowSchema)(unsafe.Pointer(C.calloc(1, C.sizeof_struct_ArrowSchema)))
+	schema := C.calloc(1, C.sizeof_struct_ArrowSchema)
 	defer func() {
-		cdata.ReleaseCArrowSchema(cdSchema)
-		C.free(unsafe.Pointer(cdSchema))
+		cdata.ReleaseCArrowSchema((*cdata.CArrowSchema)(schema))
+		C.free(schema)
 	}()
 
 	if state := C.duckdb_query_arrow_schema(
 		*res,
-		(*C.duckdb_arrow_schema)(unsafe.Pointer(&cdSchema)),
+		(*C.duckdb_arrow_schema)(unsafe.Pointer(&schema)),
 	); state == C.DuckDBError {
 		return nil, errors.New("duckdb_query_arrow_schema")
 	}
 
-	sc, err := cdata.ImportCArrowSchema(cdSchema)
+	sc, err := cdata.ImportCArrowSchema((*cdata.CArrowSchema)(schema))
 	if err != nil {
 		return nil, fmt.Errorf("%w: ImportCArrowSchema", err)
 	}
@@ -184,20 +184,20 @@ func (a *Arrow) queryArrowSchema(res *C.duckdb_arrow) (*arrow.Schema, error) {
 // This function can be called multiple time to get next chunks,
 // which will free the previous out_array.
 func (a *Arrow) queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Record, error) {
-	cdArr := (*cdata.CArrowArray)(unsafe.Pointer(C.calloc(1, C.sizeof_struct_ArrowArray)))
+	arr := C.calloc(1, C.sizeof_struct_ArrowArray)
 	defer func() {
-		cdata.ReleaseCArrowArray(cdArr)
-		C.free(unsafe.Pointer(cdArr))
+		cdata.ReleaseCArrowArray((*cdata.CArrowArray)(arr))
+		C.free(arr)
 	}()
 
 	if state := C.duckdb_query_arrow_array(
 		*res,
-		(*C.duckdb_arrow_array)(unsafe.Pointer(&cdArr)),
+		(*C.duckdb_arrow_array)(unsafe.Pointer(&arr)),
 	); state == C.DuckDBError {
 		return nil, errors.New("duckdb_query_arrow_array")
 	}
 
-	rec, err := cdata.ImportCRecordBatchWithSchema(cdArr, sc)
+	rec, err := cdata.ImportCRecordBatchWithSchema((*cdata.CArrowArray)(arr), sc)
 	if err != nil {
 		return nil, fmt.Errorf("%w: ImportCRecordBatchWithSchema", err)
 	}
