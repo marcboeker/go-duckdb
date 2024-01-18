@@ -133,7 +133,8 @@ func TestAppender(t *testing.T) {
 
 		err := appender.AppendRow(
 			row.ID,
-			row.UUID, row.UInt8,
+			row.UUID,
+			row.UInt8,
 			row.Int8,
 			row.UInt16,
 			row.Int16,
