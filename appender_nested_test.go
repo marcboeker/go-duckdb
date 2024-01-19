@@ -31,7 +31,7 @@ func createAppenderNestedTable(db *sql.DB, t *testing.T) *sql.Result {
 	return &res
 }
 
-type dataRowInterface struct {
+type nestedDataRowInterface struct {
 	stringList          []interface{}
 	intList             []interface{}
 	nestedListInt       []interface{}
@@ -45,7 +45,7 @@ type dataRowInterface struct {
 	mixList             []interface{}
 }
 
-type dataRow struct {
+type nestedDataRow struct {
 	ID                  int
 	stringList          ListString
 	intList             Int32List
@@ -60,7 +60,7 @@ type dataRow struct {
 	mixList             MixList
 }
 
-func (dR *dataRow) Convert(i *dataRowInterface) {
+func (dR *nestedDataRow) Convert(i *nestedDataRowInterface) {
 	dR.stringList.FillFromInterface(i.stringList)
 	dR.intList.FillInnerFromInterface(i.intList)
 	dR.nestedListInt.FillFromInterface(i.nestedListInt)
@@ -83,8 +83,8 @@ func TestNestedAppender(t *testing.T) {
 	createAppenderNestedTable(db, t)
 	defer db.Close()
 
-	initRow := func(i int) dataRow {
-		dR := dataRow{ID: i}
+	initRow := func(i int) nestedDataRow {
+		dR := nestedDataRow{ID: i}
 		dR.stringList.Fill()
 		dR.intList.Fill()
 		dR.nestedListInt.Fill()
@@ -98,7 +98,7 @@ func TestNestedAppender(t *testing.T) {
 		dR.mixList.ListFill()
 		return dR
 	}
-	rows := make([]dataRow, 100)
+	rows := make([]nestedDataRow, 100)
 	for i := 0; i < 100; i++ {
 		rows[i] = initRow(i)
 	}
@@ -140,8 +140,8 @@ func TestNestedAppender(t *testing.T) {
 
 	i := 0
 	for res.Next() {
-		r := dataRow{}
-		interfaces := dataRowInterface{}
+		r := nestedDataRow{}
+		interfaces := nestedDataRowInterface{}
 		err := res.Scan(
 			&r.ID,
 			&interfaces.stringList,

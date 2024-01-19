@@ -3,12 +3,11 @@ package duckdb
 import (
 	"context"
 	"database/sql"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -20,15 +19,16 @@ const (
 		int8 TINYINT,
 		uint16 USMALLINT,
 		int16 SMALLINT,
-	uint32 UINTEGER,
+		uint32 UINTEGER,
 		int32 INTEGER,
 		uint64 UBIGINT,
 		int64 BIGINT,
-	timestamp TIMESTAMP,
+		timestamp TIMESTAMP,
 		float REAL,
 		double DOUBLE,
 		string VARCHAR,
-		bool BOOLEAN
+		bool BOOLEAN,
+-- 	    blob BLOB
   )`
 )
 
@@ -82,6 +82,7 @@ func TestAppender(t *testing.T) {
 		Double    float64
 		String    string
 		Bool      bool
+		//Blob      []byte `duckdb:"blob"`
 	}
 	randRow := func(i int) dataRow {
 		u64 := rand.Uint64()
@@ -97,8 +98,8 @@ func TestAppender(t *testing.T) {
 
 		return dataRow{
 			ID:        i,
-			UInt8:     uint8(randInt(0, 255)),
 			UUID:      UUID(uuidBytes),
+			UInt8:     uint8(randInt(0, 255)),
 			Int8:      int8(randInt(-128, 127)),
 			UInt16:    uint16(randInt(0, 65535)),
 			Int16:     int16(randInt(-32768, 32767)),
@@ -111,6 +112,7 @@ func TestAppender(t *testing.T) {
 			Double:    rand.Float64(),
 			String:    randString(int(randInt(0, 128))),
 			Bool:      randBool(),
+			//Blob:      []byte{1},
 		}
 	}
 	rows := []dataRow{}
@@ -126,7 +128,7 @@ func TestAppender(t *testing.T) {
 	require.NoError(t, err)
 
 	for i, row := range rows {
-		if i%1024 == 0 {
+		if i%3000 == 0 {
 			err = appender.Flush()
 			require.NoError(t, err)
 		}
@@ -146,6 +148,7 @@ func TestAppender(t *testing.T) {
 			row.Double,
 			row.String,
 			row.Bool,
+			//row.Blob,
 		)
 		require.NoError(t, err)
 	}
@@ -155,7 +158,8 @@ func TestAppender(t *testing.T) {
 	res, err := db.QueryContext(
 		context.Background(), `
 			SELECT  id,
-					uuid,uint8,
+					uuid,
+					uint8,
 					int8,
 					uint16,
 					int16,
@@ -167,7 +171,8 @@ func TestAppender(t *testing.T) {
 					float,
 					double,
 					string,
-					bool
+					bool,
+-- 					blob
       FROM test
       ORDER BY id`)
 	require.NoError(t, err)
@@ -193,6 +198,7 @@ func TestAppender(t *testing.T) {
 			&r.Double,
 			&r.String,
 			&r.Bool,
+			//&r.Blob,
 		)
 		require.NoError(t, err)
 		copy(r.UUID[:], scannedUUID)

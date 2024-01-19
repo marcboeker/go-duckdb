@@ -87,7 +87,7 @@ func (a *Appender) Error() error {
 
 // Flush the appender to the underlying table and clear the internal cache.
 func (a *Appender) Flush() error {
-	if a.currentChunkIdx == 0 && a.currentRow == 0 {
+	if len(a.chunks) == 0 && a.currentChunkSize == 0 {
 		return nil
 	}
 
@@ -101,8 +101,7 @@ func (a *Appender) Flush() error {
 		return errors.New(dbErr)
 	}
 
-	a.currentRow = 0
-	a.currentChunkIdx = 0
+	a.currentChunkSize = 0
 	a.chunks = a.chunks[:0]
 	return nil
 }
@@ -115,7 +114,7 @@ func (a *Appender) Close() error {
 
 	a.closed = true
 	// append chunks if not already done via flush
-	if a.currentChunkIdx != 0 || a.currentRow != 0 {
+	if len(a.chunks) != 0 || a.currentChunkSize != 0 {
 		if err := a.appendChunks(); err != nil {
 			return err
 		}
@@ -219,8 +218,6 @@ func (a *Appender) InitializeColumnTypesAndInfos(val driver.Value, colIdx int) (
 			setPrimitive[bool](a, callbackColumn, rowIdx, val.(bool))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN), ColumnInfo{function: f, colType: PRIMITIVE}
-	case UUID:
-		tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID)
 	case reflect.String:
 		f := func(a *Appender, callbackColumn *ColumnInfo, rowIdx C.idx_t, val interface{}) {
 			setVarchar(a, callbackColumn, rowIdx, val.(string))
@@ -244,6 +241,13 @@ func (a *Appender) InitializeColumnTypesAndInfos(val driver.Value, colIdx int) (
 		childType, childCallbackColumn := a.InitializeColumnTypesAndInfos(v.Index(0).Interface(), colIdx)
 		callbackColumn.columnInfos[0] = childCallbackColumn
 		return C.duckdb_create_list_type(childType), callbackColumn
+	case reflect.Array:
+		if v.Type().Elem().Kind() == reflect.Uint8 && v.Type().Len() == 16 {
+			f := func(a *Appender, callbackColumn *ColumnInfo, rowIdx C.idx_t, val interface{}) {
+				setPrimitive[C.duckdb_hugeint](a, callbackColumn, rowIdx, uuidToHugeInt(val.(UUID)))
+			}
+			return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID), ColumnInfo{function: f, colType: PRIMITIVE}
+		}
 	case reflect.Struct:
 		// Check if it's time.Time since that is equivalent to the DuckDB TIMESTAMP type.
 		// If so, we can just use the primitive setter; otherwise it will not match the table set up by the user.
