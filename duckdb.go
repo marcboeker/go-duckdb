@@ -53,7 +53,6 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_config(&config)
 
 	connectionString := C.CString(extractConnectionString(dsn))
 	defer C.free(unsafe.Pointer(connectionString))
@@ -62,14 +61,21 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	defer C.duckdb_free(unsafe.Pointer(errMsg))
 
 	if state := C.duckdb_open_ext(connectionString, &db, config, &errMsg); state == C.DuckDBError {
+		C.duckdb_destroy_config(&config)
+
 		return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errMsg))
 	}
 
-	return &Connector{db: &db, connInitFn: connInitFn}, nil
+	return &Connector{
+		db:         &db,
+		connInitFn: connInitFn,
+		config:     config,
+	}, nil
 }
 
 type Connector struct {
 	db         *C.duckdb_database
+	config     C.duckdb_config
 	connInitFn func(execer driver.ExecerContext) error
 }
 
@@ -98,6 +104,10 @@ func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 func (c *Connector) Close() error {
 	C.duckdb_close(c.db)
 	c.db = nil
+
+	C.duckdb_destroy_config(&c.config)
+	c.config = nil
+
 	return nil
 }
 
@@ -106,6 +116,7 @@ func extractConnectionString(dataSourceName string) string {
 	if queryIndex < 0 {
 		queryIndex = len(dataSourceName)
 	}
+
 	return dataSourceName[0:queryIndex]
 }
 
@@ -122,6 +133,8 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 		for k, v := range parsedDSN.Query() {
 			if len(v) > 0 {
 				if err := setConfig(config, k, v[0]); err != nil {
+					C.duckdb_destroy_config(&config)
+
 					return nil, err
 				}
 			}
