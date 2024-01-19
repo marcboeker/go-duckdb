@@ -74,6 +74,8 @@ connector, err := duckdb.NewConnector("test.db", nil)
 if err != nil {
   ...
 }
+defer connector.Close()
+
 conn, err := connector.Connect(context.Background())
 if err != nil {
   ...
@@ -108,6 +110,8 @@ connector, err := duckdb.NewConnector("", nil)
 if err != nil {
   ...
 }
+defer connector.Close()
+
 conn, err := connector.Connect(context.Background())
 if err != nil {
   ...

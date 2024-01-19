@@ -56,7 +56,7 @@ func TestOpen(t *testing.T) {
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
 
-		if !errors.Is(err, errPrepareConfig) {
+		if !errors.Is(err, errSetConfig) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
