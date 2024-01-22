@@ -1,6 +1,8 @@
 package duckdb
 
-import "strconv"
+import (
+	"strconv"
+)
 
 const childLength = 3000
 const parentLength = 30
