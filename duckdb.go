@@ -51,13 +51,11 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 		return nil, fmt.Errorf("%w: %s", errParseConfig, err.Error())
 	}
 
-	connectionString := C.CString(extractConnectionString(dataSourceName))
-	defer C.free(unsafe.Pointer(connectionString))
-
 	config, err := prepareConfig(parsedDSN)
 	if err != nil {
 		return nil, err
 	}
+	defer C.duckdb_destroy_config(&config)
 
 	connectionString := C.CString(extractConnectionString(dataSourceName))
 	defer C.free(unsafe.Pointer(connectionString))
