@@ -59,6 +59,9 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 		return nil, err
 	}
 
+	connectionString := C.CString(extractConnectionString(dataSourceName))
+	defer C.free(unsafe.Pointer(connectionString))
+
 	var errMsg *C.char
 	defer C.duckdb_free(unsafe.Pointer(errMsg))
 
