@@ -388,21 +388,22 @@ func setTime(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.V
 }
 
 func setList(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.Value) {
-	// Convert the refVal to []interface{} to be able to iterate over it
 	refVal := reflect.ValueOf(value)
 
 	childColumnInfo := columnInfo.columnInfos[0]
 
+	childVectorSize := C.duckdb_list_vector_get_size(columnInfo.vector)
+
 	if refVal.IsNil() {
 		setNull(columnInfo, a.currentChunkSize)
+		childVectorSize += 1
 	}
 
+	// Convert the refVal to []interface{} to be able to iterate over it
 	interfaceSlice := make([]interface{}, refVal.Len())
 	for i := 0; i < refVal.Len(); i++ {
 		interfaceSlice[i] = refVal.Index(i).Interface()
 	}
-
-	childVectorSize := C.duckdb_list_vector_get_size(columnInfo.vector)
 
 	// Set the offset of the list vector using the current size of the child vector.
 	// The duckdb list vector contains for each row two values, the offset and the length,

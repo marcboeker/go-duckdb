@@ -164,3 +164,142 @@ func TestNestedAppender(t *testing.T) {
 	// Ensure that the number of fetched rows equals the number of inserted rows.
 	require.Equal(t, 100, i)
 }
+
+func TestAppenderNullList(t *testing.T) {
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	db := sql.OpenDB(c)
+	_, err = db.Exec(`CREATE TABLE test(intSlice INT[][])`)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Int32ListList{{}}, // empty list should also work
+	)
+
+	err = appender.AppendRow(
+		Int32ListList{{1, 2, 3}, {4, 5, 6}},
+	)
+
+	err = appender.AppendRow(
+		nil,
+	)
+
+	err = appender.AppendRow(
+		Int32ListList{{1, 2, 3}, nil},
+	)
+
+	err = appender.AppendRow(
+		Int32ListList{nil, {4, 5, 6}},
+	)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT intSlice FROM test`)
+	require.NoError(t, err)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		var intS []interface{}
+		err := res.Scan(
+			&intS,
+		)
+		if i == 0 || i == 1 {
+			require.NoError(t, err)
+		} else if i == 2 {
+			require.Error(t, err)
+		} else if i == 3 {
+			require.NoError(t, err)
+			if intS != nil {
+				c := intS[0].([]interface{})
+				if c[0].(int32) != 1 || c[1].(int32) != 2 || c[2].(int32) != 3 {
+					panic("expected [1, 2, 3]")
+				}
+				if intS[1] != nil {
+					panic("expected nil")
+				}
+			} else {
+				panic("expected non-nil")
+			}
+		} else if i == 4 {
+			require.NoError(t, err)
+			if intS != nil {
+				if intS[0] != nil {
+					panic("expected nil")
+				}
+				// cast to []int32
+				c := intS[1].([]interface{})
+				if c[0].(int32) != 4 || c[1].(int32) != 5 || c[2].(int32) != 6 {
+					panic("expected [4, 5, 6]")
+				}
+			} else {
+				panic("expected non-nil")
+			}
+		}
+		i++
+	}
+}
+
+func TestAppenderNullStruct(t *testing.T) {
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	db := sql.OpenDB(c)
+	_, err = db.Exec(`
+		CREATE TABLE test(
+			base STRUCT(I INT, V VARCHAR),
+    	)
+    `)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Base{1, "hello"},
+	)
+
+	err = appender.AppendRow(
+		nil,
+	)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT * FROM test`)
+	require.NoError(t, err)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		var intS interface{}
+		err := res.Scan(
+			&intS,
+		)
+		if i == 0 {
+			require.NoError(t, err)
+		} else if i == 1 {
+			require.Equal(t, nil, intS)
+		}
+		i++
+	}
+}
