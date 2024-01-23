@@ -51,29 +51,20 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 		return nil, fmt.Errorf("%w: %s", errParseConfig, err.Error())
 	}
 
+	config, err := prepareConfig(parsedDSN)
+	if err != nil {
+		return nil, err
+	}
+	defer C.duckdb_destroy_config(&config)
+
 	connectionString := C.CString(extractConnectionString(dataSourceName))
 	defer C.free(unsafe.Pointer(connectionString))
 
-	// Check for config options.
-	if len(parsedDSN.RawQuery) == 0 {
-		var errMsg *C.char
-		defer C.duckdb_free(unsafe.Pointer(errMsg))
+	var errMsg *C.char
+	defer C.duckdb_free(unsafe.Pointer(errMsg))
 
-		if state := C.duckdb_open_ext(connectionString, &db, nil, &errMsg); state == C.DuckDBError {
-			return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errMsg))
-		}
-	} else {
-		config, err := prepareConfig(parsedDSN.Query())
-		if err != nil {
-			return nil, err
-		}
-
-		var errMsg *C.char
-		defer C.duckdb_free(unsafe.Pointer(errMsg))
-
-		if state := C.duckdb_open_ext(connectionString, &db, config, &errMsg); state == C.DuckDBError {
-			return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errMsg))
-		}
+	if state := C.duckdb_open_ext(connectionString, &db, config, &errMsg); state == C.DuckDBError {
+		return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errMsg))
 	}
 
 	return &connector{db: &db, connInitFn: connInitFn}, nil
@@ -118,17 +109,22 @@ func extractConnectionString(dataSourceName string) string {
 	return dataSourceName[0:queryIndex]
 }
 
-func prepareConfig(options map[string][]string) (C.duckdb_config, error) {
+func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 	var config C.duckdb_config
 	if state := C.duckdb_create_config(&config); state == C.DuckDBError {
 		return nil, errCreateConfig
 	}
+	if state := C.duckdb_set_config(config, C.CString("duckdb_api"), C.CString("go")); state == C.DuckDBError {
+		return nil, fmt.Errorf("%w: failed to set duckdb_api", errPrepareConfig)
+	}
 
-	for k, v := range options {
-		if len(v) > 0 {
-			state := C.duckdb_set_config(config, C.CString(k), C.CString(v[0]))
-			if state == C.DuckDBError {
-				return nil, fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, k, v[0])
+	if len(parsedDSN.RawQuery) > 0 {
+		for k, v := range parsedDSN.Query() {
+			if len(v) > 0 {
+				state := C.duckdb_set_config(config, C.CString(k), C.CString(v[0]))
+				if state == C.DuckDBError {
+					return nil, fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, k, v[0])
+				}
 			}
 		}
 	}
