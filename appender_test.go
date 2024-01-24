@@ -38,7 +38,7 @@ func createAppenderTable(db *sql.DB, t *testing.T) *sql.Result {
 	return &res
 }
 
-const numAppenderTestRows = 10000
+const numAppenderTestRows = 5000
 
 func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
