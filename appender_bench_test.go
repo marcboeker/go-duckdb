@@ -45,7 +45,7 @@ func BenchmarkNaive(b *testing.B) {
 	// insert ROW_COUNT random row
 	for i := 0; i < ROW_COUNT; i++ {
 		_, err = db.Exec(fmt.Sprintf(INSERT_INTO, tableName),
-			i, 100/i, 10000/i, (i*95823983533)%100000, "ducks are cool", "so are geese")
+			i, 100*i, 10000*i, (i*95823983533)%100000, "ducks are cool", "so are geese")
 		checkErrWithMessage("failed to insert row", err)
 	}
 }
@@ -71,8 +71,8 @@ func BenchmarkAppender_AppendRow(b *testing.B) {
 	for i := 0; i < ROW_COUNT; i++ {
 		err := appender.AppendRow(
 			i,
-			100/i,
-			10000/i,
+			100*i,
+			10000*i,
 			(i*95823983533)%100000,
 			"ducks are cool",
 			"so are geese",
