@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/rand"
 	"testing"
 )
 
@@ -36,6 +35,7 @@ func BenchmarkNaive(b *testing.B) {
 	checkErrWithMessage("failed to connect", err)
 
 	db := sql.OpenDB(c)
+	defer db.Close()
 
 	tableName := "naive_table"
 
@@ -45,7 +45,7 @@ func BenchmarkNaive(b *testing.B) {
 	// insert ROW_COUNT random row
 	for i := 0; i < ROW_COUNT; i++ {
 		_, err = db.Exec(fmt.Sprintf(INSERT_INTO, tableName),
-			i, rand.Intn(10), rand.Intn(1000), rand.Intn(1000), "ducks are cool", "so are geese")
+			i, 100/i, 10000/i, (i*95823983533)%100000, "ducks are cool", "so are geese")
 		checkErrWithMessage("failed to insert row", err)
 	}
 }
@@ -55,6 +55,7 @@ func BenchmarkAppender_AppendRow(b *testing.B) {
 	checkErrWithMessage("failed to connect", err)
 
 	db := sql.OpenDB(c)
+	defer db.Close()
 
 	tableName := "appender_table"
 
@@ -70,9 +71,9 @@ func BenchmarkAppender_AppendRow(b *testing.B) {
 	for i := 0; i < ROW_COUNT; i++ {
 		err := appender.AppendRow(
 			i,
-			rand.Intn(10),
-			rand.Intn(1000),
-			rand.Intn(1000),
+			100/i,
+			10000/i,
+			(i*95823983533)%100000,
 			"ducks are cool",
 			"so are geese",
 		)
