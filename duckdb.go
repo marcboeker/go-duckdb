@@ -55,7 +55,6 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_config(&config)
 
 	connectionString := C.CString(extractConnectionString(dataSourceName))
 	defer C.free(unsafe.Pointer(connectionString))
@@ -64,14 +63,21 @@ func createConnector(dataSourceName string, connInitFn func(execer driver.Execer
 	defer C.duckdb_free(unsafe.Pointer(errMsg))
 
 	if state := C.duckdb_open_ext(connectionString, &db, config, &errMsg); state == C.DuckDBError {
+		C.duckdb_destroy_config(&config)
+
 		return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errMsg))
 	}
 
-	return &connector{db: &db, connInitFn: connInitFn}, nil
+	return &connector{
+		db:         &db,
+		connInitFn: connInitFn,
+		config:     config,
+	}, nil
 }
 
 type connector struct {
 	db         *C.duckdb_database
+	config     C.duckdb_config
 	connInitFn func(execer driver.ExecerContext) error
 }
 
@@ -84,6 +90,7 @@ func (c *connector) Connect(context.Context) (driver.Conn, error) {
 	if state := C.duckdb_connect(*c.db, &con); state == C.DuckDBError {
 		return nil, errOpen
 	}
+
 	conn := &conn{con: &con}
 
 	// Call the connection init function if defined
@@ -92,12 +99,17 @@ func (c *connector) Connect(context.Context) (driver.Conn, error) {
 			return nil, err
 		}
 	}
+
 	return conn, nil
 }
 
 func (c *connector) Close() error {
 	C.duckdb_close(c.db)
 	c.db = nil
+
+	C.duckdb_destroy_config(&c.config)
+	c.config = nil
+
 	return nil
 }
 
@@ -106,6 +118,7 @@ func extractConnectionString(dataSourceName string) string {
 	if queryIndex < 0 {
 		queryIndex = len(dataSourceName)
 	}
+
 	return dataSourceName[0:queryIndex]
 }
 
@@ -115,15 +128,16 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 		return nil, errCreateConfig
 	}
 	if state := C.duckdb_set_config(config, C.CString("duckdb_api"), C.CString("go")); state == C.DuckDBError {
-		return nil, fmt.Errorf("%w: failed to set duckdb_api", errPrepareConfig)
+		return nil, fmt.Errorf("%w: failed to set duckdb_api", errSetConfig)
 	}
 
 	if len(parsedDSN.RawQuery) > 0 {
 		for k, v := range parsedDSN.Query() {
 			if len(v) > 0 {
-				state := C.duckdb_set_config(config, C.CString(k), C.CString(v[0]))
-				if state == C.DuckDBError {
-					return nil, fmt.Errorf("%w: affected config option %s=%s", errPrepareConfig, k, v[0])
+				if err := setConfig(config, k, v[0]); err != nil {
+					C.duckdb_destroy_config(&config)
+
+					return nil, err
 				}
 			}
 		}
@@ -132,9 +146,17 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 	return config, nil
 }
 
+func setConfig(config C.duckdb_config, name, option string) error {
+	if state := C.duckdb_set_config(config, C.CString(name), C.CString(option)); state == C.DuckDBError {
+		return fmt.Errorf("%w: affected config option %s=%s", errSetConfig, name, option)
+	}
+
+	return nil
+}
+
 var (
-	errOpen          = errors.New("could not open database")
-	errParseConfig   = errors.New("could not parse config for database")
-	errCreateConfig  = errors.New("could not create config for database")
-	errPrepareConfig = errors.New("could not set config for database")
+	errOpen         = errors.New("could not open database")
+	errParseConfig  = errors.New("could not parse config for database")
+	errCreateConfig = errors.New("could not create config for database")
+	errSetConfig    = errors.New("could not set config for database")
 )

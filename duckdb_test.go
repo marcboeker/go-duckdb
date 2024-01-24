@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"reflect"
@@ -56,10 +57,22 @@ func TestOpen(t *testing.T) {
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
 
-		if !errors.Is(err, errPrepareConfig) {
+		if !errors.Is(err, errSetConfig) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
+}
+
+func TestConnector_Close(t *testing.T) {
+	t.Parallel()
+
+	connector, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	require.NoError(t, connector.(io.Closer).Close())
+
+	// check that multiple close calls don't cause panics or errors
+	require.NoError(t, connector.(io.Closer).Close())
 }
 
 func TestConnPool(t *testing.T) {
