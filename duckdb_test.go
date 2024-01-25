@@ -62,6 +62,17 @@ func TestOpen(t *testing.T) {
 	})
 }
 
+func TestConnector_Close(t *testing.T) {
+	t.Parallel()
+
+	connector, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	// check that multiple close calls don't cause panics or errors
+	require.NoError(t, connector.Close())
+	require.NoError(t, connector.Close())
+}
+
 func TestConnPool(t *testing.T) {
 	db := openDB(t)
 	db.SetMaxOpenConns(2) // set connection pool size greater than 1
