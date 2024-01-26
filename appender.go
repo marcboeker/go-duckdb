@@ -424,10 +424,8 @@ func setList(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.V
 
 	childColumnInfo := columnInfo.columnInfos[0]
 
-	childVectorSize := C.duckdb_list_vector_get_size(columnInfo.vector)
-
 	if refVal.IsNil() {
-		setNull(columnInfo, a.currentChunkSize)
+		setNull(columnInfo, rowIdx)
 	}
 
 	// Convert the refVal to []interface{} to be able to iterate over it
@@ -435,6 +433,8 @@ func setList(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.V
 	for i := 0; i < refVal.Len(); i++ {
 		interfaceSlice[i] = refVal.Index(i).Interface()
 	}
+
+	childVectorSize := C.duckdb_list_vector_get_size(columnInfo.vector)
 
 	// Set the offset of the list vector using the current size of the child vector.
 	// The duckdb list vector contains for each row two values, the offset and the length,
@@ -459,7 +459,7 @@ func setStruct(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver
 	structType := refVal.Type()
 
 	if value == nil {
-		setNull(columnInfo, a.currentChunkSize)
+		setNull(columnInfo, rowIdx)
 	}
 
 	for i := 0; i < structType.NumField(); i++ {
@@ -496,11 +496,13 @@ func (a *Appender) appendChunks() error {
 
 	// append all chunks to the appender and destroy them
 	var state C.duckdb_state
-	for i, chunk := range a.chunks {
+	for _, chunk := range a.chunks {
 		state = C.duckdb_append_data_chunk(*a.appender, chunk)
 		if state == C.DuckDBError {
 			dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
-			return fmt.Errorf("duckdb error appending chunk %d of %d: %s", i+1, len(a.chunks), dbErr)
+			return fmt.Errorf("Duckdb has returned an error while appending, all data has been invalidated."+
+				"\n Check that the data being appended matches the schema."+
+				"\n Error from duckdb: %s", dbErr)
 		}
 		C.duckdb_destroy_data_chunk(&chunk)
 	}

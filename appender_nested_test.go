@@ -3,6 +3,7 @@ package duckdb
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -166,11 +167,11 @@ func TestNestedAppender(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
-	c, err := NewConnector("", nil)
+	c, err := NewConnector("hello", nil)
 	require.NoError(t, err)
 
 	db := sql.OpenDB(c)
-	_, err = db.Exec(`CREATE TABLE test(intSlice INT[][])`)
+	_, err = db.Exec(`CREATE OR REPLACE TABLE test(intSlice INT[][][])`)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -182,11 +183,11 @@ func TestAppenderNullList(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow(
-		Int32ListList{{}}, // empty list should also work
+		Int32ListListList{{{1, 2, 3}, {4, 5, 6}}},
 	)
 
 	err = appender.AppendRow(
-		Int32ListList{{1, 2, 3}, {4, 5, 6}},
+		Int32ListListList{{{1}, nil}},
 	)
 
 	err = appender.AppendRow(
@@ -194,11 +195,11 @@ func TestAppenderNullList(t *testing.T) {
 	)
 
 	err = appender.AppendRow(
-		Int32ListList{{1, 2, 3}, nil},
+		Int32ListListList{nil, {{2}}},
 	)
 
 	err = appender.AppendRow(
-		Int32ListList{nil, {4, 5, 6}},
+		Int32ListListList{{nil, {3}}, {{4}}},
 	)
 
 	err = appender.Close()
@@ -210,46 +211,32 @@ func TestAppenderNullList(t *testing.T) {
 	require.NoError(t, err)
 	defer res.Close()
 
+	var strResult []string
+	strResult = append(strResult, "[[[1 2 3] [4 5 6]]]")
+	strResult = append(strResult, "[[[1] <nil>]]")
+	strResult = append(strResult, "<nil>")
+	strResult = append(strResult, "[<nil> [[2]]]")
+	strResult = append(strResult, "[[<nil> [3]] [[4]]]")
+
 	i := 0
 	for res.Next() {
+		var strS string
 		var intS []interface{}
 		err := res.Scan(
 			&intS,
 		)
-		if i == 0 || i == 1 {
-			require.NoError(t, err)
-		} else if i == 2 {
-			require.Error(t, err)
-		} else if i == 3 {
-			require.NoError(t, err)
-			if intS != nil {
-				c := intS[0].([]interface{})
-				if c[0].(int32) != 1 || c[1].(int32) != 2 || c[2].(int32) != 3 {
-					panic("expected [1, 2, 3]")
-				}
-				if intS[1] != nil {
-					panic("expected nil")
-				}
-			} else {
-				panic("expected non-nil")
-			}
-		} else if i == 4 {
-			require.NoError(t, err)
-			if intS != nil {
-				if intS[0] != nil {
-					panic("expected nil")
-				}
-				// cast to []int32
-				c := intS[1].([]interface{})
-				if c[0].(int32) != 4 || c[1].(int32) != 5 || c[2].(int32) != 6 {
-					panic("expected [4, 5, 6]")
-				}
-			} else {
-				panic("expected non-nil")
-			}
+		if err != nil {
+			strS = "<nil>"
+		} else {
+			strS = fmt.Sprintf("%v", intS)
+		}
+
+		if strResult[i] != strS {
+			panic(fmt.Sprintf("row %d: expected %v, got %v", i, strResult[i], strS))
 		}
 		i++
 	}
+
 }
 
 func TestAppenderNullStruct(t *testing.T) {
