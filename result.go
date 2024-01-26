@@ -1,7 +1,7 @@
 package duckdb
 
 type result struct {
-	ra int64
+	rowsAffected int64
 }
 
 func (r result) LastInsertId() (int64, error) {
@@ -9,5 +9,5 @@ func (r result) LastInsertId() (int64, error) {
 }
 
 func (r result) RowsAffected() (int64, error) {
-	return r.ra, nil
+	return r.rowsAffected, nil
 }
