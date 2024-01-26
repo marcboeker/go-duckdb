@@ -182,6 +182,11 @@ func TestAppenderNullList(t *testing.T) {
 	appender, err := NewAppenderFromConn(conn, "", "test")
 	require.NoError(t, err)
 
+	// An empty list should also be able to initialize the logical types
+	err = appender.AppendRow(
+		Int32ListListList{{{}}},
+	)
+
 	err = appender.AppendRow(
 		Int32ListListList{{{1, 2, 3}, {4, 5, 6}}},
 	)
@@ -212,6 +217,7 @@ func TestAppenderNullList(t *testing.T) {
 	defer res.Close()
 
 	var strResult []string
+	strResult = append(strResult, "[[[]]]")
 	strResult = append(strResult, "[[[1 2 3] [4 5 6]]]")
 	strResult = append(strResult, "[[[1] <nil>]]")
 	strResult = append(strResult, "<nil>")
@@ -239,6 +245,8 @@ func TestAppenderNullList(t *testing.T) {
 
 }
 
+// Only the base layer is tested, since a struct cannot be nil, so it is not possible to test
+// a nested struct with a nil base.
 func TestAppenderNullStruct(t *testing.T) {
 	c, err := NewConnector("", nil)
 	require.NoError(t, err)
