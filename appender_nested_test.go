@@ -404,15 +404,15 @@ func TestAppenderNestedStructMismatch(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	//err = appender.AppendRow(
-	//	1,
-	//)
-	//require.ErrorContains(t, err, "expected: \"struct\" \nactual: \"int64\"")
-	//
-	//err = appender.AppendRow(
-	//	"hello",
-	//)
-	//require.ErrorContains(t, err, "expected: \"struct\" \nactual: \"string\"")
+	err = appender.AppendRow(
+		1,
+	)
+	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"int64\"")
+
+	err = appender.AppendRow(
+		"hello",
+	)
+	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"string\"")
 
 	type other struct {
 		S string
@@ -422,7 +422,124 @@ func TestAppenderNestedStructMismatch(t *testing.T) {
 	err = appender.AppendRow(
 		other{"hello", 1},
 	)
-	require.NoError(t, err, "expected: \"{int32, string}\" \nactual: \"{string, int64}\"")
+	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"{string, int64}\"")
+
+	err = appender.AppendRow(
+		Wrapper{
+			Base{
+				I: 0,
+				V: "one billion ducks",
+			},
+		},
+	)
+	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"{{int32, string}}\"")
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	_, err = db.Exec(`
+		CREATE TABLE test2(
+				wrapper STRUCT(base STRUCT(I INT, V VARCHAR)),
+		)
+	`)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err = c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err = NewAppenderFromConn(conn, "", "test2")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Wrapper{
+			Base{
+				I: 0,
+				V: "one billion ducks",
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Base{1, "hello"},
+	)
+	require.ErrorContains(t, err, "expected: \"{{int32, string}}\" \nactual: \"{int32, string}\"")
+
+	err = appender.Close()
+	require.NoError(t, err)
+}
+
+func TestAppenderNestedMixedMismatch(t *testing.T) {
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	db := sql.OpenDB(c)
+	_, err = db.Exec(`
+		CREATE TABLE test(
+			listStruct STRUCT(L INT[]),
+		)
+	`)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
+	var listInt ListInt
+	listInt.L.Fill()
+	err = appender.AppendRow(
+		listInt,
+	)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Int32List{1, 2, 3},
+	)
+	require.ErrorContains(t, err, "expected: \"{int32}[]\" \nactual: \"int32[]\"")
+
+	var listString ListString
+	listString.Fill()
+	err = appender.AppendRow(
+		listString,
+	)
+	require.ErrorContains(t, err, "expected: \"{int32}[]\" \nactual: \"{string}[]\"")
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	_, err = db.Exec(`
+		CREATE TABLE test2(
+			mix STRUCT(A STRUCT(L VARCHAR[]), B STRUCT(L INT[])[]),
+		)
+	`)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err = c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err = NewAppenderFromConn(conn, "", "test2")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Mix{
+			A: listString,
+			B: []ListInt{{L: Int32List{1, 2, 3}}},
+		},
+	)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Base{1, "hello"},
+	)
+	require.ErrorContains(t, err, "expected: \"{{string}, {int32}}[][][]\" \nactual: \"{int32, string}\"")
 
 	err = appender.Close()
 	require.NoError(t, err)

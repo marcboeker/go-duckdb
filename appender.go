@@ -490,110 +490,70 @@ func setStruct(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver
 	}
 }
 
-func (c *ColumnInfo) returnInnerMostDuckDBChildType(brackets *string) C.duckdb_type {
-	*brackets += "[]"
+func (c *ColumnInfo) returnInnerMostDuckDBChildType(brackets *string) (string, C.duckdb_type) {
 	if c.colType == C.DUCKDB_TYPE_LIST {
-		return c.columnInfos[0].returnInnerMostDuckDBChildType(brackets)
+		*brackets += "[]"
+		s, t := c.columnInfos[0].returnInnerMostDuckDBChildType(brackets)
+		return s, t
+	} else if c.colType == C.DUCKDB_TYPE_STRUCT {
+		s := "{"
+		for i := 0; i < c.fields; i++ {
+			if i > 0 {
+				s += ", "
+			}
+			tmp, _ := c.columnInfos[i].returnInnerMostDuckDBChildType(brackets)
+			s += tmp
+		}
+		s += "}"
+		return s, c.colType
 	}
-	return c.colType
+	return duckdbTypeMap[c.colType], c.colType
 }
 
-func returnInnerMostGoChildType(v reflect.Type, bracketsStr *string, brackets string) reflect.Type {
-	*bracketsStr += brackets
+func returnInnerMostGoChildType(v reflect.Type, brackets *string) string {
 	if v.Kind() == reflect.Slice {
-		return returnInnerMostGoChildType(v.Elem(), bracketsStr, brackets)
+		*brackets += "[]"
+		return returnInnerMostGoChildType(v.Elem(), brackets)
+	} else if v.Kind() == reflect.Struct {
+		s := "{"
+		for i := 0; i < v.NumField(); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			s += returnInnerMostGoChildType(v.Field(i).Type, brackets)
+		}
+		s += "}"
+		return s
 	}
-	return v
+	return getValueType(v)
 }
 
 func getValueType(v reflect.Type) string {
 	valueType := v.String()
 	if valueType == "int" {
-		valueType = "int64"
+		return "int64"
 	} else if valueType == "uint" {
-		valueType = "uint64"
+		return "uint64"
+	} else if valueType == "time.Time" {
+		return "time.Time"
+	} else if v.Kind() == reflect.Slice || v.Kind() == reflect.Struct {
+		brackets := ""
+		s := returnInnerMostGoChildType(v, &brackets)
+		return s + brackets
 	}
 	return valueType
 }
 
-func generateListBrackets(nestedLevel int) string {
-	listBrackets := ""
-	for i := 0; i < nestedLevel; i++ {
-		listBrackets += "[]"
-	}
-	return listBrackets
-}
-
-func (c *ColumnInfo) checkMatchingType(v reflect.Type, nestedLevel int, parent reflect.Type) (int, string, string, error) {
+func (c *ColumnInfo) checkMatchingType(v reflect.Type, nestedLevel int, parent reflect.Type) error {
 	valueType := getValueType(v)
-	expectedType := duckdbTypeMap[c.colType]
+	brackets := ""
+	expectedType, _ := c.returnInnerMostDuckDBChildType(&brackets)
+	expectedType += brackets
 
-	leftStructBrackets := ""
-	rightStructBrackets := ""
-	for i := 0; i < nestedLevel; i++ {
-		leftStructBrackets += "{"
-		rightStructBrackets += "}"
+	if valueType != expectedType {
+		return fmt.Errorf("expected: \"%s\" \nactual: \"%s\"", expectedType, valueType)
 	}
-
-	switch v.Kind() {
-	case reflect.Slice:
-		if expectedType != "slice" {
-			listBrackets := generateListBrackets(nestedLevel)
-			nestedListBrackets := listBrackets
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s\" \nactual: \"%s%s\"", expectedType, listBrackets, returnInnerMostGoChildType(v.Elem(), &nestedListBrackets, "[]"), nestedListBrackets)
-		}
-		return c.columnInfos[0].checkMatchingType(v.Elem(), nestedLevel+1, v)
-	case reflect.Struct:
-		if expectedType != "struct" {
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s%s\" \nactual: \"%s%s%s\"", leftStructBrackets, expectedType, rightStructBrackets, leftStructBrackets, valueType, rightStructBrackets)
-		}
-		structStr := ""
-		expectedStructStr := ""
-		ifErr := false
-		for i := 0; i < c.fields; i++ {
-			if i > 0 {
-				structStr += ", "
-				expectedStructStr += ", "
-			}
-			_, childType, expectedChildType, err := c.columnInfos[i].checkMatchingType(v.Field(i).Type, nestedLevel+1, v)
-			if err != nil {
-				ifErr = true
-			}
-			structStr += fmt.Sprintf("%s", childType)
-			expectedStructStr += fmt.Sprintf("%s", expectedChildType)
-		}
-		if ifErr {
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"{%s}\" \nactual: \"{%s}\"", expectedStructStr, structStr)
-		}
-		return nestedLevel, valueType, expectedType, nil
-	default:
-		if expectedType == "slice" {
-			listBrackets := generateListBrackets(nestedLevel)
-			nestedListBrackets := listBrackets
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s\" \nactual: \"%s%s\"", duckdbTypeMap[c.columnInfos[0].returnInnerMostDuckDBChildType(&nestedListBrackets)], nestedListBrackets, valueType, listBrackets)
-		}
-		if expectedType == "struct" {
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s%s\" \nactual: \"%s%s%s\"", leftStructBrackets, expectedType, rightStructBrackets, leftStructBrackets, valueType, rightStructBrackets)
-		}
-	}
-	if parent == nil {
-		if valueType != expectedType {
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s\" \nactual: \"%s\"", expectedType, valueType)
-		}
-		return nestedLevel, valueType, expectedType, nil
-	}
-	switch parent.Kind() {
-	case reflect.Slice:
-		if valueType != expectedType {
-			listBrackets := generateListBrackets(nestedLevel)
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s\" \nactual: \"%s%s\"", expectedType, listBrackets, valueType, listBrackets)
-		}
-	case reflect.Struct:
-		if valueType != expectedType {
-			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s%s\" \nactual: \"%s%s%s\"", leftStructBrackets, expectedType, rightStructBrackets, leftStructBrackets, valueType, rightStructBrackets)
-		}
-	}
-	return nestedLevel, valueType, expectedType, nil
+	return nil
 }
 
 // appendRowArray loads a row of values into the appender. The values are provided as an array.
@@ -605,7 +565,7 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 			continue
 		}
 
-		if _, _, _, err := columnInfo.checkMatchingType(reflect.TypeOf(v), 0, nil); err != nil {
+		if err := columnInfo.checkMatchingType(reflect.TypeOf(v), 0, nil); err != nil {
 			return fmt.Errorf("\"Type mismatch for column %d: \n%s \n%s", i, err.Error(), errNote)
 		}
 
