@@ -16,28 +16,6 @@ import (
 
 const errNote = "NOTE: this is based on types initialized from the first row of appended data, please confirm this matches the schema."
 
-var typesMap = map[string]C.duckdb_type{
-	"bool":        C.DUCKDB_TYPE_BOOLEAN,
-	"int8":        C.DUCKDB_TYPE_TINYINT,
-	"int16":       C.DUCKDB_TYPE_SMALLINT,
-	"int32":       C.DUCKDB_TYPE_INTEGER,
-	"int":         C.DUCKDB_TYPE_BIGINT,
-	"int64":       C.DUCKDB_TYPE_BIGINT,
-	"uint8":       C.DUCKDB_TYPE_UTINYINT,
-	"uint16":      C.DUCKDB_TYPE_USMALLINT,
-	"uint32":      C.DUCKDB_TYPE_UINTEGER,
-	"uint":        C.DUCKDB_TYPE_UBIGINT,
-	"uint64":      C.DUCKDB_TYPE_UBIGINT,
-	"float32":     C.DUCKDB_TYPE_FLOAT,
-	"float64":     C.DUCKDB_TYPE_DOUBLE,
-	"string":      C.DUCKDB_TYPE_VARCHAR,
-	"[]byte{}":    C.DUCKDB_TYPE_BLOB,
-	"time.Time":   C.DUCKDB_TYPE_TIMESTAMP,
-	"duckdb.UUID": C.DUCKDB_TYPE_UUID,
-	"slice":       C.DUCKDB_TYPE_LIST,
-	"struct":      C.DUCKDB_TYPE_STRUCT,
-}
-
 var duckdbTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_BOOLEAN:   "bool",
 	C.DUCKDB_TYPE_TINYINT:   "int8",
