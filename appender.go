@@ -183,72 +183,72 @@ func (a *Appender) InitializeColumnTypesAndInfos(v reflect.Type, colIdx int) (C.
 	switch v.Kind() {
 	case reflect.Uint8:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[uint8](a, columnInfo, rowIdx, val.(uint8))
+			setPrimitive[uint8](columnInfo, rowIdx, val.(uint8))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UTINYINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_UTINYINT}
 	case reflect.Int8:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[int8](a, columnInfo, rowIdx, val.(int8))
+			setPrimitive[int8](columnInfo, rowIdx, val.(int8))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_TINYINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_TINYINT}
 	case reflect.Uint16:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[uint16](a, columnInfo, rowIdx, val.(uint16))
+			setPrimitive[uint16](columnInfo, rowIdx, val.(uint16))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_USMALLINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_USMALLINT}
 	case reflect.Int16:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[int16](a, columnInfo, rowIdx, val.(int16))
+			setPrimitive[int16](columnInfo, rowIdx, val.(int16))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_SMALLINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_SMALLINT}
 	case reflect.Uint32:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[uint32](a, columnInfo, rowIdx, val.(uint32))
+			setPrimitive[uint32](columnInfo, rowIdx, val.(uint32))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UINTEGER), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_UINTEGER}
 	case reflect.Int32:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[int32](a, columnInfo, rowIdx, val.(int32))
+			setPrimitive[int32](columnInfo, rowIdx, val.(int32))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_INTEGER), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_INTEGER}
 	case reflect.Uint64:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[uint64](a, columnInfo, rowIdx, val.(uint64))
+			setPrimitive[uint64](columnInfo, rowIdx, val.(uint64))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UBIGINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_UBIGINT}
 	case reflect.Int64:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[int64](a, columnInfo, rowIdx, val.(int64))
+			setPrimitive[int64](columnInfo, rowIdx, val.(int64))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BIGINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_BIGINT}
 	case reflect.Uint:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[uint](a, columnInfo, rowIdx, val.(uint))
+			setPrimitive[uint](columnInfo, rowIdx, val.(uint))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UBIGINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_UBIGINT}
 	case reflect.Int:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[int](a, columnInfo, rowIdx, val.(int))
+			setPrimitive[int](columnInfo, rowIdx, val.(int))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BIGINT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_BIGINT}
 	case reflect.Float32:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[float32](a, columnInfo, rowIdx, val.(float32))
+			setPrimitive[float32](columnInfo, rowIdx, val.(float32))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_FLOAT), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_FLOAT}
 	case reflect.Float64:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[float64](a, columnInfo, rowIdx, val.(float64))
+			setPrimitive[float64](columnInfo, rowIdx, val.(float64))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_DOUBLE), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_DOUBLE}
 	case reflect.Bool:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setPrimitive[bool](a, columnInfo, rowIdx, val.(bool))
+			setPrimitive[bool](columnInfo, rowIdx, val.(bool))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_BOOLEAN}
 	case reflect.String:
 		f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-			setVarchar(a, columnInfo, rowIdx, val.(string))
+			setVarchar(columnInfo, rowIdx, val.(string))
 		}
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_VARCHAR}
 	case reflect.Slice:
@@ -256,7 +256,7 @@ func (a *Appender) InitializeColumnTypesAndInfos(v reflect.Type, colIdx int) (C.
 		// If so, we can just use the primitive setter; otherwise it will not match the table set up by the user.
 		if v.Elem().Kind() == reflect.Uint8 {
 			f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-				setPrimitive[[]byte](a, columnInfo, rowIdx, val.([]byte))
+				setPrimitive[[]byte](columnInfo, rowIdx, val.([]byte))
 			}
 			return C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_BLOB}
 		}
@@ -274,7 +274,7 @@ func (a *Appender) InitializeColumnTypesAndInfos(v reflect.Type, colIdx int) (C.
 	case reflect.Array:
 		if v.Elem().Kind() == reflect.Uint8 && v.Len() == 16 {
 			f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-				setPrimitive[C.duckdb_hugeint](a, columnInfo, rowIdx, uuidToHugeInt(val.(UUID)))
+				setPrimitive[C.duckdb_hugeint](columnInfo, rowIdx, uuidToHugeInt(val.(UUID)))
 			}
 			return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_UUID}
 		}
@@ -283,7 +283,7 @@ func (a *Appender) InitializeColumnTypesAndInfos(v reflect.Type, colIdx int) (C.
 		// If so, we can just use the primitive setter; otherwise it will not match the table set up by the user.
 		if (v == reflect.TypeOf(time.Time{})) {
 			f := func(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, val interface{}) {
-				setTime(a, columnInfo, rowIdx, val)
+				setTime(columnInfo, rowIdx, val)
 			}
 			return C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP), ColumnInfo{function: f, colType: C.DUCKDB_TYPE_TIMESTAMP}
 		}
@@ -401,22 +401,22 @@ func setNull(columnInfo *ColumnInfo, rowIdx C.idx_t) {
 	C.duckdb_validity_set_row_invalid(mask, rowIdx)
 }
 
-func setPrimitive[T any](a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value T) {
+func setPrimitive[T any](columnInfo *ColumnInfo, rowIdx C.idx_t, value T) {
 	ptr := C.duckdb_vector_get_data(columnInfo.vector)
 	xs := (*[1 << 31]T)(ptr)
 	xs[rowIdx] = value
 }
 
-func setVarchar(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value string) {
+func setVarchar(columnInfo *ColumnInfo, rowIdx C.idx_t, value string) {
 	str := C.CString(value)
 	C.duckdb_vector_assign_string_element(columnInfo.vector, rowIdx, str)
 	C.free(unsafe.Pointer(str))
 }
 
-func setTime(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.Value) {
+func setTime(columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.Value) {
 	var dt C.duckdb_timestamp
 	dt.micros = C.int64_t(value.(time.Time).UTC().UnixMicro())
-	setPrimitive[C.duckdb_timestamp](a, columnInfo, rowIdx, dt)
+	setPrimitive[C.duckdb_timestamp](columnInfo, rowIdx, dt)
 }
 
 func setList(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.Value) {
@@ -439,10 +439,10 @@ func setList(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.V
 	// Set the offset of the list vector using the current size of the child vector.
 	// The duckdb list vector contains for each row two values, the offset and the length,
 	// which are located at rowIdx*2 and rowIdx*2+1 respectively.
-	setPrimitive[uint64](a, columnInfo, rowIdx*2, uint64(childVectorSize))
+	setPrimitive[uint64](columnInfo, rowIdx*2, uint64(childVectorSize))
 
 	// Set the length of the list vector
-	setPrimitive[uint64](a, columnInfo, rowIdx*2+1, uint64(refVal.Len()))
+	setPrimitive[uint64](columnInfo, rowIdx*2+1, uint64(refVal.Len()))
 
 	C.duckdb_list_vector_set_size(columnInfo.vector, C.idx_t(refVal.Len())+childVectorSize)
 	C.duckdb_list_vector_reserve(columnInfo.vector, C.idx_t(refVal.Len())+childVectorSize)
@@ -513,7 +513,7 @@ func returnInnerMostGoChildType(v reflect.Type) string {
 	return valueType
 }
 
-func (c *ColumnInfo) checkMatchingType(v reflect.Type, nestedLevel int, parent reflect.Type) error {
+func (c *ColumnInfo) checkMatchingType(v reflect.Type) error {
 	valueType := returnInnerMostGoChildType(v)
 	expectedType, _ := c.returnInnerMostDuckDBChildType()
 
@@ -532,7 +532,7 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 			continue
 		}
 
-		if err := columnInfo.checkMatchingType(reflect.TypeOf(v), 0, nil); err != nil {
+		if err := columnInfo.checkMatchingType(reflect.TypeOf(v)); err != nil {
 			return fmt.Errorf("\"Type mismatch for column %d: \n%s \n%s", i, err.Error(), errNote)
 		}
 
