@@ -490,18 +490,17 @@ func setStruct(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver
 	}
 }
 
-func (c *ColumnInfo) returnInnerMostDuckDBChildType(brackets *string) (string, C.duckdb_type) {
+func (c *ColumnInfo) returnInnerMostDuckDBChildType() (string, C.duckdb_type) {
 	if c.colType == C.DUCKDB_TYPE_LIST {
-		*brackets += "[]"
-		s, t := c.columnInfos[0].returnInnerMostDuckDBChildType(brackets)
-		return s, t
+		s, t := c.columnInfos[0].returnInnerMostDuckDBChildType()
+		return s + "[]", t
 	} else if c.colType == C.DUCKDB_TYPE_STRUCT {
 		s := "{"
 		for i := 0; i < c.fields; i++ {
 			if i > 0 {
 				s += ", "
 			}
-			tmp, _ := c.columnInfos[i].returnInnerMostDuckDBChildType(brackets)
+			tmp, _ := c.columnInfos[i].returnInnerMostDuckDBChildType()
 			s += tmp
 		}
 		s += "}"
@@ -510,25 +509,7 @@ func (c *ColumnInfo) returnInnerMostDuckDBChildType(brackets *string) (string, C
 	return duckdbTypeMap[c.colType], c.colType
 }
 
-func returnInnerMostGoChildType(v reflect.Type, brackets *string) string {
-	if v.Kind() == reflect.Slice {
-		*brackets += "[]"
-		return returnInnerMostGoChildType(v.Elem(), brackets)
-	} else if v.Kind() == reflect.Struct {
-		s := "{"
-		for i := 0; i < v.NumField(); i++ {
-			if i > 0 {
-				s += ", "
-			}
-			s += returnInnerMostGoChildType(v.Field(i).Type, brackets)
-		}
-		s += "}"
-		return s
-	}
-	return getValueType(v)
-}
-
-func getValueType(v reflect.Type) string {
+func returnInnerMostGoChildType(v reflect.Type) string {
 	valueType := v.String()
 	if valueType == "int" {
 		return "int64"
@@ -536,19 +517,27 @@ func getValueType(v reflect.Type) string {
 		return "uint64"
 	} else if valueType == "time.Time" {
 		return "time.Time"
-	} else if v.Kind() == reflect.Slice || v.Kind() == reflect.Struct {
-		brackets := ""
-		s := returnInnerMostGoChildType(v, &brackets)
-		return s + brackets
+	}
+
+	if v.Kind() == reflect.Slice {
+		return returnInnerMostGoChildType(v.Elem()) + "[]"
+	} else if v.Kind() == reflect.Struct {
+		s := "{"
+		for i := 0; i < v.NumField(); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			s += returnInnerMostGoChildType(v.Field(i).Type)
+		}
+		s += "}"
+		return s
 	}
 	return valueType
 }
 
 func (c *ColumnInfo) checkMatchingType(v reflect.Type, nestedLevel int, parent reflect.Type) error {
-	valueType := getValueType(v)
-	brackets := ""
-	expectedType, _ := c.returnInnerMostDuckDBChildType(&brackets)
-	expectedType += brackets
+	valueType := returnInnerMostGoChildType(v)
+	expectedType, _ := c.returnInnerMostDuckDBChildType()
 
 	if valueType != expectedType {
 		return fmt.Errorf("expected: \"%s\" \nactual: \"%s\"", expectedType, valueType)

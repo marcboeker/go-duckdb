@@ -501,14 +501,14 @@ func TestAppenderNestedMixedMismatch(t *testing.T) {
 	err = appender.AppendRow(
 		Int32List{1, 2, 3},
 	)
-	require.ErrorContains(t, err, "expected: \"{int32}[]\" \nactual: \"int32[]\"")
+	require.ErrorContains(t, err, "expected: \"{int32[]}\" \nactual: \"int32[]\"")
 
 	var listString ListString
 	listString.Fill()
 	err = appender.AppendRow(
 		listString,
 	)
-	require.ErrorContains(t, err, "expected: \"{int32}[]\" \nactual: \"{string}[]\"")
+	require.ErrorContains(t, err, "expected: \"{int32[]}\" \nactual: \"{string[]}\"")
 
 	err = appender.Close()
 	require.NoError(t, err)
@@ -539,7 +539,7 @@ func TestAppenderNestedMixedMismatch(t *testing.T) {
 	err = appender.AppendRow(
 		Base{1, "hello"},
 	)
-	require.ErrorContains(t, err, "expected: \"{{string}, {int32}}[][][]\" \nactual: \"{int32, string}\"")
+	require.ErrorContains(t, err, "expected: \"{{string[]}, {int32[]}[]}\" \nactual: \"{int32, string}\"")
 
 	err = appender.Close()
 	require.NoError(t, err)
