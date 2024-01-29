@@ -437,12 +437,13 @@ func setList(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver.V
 	childVectorSize := C.duckdb_list_vector_get_size(columnInfo.vector)
 
 	// Set the offset of the list vector using the current size of the child vector.
-	// The duckdb list vector contains for each row two values, the offset and the length,
-	// which are located at rowIdx*2 and rowIdx*2+1 respectively.
-	setPrimitive[uint64](columnInfo, rowIdx*2, uint64(childVectorSize))
+	// The duckdb list vector contains for each row two values, the offset and the length
+	listEntry := C.duckdb_list_entry{
+		offset: C.idx_t(childVectorSize),
+		length: C.idx_t(refVal.Len()),
+	}
 
-	// Set the length of the list vector
-	setPrimitive[uint64](columnInfo, rowIdx*2+1, uint64(refVal.Len()))
+	setPrimitive[C.duckdb_list_entry](columnInfo, rowIdx, listEntry)
 
 	C.duckdb_list_vector_set_size(columnInfo.vector, C.idx_t(refVal.Len())+childVectorSize)
 	C.duckdb_list_vector_reserve(columnInfo.vector, C.idx_t(refVal.Len())+childVectorSize)
@@ -494,7 +495,7 @@ func returnInnerMostGoChildType(v reflect.Type) string {
 	} else if valueType == "uint" {
 		return "uint64"
 	} else if valueType == "time.Time" {
-		return "time.Time"
+		return valueType
 	}
 
 	if v.Kind() == reflect.Slice {
