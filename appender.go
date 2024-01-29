@@ -14,26 +14,48 @@ import (
 	"unsafe"
 )
 
-type LogicalTypeEnum int
+const errNote = "NOTE: this is based on types initialized from the first row of appended data, please confirm this matches the schema."
 
 var typesMap = map[string]C.duckdb_type{
-	"bool":      C.DUCKDB_TYPE_BOOLEAN,
-	"int8":      C.DUCKDB_TYPE_TINYINT,
-	"int16":     C.DUCKDB_TYPE_SMALLINT,
-	"int32":     C.DUCKDB_TYPE_INTEGER,
-	"int64":     C.DUCKDB_TYPE_BIGINT,
-	"uint8":     C.DUCKDB_TYPE_UTINYINT,
-	"uint16":    C.DUCKDB_TYPE_USMALLINT,
-	"uint32":    C.DUCKDB_TYPE_UINTEGER,
-	"uint64":    C.DUCKDB_TYPE_UBIGINT,
-	"float32":   C.DUCKDB_TYPE_FLOAT,
-	"float64":   C.DUCKDB_TYPE_DOUBLE,
-	"string":    C.DUCKDB_TYPE_VARCHAR,
-	"[]byte{}":  C.DUCKDB_TYPE_BLOB,
-	"time.Time": C.DUCKDB_TYPE_TIMESTAMP,
-	"uuid.UUID": C.DUCKDB_TYPE_UUID,
-	"slice":     C.DUCKDB_TYPE_LIST,
-	"struct":    C.DUCKDB_TYPE_STRUCT,
+	"bool":        C.DUCKDB_TYPE_BOOLEAN,
+	"int8":        C.DUCKDB_TYPE_TINYINT,
+	"int16":       C.DUCKDB_TYPE_SMALLINT,
+	"int32":       C.DUCKDB_TYPE_INTEGER,
+	"int":         C.DUCKDB_TYPE_BIGINT,
+	"int64":       C.DUCKDB_TYPE_BIGINT,
+	"uint8":       C.DUCKDB_TYPE_UTINYINT,
+	"uint16":      C.DUCKDB_TYPE_USMALLINT,
+	"uint32":      C.DUCKDB_TYPE_UINTEGER,
+	"uint":        C.DUCKDB_TYPE_UBIGINT,
+	"uint64":      C.DUCKDB_TYPE_UBIGINT,
+	"float32":     C.DUCKDB_TYPE_FLOAT,
+	"float64":     C.DUCKDB_TYPE_DOUBLE,
+	"string":      C.DUCKDB_TYPE_VARCHAR,
+	"[]byte{}":    C.DUCKDB_TYPE_BLOB,
+	"time.Time":   C.DUCKDB_TYPE_TIMESTAMP,
+	"duckdb.UUID": C.DUCKDB_TYPE_UUID,
+	"slice":       C.DUCKDB_TYPE_LIST,
+	"struct":      C.DUCKDB_TYPE_STRUCT,
+}
+
+var duckdbTypeMap = map[C.duckdb_type]string{
+	C.DUCKDB_TYPE_BOOLEAN:   "bool",
+	C.DUCKDB_TYPE_TINYINT:   "int8",
+	C.DUCKDB_TYPE_SMALLINT:  "int16",
+	C.DUCKDB_TYPE_INTEGER:   "int32",
+	C.DUCKDB_TYPE_BIGINT:    "int64",
+	C.DUCKDB_TYPE_UTINYINT:  "uint8",
+	C.DUCKDB_TYPE_USMALLINT: "uint16",
+	C.DUCKDB_TYPE_UINTEGER:  "uint32",
+	C.DUCKDB_TYPE_UBIGINT:   "uint64",
+	C.DUCKDB_TYPE_FLOAT:     "float32",
+	C.DUCKDB_TYPE_DOUBLE:    "float64",
+	C.DUCKDB_TYPE_VARCHAR:   "string",
+	C.DUCKDB_TYPE_BLOB:      "[]byte{}",
+	C.DUCKDB_TYPE_TIMESTAMP: "time.Time",
+	C.DUCKDB_TYPE_UUID:      "duckdb.UUID",
+	C.DUCKDB_TYPE_LIST:      "slice",
+	C.DUCKDB_TYPE_STRUCT:    "struct",
 }
 
 // SetColumnValue is the type definition for all column callback functions
@@ -468,6 +490,112 @@ func setStruct(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver
 	}
 }
 
+func (c *ColumnInfo) returnInnerMostDuckDBChildType(brackets *string) C.duckdb_type {
+	*brackets += "[]"
+	if c.colType == C.DUCKDB_TYPE_LIST {
+		return c.columnInfos[0].returnInnerMostDuckDBChildType(brackets)
+	}
+	return c.colType
+}
+
+func returnInnerMostGoChildType(v reflect.Type, bracketsStr *string, brackets string) reflect.Type {
+	*bracketsStr += brackets
+	if v.Kind() == reflect.Slice {
+		return returnInnerMostGoChildType(v.Elem(), bracketsStr, brackets)
+	}
+	return v
+}
+
+func getValueType(v reflect.Type) string {
+	valueType := v.String()
+	if valueType == "int" {
+		valueType = "int64"
+	} else if valueType == "uint" {
+		valueType = "uint64"
+	}
+	return valueType
+}
+
+func generateListBrackets(nestedLevel int) string {
+	listBrackets := ""
+	for i := 0; i < nestedLevel; i++ {
+		listBrackets += "[]"
+	}
+	return listBrackets
+}
+
+func (c *ColumnInfo) checkMatchingType(v reflect.Type, nestedLevel int, parent reflect.Type) (int, string, string, error) {
+	valueType := getValueType(v)
+	expectedType := duckdbTypeMap[c.colType]
+
+	leftStructBrackets := ""
+	rightStructBrackets := ""
+	for i := 0; i < nestedLevel; i++ {
+		leftStructBrackets += "{"
+		rightStructBrackets += "}"
+	}
+
+	switch v.Kind() {
+	case reflect.Slice:
+		if expectedType != "slice" {
+			listBrackets := generateListBrackets(nestedLevel)
+			nestedListBrackets := listBrackets
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s\" \nactual: \"%s%s\"", expectedType, listBrackets, returnInnerMostGoChildType(v.Elem(), &nestedListBrackets, "[]"), nestedListBrackets)
+		}
+		return c.columnInfos[0].checkMatchingType(v.Elem(), nestedLevel+1, v)
+	case reflect.Struct:
+		if expectedType != "struct" {
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s%s\" \nactual: \"%s%s%s\"", leftStructBrackets, expectedType, rightStructBrackets, leftStructBrackets, valueType, rightStructBrackets)
+		}
+		structStr := ""
+		expectedStructStr := ""
+		ifErr := false
+		for i := 0; i < c.fields; i++ {
+			if i > 0 {
+				structStr += ", "
+				expectedStructStr += ", "
+			}
+			_, childType, expectedChildType, err := c.columnInfos[i].checkMatchingType(v.Field(i).Type, nestedLevel+1, v)
+			if err != nil {
+				ifErr = true
+			}
+			structStr += fmt.Sprintf("%s", childType)
+			expectedStructStr += fmt.Sprintf("%s", expectedChildType)
+		}
+		if ifErr {
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"{%s}\" \nactual: \"{%s}\"", expectedStructStr, structStr)
+		}
+		return nestedLevel, valueType, expectedType, nil
+	default:
+		if expectedType == "slice" {
+			listBrackets := generateListBrackets(nestedLevel)
+			nestedListBrackets := listBrackets
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s\" \nactual: \"%s%s\"", duckdbTypeMap[c.columnInfos[0].returnInnerMostDuckDBChildType(&nestedListBrackets)], nestedListBrackets, valueType, listBrackets)
+		}
+		if expectedType == "struct" {
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s%s\" \nactual: \"%s%s%s\"", leftStructBrackets, expectedType, rightStructBrackets, leftStructBrackets, valueType, rightStructBrackets)
+		}
+	}
+	if parent == nil {
+		if valueType != expectedType {
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s\" \nactual: \"%s\"", expectedType, valueType)
+		}
+		return nestedLevel, valueType, expectedType, nil
+	}
+	switch parent.Kind() {
+	case reflect.Slice:
+		if valueType != expectedType {
+			listBrackets := generateListBrackets(nestedLevel)
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s\" \nactual: \"%s%s\"", expectedType, listBrackets, valueType, listBrackets)
+		}
+	case reflect.Struct:
+		if valueType != expectedType {
+			return nestedLevel, valueType, expectedType, fmt.Errorf("expected: \"%s%s%s\" \nactual: \"%s%s%s\"", leftStructBrackets, expectedType, rightStructBrackets, leftStructBrackets, valueType, rightStructBrackets)
+		}
+	}
+	return nestedLevel, valueType, expectedType, nil
+}
+
 // appendRowArray loads a row of values into the appender. The values are provided as an array.
 func (a *Appender) appendRowArray(args []driver.Value) error {
 	for i, v := range args {
@@ -477,11 +605,9 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 			continue
 		}
 
-		//vType := reflect.TypeOf(v).String()
-		//duckdbType := typesMap[vType]
-		//if duckdbType != a.columnInfos[i].colType {
-		//	return fmt.Errorf("type mismatch for column %d, type %s", i, vType)
-		//}
+		if _, _, _, err := columnInfo.checkMatchingType(reflect.TypeOf(v), 0, nil); err != nil {
+			return fmt.Errorf("\"Type mismatch for column %d: \n%s \n%s", i, err.Error(), errNote)
+		}
 
 		columnInfo.function(a, &columnInfo, a.currentChunkSize, v)
 	}

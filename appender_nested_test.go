@@ -167,7 +167,7 @@ func TestNestedAppender(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
-	c, err := NewConnector("hello", nil)
+	c, err := NewConnector("", nil)
 	require.NoError(t, err)
 
 	db := sql.OpenDB(c)
@@ -297,4 +297,133 @@ func TestAppenderNullStruct(t *testing.T) {
 		}
 		i++
 	}
+}
+
+func TestAppenderNestedListMismatch(t *testing.T) {
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	db := sql.OpenDB(c)
+	_, err = db.Exec(`
+		CREATE TABLE test(
+				intSlice INT[][][],
+    	)
+    `)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Int32ListListList{{{}}},
+	)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Int32List{1, 2, 3},
+	)
+	require.Error(t, err, "expected: \"int32[][][]\" \nactual: \"int32[]\"")
+
+	err = appender.AppendRow(
+		1,
+	)
+	require.ErrorContains(t, err, "expected: \"int32[][][]\" \nactual: \"int64\"")
+
+	err = appender.AppendRow(
+		Int32ListList{{1, 2, 3}, {4, 5, 6}},
+	)
+	require.ErrorContains(t, err, "expected: \"int32[][][]\" \nactual: \"int32[][]\"")
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	// test incorrect nested type insert (double nested into single nested)
+	_, err = db.Exec(`
+		CREATE TABLE test2(
+		    				intSlice INT[]
+		    	)
+		    `)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err = c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err = NewAppenderFromConn(conn, "", "test2")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Int32List{},
+	)
+	require.NoError(t, err)
+
+	var l ListString
+	l.Fill()
+	err = appender.AppendRow(
+		l.L,
+	)
+	require.ErrorContains(t, err, "expected: \"int32[]\" \nactual: \"string[]\"")
+
+	err = appender.AppendRow(
+		Int32ListList{{1, 2, 3}, {4, 5, 6}},
+	)
+	require.ErrorContains(t, err, "expected: \"int32[]\" \nactual: \"int32[][]\"")
+
+	err = appender.Close()
+	require.NoError(t, err)
+}
+
+func TestAppenderNestedStructMismatch(t *testing.T) {
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	db := sql.OpenDB(c)
+	_, err = db.Exec(`
+		CREATE TABLE test(
+				base STRUCT(I INT, V VARCHAR),
+		)
+	`)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		Base{1, "hello"},
+	)
+	require.NoError(t, err)
+
+	//err = appender.AppendRow(
+	//	1,
+	//)
+	//require.ErrorContains(t, err, "expected: \"struct\" \nactual: \"int64\"")
+	//
+	//err = appender.AppendRow(
+	//	"hello",
+	//)
+	//require.ErrorContains(t, err, "expected: \"struct\" \nactual: \"string\"")
+
+	type other struct {
+		S string
+		I int
+	}
+
+	err = appender.AppendRow(
+		other{"hello", 1},
+	)
+	require.NoError(t, err, "expected: \"{int32, string}\" \nactual: \"{string, int64}\"")
+
+	err = appender.Close()
+	require.NoError(t, err)
 }

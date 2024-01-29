@@ -268,3 +268,37 @@ func TestAppenderNullIntAndString(t *testing.T) {
 	}
 
 }
+
+func TestAppenderMismatch(t *testing.T) {
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	db := sql.OpenDB(c)
+	_, err = db.Exec(`
+		CREATE TABLE test(
+				ID BIGINT,
+    	)
+    `)
+	require.NoError(t, err)
+	defer db.Close()
+
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		"hello",
+	)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(
+		false,
+	)
+	require.ErrorContains(t, err, "Type mismatch")
+
+	err = appender.Close()
+	require.ErrorContains(t, err, "Duckdb has returned an error while appending, all data has been invalidated.")
+}
