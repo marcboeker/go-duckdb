@@ -4,7 +4,7 @@ import (
 	"strconv"
 )
 
-const childLength = 3000
+const childLength = 300
 const parentLength = 30
 const topLength = 3
 
