@@ -469,17 +469,18 @@ func setStruct(a *Appender, columnInfo *ColumnInfo, rowIdx C.idx_t, value driver
 	}
 }
 
-func (c *ColumnInfo) returnInnerMostDuckDBChildType() (string, C.duckdb_type) {
+func (c *ColumnInfo) duckDBTypeToString() (string, C.duckdb_type) {
 	if c.colType == C.DUCKDB_TYPE_LIST {
-		s, t := c.columnInfos[0].returnInnerMostDuckDBChildType()
+		s, t := c.columnInfos[0].duckDBTypeToString()
 		return s + "[]", t
-	} else if c.colType == C.DUCKDB_TYPE_STRUCT {
+	}
+	if c.colType == C.DUCKDB_TYPE_STRUCT {
 		s := "{"
 		for i := 0; i < c.fields; i++ {
 			if i > 0 {
 				s += ", "
 			}
-			tmp, _ := c.columnInfos[i].returnInnerMostDuckDBChildType()
+			tmp, _ := c.columnInfos[i].duckDBTypeToString()
 			s += tmp
 		}
 		s += "}"
@@ -488,25 +489,28 @@ func (c *ColumnInfo) returnInnerMostDuckDBChildType() (string, C.duckdb_type) {
 	return duckdbTypeMap[c.colType], c.colType
 }
 
-func returnInnerMostGoChildType(v reflect.Type) string {
+func goTypeToString(v reflect.Type) string {
 	valueType := v.String()
 	if valueType == "int" {
 		return "int64"
-	} else if valueType == "uint" {
+	}
+	if valueType == "uint" {
 		return "uint64"
-	} else if valueType == "time.Time" {
+	}
+	if valueType == "time.Time" {
 		return valueType
 	}
 
 	if v.Kind() == reflect.Slice {
-		return returnInnerMostGoChildType(v.Elem()) + "[]"
-	} else if v.Kind() == reflect.Struct {
+		return goTypeToString(v.Elem()) + "[]"
+	}
+	if v.Kind() == reflect.Struct {
 		s := "{"
 		for i := 0; i < v.NumField(); i++ {
 			if i > 0 {
 				s += ", "
 			}
-			s += returnInnerMostGoChildType(v.Field(i).Type)
+			s += goTypeToString(v.Field(i).Type)
 		}
 		s += "}"
 		return s
@@ -515,8 +519,8 @@ func returnInnerMostGoChildType(v reflect.Type) string {
 }
 
 func (c *ColumnInfo) checkMatchingType(v reflect.Type) error {
-	valueType := returnInnerMostGoChildType(v)
-	expectedType, _ := c.returnInnerMostDuckDBChildType()
+	valueType := goTypeToString(v)
+	expectedType, _ := c.duckDBTypeToString()
 
 	if valueType != expectedType {
 		return fmt.Errorf("expected: \"%s\" \nactual: \"%s\"", expectedType, valueType)
@@ -550,15 +554,21 @@ func (a *Appender) appendChunks() error {
 
 	// append all chunks to the appender and destroy them
 	var state C.duckdb_state
+	dbErr := ""
 	for _, chunk := range a.chunks {
-		state = C.duckdb_append_data_chunk(*a.appender, chunk)
-		if state == C.DuckDBError {
-			dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
-			return fmt.Errorf("Duckdb has returned an error while appending, all data has been invalidated."+
-				"\n Check that the data being appended matches the schema."+
-				"\n Error from duckdb: %s", dbErr)
+		if len(dbErr) == 0 {
+			state = C.duckdb_append_data_chunk(*a.appender, chunk)
+			if state == C.DuckDBError {
+				dbErr = C.GoString(C.duckdb_appender_error(*a.appender))
+			}
 		}
 		C.duckdb_destroy_data_chunk(&chunk)
+	}
+
+	if len(dbErr) > 0 {
+		return fmt.Errorf("Duckdb has returned an error while appending, all data has been invalidated."+
+			"\n Check that the data being appended matches the schema."+
+			"\n Error from duckdb: %s", dbErr)
 	}
 	return nil
 }
