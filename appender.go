@@ -567,7 +567,8 @@ func (a *Appender) appendChunks() error {
 
 	if len(dbErr) > 0 {
 		return fmt.Errorf("Duckdb has returned an error while appending, all data has been invalidated."+
-			"\n Check that the data being appended matches the schema."+
+			"\n Check that the data being appended matches the schema. "+
+			"Struct field names must match, and are case sensitive."+
 			"\n Error from duckdb: %s", dbErr)
 	}
 	return nil

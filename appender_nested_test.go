@@ -439,7 +439,7 @@ func TestAppenderNestedStructMismatch(t *testing.T) {
 
 	_, err = db.Exec(`
 		CREATE TABLE test2(
-				wrapper STRUCT(base STRUCT(I INT, V VARCHAR)),
+				wrapper STRUCT(Base STRUCT(I INT, V VARCHAR)),
 		)
 	`)
 	require.NoError(t, err)
