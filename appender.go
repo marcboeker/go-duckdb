@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -147,29 +148,29 @@ func (a *Appender) initializeChunkTypes(args []driver.Value) {
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_TINYINT)
 		case uint16:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_USMALLINT)
-		case int16:
+		case int16, sql.NullInt16:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_SMALLINT)
 		case uint32:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UINTEGER)
-		case int32:
+		case int32, sql.NullInt32:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_INTEGER)
 		case uint64, uint:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UBIGINT)
-		case int64, int:
+		case int64, int, sql.NullInt64:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BIGINT)
 		case float32:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_FLOAT)
-		case float64:
+		case float64, sql.NullFloat64:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_DOUBLE)
-		case bool:
+		case bool, sql.NullBool:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BOOLEAN)
-		case []byte:
+		case []byte, sql.NullByte:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
 		case UUID:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID)
-		case string:
+		case string, sql.NullString:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
-		case time.Time:
+		case time.Time, sql.NullTime:
 			tmpChunkTypes[i] = C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP)
 		default:
 			panic(fmt.Sprintf("couldn't append unsupported parameter %T", v))
