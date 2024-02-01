@@ -22,6 +22,7 @@ func TestArrow(t *testing.T) {
 	t.Run("select series", func(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
+		defer c.Close()
 
 		conn, err := c.Connect(context.Background())
 		require.NoError(t, err)
@@ -46,6 +47,7 @@ func TestArrow(t *testing.T) {
 	t.Run("select long series", func(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
+		defer c.Close()
 
 		conn, err := c.Connect(context.Background())
 		require.NoError(t, err)

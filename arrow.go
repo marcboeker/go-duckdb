@@ -210,7 +210,7 @@ func (a *Arrow) execute(s *stmt, args []driver.NamedValue) (*C.duckdb_arrow, err
 		panic("database/sql/driver: misuse of duckdb driver: executeArrow after Close")
 	}
 
-	if err := s.start(args); err != nil {
+	if err := s.bind(args); err != nil {
 		return nil, err
 	}
 

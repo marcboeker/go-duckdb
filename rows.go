@@ -28,10 +28,6 @@ type rows struct {
 	chunkRowIdx   C.idx_t
 }
 
-func newRows(res C.duckdb_result) *rows {
-	return newRowsWithStmt(res, nil)
-}
-
 func newRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
 	n := C.duckdb_column_count(&res)
 	columns := make([]string, 0, n)
@@ -331,16 +327,19 @@ func scanString(vector C.duckdb_vector, rowIdx C.idx_t) string {
 }
 
 // duckdb/tools/juliapkg/src/ctypes.jl
-// `json`, `varchar`, and `blob` have the same repr
+// `json`, `varchar`, and `blob` are C-style char arrays
 func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
+
+	// we don't have to free s.ptr, as it is part of the data in the vector
 	s := get[duckdb_string_t](vector, rowIdx)
+
 	if s.length <= stringInlineLength {
-		// inline data is stored from byte 4..16 (up to 12 bytes)
+		// inlined data is stored from byte 4..16 (up to 12 bytes)
 		return C.GoBytes(unsafe.Pointer(&s.prefix), C.int(s.length))
-	} else {
-		// any longer strings are stored as a pointer in `ptr`
-		return C.GoBytes(unsafe.Pointer(s.ptr), C.int(s.length))
 	}
+
+	// any longer strings are stored as a pointer in `ptr`
+	return C.GoBytes(unsafe.Pointer(s.ptr), C.int(s.length))
 }
 
 func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {

@@ -56,10 +56,21 @@ func TestOpen(t *testing.T) {
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
 
-		if !errors.Is(err, errPrepareConfig) {
+		if !errors.Is(err, errSetConfig) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
+}
+
+func TestConnector_Close(t *testing.T) {
+	t.Parallel()
+
+	connector, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	// check that multiple close calls don't cause panics or errors
+	require.NoError(t, connector.Close())
+	require.NoError(t, connector.Close())
 }
 
 func TestConnPool(t *testing.T) {
@@ -968,6 +979,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			err = rows.Scan(&val)
 			require.NoError(t, err)
 			require.Equal(t, test.value, val)
+			require.Equal(t, rows.Next(), false)
 		})
 	}
 }

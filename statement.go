@@ -44,10 +44,12 @@ func (s *stmt) NumInput() int {
 	return int(paramCount)
 }
 
-func (s *stmt) start(args []driver.NamedValue) error {
+func (s *stmt) bind(args []driver.NamedValue) error {
 	if s.NumInput() != len(args) {
 		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
+
+	// FIXME (feature): we can't pass nested types as parameters (bind_value) yet
 
 	for i, v := range args {
 		switch v := v.Value.(type) {
@@ -190,7 +192,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
 
-	if err := s.start(args); err != nil {
+	if err := s.bind(args); err != nil {
 		return nil, err
 	}
 
@@ -225,12 +227,13 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	<-bgDoneCh
 	if state == C.DuckDBError {
 		if ctx.Err() != nil {
+			C.duckdb_destroy_result(&res)
 			return nil, ctx.Err()
 		}
 
-		dbErr := C.GoString(C.duckdb_result_error(&res))
+		err := C.GoString(C.duckdb_result_error(&res))
 		C.duckdb_destroy_result(&res)
-		return nil, errors.New(dbErr)
+		return nil, errors.New(err)
 	}
 
 	return &res, nil

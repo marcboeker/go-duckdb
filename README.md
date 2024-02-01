@@ -18,116 +18,152 @@ go get github.com/marcboeker/go-duckdb
 
 ## Usage
 
-`go-duckdb` hooks into the `database/sql` interface provided by the Go stdlib. To open a connection, simply specify the driver type as `duckdb`:
+`go-duckdb` hooks into the `database/sql` interface provided by the Go `stdlib`. To open a connection, simply specify the driver type as `duckdb`.
 
 ```go
 db, err := sql.Open("duckdb", "")
+if err != nil {
+    ...
+}
+defer db.Close()
 ```
 
-This creates an in-memory instance of DuckDB. If you would like to store the data on the filesystem, you need to specify the path where to store the database:
+This creates an in-memory instance of DuckDB. To open a persistent database, you need to specify a filepath to the database file. If
+the file does not exist, then DuckDB creates it.
+
 
 ```go
 db, err := sql.Open("duckdb", "/path/to/foo.db")
+if err != nil {
+	...
+}
+defer db.Close()
 ```
 
-If you want to set specific [config options for DuckDB](https://duckdb.org/docs/sql/configuration), you can add them as query style parameters in the form of `name=value` to the DSN, like:
+If you want to set specific [config options for DuckDB](https://duckdb.org/docs/sql/configuration), you can add them as query style parameters in the form of `name=value` pairs to the DSN.
 
 ```go
 db, err := sql.Open("duckdb", "/path/to/foo.db?access_mode=read_only&threads=4")
+if err != nil {
+    ...
+}
+defer db.Close()
 ```
 
-Alternatively, you can also use `sql.OpenDB` when you want to perform some initialization before the connection is created and returned from the connection pool on call to `db.Conn`.
-Here's an example that installs and loads the JSON extension for each connection:
+Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/go1.21.6:src/database/sql/sql.go;l=781). That way, you can perform initialization steps in a callback function before opening the database.
+Here's an example that installs and loads the JSON extension when opening a database with `sql.OpenDB(connector)`.
 
 ```go
 connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.Execer) error {
-  bootQueries := []string{
-    "INSTALL 'json'",
-    "LOAD 'json'",
-  }
-
-  for _, qry := range bootQueries {
-    _, err = execer.Exec(qry, nil)
-    if err != nil {
-      return err
+    bootQueries := []string{
+        "INSTALL 'json'",
+        "LOAD 'json'",
     }
-  }
-  return nil
+
+    for _, query := range bootQueries {
+        _, err = execer.Exec(query, nil)
+        if err != nil {
+            ...
+        }
+    }
+    return nil
 })
 if err != nil {
-  return nil, err
+    ...
 }
 
 db := sql.OpenDB(connector)
-db.SetMaxOpenConns(poolsize)
-...
+defer db.Close()
 ```
 
-Please refer to the [database/sql](https://godoc.org/database/sql) GoDoc for further usage instructions.
+Please refer to the [database/sql](https://godoc.org/database/sql) documentation for further usage instructions.
+
+## A Note on Memory Allocation
+
+DuckDB lives in-process. Therefore, all its memory lives in the driver. All allocations live in the host process, which
+is the Go application. Especially for long-running applications, it is crucial to call the corresponding `Close`-functions as specified
+in [database/sql](https://godoc.org/database/sql). The following is a list of examples.
+```go
+db, err := sql.Open("duckdb", "")
+defer db.Close()
+
+conn, err := db.Conn(context.Background())
+defer conn.Close()
+
+rows, err := conn.QueryContext(context.Background(), "SELECT 42")
+// alternatively, rows.Next() has to return false
+rows.Close()
+
+appender, err := NewAppenderFromConn(conn, "", "test")
+defer appender.Close()
+
+// if not passed to sql.OpenDB
+connector, err := NewConnector("", nil)
+defer connector.Close()
+```
 
 ## DuckDB Appender API
 
-If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new Appender by supplying a DuckDB connection to `NewAppenderFromConn()`.
+If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new `Appender` by passing a DuckDB connection to `NewAppenderFromConn()`.
 
 ```go
 connector, err := duckdb.NewConnector("test.db", nil)
 if err != nil {
-  ...
+	...
 }
+defer connector.Close()
+
 conn, err := connector.Connect(context.Background())
 if err != nil {
-  ...
+	...
 }
 defer conn.Close()
 
-// Retrieve appender from connection (note that you have to create the table 'test' beforehand).
-appender, err := NewAppenderFromConn(conn, "", "test")
+// obtain an appender from the connection
+// NOTE: the table 'test_tbl' must exist in test.db
+appender, err := NewAppenderFromConn(conn, "", "test_tbl")
 if err != nil {
-  ...
+	...
 }
 defer appender.Close()
 
 err = appender.AppendRow(...)
 if err != nil {
-  ...
-}
-
-// Optional, if you want to access the appended rows immediately.
-err = appender.Flush()
-if err != nil {
-  ...
+	...
 }
 ```
 
 ## DuckDB Apache Arrow Interface
 
-If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new Arrow by supplying a DuckDB connection to `NewArrowFromConn()`.
+If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
 
 ```go
 connector, err := duckdb.NewConnector("", nil)
 if err != nil {
-  ...
+	...
 }
+defer connector.Close()
+
 conn, err := connector.Connect(context.Background())
 if err != nil {
-  ...
+	...
 }
 defer conn.Close()
 
-// Retrieve Arrow from connection.
-ar, err := duckdb.NewArrowFromConn(conn)
-if err != nil {
-  ...
+// obtain the Arrow from the connection
+arrow, err := duckdb.NewArrowFromConn(conn)
+if err != nil w
+	...
 }
 
-rdr, err := ar.QueryContext(context.Background(), "SELECT * FROM generate_series(1, 10)")
+rdr, err := arrow.QueryContext(context.Background(), "SELECT * FROM generate_series(1, 10)")
 if err != nil {
-  ...
+	...
 }
 defer rdr.Release()
 
 for rdr.Next() {
-  // Process records.
+  // process records
 }
 ```
 
