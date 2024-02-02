@@ -44,7 +44,6 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 // The user must close the returned Connector, if it is not passed to the sql.OpenDB function.
 // Otherwise, sql.DB closes the Connector when calling sql.DB.Close().
 func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (*Connector, error) {
-
 	var db C.duckdb_database
 
 	parsedDSN, err := url.Parse(dsn)
@@ -84,7 +83,6 @@ func (c *Connector) Driver() driver.Driver {
 }
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-
 	var con C.duckdb_connection
 	if state := C.duckdb_connect(c.db, &con); state == C.DuckDBError {
 		return nil, errOpen
@@ -118,7 +116,6 @@ func extractConnectionString(dsn string) string {
 }
 
 func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
-
 	var config C.duckdb_config
 	if state := C.duckdb_create_config(&config); state == C.DuckDBError {
 		C.duckdb_destroy_config(&config)
@@ -147,7 +144,6 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 }
 
 func setConfig(config C.duckdb_config, name string, option string) error {
-
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 

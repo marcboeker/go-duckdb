@@ -329,7 +329,6 @@ func scanString(vector C.duckdb_vector, rowIdx C.idx_t) string {
 // duckdb/tools/juliapkg/src/ctypes.jl
 // `json`, `varchar`, and `blob` are C-style char arrays
 func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
-
 	// we don't have to free s.ptr, as it is part of the data in the vector
 	s := get[duckdb_string_t](vector, rowIdx)
 
@@ -362,7 +361,6 @@ func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t
 	data := map[string]any{}
 
 	for j := C.idx_t(0); j < C.duckdb_struct_type_child_count(ty); j++ {
-
 		ptrToChildName := C.duckdb_struct_type_child_name(ty, j)
 		name := C.GoString(ptrToChildName)
 		C.duckdb_free(unsafe.Pointer(ptrToChildName))
@@ -539,7 +537,6 @@ func logicalTypeNameStruct(lt C.duckdb_logical_type) string {
 	count := int(C.duckdb_struct_type_child_count(lt))
 	name := "STRUCT("
 	for i := 0; i < count; i++ {
-
 		ptrToChildName := C.duckdb_struct_type_child_name(lt, C.idx_t(i))
 		childName := C.GoString(ptrToChildName)
 		childLogicalType := C.duckdb_struct_type_child_type(lt, C.idx_t(i))
