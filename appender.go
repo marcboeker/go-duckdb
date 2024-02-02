@@ -29,7 +29,7 @@ var duckdbTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_FLOAT:     "float32",
 	C.DUCKDB_TYPE_DOUBLE:    "float64",
 	C.DUCKDB_TYPE_VARCHAR:   "string",
-	C.DUCKDB_TYPE_BLOB:      "[]byte{}",
+	C.DUCKDB_TYPE_BLOB:      "[]byte",
 	C.DUCKDB_TYPE_TIMESTAMP: "time.Time",
 	C.DUCKDB_TYPE_UUID:      "duckdb.UUID",
 	C.DUCKDB_TYPE_LIST:      "slice",
