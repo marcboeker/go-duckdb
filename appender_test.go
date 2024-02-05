@@ -182,7 +182,7 @@ func TestAppender(t *testing.T) {
 			Float:     rand.Float32(),
 			Double:    rand.Float64(),
 			String:    randString(int(randInt(0, 128))),
-			Bool:      randBool(),
+			Bool:      rand.Int()%2 == 0,
 		}
 	}
 	rows := []dataRow{}
