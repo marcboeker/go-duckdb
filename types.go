@@ -13,6 +13,8 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+type UUID [16]byte
+
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
@@ -22,6 +24,16 @@ func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
 	binary.BigEndian.PutUint64(uuid[:8], uint64(hi.upper)^1<<63)
 	binary.BigEndian.PutUint64(uuid[8:], uint64(hi.lower))
 	return uuid[:]
+}
+
+func uuidToHugeInt(uuid UUID) C.duckdb_hugeint {
+	var dt C.duckdb_hugeint
+	upper := binary.BigEndian.Uint64(uuid[:8])
+	// flip the sign bit
+	upper = upper ^ (1 << 63)
+	dt.upper = C.int64_t(upper)
+	dt.lower = C.uint64_t(binary.BigEndian.Uint64(uuid[8:]))
+	return dt
 }
 
 func hugeIntToNative(hi C.duckdb_hugeint) *big.Int {

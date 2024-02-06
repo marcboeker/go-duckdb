@@ -56,10 +56,21 @@ func TestOpen(t *testing.T) {
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
 
-		if !errors.Is(err, errPrepareConfig) {
+		if !errors.Is(err, errSetConfig) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
+}
+
+func TestConnector_Close(t *testing.T) {
+	t.Parallel()
+
+	connector, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	// check that multiple close calls don't cause panics or errors
+	require.NoError(t, connector.Close())
+	require.NoError(t, connector.Close())
 }
 
 func TestConnPool(t *testing.T) {
@@ -968,6 +979,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			err = rows.Scan(&val)
 			require.NoError(t, err)
 			require.Equal(t, test.value, val)
+			require.Equal(t, rows.Next(), false)
 		})
 	}
 }
@@ -1098,6 +1110,22 @@ func TestParquetExtension(t *testing.T) {
 
 	err = os.Remove("./users.parquet")
 	require.NoError(t, err)
+}
+
+func TestQueryTimeout(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*250)
+	defer cancel()
+
+	now := time.Now()
+	_, err := db.ExecContext(ctx, "CREATE TABLE test AS SELECT * FROM range(10000000) t1, range(1000000) t2;")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	// a very defensive time check, but should be good enough
+	// the query takes much longer than 10 seconds
+	require.Less(t, time.Since(now), 10*time.Second)
 }
 
 func openDB(t *testing.T) *sql.DB {

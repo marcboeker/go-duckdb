@@ -44,10 +44,12 @@ func (s *stmt) NumInput() int {
 	return int(paramCount)
 }
 
-func (s *stmt) start(args []driver.NamedValue) error {
+func (s *stmt) bind(args []driver.NamedValue) error {
 	if s.NumInput() != len(args) {
 		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
+
+	// FIXME (feature): we can't pass nested types as parameters (bind_value) yet
 
 	for i, v := range args {
 		switch v := v.Value.(type) {
@@ -190,8 +192,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
 
-	err := s.start(args)
-	if err != nil {
+	if err := s.bind(args); err != nil {
 		return nil, err
 	}
 
@@ -203,30 +204,38 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)
 
-	for {
+	mainDoneCh := make(chan struct{})
+	bgDoneCh := make(chan struct{})
+	go func() {
 		select {
-		// if context is cancelled or deadline exceeded, don't execute further
 		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			// continue
+			C.duckdb_interrupt(*s.c.con)
+			close(bgDoneCh)
+			return
+		case <-mainDoneCh:
+			close(bgDoneCh)
+			return
 		}
-		state := C.duckdb_pending_execute_task(pendingRes)
-		if state == C.DUCKDB_PENDING_ERROR {
-			dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
-			return nil, errors.New(dbErr)
-		}
-		if C.duckdb_pending_execution_is_finished(state) {
-			break
-		}
-	}
+	}()
 
 	var res C.duckdb_result
-	if state := C.duckdb_execute_pending(pendingRes, &res); state == C.DuckDBError {
-		dbErr := C.GoString(C.duckdb_result_error(&res))
+	state := C.duckdb_execute_pending(pendingRes, &res)
+	close(mainDoneCh)
+	// also wait for background goroutine to finish
+	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
+	// it can cancel that query so need to wait for it to finish as well
+	<-bgDoneCh
+	if state == C.DuckDBError {
+		if ctx.Err() != nil {
+			C.duckdb_destroy_result(&res)
+			return nil, ctx.Err()
+		}
+
+		err := C.GoString(C.duckdb_result_error(&res))
 		C.duckdb_destroy_result(&res)
-		return nil, errors.New(dbErr)
+		return nil, errors.New(err)
 	}
+
 	return &res, nil
 }
 
