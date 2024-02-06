@@ -147,6 +147,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return hugeIntToNative(hi), nil
 	case C.DUCKDB_TYPE_VARCHAR:
 		return scanString(vector, rowIdx), nil
+	case C.DUCKDB_TYPE_ENUM:
+		return scanENUM(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_BLOB:
 		return scanBlob(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DECIMAL:
@@ -211,6 +213,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(big.NewInt(0))
 	case C.DUCKDB_TYPE_VARCHAR:
 		return reflect.TypeOf("")
+	case C.DUCKDB_TYPE_ENUM:
+		return reflect.TypeOf("")
 	case C.DUCKDB_TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
 	case C.DUCKDB_TYPE_DECIMAL:
@@ -271,6 +275,12 @@ func (r *rows) Close() error {
 	}
 
 	return err
+}
+
+func set[T any](vector C.duckdb_vector, rowIdx C.idx_t, value T) {
+	ptr := C.duckdb_vector_get_data(vector)
+	xs := (*[1 << 31]T)(ptr)
+	xs[rowIdx] = value
 }
 
 func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
@@ -351,8 +361,13 @@ func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
 
 func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (map[string]any, error) {
 	data := map[string]any{}
+
 	for j := C.idx_t(0); j < C.duckdb_struct_type_child_count(ty); j++ {
-		name := C.GoString(C.duckdb_struct_type_child_name(ty, j))
+
+		ptrToChildName := C.duckdb_struct_type_child_name(ty, j)
+		name := C.GoString(ptrToChildName)
+		C.duckdb_free(unsafe.Pointer(ptrToChildName))
+
 		child := C.duckdb_struct_vector_get_child(vector, j)
 		value, err := scan(child, rowIdx)
 		if err != nil {
@@ -399,6 +414,27 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 		Micros: int64(i.micros),
 	}
 	return data, nil
+}
+
+func scanENUM(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (string, error) {
+	var idx uint64
+	internalType := C.duckdb_enum_internal_type(ty)
+	switch internalType {
+	case C.DUCKDB_TYPE_UTINYINT:
+		idx = uint64(get[uint8](vector, rowIdx))
+	case C.DUCKDB_TYPE_USMALLINT:
+		idx = uint64(get[uint16](vector, rowIdx))
+	case C.DUCKDB_TYPE_UINTEGER:
+		idx = uint64(get[uint32](vector, rowIdx))
+	case C.DUCKDB_TYPE_UBIGINT:
+		idx = get[uint64](vector, rowIdx)
+	default:
+		return "", errInvalidType
+	}
+
+	val := C.duckdb_enum_dictionary_value(ty, (C.idx_t)(idx))
+	defer C.duckdb_free(unsafe.Pointer(val))
+	return C.GoString(val), nil
 }
 
 var (
@@ -504,19 +540,19 @@ func logicalTypeNameStruct(lt C.duckdb_logical_type) string {
 	count := int(C.duckdb_struct_type_child_count(lt))
 	name := "STRUCT("
 	for i := 0; i < count; i++ {
-		// Child name
-		cn := C.duckdb_struct_type_child_name(lt, C.idx_t(i))
-		defer C.duckdb_free(unsafe.Pointer(cn))
 
-		// Child logical type
-		clt := C.duckdb_struct_type_child_type(lt, C.idx_t(i))
-		defer C.duckdb_destroy_logical_type(&clt)
+		ptrToChildName := C.duckdb_struct_type_child_name(lt, C.idx_t(i))
+		childName := C.GoString(ptrToChildName)
+		childLogicalType := C.duckdb_struct_type_child_type(lt, C.idx_t(i))
 
 		// Add comma if not at end of list
-		name += escapeStructFieldName(C.GoString(cn)) + " " + logicalTypeName(clt)
+		name += escapeStructFieldName(childName) + " " + logicalTypeName(childLogicalType)
 		if i != count-1 {
 			name += ", "
 		}
+
+		C.duckdb_free(unsafe.Pointer(ptrToChildName))
+		C.duckdb_destroy_logical_type(&childLogicalType)
 	}
 	return name + ")"
 }

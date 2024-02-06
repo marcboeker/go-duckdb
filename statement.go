@@ -203,8 +203,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)
 
-	ready := false
-	for !ready {
+	for {
 		select {
 		// if context is cancelled or deadline exceeded, don't execute further
 		case <-ctx.Done():
@@ -213,17 +212,12 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 			// continue
 		}
 		state := C.duckdb_pending_execute_task(pendingRes)
-		switch state {
-		case C.DUCKDB_PENDING_RESULT_READY:
-			// we are done processing the query, now get the results
-			ready = true
-		case C.DUCKDB_PENDING_ERROR:
+		if state == C.DUCKDB_PENDING_ERROR {
 			dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
 			return nil, errors.New(dbErr)
-		case C.DUCKDB_PENDING_RESULT_NOT_READY:
-			// we are not done yet, continue to next task
-		default:
-			panic(fmt.Sprintf("found unknown state while pending execute: %v", state))
+		}
+		if C.duckdb_pending_execution_is_finished(state) {
+			break
 		}
 	}
 

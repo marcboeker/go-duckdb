@@ -2,5 +2,4 @@
 .DS_Store
 run.sh
 duckdb/
-/lib
 .idea

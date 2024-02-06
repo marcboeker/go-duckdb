@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestOpen(t *testing.T) {
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
 
-		if !errors.Is(err, prepareConfigError) {
+		if !errors.Is(err, errPrepareConfig) {
 			t.Fatal("invalid config should not be accepted")
 		}
 	})
@@ -267,7 +268,7 @@ func TestStruct(t *testing.T) {
 			{row{"lala", 12346}},
 		}
 
-		rows, err := db.Query("SELECT ROW(bar, baz) FROM foo ORDER BY baz")
+		rows, err := db.Query("SELECT struct_pack(bar, baz) FROM foo ORDER BY baz")
 		require.NoError(t, err)
 		defer rows.Close()
 
@@ -483,6 +484,13 @@ func TestUUID(t *testing.T) {
 func TestENUMs(t *testing.T) {
 	t.Parallel()
 
+	type environment string
+	const (
+		Sea  environment = "Sea"
+		Air  environment = "Air"
+		Land environment = "Land"
+	)
+
 	db := openDB(t)
 	defer db.Close()
 
@@ -492,14 +500,25 @@ func TestENUMs(t *testing.T) {
 	_, err = db.Exec("CREATE TABLE vehicles (name text, environment element)")
 	require.NoError(t, err)
 
-	_, err = db.Exec("INSERT INTO vehicles VALUES (?, ?), (?, ?)", "Aircraft", "Air", "Boat", "Sea")
+	_, err = db.Exec("INSERT INTO vehicles VALUES (?, ?), (?, ?)", "Aircraft", Air, "Boat", Sea)
 	require.NoError(t, err)
 
 	var name string
-	var env string
-	require.NoError(t, db.QueryRow("SELECT name, CAST(environment AS text) FROM vehicles WHERE environment = ?", "Air").Scan(&name, &env))
+	var env environment
+	require.NoError(t, db.QueryRow("SELECT name, environment FROM vehicles WHERE environment = ?", Air).Scan(&name, &env))
 	require.Equal(t, "Aircraft", name)
-	require.Equal(t, "Air", env)
+	require.Equal(t, Air, env)
+
+	// enum list
+	_, err = db.Exec("CREATE TABLE all_enums (environments element[])")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO all_enums VALUES ([?, ?, ?])", Air, Land, Sea)
+	require.NoError(t, err)
+
+	var row Composite[[]environment]
+	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
+	require.ElementsMatch(t, []environment{Air, Sea, Land}, row.Get())
 }
 
 func TestHugeInt(t *testing.T) {
@@ -946,7 +965,8 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 
 			var val any
 			require.True(t, rows.Next())
-			rows.Scan(&val)
+			err = rows.Scan(&val)
+			require.NoError(t, err)
 			require.Equal(t, test.value, val)
 		})
 	}
@@ -1001,7 +1021,7 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	// args are only applied to the last statement
-	res, err = conn.ExecContext(context.Background(), "INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
+	_, err = conn.ExecContext(context.Background(), "INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "incorrect argument count for command: have 0 want 2")
 
@@ -1049,6 +1069,34 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	err = conn.Close()
+	require.NoError(t, err)
+}
+
+func TestParquetExtension(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("CREATE TABLE users (id int, name varchar, age int);")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO users VALUES (1, 'Jane', 30);")
+	require.NoError(t, err)
+
+	_, err = db.Exec("COPY (SELECT * FROM users) TO './users.parquet' (FORMAT 'parquet');")
+	require.NoError(t, err)
+
+	type res struct {
+		ID   int
+		Name string
+		Age  int
+	}
+	row := db.QueryRow("SELECT * FROM read_parquet('./users.parquet');")
+	var r res
+	err = row.Scan(&r.ID, &r.Name, &r.Age)
+	require.NoError(t, err)
+	require.Equal(t, res{ID: 1, Name: "Jane", Age: 30}, r)
+
+	err = os.Remove("./users.parquet")
 	require.NoError(t, err)
 }
 
