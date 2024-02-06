@@ -567,13 +567,13 @@ func TestAppenderNestedListMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow([]int32{1, 2, 3})
-	require.Error(t, err, "expected: \"int32[][][]\" \nactual: \"int32[]\"")
+	require.Error(t, err, "expected: int32[][][], actual: int32[]")
 
 	err = appender.AppendRow(1)
-	require.ErrorContains(t, err, "expected: \"int32[][][]\" \nactual: \"int64\"")
+	require.ErrorContains(t, err, "expected: int32[][][], actual: int64")
 
 	err = appender.AppendRow([][]int32{{1, 2, 3}, {4, 5, 6}})
-	require.ErrorContains(t, err, "expected: \"int32[][][]\" \nactual: \"int32[][]\"")
+	require.ErrorContains(t, err, "expected: int32[][][], actual: int32[][]")
 
 	err = appender.Close()
 	require.NoError(t, err)
@@ -597,12 +597,12 @@ func TestAppenderNestedListMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow([]string{"foo", "bar", "baz"})
-	require.ErrorContains(t, err, "expected: \"int32[]\" \nactual: \"string[]\"")
+	require.ErrorContains(t, err, "expected: int32[], actual: string[]")
 
 	err = appender.AppendRow(
 		[][]int32{{1, 2, 3}, {4, 5, 6}},
 	)
-	require.ErrorContains(t, err, "expected: \"int32[]\" \nactual: \"int32[][]\"")
+	require.ErrorContains(t, err, "expected: int32[], actual: int32[][]")
 
 	err = appender.Close()
 	require.NoError(t, err)
@@ -631,24 +631,24 @@ func TestAppenderNestedStructMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow(1)
-	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"int64\"")
+	require.ErrorContains(t, err, "expected: {int32, string}, actual: int64")
 
 	err = appender.AppendRow("hello")
-	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"string\"")
+	require.ErrorContains(t, err, "expected: {int32, string}, actual: string")
 
 	type other struct {
 		S string
 		I int
 	}
 	err = appender.AppendRow(other{"hello", 1})
-	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"{string, int64}\"")
+	require.ErrorContains(t, err, "expected: {int32, string}, actual: {string, int64}")
 
 	err = appender.AppendRow(
 		wrappedStruct{
 			simpleStruct{A: 0, B: "one billion ducks"},
 		},
 	)
-	require.ErrorContains(t, err, "expected: \"{int32, string}\" \nactual: \"{{int32, string}}\"")
+	require.ErrorContains(t, err, "expected: {int32, string}, actual: {{int32, string}}")
 
 	err = appender.Close()
 	require.NoError(t, err)
@@ -675,7 +675,7 @@ func TestAppenderNestedStructMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow(simpleStruct{1, "hello"})
-	require.ErrorContains(t, err, "expected: \"{{int32, string}}\" \nactual: \"{int32, string}\"")
+	require.ErrorContains(t, err, "expected: {{int32, string}}, actual: {int32, string}")
 
 	err = appender.Close()
 	require.NoError(t, err)
@@ -704,11 +704,11 @@ func TestAppenderNestedMixedMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow([]int32{1, 2, 3})
-	require.ErrorContains(t, err, "expected: \"{int32[]}\" \nactual: \"int32[]\"")
+	require.ErrorContains(t, err, "expected: {int32[]}, actual: int32[]")
 
 	l := struct{ L []string }{L: []string{"a", "b", "c"}}
 	err = appender.AppendRow(l)
-	require.ErrorContains(t, err, "expected: \"{int32[]}\" \nactual: \"{string[]}\"")
+	require.ErrorContains(t, err, "expected: {int32[]}, actual: {string[]}")
 
 	err = appender.Close()
 	require.NoError(t, err)
@@ -744,7 +744,7 @@ func TestAppenderNestedMixedMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow(simpleStruct{1, "hello"})
-	require.ErrorContains(t, err, "expected: \"{{string[]}, {int32[]}[]}\" \nactual: \"{int32, string}\"")
+	require.ErrorContains(t, err, "expected: {{string[]}, {int32[]}[]}, actual: {int32, string}")
 
 	err = appender.Close()
 	require.NoError(t, err)
@@ -832,8 +832,8 @@ func TestAppenderMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow(false)
-	require.ErrorContains(t, err, "Type mismatch")
+	require.ErrorContains(t, err, "type mismatch")
 
 	err = appender.Close()
-	require.ErrorContains(t, err, "Duckdb has returned an error while appending, all data has been invalidated.")
+	require.ErrorContains(t, err, "duckdb has returned an error while appending, all data has been invalidated.")
 }
