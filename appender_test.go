@@ -723,7 +723,7 @@ func TestAppenderTime(t *testing.T) {
 	db, appender := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP)`)
 	defer db.Close()
 
-	ts := time.Now().UTC()
+	ts := time.Date(2022, time.January, 1, 12, 0, 0, 0, time.UTC)
 	err := appender.AppendRow(ts)
 	require.NoError(t, err)
 
