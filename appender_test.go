@@ -720,7 +720,7 @@ func TestAppenderUUID(t *testing.T) {
 }
 
 func TestAppenderTime(t *testing.T) {
-	db, appender := prepareAppender(t, `CREATE TABLE test (timestamp DATETIME)`)
+	db, appender := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP)`)
 	defer db.Close()
 
 	ts := time.Now().UTC()
