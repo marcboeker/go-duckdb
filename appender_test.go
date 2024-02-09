@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const numAppenderTestRows = 100
+const numAppenderTestRows = 10000
 
 type simpleStruct struct {
 	A int32
@@ -42,7 +42,7 @@ type mixedStruct struct {
 }
 
 type nestedDataRow struct {
-	ID                  int
+	ID                  int64
 	stringList          []string
 	intList             []int32
 	nestedIntList       [][]int32
@@ -57,7 +57,7 @@ type nestedDataRow struct {
 }
 
 type resultRow struct {
-	ID                  int
+	ID                  int64
 	stringList          []any
 	intList             []any
 	nestedIntList       []any
@@ -97,10 +97,6 @@ func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
 }
 
-func randBool() bool {
-	return (rand.Int()%2 == 0)
-}
-
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 func randString(n int) string {
@@ -111,17 +107,27 @@ func randString(n int) string {
 	return string(b)
 }
 
-func TestAppender(t *testing.T) {
+func prepareAppender(t *testing.T, ddl string) (*sql.DB, *Appender) {
 	c, err := NewConnector("", nil)
 	require.NoError(t, err)
 
 	db := sql.OpenDB(c)
-	defer db.Close()
+	_, err = db.Exec(ddl)
+	require.NoError(t, err)
 
-	_, err = db.Exec(`
-  CREATE TABLE test (
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+
+	return db, appender
+}
+
+func TestAppender(t *testing.T) {
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
 		id BIGINT,
-		uuid UUID,
 		uint8 UTINYINT,
 		int8 TINYINT,
 		uint16 USMALLINT,
@@ -134,13 +140,12 @@ func TestAppender(t *testing.T) {
 		float REAL,
 		double DOUBLE,
 		string VARCHAR,
-		bool BOOLEAN,
+		bool BOOLEAN
   )`)
-	require.NoError(t, err)
+	defer db.Close()
 
 	type dataRow struct {
-		ID        int
-		UUID      UUID
+		ID        int64
 		UInt8     uint8
 		Int8      int8
 		UInt16    uint16
@@ -155,21 +160,16 @@ func TestAppender(t *testing.T) {
 		String    string
 		Bool      bool
 	}
-	randRow := func(i int) dataRow {
+
+	rows := make([]dataRow, numAppenderTestRows)
+	for i := 0; i < numAppenderTestRows; i++ {
 		u64 := rand.Uint64()
 		// go sql doesn't support uint64 values with high bit set (see for example https://github.com/lib/pq/issues/72)
 		if u64 > 9223372036854775807 {
 			u64 = 9223372036854775807
 		}
-
-		b, err := uuid.New().MarshalBinary()
-		require.NoError(t, err)
-		var uuidBytes [16]byte
-		copy(uuidBytes[:], b)
-
-		return dataRow{
-			ID:        i,
-			UUID:      uuidBytes,
+		rows[i] = dataRow{
+			ID:        int64(i),
 			UInt8:     uint8(randInt(0, 255)),
 			Int8:      int8(randInt(-128, 127)),
 			UInt16:    uint16(randInt(0, 65535)),
@@ -184,77 +184,46 @@ func TestAppender(t *testing.T) {
 			String:    randString(int(randInt(0, 128))),
 			Bool:      rand.Int()%2 == 0,
 		}
-	}
-	rows := []dataRow{}
-	for i := 0; i < numAppenderTestRows; i++ {
-		rows = append(rows, randRow(i))
-	}
-
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
-	for i, row := range rows {
-		if i%3000 == 0 {
-			err = appender.Flush()
-			require.NoError(t, err)
-		}
 
 		err := appender.AppendRow(
-			row.ID,
-			row.UUID,
-			row.UInt8,
-			row.Int8,
-			row.UInt16,
-			row.Int16,
-			row.UInt32,
-			row.Int32,
-			row.UInt64,
-			row.Int64,
-			row.Timestamp,
-			row.Float,
-			row.Double,
-			row.String,
-			row.Bool,
+			rows[i].ID,
+			rows[i].UInt8,
+			rows[i].Int8,
+			rows[i].UInt16,
+			rows[i].Int16,
+			rows[i].UInt32,
+			rows[i].Int32,
+			rows[i].UInt64,
+			rows[i].Int64,
+			rows[i].Timestamp,
+			rows[i].Float,
+			rows[i].Double,
+			rows[i].String,
+			rows[i].Bool,
 		)
 		require.NoError(t, err)
+
+		if i%1000 == 0 {
+			err := appender.Flush()
+			require.NoError(t, err)
+		}
 	}
-	err = appender.Close()
+
+	err := appender.Close()
 	require.NoError(t, err)
 
 	res, err := db.QueryContext(
 		context.Background(), `
-			SELECT  id,
-				uuid,
-				uint8,
-				int8,
-				uint16,
-				int16,
-				uint32,
-				int32,
-				uint64,
-				int64,
-				timestamp,
-				float,
-				double,
-				string,
-				bool
-      FROM test
-      ORDER BY id`,
+			SELECT * FROM test ORDER BY id`,
 	)
 	require.NoError(t, err)
 	defer res.Close()
 
 	i := 0
-	var scannedUUID []byte
 	for res.Next() {
 		r := dataRow{}
 		err := res.Scan(
 			&r.ID,
-			&scannedUUID,
 			&r.UInt8,
 			&r.Int8,
 			&r.UInt16,
@@ -270,22 +239,64 @@ func TestAppender(t *testing.T) {
 			&r.Bool,
 		)
 		require.NoError(t, err)
-		copy(r.UUID[:], scannedUUID)
 		require.Equal(t, rows[i], r)
 		i++
 	}
 
-	require.Equal(t, i, numAppenderTestRows)
+	require.Equal(t, numAppenderTestRows, i)
+}
+
+func TestAppenderList(t *testing.T) {
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
+		string_list VARCHAR[],
+		int_list INTEGER[]
+	)`)
+	defer db.Close()
+
+	rows := make([]nestedDataRow, 10)
+	for i := 0; i < 10; i++ {
+		rows[i].stringList = []string{"a", "b", "c"}
+		rows[i].intList = []int32{1, 2, 3}
+	}
+
+	for _, row := range rows {
+		err := appender.AppendRow(
+			row.stringList,
+			row.intList,
+		)
+		require.NoError(t, err)
+	}
+	err := appender.Close()
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT * FROM test`,
+	)
+	require.NoError(t, err)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		var r resultRow
+		err := res.Scan(
+			&r.stringList,
+			&r.intList,
+		)
+		require.NoError(t, err)
+
+		require.Equal(t, rows[i].stringList, castList[string](r.stringList))
+		require.Equal(t, rows[i].intList, castList[int32](r.intList))
+
+		i++
+	}
+
+	require.Equal(t, 10, i)
 }
 
 func TestAppenderNested(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
-	defer db.Close()
-
-	_, err = db.Exec(`
+	db, appender := prepareAppender(t, `
 	CREATE TABLE test (
 		id BIGINT,
 		string_list VARCHAR[],
@@ -313,7 +324,7 @@ func TestAppenderNested(t *testing.T) {
 			B STRUCT(L INT[])[]
 		)[]
 	)`)
-	require.NoError(t, err)
+	defer db.Close()
 
 	ms := mixedStruct{
 		A: struct {
@@ -330,7 +341,7 @@ func TestAppenderNested(t *testing.T) {
 
 	rows := make([]nestedDataRow, 10)
 	for i := 0; i < 10; i++ {
-		rows[i].ID = i
+		rows[i].ID = int64(i)
 		rows[i].stringList = []string{"a", "b", "c"}
 		rows[i].intList = []int32{1, 2, 3}
 		rows[i].nestedIntList = [][]int32{{1, 2, 3}, {4, 5, 6}}
@@ -349,14 +360,6 @@ func TestAppenderNested(t *testing.T) {
 		rows[i].mixList = []mixedStruct{ms, ms}
 	}
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-	defer appender.Close()
-
 	for _, row := range rows {
 		err := appender.AppendRow(
 			row.ID,
@@ -374,7 +377,7 @@ func TestAppenderNested(t *testing.T) {
 		)
 		require.NoError(t, err)
 	}
-	err = appender.Flush()
+	err := appender.Close()
 	require.NoError(t, err)
 
 	res, err := db.QueryContext(
@@ -424,24 +427,11 @@ func TestAppenderNested(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
+	db, appender := prepareAppender(t, `CREATE TABLE test (int_slice INT[][][])`)
 	defer db.Close()
 
-	_, err = db.Exec(`CREATE OR REPLACE TABLE test(int_slice INT[][][])`)
-	require.NoError(t, err)
-
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
 	// An empty list should also be able to initialize the logical types
-	err = appender.AppendRow([][][]int32{{{}}})
+	err := appender.AppendRow([][][]int32{{{}}})
 	require.NoError(t, err)
 
 	err = appender.AppendRow([][][]int32{{{1, 2, 3}, {4, 5, 6}}})
@@ -497,25 +487,13 @@ func TestAppenderNullList(t *testing.T) {
 }
 
 func TestAppenderNullStruct(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
-	_, err = db.Exec(`
-		CREATE TABLE test(
-			simple_struct STRUCT(A INT, B VARCHAR),
-    )`)
-	require.NoError(t, err)
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
+		simple_struct STRUCT(A INT, B VARCHAR)
+	)`)
 	defer db.Close()
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
-	err = appender.AppendRow(simpleStruct{1, "hello"})
+	err := appender.AppendRow(simpleStruct{1, "hello"})
 	require.NoError(t, err)
 
 	err = appender.AppendRow(nil)
@@ -545,89 +523,46 @@ func TestAppenderNullStruct(t *testing.T) {
 }
 
 func TestAppenderNestedListMismatch(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
-	_, err = db.Exec(`
-		CREATE TABLE test(
-			int_slice INT[][][],
-    )`)
-	require.NoError(t, err)
+	db, appender := prepareAppender(t, `CREATE TABLE test(int_slice INT[][][])`)
 	defer db.Close()
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
-	err = appender.AppendRow([][][]int32{{{}}})
+	err := appender.AppendRow([][][]int32{{{}}})
 	require.NoError(t, err)
 
 	err = appender.AppendRow([]int32{1, 2, 3})
-	require.Error(t, err, "expected: int32[][][], actual: int32[]")
+	require.Error(t, err, "expected: [][][]int32, actual: []int32")
 
 	err = appender.AppendRow(1)
-	require.ErrorContains(t, err, "expected: int32[][][], actual: int64")
+	require.ErrorContains(t, err, "expected: [][][]int32, actual: int64")
 
 	err = appender.AppendRow([][]int32{{1, 2, 3}, {4, 5, 6}})
-	require.ErrorContains(t, err, "expected: int32[][][], actual: int32[][]")
+	require.ErrorContains(t, err, "expected: [][][]int32, actual: [][]int32")
+}
 
-	err = appender.Close()
-	require.NoError(t, err)
-
-	// test incorrect nested type insert (double nested into single nested)
-	_, err = db.Exec(`
-		CREATE TABLE test2(
-		  intSlice INT[]
-  	)`)
-	require.NoError(t, err)
+func TestAppenderListMismatch(t *testing.T) {
+	db, appender := prepareAppender(t, `CREATE TABLE test(intSlice INT[])`)
 	defer db.Close()
 
-	conn, err = c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err = NewAppenderFromConn(conn, "", "test2")
-	require.NoError(t, err)
-
-	err = appender.AppendRow([]int32{})
+	err := appender.AppendRow([]int32{})
 	require.NoError(t, err)
 
 	err = appender.AppendRow([]string{"foo", "bar", "baz"})
-	require.ErrorContains(t, err, "expected: int32[], actual: string[]")
+	require.ErrorContains(t, err, "expected: []int32, actual: []string")
 
 	err = appender.AppendRow(
 		[][]int32{{1, 2, 3}, {4, 5, 6}},
 	)
-	require.ErrorContains(t, err, "expected: int32[], actual: int32[][]")
-
-	err = appender.Close()
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "expected: []int32, actual: [][]int32")
 }
 
-func TestAppenderNestedStructMismatch(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
-	_, err = db.Exec(`
+func TestAppenderStructMismatch(t *testing.T) {
+	db, appender := prepareAppender(t, `
 		CREATE TABLE test (
-			simple_struct STRUCT(A INT, B VARCHAR),
+			simple_struct STRUCT(A INT, B VARCHAR)
 		)`)
-	require.NoError(t, err)
 	defer db.Close()
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
-	err = appender.AppendRow(simpleStruct{1, "hello"})
+	err := appender.AppendRow(simpleStruct{1, "hello"})
 	require.NoError(t, err)
 
 	err = appender.AppendRow(1)
@@ -649,25 +584,16 @@ func TestAppenderNestedStructMismatch(t *testing.T) {
 		},
 	)
 	require.ErrorContains(t, err, "expected: {int32, string}, actual: {{int32, string}}")
+}
 
-	err = appender.Close()
-	require.NoError(t, err)
-
-	_, err = db.Exec(`
-		CREATE TABLE test2 (
+func TestAppenderWrappedStructMismatch(t *testing.T) {
+	db, appender := prepareAppender(t, `
+		CREATE TABLE test (
 			wrapped_struct STRUCT(A STRUCT(A INT, B VARCHAR)),
 		)`)
-	require.NoError(t, err)
 	defer db.Close()
 
-	conn, err = c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err = NewAppenderFromConn(conn, "", "test2")
-	require.NoError(t, err)
-
-	err = appender.AppendRow(
+	err := appender.AppendRow(
 		wrappedStruct{
 			simpleStruct{A: 0, B: "one billion ducks"},
 		},
@@ -676,58 +602,31 @@ func TestAppenderNestedStructMismatch(t *testing.T) {
 
 	err = appender.AppendRow(simpleStruct{1, "hello"})
 	require.ErrorContains(t, err, "expected: {{int32, string}}, actual: {int32, string}")
-
-	err = appender.Close()
-	require.NoError(t, err)
 }
 
-func TestAppenderNestedMixedMismatch(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
-	_, err = db.Exec(`
-		CREATE TABLE test (
-			struct_with_list STRUCT(L INT[]),
-		)`)
-	require.NoError(t, err)
+func TestAppenderMismatchStructWithList(t *testing.T) {
+	db, appender := prepareAppender(t, `CREATE TABLE test (struct_with_list STRUCT(L INT[]))`)
 	defer db.Close()
 
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
-	err = appender.AppendRow(structWithList{L: []int32{1, 2, 3}})
+	err := appender.AppendRow(structWithList{L: []int32{1, 2, 3}})
 	require.NoError(t, err)
 
 	err = appender.AppendRow([]int32{1, 2, 3})
-	require.ErrorContains(t, err, "expected: {int32[]}, actual: int32[]")
+	require.ErrorContains(t, err, "expected: {[]int32}, actual: []int32")
 
 	l := struct{ L []string }{L: []string{"a", "b", "c"}}
 	err = appender.AppendRow(l)
-	require.ErrorContains(t, err, "expected: {int32[]}, actual: {string[]}")
+	require.ErrorContains(t, err, "expected: {[]int32}, actual: {[]string}")
+}
 
-	err = appender.Close()
-	require.NoError(t, err)
-
-	_, err = db.Exec(`
-		CREATE TABLE test2 (
-			mix STRUCT(A STRUCT(L VARCHAR[]), B STRUCT(L INT[])[]),
+func TestAppenderMismatchStruct(t *testing.T) {
+	db, appender := prepareAppender(t, `
+		CREATE TABLE test (
+			mix STRUCT(A STRUCT(L VARCHAR[]), B STRUCT(L INT[])[])
 		)`)
-	require.NoError(t, err)
 	defer db.Close()
 
-	conn, err = c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err = NewAppenderFromConn(conn, "", "test2")
-	require.NoError(t, err)
-
-	err = appender.AppendRow(
+	err := appender.AppendRow(
 		mixedStruct{
 			A: struct {
 				L []string
@@ -744,34 +643,14 @@ func TestAppenderNestedMixedMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	err = appender.AppendRow(simpleStruct{1, "hello"})
-	require.ErrorContains(t, err, "expected: {{string[]}, {int32[]}[]}, actual: {int32, string}")
-
-	err = appender.Close()
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "expected: {{[]string}, []{[]int32}}, actual: {int32, string}")
 }
 
 func TestAppenderNullIntAndString(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
+	db, appender := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
 	defer db.Close()
 
-	_, err = db.Exec(`
-		CREATE TABLE test (
-			ID BIGINT,
-			str VARCHAR
-		)`)
-	require.NoError(t, err)
-
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
-	err = appender.AppendRow(32, "hello")
+	err := appender.AppendRow(int64(32), "hello")
 	require.NoError(t, err)
 
 	err = appender.AppendRow(nil, nil)
@@ -805,30 +684,13 @@ func TestAppenderNullIntAndString(t *testing.T) {
 
 		i++
 	}
-
 }
 
 func TestAppenderMismatch(t *testing.T) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	db := sql.OpenDB(c)
+	db, appender := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
 	defer db.Close()
 
-	_, err = db.Exec(`
-		CREATE TABLE test (
-			ID BIGINT,
-    )`)
-	require.NoError(t, err)
-
-	conn, err := c.Connect(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-
-	err = appender.AppendRow("hello")
+	err := appender.AppendRow("hello")
 	require.NoError(t, err)
 
 	err = appender.AppendRow(false)
@@ -836,4 +698,62 @@ func TestAppenderMismatch(t *testing.T) {
 
 	err = appender.Close()
 	require.ErrorContains(t, err, "duckdb has returned an error while appending, all data has been invalidated.")
+}
+
+func TestAppenderUUID(t *testing.T) {
+	db, appender := prepareAppender(t, `CREATE TABLE test (id UUID)`)
+	defer db.Close()
+
+	id := UUID(uuid.New())
+	err := appender.AppendRow(id)
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	row := db.QueryRowContext(context.Background(), `SELECT id FROM test`)
+
+	var uuid UUID
+	err = row.Scan(&uuid)
+	require.NoError(t, err)
+	require.Equal(t, id, uuid)
+}
+
+func TestAppenderTime(t *testing.T) {
+	db, appender := prepareAppender(t, `CREATE TABLE test (timestamp DATETIME)`)
+	defer db.Close()
+
+	ts := time.Now().UTC()
+	err := appender.AppendRow(ts)
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	row := db.QueryRowContext(context.Background(), `SELECT timestamp FROM test`)
+
+	var res time.Time
+	err = row.Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, ts, res)
+}
+
+func TestAppenderBlob(t *testing.T) {
+	t.Skip("BLOB type is not supported in appender")
+	db, appender := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
+	defer db.Close()
+
+	data := []byte{0x01, 0x02, 0x03, 0x04}
+	err := appender.AppendRow(data)
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	row := db.QueryRowContext(context.Background(), `SELECT data FROM test`)
+
+	var res []byte
+	err = row.Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, data, res)
 }
