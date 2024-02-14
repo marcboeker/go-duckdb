@@ -1,6 +1,5 @@
 DUCKDB_REPO=https://github.com/duckdb/duckdb.git
-DUCKDB_BRANCH=main
-DUCKDB_VERSION=0.10.0
+DUCKDB_BRANCH=v0.10.0
 
 .PHONY: install
 install:
@@ -22,7 +21,7 @@ deps.header:
 .PHONY: duckdb
 duckdb:
 	rm -rf duckdb
-	git clone -b v${DUCKDB_VERSION} --depth 1 ${DUCKDB_REPO}
+	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 
 DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0
 
