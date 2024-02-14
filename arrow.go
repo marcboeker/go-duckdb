@@ -1,6 +1,7 @@
 package duckdb
 
 /*
+#include <stdlib.h>
 #include <duckdb.h>
 #include <stdint.h>
 
