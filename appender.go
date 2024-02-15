@@ -491,6 +491,15 @@ func setNull(columnInfo *columnInfo, rowIdx C.idx_t) {
 	C.duckdb_vector_ensure_validity_writable(columnInfo.vector)
 	mask := C.duckdb_vector_get_validity(columnInfo.vector)
 	C.duckdb_validity_set_row_invalid(mask, rowIdx)
+
+	// also set the validity for all child vectors
+	ddbType := C.duckdb_get_type_id(columnInfo.logicalType)
+	if duckdbTypeMap[ddbType] == "struct" {
+		for i := 0; i < columnInfo.fields; i++ {
+			childColumnInfo := columnInfo.columnInfos[i]
+			setNull(&childColumnInfo, rowIdx)
+		}
+	}
 }
 
 func setPrimitive[T any](columnInfo *columnInfo, rowIdx C.idx_t, value T) {
