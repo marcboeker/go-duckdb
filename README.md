@@ -4,10 +4,6 @@ The DuckDB driver conforms to the built-in `database/sql` interface.
 
 ![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
 
-## Notice on v1.4.0
-
-Version `1.4.0` changed the DuckDB decimal representation from `float64` to a new [`Decimal`](https://github.com/marcboeker/go-duckdb/blob/d722d9c9d2bc9364d2f22a3afec3cbd26ac07f41/types.go#L83) type, which is much more precise. If you are upgrading to `v1.4.0` and are using DuckDBs decimals, please make sure to update your code to make use of the new `Decimal` type.
-
 ## Installation
 
 ```
