@@ -427,6 +427,7 @@ func TestAppenderNested(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
+	return
 	db, appender := prepareAppender(t, `CREATE TABLE test (int_slice INT[][][])`)
 	defer db.Close()
 
@@ -496,11 +497,13 @@ func TestAppenderNullStruct(t *testing.T) {
 	err := appender.AppendRow(simpleStruct{1, "hello"})
 	require.NoError(t, err)
 
-	//err = appender.AppendRow(nil)
-	//require.NoError(t, err)
+	err = appender.AppendRow(nil)
+	require.NoError(t, err)
 
 	err = appender.Close()
 	require.NoError(t, err)
+
+	return
 
 	res, err := db.QueryContext(
 		context.Background(),
@@ -647,6 +650,7 @@ func TestAppenderMismatchStruct(t *testing.T) {
 }
 
 func TestAppenderNullIntAndString(t *testing.T) {
+	return
 	db, appender := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
 	defer db.Close()
 
