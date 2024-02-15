@@ -62,5 +62,5 @@ deps.freebsd.amd64: duckdb
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "freebsd" ]; then echo "Error: must run build on freebsd"; false; fi
 
 	cd duckdb && \
-	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} make bundle-library -j 2
-	cp duckdb/build/release/libduckdb_bundle.a deps/linux_arm64/libduckdb.a
+	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
+	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a
