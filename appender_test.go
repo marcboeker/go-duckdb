@@ -107,12 +107,12 @@ func randString(n int) string {
 	return string(b)
 }
 
-func prepareAppender(t *testing.T, ddl string) (*sql.DB, *Appender) {
+func prepareAppender(t *testing.T, createTbl string) (*sql.DB, *Appender) {
 	c, err := NewConnector("", nil)
 	require.NoError(t, err)
 
 	db := sql.OpenDB(c)
-	_, err = db.Exec(ddl)
+	_, err = db.Exec(createTbl)
 	require.NoError(t, err)
 
 	conn, err := c.Connect(context.Background())
@@ -427,7 +427,6 @@ func TestAppenderNested(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
-	return
 	db, appender := prepareAppender(t, `CREATE TABLE test (int_slice INT[][][])`)
 	defer db.Close()
 
@@ -502,8 +501,6 @@ func TestAppenderNullStruct(t *testing.T) {
 
 	err = appender.Close()
 	require.NoError(t, err)
-
-	return
 
 	res, err := db.QueryContext(
 		context.Background(),
@@ -650,7 +647,6 @@ func TestAppenderMismatchStruct(t *testing.T) {
 }
 
 func TestAppenderNullIntAndString(t *testing.T) {
-	return
 	db, appender := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
 	defer db.Close()
 
