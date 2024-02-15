@@ -488,9 +488,9 @@ func (a *Appender) addChunk(colCount int) error {
 }
 
 func setNull(columnInfo *columnInfo, rowIdx C.idx_t) {
-	//C.duckdb_vector_ensure_validity_writable(columnInfo.vector)
-	//mask := C.duckdb_vector_get_validity(columnInfo.vector)
-	//C.duckdb_validity_set_row_invalid(mask, rowIdx)
+	C.duckdb_vector_ensure_validity_writable(columnInfo.vector)
+	mask := C.duckdb_vector_get_validity(columnInfo.vector)
+	C.duckdb_validity_set_row_invalid(mask, rowIdx)
 }
 
 func setPrimitive[T any](columnInfo *columnInfo, rowIdx C.idx_t, value T) {

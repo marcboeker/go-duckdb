@@ -20,6 +20,11 @@ type simpleStruct struct {
 	B string
 }
 
+type simpleStruct2 struct {
+	A int32
+	B int32
+}
+
 type wrappedStruct struct {
 	A simpleStruct
 }
@@ -490,18 +495,15 @@ func TestAppenderNullList(t *testing.T) {
 func TestAppenderNullStruct(t *testing.T) {
 	db, appender := prepareAppender(t, `
 	CREATE TABLE test (
-		simple_struct STRUCT(A INT, B VARCHAR)
+		simple_struct STRUCT(A INT, B INT)
 	)`)
 	defer db.Close()
 
-	err := appender.AppendRow(simpleStruct{1, "hello"})
+	err := appender.AppendRow(simpleStruct2{1, 2})
 	require.NoError(t, err)
 
-	err = appender.AppendRow(simpleStruct{1, "hello"})
+	err = appender.AppendRow(nil)
 	require.NoError(t, err)
-
-	//err = appender.AppendRow(nil)
-	//require.NoError(t, err)
 
 	err = appender.Close()
 	require.NoError(t, err)
