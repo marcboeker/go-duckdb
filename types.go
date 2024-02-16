@@ -15,6 +15,13 @@ import (
 
 type UUID [16]byte
 
+func (u *UUID) Scan(v any) error {
+	if n := copy(u[:], v.([]byte)); n != 16 {
+		return fmt.Errorf("invalid UUID length: %d", n)
+	}
+	return nil
+}
+
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
