@@ -820,7 +820,6 @@ func TestAppenderTime(t *testing.T) {
 }
 
 func TestAppenderBlob(t *testing.T) {
-	t.Skip("BLOB type is not supported in appender")
 	db, appender := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
 	defer db.Close()
 

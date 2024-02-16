@@ -287,7 +287,7 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 		t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
 		info := colInfo{
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				setVarchar(info, rowIdx, val.(string))
+				setCString(info, rowIdx, val.(string))
 			},
 			ddbType: C.DUCKDB_TYPE_VARCHAR,
 		}
@@ -295,9 +295,18 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 
 	case reflect.Slice:
 		// Check if it's []byte since that is equivalent to the DuckDB BLOB type.
-		// If so, we can use the primitive setter; otherwise it will not match the table set up by the user.
+		// If so, we can use the same setter as for VARCHAR;
+		// otherwise it will not match the table set up by the user.
 		if v.Elem().Kind() == reflect.Uint8 {
-			return initPrimitive[[]byte](C.DUCKDB_TYPE_BLOB)
+			t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
+			info := colInfo{
+				fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+					blob := val.([]byte)
+					setCString(info, rowIdx, string(blob[:]))
+				},
+				ddbType: C.DUCKDB_TYPE_BLOB,
+			}
+			return info, t
 		}
 
 		// Otherwise, it's a LIST. We recurse into the child element type.
@@ -442,7 +451,7 @@ func setPrimitive[T any](info *colInfo, rowIdx C.idx_t, value T) {
 	xs[rowIdx] = value
 }
 
-func setVarchar(info *colInfo, rowIdx C.idx_t, value string) {
+func setCString(info *colInfo, rowIdx C.idx_t, value string) {
 	str := C.CString(value)
 	C.duckdb_vector_assign_string_element(info.vector, rowIdx, str)
 	C.free(unsafe.Pointer(str))
