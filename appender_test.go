@@ -827,13 +827,62 @@ func TestAppenderBlob(t *testing.T) {
 	err := appender.AppendRow(data)
 	require.NoError(t, err)
 
+	// Treat []uint8 the same as []byte.
+	uint8Slice := []uint8{0x01, 0x02, 0x03, 0x04}
+	err = appender.AppendRow(uint8Slice)
+	require.NoError(t, err)
+
 	err = appender.Close()
 	require.NoError(t, err)
 
-	row := db.QueryRowContext(context.Background(), `SELECT data FROM test`)
-
-	var res []byte
-	err = row.Scan(&res)
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT data FROM test`,
+	)
 	require.NoError(t, err)
-	require.Equal(t, data, res)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		var b []byte
+		err = res.Scan(
+			&b,
+		)
+		require.NoError(t, err)
+		require.Equal(t, data, b)
+		i++
+	}
+	require.Equal(t, 2, i)
+}
+
+func TestAppenderBlobTinyInt(t *testing.T) {
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
+		data UTINYINT[]
+	)`)
+	defer db.Close()
+
+	// []byte is not UTINYINT[].
+	data := []byte{0x01, 0x02, 0x03, 0x04}
+	err := appender.AppendRow(data)
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.ErrorContains(t, err, "Check that the data being appended matches the schema")
+}
+
+func TestAppenderUint8SliceTinyInt(t *testing.T) {
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
+		data UTINYINT[]
+	)`)
+	defer db.Close()
+
+	// []uint8 is not UTINYINT[].
+	uint8Slice := []uint8{0x01, 0x02, 0x03, 0x04}
+	err := appender.AppendRow(uint8Slice)
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.ErrorContains(t, err, "Check that the data being appended matches the schema")
 }
