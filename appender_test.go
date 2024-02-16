@@ -107,12 +107,12 @@ func randString(n int) string {
 	return string(b)
 }
 
-func prepareAppender(t *testing.T, ddl string) (*sql.DB, *Appender) {
+func prepareAppender(t *testing.T, createTbl string) (*sql.DB, *Appender) {
 	c, err := NewConnector("", nil)
 	require.NoError(t, err)
 
 	db := sql.OpenDB(c)
-	_, err = db.Exec(ddl)
+	_, err = db.Exec(createTbl)
 	require.NoError(t, err)
 
 	conn, err := c.Connect(context.Background())
