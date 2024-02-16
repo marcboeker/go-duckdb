@@ -21,11 +21,13 @@ type simpleStruct struct {
 }
 
 type wrappedStruct struct {
-	A simpleStruct
+	N string
+	M simpleStruct
 }
 
 type doubleWrappedStruct struct {
-	A wrappedStruct
+	X string
+	Y wrappedStruct
 }
 
 type structWithList struct {
@@ -297,33 +299,36 @@ func TestAppenderList(t *testing.T) {
 
 func TestAppenderNested(t *testing.T) {
 	db, appender := prepareAppender(t, `
-	CREATE TABLE test (
-		id BIGINT,
-		string_list VARCHAR[],
-		int_list INT[],
-		nested_int_list INT[][],
-		triple_nested_int_list INT[][][],
-		simple_struct STRUCT(A INT, B VARCHAR),
-		wrapped_struct STRUCT(A STRUCT(A INT, B VARCHAR)),
-		double_wrapped_struct STRUCT(
-			A STRUCT(
-				A STRUCT(
-					A INT,
-					B VARCHAR
+		CREATE TABLE test (
+			id BIGINT,
+			string_list VARCHAR[],
+			int_list INT[],
+			nested_int_list INT[][],
+			triple_nested_int_list INT[][][],
+			simple_struct STRUCT(A INT, B VARCHAR),
+			wrapped_struct STRUCT(N VARCHAR, M STRUCT(A INT, B VARCHAR)),
+			double_wrapped_struct STRUCT(
+				X VARCHAR,
+				Y STRUCT(
+					N VARCHAR,
+					M STRUCT(
+						A INT,
+						B VARCHAR
+					)
 				)
-			)
-		),
-		struct_list STRUCT(A INT, B VARCHAR)[],
-		struct_with_list STRUCT(L INT[]),
-		mix STRUCT(
-			A STRUCT(L VARCHAR[]),
-			B STRUCT(L INT[])[]
-		),
-		mix_list STRUCT(
-			A STRUCT(L VARCHAR[]),
-			B STRUCT(L INT[])[]
-		)[]
-	)`)
+			),
+			struct_list STRUCT(A INT, B VARCHAR)[],
+			struct_with_list STRUCT(L INT[]),
+			mix STRUCT(
+				A STRUCT(L VARCHAR[]),
+				B STRUCT(L INT[])[]
+			),
+			mix_list STRUCT(
+				A STRUCT(L VARCHAR[]),
+				B STRUCT(L INT[])[]
+			)[]
+		)
+	`)
 	defer db.Close()
 
 	ms := mixedStruct{
@@ -350,9 +355,11 @@ func TestAppenderNested(t *testing.T) {
 			{{7, 8, 9}, {10, 11, 12}},
 		}
 		rows[i].simpleStruct = simpleStruct{A: 1, B: "foo"}
-		rows[i].wrappedStruct = wrappedStruct{simpleStruct{1, "foo"}}
+		rows[i].wrappedStruct = wrappedStruct{"wrapped", simpleStruct{1, "foo"}}
 		rows[i].doubleWrappedStruct = doubleWrappedStruct{
-			wrappedStruct{simpleStruct{1, "foo"}},
+			"so much nesting",
+			wrappedStruct{"wrapped",
+				simpleStruct{1, "foo"}},
 		}
 		rows[i].structList = []simpleStruct{{1, "a"}, {2, "b"}, {3, "c"}}
 		rows[i].structWithList.L = []int32{6, 7, 8}
@@ -409,7 +416,11 @@ func TestAppenderNested(t *testing.T) {
 		require.Equal(t, rows[i].ID, r.ID)
 		require.Equal(t, rows[i].stringList, castList[string](r.stringList))
 		require.Equal(t, rows[i].intList, castList[int32](r.intList))
-		// TODO: check nested lists
+
+		strRes := fmt.Sprintf("%v", r.nestedIntList)
+		require.Equal(t, strRes, "[[1 2 3] [4 5 6]]")
+		strRes = fmt.Sprintf("%v", r.tripleNestedIntList)
+		require.Equal(t, strRes, "[[[1 2 3] [4 5 6]] [[7 8 9] [10 11 12]]]")
 
 		require.Equal(t, rows[i].simpleStruct, castMapToStruct[simpleStruct](r.simpleStruct))
 		require.Equal(t, rows[i].wrappedStruct, castMapToStruct[wrappedStruct](r.wrappedStruct))
@@ -427,26 +438,26 @@ func TestAppenderNested(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
-	db, appender := prepareAppender(t, `CREATE TABLE test (int_slice INT[][][])`)
+	db, appender := prepareAppender(t, `CREATE TABLE test (int_slice VARCHAR[][][])`)
 	defer db.Close()
 
-	// An empty list should also be able to initialize the logical types
-	err := appender.AppendRow([][][]int32{{{}}})
+	// An empty list must also initialize the logical types.
+	err := appender.AppendRow([][][]string{{{}}})
 	require.NoError(t, err)
 
-	err = appender.AppendRow([][][]int32{{{1, 2, 3}, {4, 5, 6}}})
+	err = appender.AppendRow([][][]string{{{"1", "2", "3"}, {"4", "5", "6"}}})
 	require.NoError(t, err)
 
-	err = appender.AppendRow([][][]int32{{{1}, nil}})
+	err = appender.AppendRow([][][]string{{{"1"}, nil}})
 	require.NoError(t, err)
 
 	err = appender.AppendRow(nil)
 	require.NoError(t, err)
 
-	err = appender.AppendRow([][][]int32{nil, {{2}}})
+	err = appender.AppendRow([][][]string{nil, {{"2"}}})
 	require.NoError(t, err)
 
-	err = appender.AppendRow([][][]int32{{nil, {3}}, {{4}}})
+	err = appender.AppendRow([][][]string{{nil, {"3"}}, {{"4"}}})
 	require.NoError(t, err)
 
 	err = appender.Close()
@@ -479,9 +490,7 @@ func TestAppenderNullList(t *testing.T) {
 			strS = fmt.Sprintf("%v", intS)
 		}
 
-		if strResult[i] != strS {
-			panic(fmt.Sprintf("row %d: expected %v, got %v", i, strResult[i], strS))
-		}
+		require.Equal(t, strResult[i], strS, fmt.Sprintf("row %d: expected %v, got %v", i, strResult[i], strS))
 		i++
 	}
 }
@@ -511,11 +520,121 @@ func TestAppenderNullStruct(t *testing.T) {
 	i := 0
 	for res.Next() {
 		var row any
-		err := res.Scan(&row)
+		err = res.Scan(&row)
 		if i == 0 {
 			require.NoError(t, err)
 		} else if i == 1 {
 			require.Equal(t, nil, row)
+		}
+
+		i++
+	}
+}
+
+func TestAppenderNestedNullStruct(t *testing.T) {
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
+		double_wrapped_struct STRUCT(
+				X VARCHAR,
+				Y STRUCT(
+					N VARCHAR,
+					M STRUCT(
+						A INT,
+						B VARCHAR
+					)
+				)
+			)
+	)`)
+	defer db.Close()
+
+	err := appender.AppendRow(doubleWrappedStruct{
+		"so much nesting",
+		wrappedStruct{"wrapped",
+			simpleStruct{1, "foo"}},
+	})
+	require.NoError(t, err)
+
+	// We propagate the NULL to all nested children.
+	err = appender.AppendRow(nil)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(doubleWrappedStruct{
+		"now we are done nesting NULLs",
+		wrappedStruct{"unwrap",
+			simpleStruct{21, "bar"}},
+	})
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT double_wrapped_struct FROM test`)
+	require.NoError(t, err)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		var row any
+		err = res.Scan(&row)
+		if i == 1 {
+			require.Equal(t, nil, row)
+		} else {
+			require.NoError(t, err)
+		}
+
+		i++
+	}
+}
+
+func TestAppenderNullIntAndString(t *testing.T) {
+	db, appender := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
+	defer db.Close()
+
+	err := appender.AppendRow(int64(32), "hello")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(nil, nil)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(nil, "half valid thingy")
+	require.NoError(t, err)
+
+	err = appender.AppendRow(int64(60), nil)
+	require.NoError(t, err)
+
+	err = appender.AppendRow(int64(42), "valid again")
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT * FROM test`,
+	)
+	require.NoError(t, err)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		var id int
+		var str string
+		err = res.Scan(
+			&id,
+			&str,
+		)
+		if i == 0 {
+			require.NoError(t, err)
+			require.Equal(t, id, 32)
+			require.Equal(t, str, "hello")
+		} else if i > 0 && i < 4 {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, id, 42)
+			require.Equal(t, str, "valid again")
 		}
 
 		i++
@@ -580,10 +699,11 @@ func TestAppenderStructMismatch(t *testing.T) {
 
 	err = appender.AppendRow(
 		wrappedStruct{
+			"hello there",
 			simpleStruct{A: 0, B: "one billion ducks"},
 		},
 	)
-	require.ErrorContains(t, err, "expected: {int32, string}, actual: {{int32, string}}")
+	require.ErrorContains(t, err, "expected: {int32, string}, actual: {string, {int32, string}}")
 }
 
 func TestAppenderWrappedStructMismatch(t *testing.T) {
@@ -595,13 +715,14 @@ func TestAppenderWrappedStructMismatch(t *testing.T) {
 
 	err := appender.AppendRow(
 		wrappedStruct{
+			"it's me again",
 			simpleStruct{A: 0, B: "one billion ducks"},
 		},
 	)
 	require.NoError(t, err)
 
 	err = appender.AppendRow(simpleStruct{1, "hello"})
-	require.ErrorContains(t, err, "expected: {{int32, string}}, actual: {int32, string}")
+	require.ErrorContains(t, err, "expected: {string, {int32, string}}, actual: {int32, string}")
 }
 
 func TestAppenderMismatchStructWithList(t *testing.T) {
@@ -644,46 +765,6 @@ func TestAppenderMismatchStruct(t *testing.T) {
 
 	err = appender.AppendRow(simpleStruct{1, "hello"})
 	require.ErrorContains(t, err, "expected: {{[]string}, []{[]int32}}, actual: {int32, string}")
-}
-
-func TestAppenderNullIntAndString(t *testing.T) {
-	db, appender := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
-	defer db.Close()
-
-	err := appender.AppendRow(int64(32), "hello")
-	require.NoError(t, err)
-
-	err = appender.AppendRow(nil, nil)
-	require.NoError(t, err)
-
-	err = appender.Close()
-	require.NoError(t, err)
-
-	res, err := db.QueryContext(
-		context.Background(),
-		`SELECT * FROM test`,
-	)
-	require.NoError(t, err)
-	defer res.Close()
-
-	i := 0
-	for res.Next() {
-		var id int
-		var str string
-		err = res.Scan(
-			&id,
-			&str,
-		)
-		if i == 0 {
-			require.NoError(t, err)
-			require.Equal(t, id, 32)
-			require.Equal(t, str, "hello")
-		} else {
-			require.Error(t, err)
-		}
-
-		i++
-	}
 }
 
 func TestAppenderMismatch(t *testing.T) {
@@ -739,7 +820,6 @@ func TestAppenderTime(t *testing.T) {
 }
 
 func TestAppenderBlob(t *testing.T) {
-	t.Skip("BLOB type is not supported in appender")
 	db, appender := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
 	defer db.Close()
 
@@ -747,13 +827,62 @@ func TestAppenderBlob(t *testing.T) {
 	err := appender.AppendRow(data)
 	require.NoError(t, err)
 
+	// Treat []uint8 the same as []byte.
+	uint8Slice := []uint8{0x01, 0x02, 0x03, 0x04}
+	err = appender.AppendRow(uint8Slice)
+	require.NoError(t, err)
+
 	err = appender.Close()
 	require.NoError(t, err)
 
-	row := db.QueryRowContext(context.Background(), `SELECT data FROM test`)
-
-	var res []byte
-	err = row.Scan(&res)
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT data FROM test`,
+	)
 	require.NoError(t, err)
-	require.Equal(t, data, res)
+	defer res.Close()
+
+	i := 0
+	for res.Next() {
+		var b []byte
+		err = res.Scan(
+			&b,
+		)
+		require.NoError(t, err)
+		require.Equal(t, data, b)
+		i++
+	}
+	require.Equal(t, 2, i)
+}
+
+func TestAppenderBlobTinyInt(t *testing.T) {
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
+		data UTINYINT[]
+	)`)
+	defer db.Close()
+
+	// []byte is not UTINYINT[].
+	data := []byte{0x01, 0x02, 0x03, 0x04}
+	err := appender.AppendRow(data)
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.ErrorContains(t, err, "Check that the data being appended matches the schema")
+}
+
+func TestAppenderUint8SliceTinyInt(t *testing.T) {
+	db, appender := prepareAppender(t, `
+	CREATE TABLE test (
+		data UTINYINT[]
+	)`)
+	defer db.Close()
+
+	// []uint8 is not UTINYINT[].
+	uint8Slice := []uint8{0x01, 0x02, 0x03, 0x04}
+	err := appender.AppendRow(uint8Slice)
+	require.NoError(t, err)
+
+	err = appender.Close()
+	require.ErrorContains(t, err, "Check that the data being appended matches the schema")
 }
