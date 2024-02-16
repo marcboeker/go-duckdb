@@ -21,11 +21,13 @@ type simpleStruct struct {
 }
 
 type wrappedStruct struct {
-	A simpleStruct
+	N string
+	M simpleStruct
 }
 
 type doubleWrappedStruct struct {
-	A wrappedStruct
+	X string
+	Y wrappedStruct
 }
 
 type structWithList struct {
@@ -296,34 +298,7 @@ func TestAppenderList(t *testing.T) {
 }
 
 func TestAppenderNested(t *testing.T) {
-	db, appender := prepareAppender(t, `
-	CREATE TABLE test (
-		id BIGINT,
-		string_list VARCHAR[],
-		int_list INT[],
-		nested_int_list INT[][],
-		triple_nested_int_list INT[][][],
-		simple_struct STRUCT(A INT, B VARCHAR),
-		wrapped_struct STRUCT(A STRUCT(A INT, B VARCHAR)),
-		double_wrapped_struct STRUCT(
-			A STRUCT(
-				A STRUCT(
-					A INT,
-					B VARCHAR
-				)
-			)
-		),
-		struct_list STRUCT(A INT, B VARCHAR)[],
-		struct_with_list STRUCT(L INT[]),
-		mix STRUCT(
-			A STRUCT(L VARCHAR[]),
-			B STRUCT(L INT[])[]
-		),
-		mix_list STRUCT(
-			A STRUCT(L VARCHAR[]),
-			B STRUCT(L INT[])[]
-		)[]
-	)`)
+	db, appender := prepareAppender(t, createNestedTbl)
 	defer db.Close()
 
 	ms := mixedStruct{
@@ -350,9 +325,11 @@ func TestAppenderNested(t *testing.T) {
 			{{7, 8, 9}, {10, 11, 12}},
 		}
 		rows[i].simpleStruct = simpleStruct{A: 1, B: "foo"}
-		rows[i].wrappedStruct = wrappedStruct{simpleStruct{1, "foo"}}
+		rows[i].wrappedStruct = wrappedStruct{"wrapped", simpleStruct{1, "foo"}}
 		rows[i].doubleWrappedStruct = doubleWrappedStruct{
-			wrappedStruct{simpleStruct{1, "foo"}},
+			"so much nesting",
+			wrappedStruct{"wrapped",
+				simpleStruct{1, "foo"}},
 		}
 		rows[i].structList = []simpleStruct{{1, "a"}, {2, "b"}, {3, "c"}}
 		rows[i].structWithList.L = []int32{6, 7, 8}
@@ -580,10 +557,11 @@ func TestAppenderStructMismatch(t *testing.T) {
 
 	err = appender.AppendRow(
 		wrappedStruct{
+			"hello there",
 			simpleStruct{A: 0, B: "one billion ducks"},
 		},
 	)
-	require.ErrorContains(t, err, "expected: {int32, string}, actual: {{int32, string}}")
+	require.ErrorContains(t, err, "expected: {int32, string}, actual: {string, {int32, string}}")
 }
 
 func TestAppenderWrappedStructMismatch(t *testing.T) {
@@ -595,13 +573,14 @@ func TestAppenderWrappedStructMismatch(t *testing.T) {
 
 	err := appender.AppendRow(
 		wrappedStruct{
+			"it's me again",
 			simpleStruct{A: 0, B: "one billion ducks"},
 		},
 	)
 	require.NoError(t, err)
 
 	err = appender.AppendRow(simpleStruct{1, "hello"})
-	require.ErrorContains(t, err, "expected: {{int32, string}}, actual: {int32, string}")
+	require.ErrorContains(t, err, "expected: {string, {int32, string}}, actual: {int32, string}")
 }
 
 func TestAppenderMismatchStructWithList(t *testing.T) {
@@ -757,3 +736,142 @@ func TestAppenderBlob(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, data, res)
 }
+
+// TODO: mix values and NULL on deeper levels
+//func TestAppenderNested(t *testing.T) {
+//	db, appender := prepareAppender(t, createNestedTbl)
+//	defer db.Close()
+//
+//	ms := mixedStruct{
+//		A: struct {
+//			L []string
+//		}{
+//			[]string{"a", "b", "c"},
+//		},
+//		B: []struct {
+//			L []int32
+//		}{
+//			{[]int32{1, 2, 3}},
+//		},
+//	}
+//
+//	rows := make([]nestedDataRow, 10)
+//	for i := 0; i < 10; i++ {
+//		rows[i].ID = int64(i)
+//		rows[i].stringList = []string{"a", "b", "c"}
+//		rows[i].intList = []int32{1, 2, 3}
+//		rows[i].nestedIntList = [][]int32{{1, 2, 3}, {4, 5, 6}}
+//		rows[i].tripleNestedIntList = [][][]int32{
+//			{{1, 2, 3}, {4, 5, 6}},
+//			{{7, 8, 9}, {10, 11, 12}},
+//		}
+//		rows[i].simpleStruct = simpleStruct{A: 1, B: "foo"}
+//		rows[i].wrappedStruct = wrappedStruct{"wrapped", simpleStruct{1, "foo"}}
+//		rows[i].doubleWrappedStruct = doubleWrappedStruct{
+//			"so much nesting",
+//			wrappedStruct{"wrapped",
+//				simpleStruct{1, "foo"}},
+//		}
+//		rows[i].structList = []simpleStruct{{1, "a"}, {2, "b"}, {3, "c"}}
+//		rows[i].structWithList.L = []int32{6, 7, 8}
+//		rows[i].mix = ms
+//		rows[i].mixList = []mixedStruct{ms, ms}
+//	}
+//
+//	for _, row := range rows {
+//		err := appender.AppendRow(
+//			row.ID,
+//			row.stringList,
+//			row.intList,
+//			row.nestedIntList,
+//			row.tripleNestedIntList,
+//			row.simpleStruct,
+//			row.wrappedStruct,
+//			row.doubleWrappedStruct,
+//			row.structList,
+//			row.structWithList,
+//			row.mix,
+//			row.mixList,
+//		)
+//		require.NoError(t, err)
+//	}
+//	err := appender.Close()
+//	require.NoError(t, err)
+//
+//	res, err := db.QueryContext(
+//		context.Background(),
+//		`SELECT * FROM test ORDER BY id`,
+//	)
+//	require.NoError(t, err)
+//	defer res.Close()
+//
+//	i := 0
+//	for res.Next() {
+//		var r resultRow
+//		err := res.Scan(
+//			&r.ID,
+//			&r.stringList,
+//			&r.intList,
+//			&r.nestedIntList,
+//			&r.tripleNestedIntList,
+//			&r.simpleStruct,
+//			&r.wrappedStruct,
+//			&r.doubleWrappedStruct,
+//			&r.structList,
+//			&r.structWithList,
+//			&r.mix,
+//			&r.mixList,
+//		)
+//		require.NoError(t, err)
+//
+//		require.Equal(t, rows[i].ID, r.ID)
+//		require.Equal(t, rows[i].stringList, castList[string](r.stringList))
+//		require.Equal(t, rows[i].intList, castList[int32](r.intList))
+//		// TODO: check nested lists
+//
+//		require.Equal(t, rows[i].simpleStruct, castMapToStruct[simpleStruct](r.simpleStruct))
+//		require.Equal(t, rows[i].wrappedStruct, castMapToStruct[wrappedStruct](r.wrappedStruct))
+//		require.Equal(t, rows[i].doubleWrappedStruct, castMapToStruct[doubleWrappedStruct](r.doubleWrappedStruct))
+//
+//		require.Equal(t, rows[i].structList, castMapListToStruct[simpleStruct](r.structList))
+//		require.Equal(t, rows[i].structWithList, castMapToStruct[structWithList](r.structWithList))
+//		require.Equal(t, rows[i].mix, castMapToStruct[mixedStruct](r.mix))
+//		require.Equal(t, rows[i].mixList, castMapListToStruct[mixedStruct](r.mixList))
+//
+//		i++
+//	}
+//
+//	require.Equal(t, 10, i)
+//}
+
+const createNestedTbl = `
+CREATE TABLE test (
+		id BIGINT,
+		string_list VARCHAR[],
+		int_list INT[],
+		nested_int_list INT[][],
+		triple_nested_int_list INT[][][],
+		simple_struct STRUCT(A INT, B VARCHAR),
+		wrapped_struct STRUCT(N VARCHAR, M STRUCT(A INT, B VARCHAR)),
+		double_wrapped_struct STRUCT(
+		    X VARCHAR,
+			Y STRUCT(
+		    	N VARCHAR,
+				M STRUCT(
+					A INT,
+					B VARCHAR
+				)
+			)
+		),
+		struct_list STRUCT(A INT, B VARCHAR)[],
+		struct_with_list STRUCT(L INT[]),
+		mix STRUCT(
+			A STRUCT(L VARCHAR[]),
+			B STRUCT(L INT[])[]
+		),
+		mix_list STRUCT(
+			A STRUCT(L VARCHAR[]),
+			B STRUCT(L INT[])[]
+		)[]
+	)
+`
