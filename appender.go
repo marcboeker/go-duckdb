@@ -37,7 +37,7 @@ var typeIdMap = map[C.duckdb_type]string{
 }
 
 // SetColValue is the type definition for all column callback functions.
-type SetColValue func(a *Appender, colInfo *colInfo, rowIdx C.idx_t, val any)
+type SetColValue func(a *Appender, info *colInfo, rowIdx C.idx_t, val any)
 
 // colInfo holds a column's underlying vector, a callback function to write column values to this vector, and additional helper fields.
 type colInfo struct {
@@ -247,8 +247,8 @@ func mallocCStringSlice(count int) (unsafe.Pointer, []*C.char) {
 func initPrimitive[T any](ddbType C.duckdb_type) (colInfo, C.duckdb_logical_type) {
 	t := C.duckdb_create_logical_type(ddbType)
 	info := colInfo{
-		fn: func(a *Appender, colInfo *colInfo, rowIdx C.idx_t, val any) {
-			setPrimitive[T](colInfo, rowIdx, val.(T))
+		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+			setPrimitive[T](info, rowIdx, val.(T))
 		},
 		ddbType: ddbType,
 	}
@@ -286,8 +286,8 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 	case reflect.String:
 		t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
 		info := colInfo{
-			fn: func(a *Appender, colInfo *colInfo, rowIdx C.idx_t, val any) {
-				setVarchar(colInfo, rowIdx, val.(string))
+			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+				setVarchar(info, rowIdx, val.(string))
 			},
 			ddbType: C.DUCKDB_TYPE_VARCHAR,
 		}
@@ -301,16 +301,16 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 		}
 
 		// Otherwise, it's a LIST. We recurse into the child element type.
-		childColInfo, childType := a.initColInfos(v.Elem(), colIdx)
+		childInfo, childType := a.initColInfos(v.Elem(), colIdx)
 		defer C.duckdb_destroy_logical_type(&childType)
 
 		t := C.duckdb_create_list_type(childType)
 		info := colInfo{
-			fn: func(a *Appender, colInfo *colInfo, rowIdx C.idx_t, val any) {
-				setList(a, colInfo, rowIdx, val)
+			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+				setList(a, info, rowIdx, val)
 			},
 			ddbType:  C.DUCKDB_TYPE_LIST,
-			colInfos: []colInfo{childColInfo},
+			colInfos: []colInfo{childInfo},
 		}
 		return info, t
 
@@ -319,8 +319,8 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 		// use initPrimitive here.
 		t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID)
 		info := colInfo{
-			fn: func(a *Appender, colInfo *colInfo, rowIdx C.idx_t, val any) {
-				setPrimitive[C.duckdb_hugeint](colInfo, rowIdx, uuidToHugeInt(val.(UUID)))
+			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+				setPrimitive[C.duckdb_hugeint](info, rowIdx, uuidToHugeInt(val.(UUID)))
 			},
 			ddbType: C.DUCKDB_TYPE_UUID,
 		}
@@ -332,8 +332,8 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 		if (v == reflect.TypeOf(time.Time{})) {
 			t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP)
 			info := colInfo{
-				fn: func(a *Appender, colInfo *colInfo, rowIdx C.idx_t, val any) {
-					setTime(colInfo, rowIdx, val)
+				fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+					setTime(info, rowIdx, val.(time.Time))
 				},
 				ddbType: C.DUCKDB_TYPE_TIMESTAMP,
 			}
@@ -344,8 +344,8 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 		numFields := v.NumField()
 
 		info := colInfo{
-			fn: func(a *Appender, colInfo *colInfo, rowIdx C.idx_t, val any) {
-				setStruct(a, colInfo, rowIdx, val)
+			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+				setStruct(a, info, rowIdx, val)
 			},
 			ddbType:   C.DUCKDB_TYPE_STRUCT,
 			colInfos:  make([]colInfo, numFields),
@@ -423,43 +423,43 @@ func (a *Appender) appendChunk(colCount int) error {
 	return nil
 }
 
-func setNull(colInfo *colInfo, rowIdx C.idx_t) {
-	C.duckdb_vector_ensure_validity_writable(colInfo.vector)
-	mask := C.duckdb_vector_get_validity(colInfo.vector)
+func setNull(info *colInfo, rowIdx C.idx_t) {
+	C.duckdb_vector_ensure_validity_writable(info.vector)
+	mask := C.duckdb_vector_get_validity(info.vector)
 	C.duckdb_validity_set_row_invalid(mask, rowIdx)
 
 	// Set the validity for all child vectors of a STRUCT.
-	if typeIdMap[colInfo.ddbType] == "struct" {
-		for i := 0; i < colInfo.numFields; i++ {
-			setNull(&colInfo.colInfos[i], rowIdx)
+	if typeIdMap[info.ddbType] == "struct" {
+		for i := 0; i < info.numFields; i++ {
+			setNull(&info.colInfos[i], rowIdx)
 		}
 	}
 }
 
-func setPrimitive[T any](colInfo *colInfo, rowIdx C.idx_t, value T) {
-	ptr := C.duckdb_vector_get_data(colInfo.vector)
+func setPrimitive[T any](info *colInfo, rowIdx C.idx_t, value T) {
+	ptr := C.duckdb_vector_get_data(info.vector)
 	xs := (*[1 << 31]T)(ptr)
 	xs[rowIdx] = value
 }
 
-func setVarchar(colInfo *colInfo, rowIdx C.idx_t, value string) {
+func setVarchar(info *colInfo, rowIdx C.idx_t, value string) {
 	str := C.CString(value)
-	C.duckdb_vector_assign_string_element(colInfo.vector, rowIdx, str)
+	C.duckdb_vector_assign_string_element(info.vector, rowIdx, str)
 	C.free(unsafe.Pointer(str))
 }
 
-func setTime(colInfo *colInfo, rowIdx C.idx_t, value driver.Value) {
+func setTime(info *colInfo, rowIdx C.idx_t, value time.Time) {
 	var ts C.duckdb_timestamp
-	ts.micros = C.int64_t(value.(time.Time).UTC().UnixMicro())
-	setPrimitive[C.duckdb_timestamp](colInfo, rowIdx, ts)
+	ts.micros = C.int64_t(value.UTC().UnixMicro())
+	setPrimitive[C.duckdb_timestamp](info, rowIdx, ts)
 }
 
-func setList(a *Appender, colInfo *colInfo, rowIdx C.idx_t, value driver.Value) {
+func setList(a *Appender, info *colInfo, rowIdx C.idx_t, value driver.Value) {
 	refVal := reflect.ValueOf(value)
-	childColInfo := colInfo.colInfos[0]
+	childInfo := info.colInfos[0]
 
 	if refVal.IsNil() {
-		setNull(colInfo, rowIdx)
+		setNull(info, rowIdx)
 	}
 
 	// Convert the refVal to []any to iterate over it.
@@ -468,7 +468,7 @@ func setList(a *Appender, colInfo *colInfo, rowIdx C.idx_t, value driver.Value) 
 		values[i] = refVal.Index(i).Interface()
 	}
 
-	childVectorSize := C.duckdb_list_vector_get_size(colInfo.vector)
+	childVectorSize := C.duckdb_list_vector_get_size(info.vector)
 
 	// Set the offset and length of the list vector using the current size of the child vector.
 	listEntry := C.duckdb_list_entry{
@@ -476,30 +476,30 @@ func setList(a *Appender, colInfo *colInfo, rowIdx C.idx_t, value driver.Value) 
 		length: C.idx_t(refVal.Len()),
 	}
 
-	setPrimitive[C.duckdb_list_entry](colInfo, rowIdx, listEntry)
+	setPrimitive[C.duckdb_list_entry](info, rowIdx, listEntry)
 
 	newLength := C.idx_t(refVal.Len()) + childVectorSize
-	C.duckdb_list_vector_set_size(colInfo.vector, newLength)
-	C.duckdb_list_vector_reserve(colInfo.vector, newLength)
+	C.duckdb_list_vector_set_size(info.vector, newLength)
+	C.duckdb_list_vector_reserve(info.vector, newLength)
 
 	// Insert the values into the child vector.
 	for i, e := range values {
 		childVectorRow := C.idx_t(i) + childVectorSize
-		childColInfo.fn(a, &childColInfo, childVectorRow, e)
+		childInfo.fn(a, &childInfo, childVectorRow, e)
 	}
 }
 
-func setStruct(a *Appender, columnInfo *colInfo, rowIdx C.idx_t, value driver.Value) {
+func setStruct(a *Appender, info *colInfo, rowIdx C.idx_t, value driver.Value) {
 	refVal := reflect.ValueOf(value)
 	structType := refVal.Type()
 
 	if value == nil {
-		setNull(columnInfo, rowIdx)
+		setNull(info, rowIdx)
 	}
 
 	for i := 0; i < structType.NumField(); i++ {
-		childColInfo := columnInfo.colInfos[i]
-		childColInfo.fn(a, &childColInfo, rowIdx, refVal.Field(i).Interface())
+		childInfo := info.colInfos[i]
+		childInfo.fn(a, &childInfo, rowIdx, refVal.Field(i).Interface())
 	}
 }
 
@@ -545,16 +545,16 @@ func (c *colInfo) typeMatch(v reflect.Type) error {
 // appendRowArray loads a row of values into the appender. The values are provided as an array.
 func (a *Appender) appendRowArray(args []driver.Value) error {
 	for i, v := range args {
-		colInfo := a.colInfos[i]
+		info := a.colInfos[i]
 		if v == nil {
-			setNull(&colInfo, a.currSize)
+			setNull(&info, a.currSize)
 			continue
 		}
 
-		if err := colInfo.typeMatch(reflect.TypeOf(v)); err != nil {
+		if err := info.typeMatch(reflect.TypeOf(v)); err != nil {
 			return fmt.Errorf("type mismatch for column %d: \n%s \n%s", i, err.Error(), errNote)
 		}
-		colInfo.fn(a, &colInfo, a.currSize, v)
+		info.fn(a, &info, a.currSize, v)
 	}
 
 	a.currSize++
