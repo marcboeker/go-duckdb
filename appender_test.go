@@ -822,7 +822,7 @@ func TestAppenderMismatch(t *testing.T) {
 	defer connector.Close()
 
 	err := appender.AppendRow("hello")
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "type mismatch")
 
 	err = appender.AppendRow(false)
 	require.ErrorContains(t, err, "type mismatch")
@@ -922,13 +922,49 @@ func TestAppenderBlobTinyInt(t *testing.T) {
 	defer con.Close()
 	defer connector.Close()
 
-	// []byte is not UTINYINT[].
-	data := []byte{0x01, 0x02, 0x03, 0x04}
-	err := appender.AppendRow(data)
+	err := appender.AppendRow(nil)
+	require.NoError(t, err)
+
+	// We treat the byte slice as a list, as that's the type we set when creating the appender.
+	err = appender.AppendRow([]byte{0x01, 0x02, 0x03, 0x04})
+	require.NoError(t, err)
+
+	err = appender.AppendRow([]byte{0x01, 0x00, 0x03, 0x04, 0x01, 0x00, 0x03, 0x04, 0x01, 0x00, 0x03, 0x04, 0x01, 0x00, 0x03, 0x04})
+	require.NoError(t, err)
+
+	err = appender.AppendRow([]byte{})
 	require.NoError(t, err)
 
 	err = appender.Close()
-	require.ErrorContains(t, err, "Check that the data being appended matches the schema")
+	require.NoError(t, err)
+
+	// Verify results.
+	db := sql.OpenDB(connector)
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT CASE WHEN data IS NULL THEN 'NULL' ELSE data::VARCHAR END FROM test`,
+	)
+	require.NoError(t, err)
+	defer res.Close()
+
+	expected := []string{
+		"NULL",
+		"[1, 2, 3, 4]",
+		"[1, 0, 3, 4, 1, 0, 3, 4, 1, 0, 3, 4, 1, 0, 3, 4]",
+		"[]",
+	}
+
+	i := 0
+	for res.Next() {
+		var str string
+		err = res.Scan(
+			&str,
+		)
+		require.NoError(t, err)
+		require.Equal(t, expected[i], str)
+		i++
+	}
+	require.Equal(t, 4, i)
 }
 
 func TestAppenderUint8SliceTinyInt(t *testing.T) {
@@ -939,11 +975,42 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 	defer con.Close()
 	defer connector.Close()
 
-	// []uint8 is not UTINYINT[].
-	uint8Slice := []uint8{0x01, 0x02, 0x03, 0x04}
-	err := appender.AppendRow(uint8Slice)
+	err := appender.AppendRow(nil)
+	require.NoError(t, err)
+
+	err = appender.AppendRow([]uint8{0x01, 0x00, 0x03, 0x04, 8, 9, 7, 6, 5, 4, 3, 2, 1, 0})
+	require.NoError(t, err)
+
+	err = appender.AppendRow([]uint8{})
 	require.NoError(t, err)
 
 	err = appender.Close()
-	require.ErrorContains(t, err, "Check that the data being appended matches the schema")
+	require.NoError(t, err)
+
+	// Verify results.
+	db := sql.OpenDB(connector)
+	res, err := db.QueryContext(
+		context.Background(),
+		`SELECT CASE WHEN data IS NULL THEN 'NULL' ELSE data::VARCHAR END FROM test`,
+	)
+	require.NoError(t, err)
+	defer res.Close()
+
+	expected := []string{
+		"NULL",
+		"[1, 0, 3, 4, 8, 9, 7, 6, 5, 4, 3, 2, 1, 0]",
+		"[]",
+	}
+
+	i := 0
+	for res.Next() {
+		var str string
+		err = res.Scan(
+			&str,
+		)
+		require.NoError(t, err)
+		require.Equal(t, expected[i], str)
+		i++
+	}
+	require.Equal(t, 3, i)
 }
