@@ -257,6 +257,10 @@ func initPrimitive[T any](ddbType C.duckdb_type) (colInfo, C.duckdb_logical_type
 }
 
 func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_logical_type) {
+	if v.Kind() == reflect.Ptr {
+		return a.initColInfos(v.Elem(), colIdx)
+	}
+
 	switch v.Kind() {
 	case reflect.Uint8:
 		return initPrimitive[uint8](C.DUCKDB_TYPE_UTINYINT)
@@ -556,7 +560,7 @@ func (c *colInfo) typeMatch(v reflect.Type) error {
 func (a *Appender) appendRowArray(args []driver.Value) error {
 	for i, v := range args {
 		info := a.colInfos[i]
-		if v == nil {
+		if v == nil || (reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil()) {
 			setNull(&info, a.currSize)
 			continue
 		}
