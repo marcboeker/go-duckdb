@@ -880,12 +880,12 @@ func TestAppenderBlob(t *testing.T) {
 	defer con.Close()
 	defer connector.Close()
 
-	data := []byte{0x01, 0x02, 0x03, 0x04}
+	data := []byte{0x01, 0x02, 0x00, 0x03, 0x04}
 	err := appender.AppendRow(data)
 	require.NoError(t, err)
 
 	// Treat []uint8 the same as []byte.
-	uint8Slice := []uint8{0x01, 0x02, 0x03, 0x04}
+	uint8Slice := []uint8{0x01, 0x02, 0x00, 0x03, 0x04}
 	err = appender.AppendRow(uint8Slice)
 	require.NoError(t, err)
 

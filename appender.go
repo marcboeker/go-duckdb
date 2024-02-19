@@ -288,7 +288,7 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 		t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
 		info := colInfo{
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				setCString(info, rowIdx, val.(string))
+				setCString(info, rowIdx, val.(string), len(val.(string)))
 			},
 			duckdbType: C.DUCKDB_TYPE_VARCHAR,
 		}
@@ -303,7 +303,7 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 			info := colInfo{
 				fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 					blob := val.([]byte)
-					setCString(info, rowIdx, string(blob[:]))
+					setCString(info, rowIdx, string(blob[:]), len(blob))
 				},
 				duckdbType: C.DUCKDB_TYPE_BLOB,
 			}
@@ -452,9 +452,9 @@ func setPrimitive[T any](info *colInfo, rowIdx C.idx_t, value T) {
 	xs[rowIdx] = value
 }
 
-func setCString(info *colInfo, rowIdx C.idx_t, value string) {
+func setCString(info *colInfo, rowIdx C.idx_t, value string, len int) {
 	str := C.CString(value)
-	C.duckdb_vector_assign_string_element(info.vector, rowIdx, str)
+	C.duckdb_vector_assign_string_element_len(info.vector, rowIdx, str, C.idx_t(len))
 	C.free(unsafe.Pointer(str))
 }
 
