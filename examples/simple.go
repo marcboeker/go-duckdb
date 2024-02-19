@@ -1,9 +1,7 @@
-// Run with:
-// CGO_LDFLAGS="-L<path to libduckdb_static.a>" CGO_CFLAGS="-I<path to duckdb.h>" DYLD_LIBRARY_PATH="<path to libduckdb.dylib>" go run examples/test.go
-
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"time"
@@ -11,9 +9,7 @@ import (
 	_ "github.com/marcboeker/go-duckdb"
 )
 
-var (
-	db *sql.DB
-)
+var db *sql.DB
 
 type user struct {
 	name    string
@@ -24,9 +20,6 @@ type user struct {
 }
 
 func main() {
-	// Use second argument to store DB on disk
-	// db, err := sql.Open("duckdb", "foobar.db")
-
 	var err error
 	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
 	if err != nil {
@@ -36,16 +29,17 @@ func main() {
 
 	check(db.Ping())
 
-	setting := db.QueryRow("SELECT current_setting('access_mode')")
+	setting := db.QueryRowContext(context.Background(), "SELECT current_setting('access_mode')")
 	var am string
 	check(setting.Scan(&am))
 	log.Printf("DB opened with access mode %s", am)
 
-	check(db.Exec("CREATE TABLE users(name VARCHAR, age INTEGER, height FLOAT, awesome BOOLEAN, bday DATE)"))
-	check(db.Exec("INSERT INTO users VALUES('marc', 99, 1.91, true, '1970-01-01')"))
-	check(db.Exec("INSERT INTO users VALUES('macgyver', 70, 1.85, true, '1951-01-23')"))
+	check(db.ExecContext(context.Background(), "CREATE TABLE users(name VARCHAR, age INTEGER, height FLOAT, awesome BOOLEAN, bday DATE)"))
+	check(db.ExecContext(context.Background(), "INSERT INTO users VALUES('marc', 99, 1.91, true, '1970-01-01')"))
+	check(db.ExecContext(context.Background(), "INSERT INTO users VALUES('macgyver', 70, 1.85, true, '1951-01-23')"))
 
-	rows, err := db.Query(`
+	rows, err := db.QueryContext(
+		context.Background(), `
 		SELECT name, age, height, awesome, bday
 		FROM users
 		WHERE (name = ? OR name = ?) AND age > ? AND awesome = ?`,
@@ -67,7 +61,7 @@ func main() {
 	}
 	check(rows.Err())
 
-	res, err := db.Exec("DELETE FROM users")
+	res, err := db.ExecContext(context.Background(), "DELETE FROM users")
 	check(err)
 
 	ra, _ := res.RowsAffected()
@@ -89,8 +83,13 @@ func runTransaction() {
 	tx, err := db.Begin()
 	check(err)
 
-	check(tx.Exec("INSERT INTO users VALUES('gru', 25, 1.35, false, '1996-04-03')"))
-	row := tx.QueryRow("SELECT COUNT(*) FROM users WHERE name = ?", "gru")
+	check(
+		tx.ExecContext(
+			context.Background(),
+			"INSERT INTO users VALUES('gru', 25, 1.35, false, '1996-04-03')",
+		),
+	)
+	row := tx.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM users WHERE name = ?", "gru")
 	var count int64
 	check(row.Scan(&count))
 	if count > 0 {
@@ -100,7 +99,7 @@ func runTransaction() {
 	log.Println("Rolling back transaction...")
 	check(tx.Rollback())
 
-	row = db.QueryRow("SELECT COUNT(*) FROM users WHERE name = ?", "gru")
+	row = db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM users WHERE name = ?", "gru")
 	check(row.Scan(&count))
 	if count > 0 {
 		log.Println("Found user Gru")
@@ -110,18 +109,18 @@ func runTransaction() {
 }
 
 func testPreparedStmt() {
-	stmt, err := db.Prepare("INSERT INTO users VALUES(?, ?, ?, ?, ?)")
+	stmt, err := db.PrepareContext(context.Background(), "INSERT INTO users VALUES(?, ?, ?, ?, ?)")
 	check(err)
 	defer stmt.Close()
 
-	check(stmt.Exec("Kevin", 11, 0.55, true, "2013-07-06"))
-	check(stmt.Exec("Bob", 12, 0.73, true, "2012-11-04"))
-	check(stmt.Exec("Stuart", 13, 0.66, true, "2014-02-12"))
+	check(stmt.ExecContext(context.Background(), "Kevin", 11, 0.55, true, "2013-07-06"))
+	check(stmt.ExecContext(context.Background(), "Bob", 12, 0.73, true, "2012-11-04"))
+	check(stmt.ExecContext(context.Background(), "Stuart", 13, 0.66, true, "2014-02-12"))
 
-	stmt, err = db.Prepare("SELECT * FROM users WHERE age > ?")
+	stmt, err = db.PrepareContext(context.Background(), "SELECT * FROM users WHERE age > ?")
 	check(err)
 
-	rows, err := stmt.Query(1)
+	rows, err := stmt.QueryContext(context.Background(), 1)
 	check(err)
 	defer rows.Close()
 
