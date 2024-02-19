@@ -82,17 +82,19 @@ func castList[T any](val []any) []T {
 	return res
 }
 
-func castMapListToStruct[T any](val []any) []T {
+func castMapListToStruct[T any](t *testing.T, val []any) []T {
 	res := make([]T, len(val))
 	for i, v := range val {
-		mapstructure.Decode(v, &res[i])
+		err := mapstructure.Decode(v, &res[i])
+		require.NoError(t, err)
 	}
 	return res
 }
 
-func castMapToStruct[T any](val any) T {
+func castMapToStruct[T any](t *testing.T, val any) T {
 	var res T
-	mapstructure.Decode(val, &res)
+	err := mapstructure.Decode(val, &res)
+	require.NoError(t, err)
 	return res
 }
 
@@ -433,14 +435,14 @@ func TestAppenderNested(t *testing.T) {
 		strRes = fmt.Sprintf("%v", r.tripleNestedIntList)
 		require.Equal(t, strRes, "[[[1 2 3] [4 5 6]] [[7 8 9] [10 11 12]]]")
 
-		require.Equal(t, rows[i].simpleStruct, castMapToStruct[simpleStruct](r.simpleStruct))
-		require.Equal(t, rows[i].wrappedStruct, castMapToStruct[wrappedStruct](r.wrappedStruct))
-		require.Equal(t, rows[i].doubleWrappedStruct, castMapToStruct[doubleWrappedStruct](r.doubleWrappedStruct))
+		require.Equal(t, rows[i].simpleStruct, castMapToStruct[simpleStruct](t, r.simpleStruct))
+		require.Equal(t, rows[i].wrappedStruct, castMapToStruct[wrappedStruct](t, r.wrappedStruct))
+		require.Equal(t, rows[i].doubleWrappedStruct, castMapToStruct[doubleWrappedStruct](t, r.doubleWrappedStruct))
 
-		require.Equal(t, rows[i].structList, castMapListToStruct[simpleStruct](r.structList))
-		require.Equal(t, rows[i].structWithList, castMapToStruct[structWithList](r.structWithList))
-		require.Equal(t, rows[i].mix, castMapToStruct[mixedStruct](r.mix))
-		require.Equal(t, rows[i].mixList, castMapListToStruct[mixedStruct](r.mixList))
+		require.Equal(t, rows[i].structList, castMapListToStruct[simpleStruct](t, r.structList))
+		require.Equal(t, rows[i].structWithList, castMapToStruct[structWithList](t, r.structWithList))
+		require.Equal(t, rows[i].mix, castMapToStruct[mixedStruct](t, r.mix))
+		require.Equal(t, rows[i].mixList, castMapListToStruct[mixedStruct](t, r.mixList))
 
 		i++
 	}
