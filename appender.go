@@ -35,6 +35,25 @@ var typeIdMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_STRUCT:    "struct",
 }
 
+var unsupportedTypeMap = map[C.duckdb_type]string{
+	C.DUCKDB_TYPE_INVALID:      "INVALID",
+	C.DUCKDB_TYPE_DATE:         "DATE",
+	C.DUCKDB_TYPE_TIME:         "TIME",
+	C.DUCKDB_TYPE_INTERVAL:     "INTERVAL",
+	C.DUCKDB_TYPE_HUGEINT:      "HUGEINT",
+	C.DUCKDB_TYPE_UHUGEINT:     "UHUGEINT",
+	C.DUCKDB_TYPE_DECIMAL:      "DECIMAL",
+	C.DUCKDB_TYPE_TIMESTAMP_S:  "TIMESTAMP_S",
+	C.DUCKDB_TYPE_TIMESTAMP_MS: "TIMESTAMP_MS",
+	C.DUCKDB_TYPE_TIMESTAMP_NS: "TIMESTAMP_NS",
+	C.DUCKDB_TYPE_ENUM:         "ENUM",
+	C.DUCKDB_TYPE_MAP:          "MAP",
+	C.DUCKDB_TYPE_UNION:        "UNION",
+	C.DUCKDB_TYPE_BIT:          "BIT",
+	C.DUCKDB_TYPE_TIME_TZ:      "TIME_TZ",
+	C.DUCKDB_TYPE_TIMESTAMP_TZ: "TIMESTAMP_TZ",
+}
+
 // SetColValue is the type definition for all column callback functions.
 type SetColValue func(a *Appender, info *colInfo, rowIdx C.idx_t, val any)
 
@@ -353,10 +372,12 @@ func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (
 		return info, nil
 
 	default:
-		alias := C.duckdb_logical_type_get_alias(logicalType)
-		err := errors.New(fmt.Sprintf("the appender does not support the column type of column %d: %s",
-			colIdx, string(C.GoString(alias))))
-		C.free(unsafe.Pointer(alias))
+		name, found := unsupportedTypeMap[duckdbType]
+		if !found {
+			name = "unknown type"
+		}
+		err := errors.New(
+			fmt.Sprintf("the appender does not support the column type of column %d: %s", colIdx, name))
 		return colInfo{}, err
 	}
 }
