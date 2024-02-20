@@ -70,28 +70,6 @@ type colInfo struct {
 	colInfos []colInfo
 }
 
-func (c *colInfo) duckDBTypeToString() string {
-	if c.duckdbType == C.DUCKDB_TYPE_LIST {
-		s := c.colInfos[0].duckDBTypeToString()
-		return "[]" + s
-	}
-
-	if c.duckdbType == C.DUCKDB_TYPE_STRUCT {
-		s := "{"
-		for i := 0; i < c.numFields; i++ {
-			if i > 0 {
-				s += ", "
-			}
-			tmp := c.colInfos[i].duckDBTypeToString()
-			s += tmp
-		}
-		s += "}"
-		return s
-	}
-
-	return typeIdMap[c.duckdbType]
-}
-
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
 type Appender struct {
 	c        *conn
@@ -252,13 +230,89 @@ func mallocLogicalTypeSlice(count int) (unsafe.Pointer, []C.duckdb_logical_type)
 	return ctPtr, slice
 }
 
+func isNull[T any](val any) bool {
+	if reflect.ValueOf(val).Kind() != reflect.Ptr {
+		return false
+	}
+	v := val.(*T)
+	if v != nil {
+		return false
+	}
+	return true
+}
+
+func getValue[T any](val any) T {
+	if reflect.ValueOf(val).Kind() != reflect.Ptr {
+		return val.(T)
+	}
+	return *(val.(*T))
+}
+
 func initPrimitive[T any](duckdbType C.duckdb_type) colInfo {
 
 	info := colInfo{
 		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-			setPrimitive[T](info, rowIdx, val.(T))
+			if isNull[T](val) {
+				setNull(info, rowIdx)
+				return
+			}
+			setPrimitive[T](info, rowIdx, getValue[T](val))
 		},
 		duckdbType: duckdbType,
+	}
+	return info
+}
+
+func initCString[T string | []byte](duckdbType C.duckdb_type) colInfo {
+	info := colInfo{
+		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+			if isNull[T](val) {
+				setNull(info, rowIdx)
+			}
+
+			var v string
+			var length int
+			if duckdbType == C.DUCKDB_TYPE_VARCHAR {
+				v = getValue[string](val)
+				length = len(v)
+			} else {
+				blob := getValue[[]byte](val)
+				v = string(blob[:])
+				length = len(blob)
+			}
+
+			setCString(info, rowIdx, v, length)
+		},
+		duckdbType: duckdbType,
+	}
+	return info
+}
+
+func initTime() colInfo {
+	info := colInfo{
+		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+			if isNull[time.Time](val) {
+				setNull(info, rowIdx)
+				return
+			}
+			setTime(info, rowIdx, getValue[time.Time](val))
+		},
+		duckdbType: C.DUCKDB_TYPE_TIMESTAMP,
+	}
+	return info
+}
+
+func initUUID() colInfo {
+	info := colInfo{
+		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+			if isNull[UUID](val) {
+				setNull(info, rowIdx)
+				return
+			}
+			v := getValue[UUID](val)
+			setPrimitive[C.duckdb_hugeint](info, rowIdx, uuidToHugeInt(v))
+		},
+		duckdbType: C.DUCKDB_TYPE_UUID,
 	}
 	return info
 }
@@ -291,40 +345,13 @@ func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return initPrimitive[bool](C.DUCKDB_TYPE_BOOLEAN), nil
 	case C.DUCKDB_TYPE_VARCHAR:
-		info := colInfo{
-			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				setCString(info, rowIdx, val.(string), len(val.(string)))
-			},
-			duckdbType: C.DUCKDB_TYPE_VARCHAR,
-		}
-		return info, nil
+		return initCString[string](C.DUCKDB_TYPE_VARCHAR), nil
 	case C.DUCKDB_TYPE_BLOB:
-		info := colInfo{
-			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				blob := val.([]byte)
-				setCString(info, rowIdx, string(blob[:]), len(blob))
-			},
-			duckdbType: C.DUCKDB_TYPE_BLOB,
-		}
-		return info, nil
+		return initCString[[]byte](C.DUCKDB_TYPE_BLOB), nil
 	case C.DUCKDB_TYPE_TIMESTAMP:
-		info := colInfo{
-			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				setTime(info, rowIdx, val.(time.Time))
-			},
-			duckdbType: C.DUCKDB_TYPE_TIMESTAMP,
-		}
-		return info, nil
+		return initTime(), nil
 	case C.DUCKDB_TYPE_UUID:
-		// The callback function casts the value via uuidToHugeInt. Thus, we do not
-		// use initPrimitive here.
-		info := colInfo{
-			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				setPrimitive[C.duckdb_hugeint](info, rowIdx, uuidToHugeInt(val.(UUID)))
-			},
-			duckdbType: C.DUCKDB_TYPE_UUID,
-		}
-		return info, nil
+		return initUUID(), nil
 
 	case C.DUCKDB_TYPE_LIST:
 		// We recurse into the child.
@@ -501,12 +528,20 @@ func setStruct(a *Appender, info *colInfo, rowIdx C.idx_t, value driver.Value) {
 }
 
 func goTypeToString(v reflect.Type) string {
-	switch v.String() {
+	str := v.String()
+	firstChar := string([]rune(str)[0])
+	if firstChar == "*" {
+		// Pointer! Remove the asterisk.
+		str = string([]rune(str)[1:])
+	}
+
+	switch str {
 	case "int":
 		return "int64"
 	case "uint":
 		return "uint64"
 	case "time.Time":
+		// TODO: necessary?
 		return "time.Time"
 	}
 
@@ -526,7 +561,29 @@ func goTypeToString(v reflect.Type) string {
 		return s
 	}
 
-	return v.String()
+	return str
+}
+
+func (c *colInfo) duckDBTypeToString() string {
+	if c.duckdbType == C.DUCKDB_TYPE_LIST {
+		s := c.colInfos[0].duckDBTypeToString()
+		return "[]" + s
+	}
+
+	if c.duckdbType == C.DUCKDB_TYPE_STRUCT {
+		s := "{"
+		for i := 0; i < c.numFields; i++ {
+			if i > 0 {
+				s += ", "
+			}
+			tmp := c.colInfos[i].duckDBTypeToString()
+			s += tmp
+		}
+		s += "}"
+		return s
+	}
+
+	return typeIdMap[c.duckdbType]
 }
 
 func (c *colInfo) typeMatch(v reflect.Type) error {
