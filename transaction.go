@@ -3,7 +3,7 @@ package duckdb
 import "context"
 
 type tx struct {
-	c *conn
+	c *con
 }
 
 func (t *tx) Commit() error {
