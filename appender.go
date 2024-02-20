@@ -268,6 +268,7 @@ func initCString[T string | []byte](duckdbType C.duckdb_type) colInfo {
 		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 			if isNull[T](val) {
 				setNull(info, rowIdx)
+				return
 			}
 
 			var v string
