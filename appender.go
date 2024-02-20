@@ -46,7 +46,7 @@ type colInfo struct {
 	fn     SetColValue
 
 	// The type of the column.
-	ddbType C.duckdb_type
+	duckdbType C.duckdb_type
 	// The number of fields in a STRUCT column.
 	numFields int
 	// Recursively stores the child colInfos for nested types.
@@ -54,12 +54,12 @@ type colInfo struct {
 }
 
 func (c *colInfo) duckDBTypeToString() string {
-	if c.ddbType == C.DUCKDB_TYPE_LIST {
+	if c.duckdbType == C.DUCKDB_TYPE_LIST {
 		s := c.colInfos[0].duckDBTypeToString()
 		return "[]" + s
 	}
 
-	if c.ddbType == C.DUCKDB_TYPE_STRUCT {
+	if c.duckdbType == C.DUCKDB_TYPE_STRUCT {
 		s := "{"
 		for i := 0; i < c.numFields; i++ {
 			if i > 0 {
@@ -72,7 +72,7 @@ func (c *colInfo) duckDBTypeToString() string {
 		return s
 	}
 
-	return typeIdMap[c.ddbType]
+	return typeIdMap[c.duckdbType]
 }
 
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
@@ -93,12 +93,12 @@ type Appender struct {
 
 // NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
-	dbConn, ok := driverConn.(*conn)
+	c, ok := driverConn.(*conn)
 	if !ok {
 		return nil, fmt.Errorf("not a duckdb driver connection")
 	}
 
-	if dbConn.closed {
+	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Appender after Close")
 	}
 
@@ -112,7 +112,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	defer C.free(unsafe.Pointer(cTable))
 
 	var appender C.duckdb_appender
-	state := C.duckdb_appender_create(*dbConn.con, cSchema, cTable, &appender)
+	state := C.duckdb_appender_create(*c.con, cSchema, cTable, &appender)
 
 	if state == C.DuckDBError {
 		// We'll destroy the error message when destroying the appender.
@@ -122,7 +122,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	}
 
 	return &Appender{
-		c:        dbConn,
+		c:        c,
 		schema:   schema,
 		table:    table,
 		appender: &appender,
@@ -245,13 +245,13 @@ func mallocCStringSlice(count int) (unsafe.Pointer, []*C.char) {
 	return csPtr, slice
 }
 
-func initPrimitive[T any](ddbType C.duckdb_type) (colInfo, C.duckdb_logical_type) {
-	t := C.duckdb_create_logical_type(ddbType)
+func initPrimitive[T any](duckdbType C.duckdb_type) (colInfo, C.duckdb_logical_type) {
+	t := C.duckdb_create_logical_type(duckdbType)
 	info := colInfo{
 		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 			setPrimitive[T](info, rowIdx, val.(T))
 		},
-		ddbType: ddbType,
+		duckdbType: duckdbType,
 	}
 	return info, t
 }
@@ -288,9 +288,9 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 		t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
 		info := colInfo{
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				setCString(info, rowIdx, val.(string))
+				setCString(info, rowIdx, val.(string), len(val.(string)))
 			},
-			ddbType: C.DUCKDB_TYPE_VARCHAR,
+			duckdbType: C.DUCKDB_TYPE_VARCHAR,
 		}
 		return info, t
 
@@ -303,9 +303,9 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 			info := colInfo{
 				fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 					blob := val.([]byte)
-					setCString(info, rowIdx, string(blob[:]))
+					setCString(info, rowIdx, string(blob[:]), len(blob))
 				},
-				ddbType: C.DUCKDB_TYPE_BLOB,
+				duckdbType: C.DUCKDB_TYPE_BLOB,
 			}
 			return info, t
 		}
@@ -319,8 +319,8 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 				setList(a, info, rowIdx, val)
 			},
-			ddbType:  C.DUCKDB_TYPE_LIST,
-			colInfos: []colInfo{childInfo},
+			duckdbType: C.DUCKDB_TYPE_LIST,
+			colInfos:   []colInfo{childInfo},
 		}
 		return info, t
 
@@ -332,7 +332,7 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 				setPrimitive[C.duckdb_hugeint](info, rowIdx, uuidToHugeInt(val.(UUID)))
 			},
-			ddbType: C.DUCKDB_TYPE_UUID,
+			duckdbType: C.DUCKDB_TYPE_UUID,
 		}
 		return info, t
 
@@ -345,7 +345,7 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 				fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 					setTime(info, rowIdx, val.(time.Time))
 				},
-				ddbType: C.DUCKDB_TYPE_TIMESTAMP,
+				duckdbType: C.DUCKDB_TYPE_TIMESTAMP,
 			}
 			return info, t
 		}
@@ -357,9 +357,9 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 				setStruct(a, info, rowIdx, val)
 			},
-			ddbType:   C.DUCKDB_TYPE_STRUCT,
-			colInfos:  make([]colInfo, numFields),
-			numFields: numFields,
+			duckdbType: C.DUCKDB_TYPE_STRUCT,
+			colInfos:   make([]colInfo, numFields),
+			numFields:  numFields,
 		}
 
 		// We recurse into the child numFields. To create the resulting duckdb_logical_type,
@@ -398,7 +398,7 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 }
 
 func (c *colInfo) getChildVectors(vector C.duckdb_vector) {
-	switch c.ddbType {
+	switch c.duckdbType {
 	case C.DUCKDB_TYPE_LIST:
 		childVector := C.duckdb_list_vector_get_child(vector)
 		c.colInfos[0].vector = childVector
@@ -439,7 +439,7 @@ func setNull(info *colInfo, rowIdx C.idx_t) {
 	C.duckdb_validity_set_row_invalid(mask, rowIdx)
 
 	// Set the validity for all child vectors of a STRUCT.
-	if typeIdMap[info.ddbType] == "struct" {
+	if typeIdMap[info.duckdbType] == "struct" {
 		for i := 0; i < info.numFields; i++ {
 			setNull(&info.colInfos[i], rowIdx)
 		}
@@ -452,9 +452,9 @@ func setPrimitive[T any](info *colInfo, rowIdx C.idx_t, value T) {
 	xs[rowIdx] = value
 }
 
-func setCString(info *colInfo, rowIdx C.idx_t, value string) {
+func setCString(info *colInfo, rowIdx C.idx_t, value string, len int) {
 	str := C.CString(value)
-	C.duckdb_vector_assign_string_element(info.vector, rowIdx, str)
+	C.duckdb_vector_assign_string_element_len(info.vector, rowIdx, str, C.idx_t(len))
 	C.free(unsafe.Pointer(str))
 }
 
