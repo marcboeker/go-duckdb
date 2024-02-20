@@ -542,7 +542,6 @@ func goTypeToString(v reflect.Type) string {
 	case "uint":
 		return "uint64"
 	case "time.Time":
-		// TODO: necessary?
 		return "time.Time"
 	}
 
