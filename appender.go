@@ -376,8 +376,9 @@ func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (
 		if !found {
 			name = "unknown type"
 		}
+		// Use 1-based indexing for readability, as we're talking about columns.
 		err := errors.New(
-			fmt.Sprintf("the appender does not support the column type of column %d: %s", colIdx, name))
+			fmt.Sprintf("the appender does not support the column type of column %d: %s", colIdx+1, name))
 		return colInfo{}, err
 	}
 }
@@ -548,7 +549,8 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 		}
 
 		if err := info.typeMatch(reflect.TypeOf(v)); err != nil {
-			return fmt.Errorf("type mismatch for column %d: \n%s", i, err.Error())
+			// Use 1-based indexing for readability, as we're talking about columns.
+			return fmt.Errorf("type mismatch for column %d: \n%s", i+1, err.Error())
 		}
 		info.fn(a, &info, a.currSize, v)
 	}

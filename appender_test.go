@@ -1031,5 +1031,5 @@ func TestAppenderUnsupportedType(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = NewAppenderFromConn(con, "", "test")
-	require.ErrorContains(t, err, "does not support the column type of column 0: MAP")
+	require.ErrorContains(t, err, "does not support the column type of column 1: MAP")
 }
