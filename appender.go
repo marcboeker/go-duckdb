@@ -15,8 +15,6 @@ import (
 	"unsafe"
 )
 
-const errNote = "NOTE: this is based on types initialized from the first row of appended data. Please confirm this matches the schema."
-
 var typeIdMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_BOOLEAN:   "bool",
 	C.DUCKDB_TYPE_TINYINT:   "int8",
@@ -37,6 +35,25 @@ var typeIdMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_STRUCT:    "struct",
 }
 
+var unsupportedTypeMap = map[C.duckdb_type]string{
+	C.DUCKDB_TYPE_INVALID:      "INVALID",
+	C.DUCKDB_TYPE_DATE:         "DATE",
+	C.DUCKDB_TYPE_TIME:         "TIME",
+	C.DUCKDB_TYPE_INTERVAL:     "INTERVAL",
+	C.DUCKDB_TYPE_HUGEINT:      "HUGEINT",
+	C.DUCKDB_TYPE_UHUGEINT:     "UHUGEINT",
+	C.DUCKDB_TYPE_DECIMAL:      "DECIMAL",
+	C.DUCKDB_TYPE_TIMESTAMP_S:  "TIMESTAMP_S",
+	C.DUCKDB_TYPE_TIMESTAMP_MS: "TIMESTAMP_MS",
+	C.DUCKDB_TYPE_TIMESTAMP_NS: "TIMESTAMP_NS",
+	C.DUCKDB_TYPE_ENUM:         "ENUM",
+	C.DUCKDB_TYPE_MAP:          "MAP",
+	C.DUCKDB_TYPE_UNION:        "UNION",
+	C.DUCKDB_TYPE_BIT:          "BIT",
+	C.DUCKDB_TYPE_TIME_TZ:      "TIME_TZ",
+	C.DUCKDB_TYPE_TIMESTAMP_TZ: "TIMESTAMP_TZ",
+}
+
 // SetColValue is the type definition for all column callback functions.
 type SetColValue func(a *Appender, info *colInfo, rowIdx C.idx_t, val any)
 
@@ -51,28 +68,6 @@ type colInfo struct {
 	numFields int
 	// Recursively stores the child colInfos for nested types.
 	colInfos []colInfo
-}
-
-func (c *colInfo) duckDBTypeToString() string {
-	if c.duckdbType == C.DUCKDB_TYPE_LIST {
-		s := c.colInfos[0].duckDBTypeToString()
-		return "[]" + s
-	}
-
-	if c.duckdbType == C.DUCKDB_TYPE_STRUCT {
-		s := "{"
-		for i := 0; i < c.numFields; i++ {
-			if i > 0 {
-				s += ", "
-			}
-			tmp := c.colInfos[i].duckDBTypeToString()
-			s += tmp
-		}
-		s += "}"
-		return s
-	}
-
-	return typeIdMap[c.duckdbType]
 }
 
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
@@ -121,19 +116,40 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 		return nil, err
 	}
 
-	return &Appender{
+	a := &Appender{
 		c:        c,
 		schema:   schema,
 		table:    table,
 		appender: &appender,
 		currSize: 0,
-	}, nil
+	}
+
+	columnCount := int(C.duckdb_appender_column_count(appender))
+	a.colInfos = make([]colInfo, columnCount)
+	a.colTypesPtr, a.colTypes = mallocTypeSlice(columnCount)
+
+	// Get the column types.
+	for i := 0; i < columnCount; i++ {
+		a.colTypes[i] = C.duckdb_appender_column_type(appender, C.idx_t(i))
+	}
+
+	// Get the column infos.
+	for i := 0; i < columnCount; i++ {
+		info, err := a.initColInfos(a.colTypes[i], i)
+		if err != nil {
+			a.destroyColumnTypes()
+			return a, err
+		}
+		a.colInfos[i] = info
+	}
+
+	return a, nil
 }
 
 // Error returns the last DuckDB appender error.
 func (a *Appender) Error() error {
-	dbErr := C.GoString(C.duckdb_appender_error(*a.appender))
-	return errors.New(dbErr)
+	err := C.GoString(C.duckdb_appender_error(*a.appender))
+	return errors.New(err)
 }
 
 // Flush the appender to the underlying table and clear the internal cache.
@@ -171,12 +187,7 @@ func (a *Appender) Close() error {
 		err = a.appendChunks()
 	}
 
-	// Free the column types.
-	for i := range a.colInfos {
-		C.duckdb_destroy_logical_type(&a.colTypes[i])
-	}
-	C.free(a.colTypesPtr)
-
+	a.destroyColumnTypes()
 	if state := C.duckdb_appender_destroy(a.appender); state == C.DuckDBError {
 		return a.Error()
 	}
@@ -191,15 +202,9 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	}
 
 	var err error
-	if len(a.colTypes) == 0 {
-		// Initialize the chunk on the first call.
-		if err = a.initColTypes(args); err != nil {
-			return err
-		}
-		err = a.appendChunk(len(args))
-
-	} else if a.currSize == C.duckdb_vector_size() || len(a.chunks) == 0 {
-		// The current chunk is full, create a new one.
+	if a.currSize == C.duckdb_vector_size() || len(a.chunks) == 0 {
+		// The current chunk is full, or there are no chunks yet.
+		// In either case, create a new chunk.
 		err = a.appendChunk(len(args))
 	}
 
@@ -209,24 +214,14 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	return a.appendRowArray(args)
 }
 
-// Create an array of DuckDB types from a list of Go types.
-func (a *Appender) initColTypes(args []driver.Value) error {
-	a.colInfos = make([]colInfo, len(args))
-	a.colTypesPtr, a.colTypes = mallocLogicalTypeSlice(len(args))
-
-	for i, val := range args {
-		if val == nil {
-			return fmt.Errorf("the first row cannot contain null values (column %d)", i)
-		}
-
-		v := reflect.ValueOf(val)
-		a.colInfos[i], a.colTypes[i] = a.initColInfos(v.Type(), i)
+func (a *Appender) destroyColumnTypes() {
+	for i := range a.colTypes {
+		C.duckdb_destroy_logical_type(&a.colTypes[i])
 	}
-
-	return nil
+	C.free(a.colTypesPtr)
 }
 
-func mallocLogicalTypeSlice(count int) (unsafe.Pointer, []C.duckdb_logical_type) {
+func mallocTypeSlice(count int) (unsafe.Pointer, []C.duckdb_logical_type) {
 	var dummy C.duckdb_logical_type
 	size := C.size_t(unsafe.Sizeof(dummy))
 
@@ -236,85 +231,88 @@ func mallocLogicalTypeSlice(count int) (unsafe.Pointer, []C.duckdb_logical_type)
 	return ctPtr, slice
 }
 
-func mallocCStringSlice(count int) (unsafe.Pointer, []*C.char) {
-	var dummy *C.char
-	size := C.size_t(unsafe.Sizeof(dummy))
-
-	csPtr := unsafe.Pointer(C.malloc(C.size_t(count) * size))
-	slice := (*[1 << 30]*C.char)(csPtr)[:count:count]
-	return csPtr, slice
-}
-
-func initPrimitive[T any](duckdbType C.duckdb_type) (colInfo, C.duckdb_logical_type) {
-	t := C.duckdb_create_logical_type(duckdbType)
+func initPrimitive[T any](duckdbType C.duckdb_type) colInfo {
 	info := colInfo{
 		fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 			setPrimitive[T](info, rowIdx, val.(T))
 		},
 		duckdbType: duckdbType,
 	}
-	return info, t
+	return info
 }
 
-func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_logical_type) {
-	switch v.Kind() {
-	case reflect.Uint8:
-		return initPrimitive[uint8](C.DUCKDB_TYPE_UTINYINT)
-	case reflect.Int8:
-		return initPrimitive[int8](C.DUCKDB_TYPE_TINYINT)
-	case reflect.Uint16:
-		return initPrimitive[uint16](C.DUCKDB_TYPE_USMALLINT)
-	case reflect.Int16:
-		return initPrimitive[int16](C.DUCKDB_TYPE_SMALLINT)
-	case reflect.Uint32:
-		return initPrimitive[uint32](C.DUCKDB_TYPE_UINTEGER)
-	case reflect.Int32:
-		return initPrimitive[int32](C.DUCKDB_TYPE_INTEGER)
-	case reflect.Uint64:
-		return initPrimitive[uint64](C.DUCKDB_TYPE_UBIGINT)
-	case reflect.Int64:
-		return initPrimitive[int64](C.DUCKDB_TYPE_BIGINT)
-	case reflect.Uint:
-		return initPrimitive[uint32](C.DUCKDB_TYPE_UINTEGER)
-	case reflect.Int:
-		return initPrimitive[int32](C.DUCKDB_TYPE_INTEGER)
-	case reflect.Float32:
-		return initPrimitive[float32](C.DUCKDB_TYPE_FLOAT)
-	case reflect.Float64:
-		return initPrimitive[float64](C.DUCKDB_TYPE_DOUBLE)
-	case reflect.Bool:
-		return initPrimitive[bool](C.DUCKDB_TYPE_BOOLEAN)
-	case reflect.String:
-		t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR)
+func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (colInfo, error) {
+
+	duckdbType := C.duckdb_get_type_id(logicalType)
+
+	switch duckdbType {
+	case C.DUCKDB_TYPE_UTINYINT:
+		return initPrimitive[uint8](C.DUCKDB_TYPE_UTINYINT), nil
+	case C.DUCKDB_TYPE_TINYINT:
+		return initPrimitive[int8](C.DUCKDB_TYPE_TINYINT), nil
+	case C.DUCKDB_TYPE_USMALLINT:
+		return initPrimitive[uint16](C.DUCKDB_TYPE_USMALLINT), nil
+	case C.DUCKDB_TYPE_SMALLINT:
+		return initPrimitive[int16](C.DUCKDB_TYPE_SMALLINT), nil
+	case C.DUCKDB_TYPE_UINTEGER:
+		return initPrimitive[uint32](C.DUCKDB_TYPE_UINTEGER), nil
+	case C.DUCKDB_TYPE_INTEGER:
+		return initPrimitive[int32](C.DUCKDB_TYPE_INTEGER), nil
+	case C.DUCKDB_TYPE_UBIGINT:
+		return initPrimitive[uint64](C.DUCKDB_TYPE_UBIGINT), nil
+	case C.DUCKDB_TYPE_BIGINT:
+		return initPrimitive[int64](C.DUCKDB_TYPE_BIGINT), nil
+	case C.DUCKDB_TYPE_FLOAT:
+		return initPrimitive[float32](C.DUCKDB_TYPE_FLOAT), nil
+	case C.DUCKDB_TYPE_DOUBLE:
+		return initPrimitive[float64](C.DUCKDB_TYPE_DOUBLE), nil
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return initPrimitive[bool](C.DUCKDB_TYPE_BOOLEAN), nil
+	case C.DUCKDB_TYPE_VARCHAR:
 		info := colInfo{
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 				setCString(info, rowIdx, val.(string), len(val.(string)))
 			},
 			duckdbType: C.DUCKDB_TYPE_VARCHAR,
 		}
-		return info, t
+		return info, nil
+	case C.DUCKDB_TYPE_BLOB:
+		info := colInfo{
+			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+				blob := val.([]byte)
+				setCString(info, rowIdx, string(blob[:]), len(blob))
+			},
+			duckdbType: C.DUCKDB_TYPE_BLOB,
+		}
+		return info, nil
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		info := colInfo{
+			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+				setTime(info, rowIdx, val.(time.Time))
+			},
+			duckdbType: C.DUCKDB_TYPE_TIMESTAMP,
+		}
+		return info, nil
+	case C.DUCKDB_TYPE_UUID:
+		// The callback function casts the value via uuidToHugeInt. Thus, we do not
+		// use initPrimitive here.
+		info := colInfo{
+			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
+				setPrimitive[C.duckdb_hugeint](info, rowIdx, uuidToHugeInt(val.(UUID)))
+			},
+			duckdbType: C.DUCKDB_TYPE_UUID,
+		}
+		return info, nil
 
-	case reflect.Slice:
-		// Check if it's []byte since that is equivalent to the DuckDB BLOB type.
-		// If so, we can use the same setter as for VARCHAR;
-		// otherwise it will not match the table set up by the user.
-		if v.Elem().Kind() == reflect.Uint8 {
-			t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_BLOB)
-			info := colInfo{
-				fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-					blob := val.([]byte)
-					setCString(info, rowIdx, string(blob[:]), len(blob))
-				},
-				duckdbType: C.DUCKDB_TYPE_BLOB,
-			}
-			return info, t
+	case C.DUCKDB_TYPE_LIST:
+		// We recurse into the child.
+		childType := C.duckdb_list_type_child_type(logicalType)
+		childInfo, err := a.initColInfos(childType, colIdx)
+		C.duckdb_destroy_logical_type(&childType)
+		if err != nil {
+			return colInfo{}, err
 		}
 
-		// Otherwise, it's a LIST. We recurse into the child element type.
-		childInfo, childType := a.initColInfos(v.Elem(), colIdx)
-		defer C.duckdb_destroy_logical_type(&childType)
-
-		t := C.duckdb_create_list_type(childType)
 		info := colInfo{
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
 				setList(a, info, rowIdx, val)
@@ -322,36 +320,10 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 			duckdbType: C.DUCKDB_TYPE_LIST,
 			colInfos:   []colInfo{childInfo},
 		}
-		return info, t
+		return info, nil
 
-	case reflect.TypeOf(UUID{}).Kind():
-		// The callback function casts the value via uuidToHugeInt. Thus, we do not
-		// use initPrimitive here.
-		t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID)
-		info := colInfo{
-			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-				setPrimitive[C.duckdb_hugeint](info, rowIdx, uuidToHugeInt(val.(UUID)))
-			},
-			duckdbType: C.DUCKDB_TYPE_UUID,
-		}
-		return info, t
-
-	case reflect.Struct:
-		// Check if it's time.Time since that is equivalent to the DuckDB TIMESTAMP type.
-		// If so, we can use setTime; otherwise it will not match the table set up by the user.
-		if (v == reflect.TypeOf(time.Time{})) {
-			t := C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP)
-			info := colInfo{
-				fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
-					setTime(info, rowIdx, val.(time.Time))
-				},
-				duckdbType: C.DUCKDB_TYPE_TIMESTAMP,
-			}
-			return info, t
-		}
-
-		// Otherwise, it's a STRUCT.
-		numFields := v.NumField()
+	case C.DUCKDB_TYPE_STRUCT:
+		numFields := int(C.duckdb_struct_type_child_count(logicalType))
 
 		info := colInfo{
 			fn: func(a *Appender, info *colInfo, rowIdx C.idx_t, val any) {
@@ -362,38 +334,30 @@ func (a *Appender) initColInfos(v reflect.Type, colIdx int) (colInfo, C.duckdb_l
 			numFields:  numFields,
 		}
 
-		// We recurse into the child numFields. To create the resulting duckdb_logical_type,
-		// we create an array of the field's types, and an array of their names.
-		typesPtr, types := mallocLogicalTypeSlice(numFields)
-		namesPtr, names := mallocCStringSlice(numFields)
-
+		// Recurse into the children.
 		for i := 0; i < numFields; i++ {
-			childInfo, t := a.initColInfos(v.Field(i).Type, i)
+			childType := C.duckdb_struct_type_child_type(logicalType, C.idx_t(i))
+			childInfo, err := a.initColInfos(childType, i)
+			C.duckdb_destroy_logical_type(&childType)
+
+			if err != nil {
+				return colInfo{}, err
+			}
+
 			info.colInfos[i] = childInfo
-
-			types[i] = t
-			names[i] = C.CString(v.Field(i).Name)
 		}
 
-		t := C.duckdb_create_struct_type(
-			(*C.duckdb_logical_type)(typesPtr), // array of child types
-			(**C.char)(namesPtr),               // array of child names
-			C.idx_t(numFields),                 // number of children
-		)
+		return info, nil
 
-		for i := 0; i < numFields; i++ {
-			C.duckdb_destroy_logical_type(&types[i])
-			C.free(unsafe.Pointer(names[i]))
-		}
-		C.free(typesPtr)
-		C.free(namesPtr)
-
-		return info, t
-
-	case reflect.Map:
-		panic(fmt.Sprintf("%T: the appender does not support maps", v))
 	default:
-		panic(fmt.Sprintf("could not append unsupported parameter %T", v))
+		name, found := unsupportedTypeMap[duckdbType]
+		if !found {
+			name = "unknown type"
+		}
+		// Use 1-based indexing for readability, as we're talking about columns.
+		err := errors.New(
+			fmt.Sprintf("the appender does not support the column type of column %d: %s", colIdx+1, name))
+		return colInfo{}, err
 	}
 }
 
@@ -414,6 +378,7 @@ func (c *colInfo) getChildVectors(vector C.duckdb_vector) {
 
 func (a *Appender) appendChunk(colCount int) error {
 	a.currSize = 0
+
 	// duckdb_create_data_chunk takes an array of duckdb_logical_type and a column count.
 	colTypesPtr := (*C.duckdb_logical_type)(a.colTypesPtr)
 	dataChunk := C.duckdb_create_data_chunk(colTypesPtr, C.idx_t(colCount))
@@ -513,6 +478,28 @@ func setStruct(a *Appender, info *colInfo, rowIdx C.idx_t, value driver.Value) {
 	}
 }
 
+func (c *colInfo) duckDBTypeToString() string {
+	if c.duckdbType == C.DUCKDB_TYPE_LIST {
+		s := c.colInfos[0].duckDBTypeToString()
+		return "[]" + s
+	}
+
+	if c.duckdbType == C.DUCKDB_TYPE_STRUCT {
+		s := "{"
+		for i := 0; i < c.numFields; i++ {
+			if i > 0 {
+				s += ", "
+			}
+			tmp := c.colInfos[i].duckDBTypeToString()
+			s += tmp
+		}
+		s += "}"
+		return s
+	}
+
+	return typeIdMap[c.duckdbType]
+}
+
 func goTypeToString(v reflect.Type) string {
 	switch v.String() {
 	case "int":
@@ -562,7 +549,8 @@ func (a *Appender) appendRowArray(args []driver.Value) error {
 		}
 
 		if err := info.typeMatch(reflect.TypeOf(v)); err != nil {
-			return fmt.Errorf("type mismatch for column %d: \n%s \n%s", i, err.Error(), errNote)
+			// Use 1-based indexing for readability, as we're talking about columns.
+			return fmt.Errorf("type mismatch for column %d: \n%s", i+1, err.Error())
 		}
 		info.fn(a, &info, a.currSize, v)
 	}
