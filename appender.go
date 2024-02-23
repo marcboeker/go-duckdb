@@ -355,8 +355,7 @@ func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (
 			name = "unknown type"
 		}
 		// Use 1-based indexing for readability, as we're talking about columns.
-		err := errors.New(
-			fmt.Sprintf("the appender does not support the column type of column %d: %s", colIdx+1, name))
+		err := fmt.Errorf("the appender does not support the column type of column %d: %s", colIdx+1, name)
 		return colInfo{}, err
 	}
 }

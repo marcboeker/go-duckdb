@@ -1018,7 +1018,6 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 func TestAppenderUnsupportedType(t *testing.T) {
 
 	connector, err := NewConnector("", nil)
-	defer connector.Close()
 	require.NoError(t, err)
 
 	// Create the table that we'll append to.
@@ -1027,9 +1026,11 @@ func TestAppenderUnsupportedType(t *testing.T) {
 	require.NoError(t, err)
 
 	con, err := connector.Connect(context.Background())
-	defer con.Close()
 	require.NoError(t, err)
 
 	_, err = NewAppenderFromConn(con, "", "test")
 	require.ErrorContains(t, err, "does not support the column type of column 1: MAP")
+
+	con.Close()
+	connector.Close()
 }
