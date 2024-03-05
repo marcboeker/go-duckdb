@@ -131,6 +131,8 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 		return get[float64](vector, rowIdx), nil
 	case C.DUCKDB_TYPE_TIMESTAMP:
 		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_DATE:
 		date := C.duckdb_from_date(get[C.duckdb_date](vector, rowIdx))
 		return time.Date(int(date.year), time.Month(date.month), int(date.day), 0, 0, 0, 0, time.UTC), nil
