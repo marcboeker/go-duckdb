@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -55,10 +54,61 @@ func TestOpen(t *testing.T) {
 
 	t.Run("with invalid config", func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?threads=NaN")
+		require.Contains(t, err.Error(), "is not a global config option or does not exist")
+	})
 
-		if !errors.Is(err, errSetConfig) {
-			t.Fatal("invalid config should not be accepted")
-		}
+	t.Run("with connection-local config", func(t *testing.T) {
+		_, err := sql.Open("duckdb", "?schema=main")
+		require.Contains(t, err.Error(), "is not a global config option or does not exist")
+	})
+}
+
+func TestConnectorBootQueries(t *testing.T) {
+	t.Run("many boot queries", func(t *testing.T) {
+		connector, err := NewConnector("", func(execer driver.ExecerContext) error {
+			bootQueries := []string{
+				"INSTALL 'json'",
+				"LOAD 'json'",
+				"SET schema=main",
+				"SET search_path=main",
+			}
+
+			for _, query := range bootQueries {
+				_, err := execer.ExecContext(context.Background(), query, nil)
+				require.NoError(t, err)
+			}
+			return nil
+		})
+		require.NoError(t, err)
+
+		db := sql.OpenDB(connector)
+		defer db.Close()
+	})
+
+	t.Run("readme example", func(t *testing.T) {
+		db, err := sql.Open("duckdb", "foo.db")
+		require.NoError(t, err)
+		_ = db.Close()
+
+		connector, err := NewConnector("foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
+			bootQueries := []string{
+				"INSTALL 'json'",
+				"LOAD 'json'",
+			}
+
+			for _, query := range bootQueries {
+				_, err := execer.ExecContext(context.Background(), query, nil)
+				require.NoError(t, err)
+			}
+			return nil
+		})
+		require.NoError(t, err)
+
+		db = sql.OpenDB(connector)
+		_ = db.Close()
+
+		err = os.Remove("foo.db")
+		require.NoError(t, err)
 	})
 }
 

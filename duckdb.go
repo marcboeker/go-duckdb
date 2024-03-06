@@ -154,7 +154,7 @@ func setConfig(config C.duckdb_config, name string, option string) error {
 	state := C.duckdb_set_config(config, cName, cOption)
 	if state == C.DuckDBError {
 		C.duckdb_destroy_config(&config)
-		return fmt.Errorf("%w: affected config option %s=%s", errSetConfig, name, option)
+		return fmt.Errorf("%w: %s=%s is not a global config option or does not exist", errSetConfig, name, option)
 	}
 
 	return nil
@@ -164,5 +164,5 @@ var (
 	errOpen         = errors.New("could not open database")
 	errParseDSN     = errors.New("could not parse DSN for database")
 	errCreateConfig = errors.New("could not create config for database")
-	errSetConfig    = errors.New("could not set config for database")
+	errSetConfig    = errors.New("could not set config option for database")
 )
