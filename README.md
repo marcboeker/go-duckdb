@@ -50,14 +50,14 @@ Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/go1
 Here's an example that installs and loads the JSON extension when opening a database with `sql.OpenDB(connector)`.
 
 ```go
-connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.Execer) error {
+connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
     bootQueries := []string{
         "INSTALL 'json'",
         "LOAD 'json'",
     }
 
     for _, query := range bootQueries {
-        _, err = execer.Exec(query, nil)
+        _, err = execer.ExecContext(context.Background(), query, nil)
         if err != nil {
             ...
         }
