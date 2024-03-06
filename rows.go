@@ -238,6 +238,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(Map{})
 	case C.DUCKDB_TYPE_UUID:
 		return reflect.TypeOf([]byte{})
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return reflect.TypeOf(time.Time{})
 	default:
 		return nil
 	}
@@ -507,6 +509,8 @@ func typeName(t C.duckdb_type) string {
 		return "MAP"
 	case C.DUCKDB_TYPE_UUID:
 		return "UUID"
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return "TIMESTAMPTZ"
 	default:
 		// Should never happen
 		return ""

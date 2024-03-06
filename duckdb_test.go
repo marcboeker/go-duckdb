@@ -986,6 +986,12 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			value:    []byte{0x53, 0xb4, 0xe9, 0x83, 0xb2, 0x87, 0x48, 0x1a, 0x94, 0xad, 0x6e, 0x3c, 0x90, 0x48, 0x99, 0x13},
 			typeName: "UUID",
 		},
+		// DUCKDB_TYPE_TIMESTAMP_TZ
+		{
+			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMPTZ AS col",
+			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			typeName: "TIMESTAMPTZ",
+		},
 	}
 
 	db := openDB(t)
