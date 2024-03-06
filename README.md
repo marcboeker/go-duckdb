@@ -57,7 +57,7 @@ connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&thr
     }
 
     for _, query := range bootQueries {
-        _, err := execer.ExecContext(context.Background(), query, nil)
+        _, err = execer.ExecContext(context.Background(), query, nil)
         if err != nil {
             ...
         }
