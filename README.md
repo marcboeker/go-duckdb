@@ -183,7 +183,8 @@ DYLD_LIBRARY_PATH=/path/to/libs ./main
 
 `TIMESTAMP vs. TIMESTAMP_TZ`
 
-In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of 
-microseconds elapsed since January 1, 1970 UTC. When passing a `time.Time` with a different location to go-duckdb, 
-it'll transform it with `UnixMicro()`, even when using `TIMESTAMP_TZ`. Scanning that value later returns the time in `UTC`, 
-not in its original timezone, even when using `TIMESTAMP_TZ`.
+In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of
+microseconds elapsed since January 1, 1970 UTC (i.e., an instant without offset information). 
+When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`, 
+even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model 
+time zone information for individual values.
