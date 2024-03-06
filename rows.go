@@ -95,15 +95,22 @@ func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 }
 
 func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
+
+	// FIXME: implement support for these types:
+	// DUCKDB_TYPE_UHUGEINT
+	// DUCKDB_TYPE_UNION
+	// DUCKDB_TYPE_BIT
+	// DUCKDB_TYPE_TIME_TZ
+
 	validity := C.duckdb_vector_get_validity(vector)
 	if !C.duckdb_validity_row_is_valid(validity, rowIdx) {
 		return nil, nil
 	}
 
-	ty := C.duckdb_vector_get_column_type(vector)
-	defer C.duckdb_destroy_logical_type(&ty)
+	columnType := C.duckdb_vector_get_column_type(vector)
+	defer C.duckdb_destroy_logical_type(&columnType)
 
-	typeId := C.duckdb_get_type_id(ty)
+	typeId := C.duckdb_get_type_id(columnType)
 	switch typeId {
 	case C.DUCKDB_TYPE_INVALID:
 		return nil, errInvalidType
@@ -139,31 +146,33 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_INTERVAL:
 		return scanInterval(vector, rowIdx)
 	case C.DUCKDB_TYPE_HUGEINT:
-		hi := get[C.duckdb_hugeint](vector, rowIdx)
-		return hugeIntToNative(hi), nil
+		hugeInt := get[C.duckdb_hugeint](vector, rowIdx)
+		return hugeIntToNative(hugeInt), nil
 	case C.DUCKDB_TYPE_VARCHAR:
 		return scanString(vector, rowIdx), nil
-	case C.DUCKDB_TYPE_ENUM:
-		return scanENUM(ty, vector, rowIdx)
 	case C.DUCKDB_TYPE_BLOB:
 		return scanBlob(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DECIMAL:
-		return scanDecimal(ty, vector, rowIdx)
+		return scanDecimal(columnType, vector, rowIdx)
 	case C.DUCKDB_TYPE_TIMESTAMP_S:
 		return time.Unix(int64(get[C.duckdb_timestamp](vector, rowIdx).micros), 0).UTC(), nil
 	case C.DUCKDB_TYPE_TIMESTAMP_MS:
 		return time.UnixMilli(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_TIMESTAMP_NS:
 		return time.Unix(0, int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
+	case C.DUCKDB_TYPE_ENUM:
+		return scanENUM(columnType, vector, rowIdx)
 	case C.DUCKDB_TYPE_LIST:
 		return scanList(vector, rowIdx)
 	case C.DUCKDB_TYPE_STRUCT:
-		return scanStruct(ty, vector, rowIdx)
+		return scanStruct(columnType, vector, rowIdx)
 	case C.DUCKDB_TYPE_MAP:
-		return scanMap(ty, vector, rowIdx)
+		return scanMap(columnType, vector, rowIdx)
 	case C.DUCKDB_TYPE_UUID:
-		hi := get[C.duckdb_hugeint](vector, rowIdx)
-		return hugeIntToUUID(hi), nil
+		hugeInt := get[C.duckdb_hugeint](vector, rowIdx)
+		return hugeIntToUUID(hugeInt), nil
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	default:
 		return nil, fmt.Errorf("unsupported type %d", typeId)
 	}

@@ -74,7 +74,7 @@ defer db.Close()
 
 Please refer to the [database/sql](https://godoc.org/database/sql) documentation for further usage instructions.
 
-## A Note on Memory Allocation
+## Memory Allocation
 
 DuckDB lives in-process. Therefore, all its memory lives in the driver. All allocations live in the host process, which
 is the Go application. Especially for long-running applications, it is crucial to call the corresponding `Close`-functions as specified
@@ -178,3 +178,13 @@ LD_LIBRARY_PATH=/path/to/libs ./main
 CGO_ENABLED=1 CGO_LDFLAGS="-L/path/to/libs" go build -tags=duckdb_use_lib main.go
 DYLD_LIBRARY_PATH=/path/to/libs ./main
 ```
+
+## Notes
+
+`TIMESTAMP vs. TIMESTAMP_TZ`
+
+In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of
+microseconds elapsed since January 1, 1970 UTC (i.e., an instant without offset information). 
+When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`, 
+even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model 
+time zone information for individual values.

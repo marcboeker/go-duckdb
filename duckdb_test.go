@@ -626,6 +626,31 @@ func TestBlob(t *testing.T) {
 	})
 }
 
+func TestTimestampTZ(t *testing.T) {
+
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS tbl (tz TIMESTAMPTZ)")
+	require.NoError(t, err)
+
+	IST, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+
+	const longForm = "2006-01-02 15:04:05 MST"
+	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", IST)
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO tbl (tz) VALUES(?)", ts)
+	require.NoError(t, err)
+
+	var tz time.Time
+	err = db.QueryRow("SELECT tz FROM tbl").Scan(&tz)
+	require.NoError(t, err)
+	require.Equal(t, ts.UTC(), tz)
+}
+
 func TestBoolean(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
