@@ -163,6 +163,17 @@ for rdr.Next() {
 }
 ```
 
+## Vendoring
+
+If you want to vendor a module containing `go-duckdb`, please use `modvendor` to include the missing header files and libraries.
+See issue [#174](https://github.com/marcboeker/go-duckdb/issues/174#issuecomment-1979097864) for more details.
+
+1. `go install github.com/goware/modvendor@latest`
+2. `go mod vendor`
+3. `modvendor -copy="**/*.a **/*.h" -v`
+
+Now you can build your module as usual.
+
 ## Linking DuckDB
 
 By default, `go-duckdb` statically links DuckDB into your binary. Statically linking DuckDB adds around 30 MB to your binary size. On Linux (Intel) and macOS (Intel and ARM), `go-duckdb` bundles pre-compiled static libraries for fast builds.
