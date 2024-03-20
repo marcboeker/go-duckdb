@@ -72,7 +72,7 @@ type colInfo struct {
 
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
 type Appender struct {
-	c        *conn
+	c        *connection
 	schema   string
 	table    string
 	appender *C.duckdb_appender
@@ -88,7 +88,7 @@ type Appender struct {
 
 // NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
-	c, ok := driverConn.(*conn)
+	c, ok := driverConn.(*connection)
 	if !ok {
 		return nil, fmt.Errorf("not a duckdb driver connection")
 	}
@@ -107,7 +107,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	defer C.free(unsafe.Pointer(cTable))
 
 	var appender C.duckdb_appender
-	state := C.duckdb_appender_create(*c.con, cSchema, cTable, &appender)
+	state := C.duckdb_appender_create(c.duckdbConn, cSchema, cTable, &appender)
 
 	if state == C.DuckDBError {
 		// We'll destroy the error message when destroying the appender.

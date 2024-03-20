@@ -14,7 +14,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -28,11 +27,11 @@ func init() {
 type Driver struct{}
 
 func (d Driver) Open(dsn string) (driver.Conn, error) {
-	connector, err := d.OpenConnector(dsn)
+	c, err := d.OpenConnector(dsn)
 	if err != nil {
 		return nil, err
 	}
-	return connector.Connect(context.Background())
+	return c.Connect(context.Background())
 }
 
 func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
@@ -42,14 +41,14 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 }
 
 // NewConnector opens a new Connector for a DuckDB database.
-// The user must close the returned Connector, if it is not passed to the sql.OpenDB function.
+// The user must close the Connector, if it is not passed to the sql.OpenDB function.
 // Otherwise, sql.DB closes the Connector when calling sql.DB.Close().
 func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (*Connector, error) {
 	var db C.duckdb_database
 
 	parsedDSN, err := url.Parse(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", errParseDSN, err.Error())
+		return nil, getError(errParseDSN, err)
 	}
 
 	config, err := prepareConfig(parsedDSN)
@@ -58,14 +57,14 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	}
 	defer C.duckdb_destroy_config(&config)
 
-	connStr := C.CString(extractConnectionString(dsn))
+	connStr := C.CString(getConnString(dsn))
 	defer C.free(unsafe.Pointer(connStr))
 
-	var errOpenMsg *C.char
-	defer C.duckdb_free(unsafe.Pointer(errOpenMsg))
+	var outError *C.char
+	defer C.duckdb_free(unsafe.Pointer(outError))
 
-	if state := C.duckdb_open_ext(connStr, &db, config, &errOpenMsg); state == C.DuckDBError {
-		return nil, fmt.Errorf("%w: %s", errOpen, C.GoString(errOpenMsg))
+	if state := C.duckdb_open_ext(connStr, &db, config, &outError); state == C.DuckDBError {
+		return nil, getError(errOpen, getDuckDBError(outError))
 	}
 
 	return &Connector{
@@ -84,14 +83,13 @@ func (c *Connector) Driver() driver.Driver {
 }
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-	var con C.duckdb_connection
-	if state := C.duckdb_connect(c.db, &con); state == C.DuckDBError {
-		return nil, errOpen
+	var duckdbConn C.duckdb_connection
+	if state := C.duckdb_connect(c.db, &duckdbConn); state == C.DuckDBError {
+		return nil, getError(errConnect, nil)
 	}
 
-	conn := &conn{con: &con}
+	conn := &connection{duckdbConn: duckdbConn}
 
-	// Call the connection init function if defined
 	if c.connInitFn != nil {
 		if err := c.connInitFn(conn); err != nil {
 			return nil, err
@@ -107,27 +105,26 @@ func (c *Connector) Close() error {
 	return nil
 }
 
-func extractConnectionString(dsn string) string {
-	var queryIndex = strings.Index(dsn, "?")
-	if queryIndex < 0 {
-		queryIndex = len(dsn)
+func getConnString(dsn string) string {
+	idx := strings.Index(dsn, "?")
+	if idx < 0 {
+		idx = len(dsn)
 	}
-
-	return dsn[0:queryIndex]
+	return dsn[0:idx]
 }
 
 func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 	var config C.duckdb_config
 	if state := C.duckdb_create_config(&config); state == C.DuckDBError {
 		C.duckdb_destroy_config(&config)
-		return nil, errCreateConfig
+		return nil, getError(errCreateConfig, nil)
 	}
 
-	if err := setConfig(config, "duckdb_api", "go"); err != nil {
+	if err := setConfigOption(config, "duckdb_api", "go"); err != nil {
 		return nil, err
 	}
 
-	// early-out
+	// Early-out, if the DSN does not contain configuration options.
 	if len(parsedDSN.RawQuery) == 0 {
 		return config, nil
 	}
@@ -136,7 +133,7 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 		if len(v) == 0 {
 			continue
 		}
-		if err := setConfig(config, k, v[0]); err != nil {
+		if err := setConfigOption(config, k, v[0]); err != nil {
 			return nil, err
 		}
 	}
@@ -144,7 +141,7 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 	return config, nil
 }
 
-func setConfig(config C.duckdb_config, name string, option string) error {
+func setConfigOption(config C.duckdb_config, name string, option string) error {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 
@@ -154,15 +151,8 @@ func setConfig(config C.duckdb_config, name string, option string) error {
 	state := C.duckdb_set_config(config, cName, cOption)
 	if state == C.DuckDBError {
 		C.duckdb_destroy_config(&config)
-		return fmt.Errorf("%w: %s=%s is not a global config option or does not exist", errSetConfig, name, option)
+		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))
 	}
 
 	return nil
 }
-
-var (
-	errOpen         = errors.New("could not open database")
-	errParseDSN     = errors.New("could not parse DSN for database")
-	errCreateConfig = errors.New("could not create config for database")
-	errSetConfig    = errors.New("could not set config option for database")
-)

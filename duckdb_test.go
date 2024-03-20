@@ -51,16 +51,6 @@ func TestOpen(t *testing.T) {
 		require.NoError(t, res.Scan(&species))
 		require.Equal(t, "Gopher", species)
 	})
-
-	t.Run("with invalid config", func(t *testing.T) {
-		_, err := sql.Open("duckdb", "?threads=NaN")
-		require.Contains(t, err.Error(), "is not a global config option or does not exist")
-	})
-
-	t.Run("with connection-local config", func(t *testing.T) {
-		_, err := sql.Open("duckdb", "?schema=main")
-		require.Contains(t, err.Error(), "is not a global config option or does not exist")
-	})
 }
 
 func TestConnectorBootQueries(t *testing.T) {

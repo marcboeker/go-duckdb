@@ -17,7 +17,7 @@ import (
 )
 
 type stmt struct {
-	c                *conn
+	c                *connection
 	stmt             *C.duckdb_prepared_statement
 	closeOnRowsClose bool
 	closed           bool
@@ -210,7 +210,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	go func() {
 		select {
 		case <-ctx.Done():
-			C.duckdb_interrupt(*s.c.con)
+			C.duckdb_interrupt(s.c.duckdbConn)
 			close(bgDoneCh)
 			return
 		case <-mainDoneCh:
