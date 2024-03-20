@@ -8,16 +8,16 @@ import (
 
 func getError(errDriver error, err error) error {
 	if err == nil {
-		return fmt.Errorf("%s: %s", DriverErrMsg, errDriver.Error())
+		return fmt.Errorf("%s: %s", driverErrMsg, errDriver.Error())
 	}
-	return fmt.Errorf("%s: %s: %s", DriverErrMsg, errDriver.Error(), err.Error())
+	return fmt.Errorf("%s: %s: %s", driverErrMsg, errDriver.Error(), err.Error())
 }
 
 func getDuckDBError(err *C.char) error {
 	return errors.New(C.GoString(err))
 }
 
-var DriverErrMsg = "database/sql/driver"
+var driverErrMsg = "database/sql/driver"
 
 var (
 	errParseDSN  = errors.New("could not parse DSN for database")

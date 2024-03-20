@@ -6,15 +6,15 @@ import (
 	"testing"
 )
 
-var TestErrOpenMap = map[string]string{
+var testErrOpenMap = map[string]string{
 	errParseDSN.Error():  ":mem ory:",
 	errOpen.Error():      "?readonly",
 	errSetConfig.Error(): "?threads=NaN",
 }
 
-func TestErrorsOpen(t *testing.T) {
+func TestErrOpen(t *testing.T) {
 
-	for errMsg, dsn := range TestErrOpenMap {
+	for errMsg, dsn := range testErrOpenMap {
 		t.Run(errMsg, func(t *testing.T) {
 			_, err := sql.Open("duckdb", dsn)
 			require.Contains(t, err.Error(), errMsg)
