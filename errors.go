@@ -10,7 +10,7 @@ func getError(errDriver error, err error) error {
 	if err == nil {
 		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
 	}
-	return fmt.Errorf("%s: %w: %w", driverErrMsg, errDriver, err)
+	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
 }
 
 func getDuckDBError(err *C.char) error {
