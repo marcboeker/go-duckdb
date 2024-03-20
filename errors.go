@@ -8,9 +8,9 @@ import (
 
 func getError(errDriver error, err error) error {
 	if err == nil {
-		return fmt.Errorf("%s: %s", driverErrMsg, errDriver.Error())
+		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
 	}
-	return fmt.Errorf("%s: %s: %s", driverErrMsg, errDriver.Error(), err.Error())
+	return fmt.Errorf("%s: %w: %w", driverErrMsg, errDriver, err)
 }
 
 func getDuckDBError(err *C.char) error {
