@@ -223,7 +223,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	state := C.duckdb_execute_pending(pendingRes, &res)
 	close(mainDoneCh)
 	// also wait for background goroutine to finish
-	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this conn
+	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
 	// it can cancel that query so need to wait for it to finish as well
 	<-bgDoneCh
 	if state == C.DuckDBError {

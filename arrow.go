@@ -67,11 +67,11 @@ type Arrow struct {
 	c *conn
 }
 
-// NewArrowFromConn returns a new Arrow from a DuckDB driver conn.
+// NewArrowFromConn returns a new Arrow from a DuckDB driver connection.
 func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	dbConn, ok := driverConn.(*conn)
 	if !ok {
-		return nil, fmt.Errorf("not a duckdb driver conn")
+		return nil, fmt.Errorf("not a duckdb driver connection")
 	}
 
 	if dbConn.closed {

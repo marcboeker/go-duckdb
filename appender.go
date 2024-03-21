@@ -86,11 +86,11 @@ type Appender struct {
 	colInfos []colInfo
 }
 
-// NewAppenderFromConn returns a new Appender from a DuckDB driver conn.
+// NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
 	c, ok := driverConn.(*conn)
 	if !ok {
-		return nil, fmt.Errorf("not a duckdb driver conn")
+		return nil, fmt.Errorf("not a duckdb driver connection")
 	}
 
 	if c.closed {
