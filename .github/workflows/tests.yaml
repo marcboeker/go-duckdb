@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-12]
-        go: ["1.22.1"]
+        go: ["1.22"]
       fail-fast: false
 
     steps:
@@ -28,7 +28,7 @@ jobs:
   freebsd_amd64:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: vmactions/freebsd-vm@v1
         with:
           usesh: true
