@@ -115,7 +115,7 @@ func TestConnector_Close(t *testing.T) {
 
 func TestConnPool(t *testing.T) {
 	db := openDB(t)
-	db.SetMaxOpenConns(2) // set connection pool size greater than 1
+	db.SetMaxOpenConns(2) // set conn pool size greater than 1
 	defer db.Close()
 	createTable(db, t)
 
@@ -166,7 +166,7 @@ func TestConnInit(t *testing.T) {
 	})
 	require.NoError(t, err)
 	db := sql.OpenDB(connector)
-	db.SetMaxOpenConns(2) // set connection pool size greater than 1
+	db.SetMaxOpenConns(2) // set conn pool size greater than 1
 	defer db.Close()
 
 	// Get two separate connections and check they're consistent

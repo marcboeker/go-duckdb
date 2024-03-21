@@ -78,7 +78,7 @@ type Connector struct {
 	connInitFn func(execer driver.ExecerContext) error
 }
 
-func (c *Connector) Driver() driver.Driver {
+func (*Connector) Driver() driver.Driver {
 	return Driver{}
 }
 
@@ -88,15 +88,15 @@ func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 		return nil, getError(errConnect, nil)
 	}
 
-	conn := &connection{duckdbConn: duckdbConn}
+	con := &conn{duckdbConn: duckdbConn}
 
 	if c.connInitFn != nil {
-		if err := c.connInitFn(conn); err != nil {
+		if err := c.connInitFn(con); err != nil {
 			return nil, err
 		}
 	}
 
-	return conn, nil
+	return con, nil
 }
 
 func (c *Connector) Close() error {

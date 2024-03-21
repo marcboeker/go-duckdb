@@ -64,14 +64,14 @@ import (
 // Arrow exposes DuckDB Apache Arrow interface.
 // https://duckdb.org/docs/api/c/api#arrow-interface
 type Arrow struct {
-	c *connection
+	c *conn
 }
 
-// NewArrowFromConn returns a new Arrow from a DuckDB driver connection.
+// NewArrowFromConn returns a new Arrow from a DuckDB driver conn.
 func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
-	dbConn, ok := driverConn.(*connection)
+	dbConn, ok := driverConn.(*conn)
 	if !ok {
-		return nil, fmt.Errorf("not a duckdb driver connection")
+		return nil, fmt.Errorf("not a duckdb driver conn")
 	}
 
 	if dbConn.closed {

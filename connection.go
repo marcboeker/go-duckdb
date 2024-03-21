@@ -15,13 +15,13 @@ import (
 	"unsafe"
 )
 
-type connection struct {
+type conn struct {
 	duckdbConn C.duckdb_connection
 	closed     bool
 	tx         bool
 }
 
-func (c *connection) CheckNamedValue(nv *driver.NamedValue) error {
+func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
 	case *big.Int, Interval:
 		return nil
@@ -29,7 +29,7 @@ func (c *connection) CheckNamedValue(nv *driver.NamedValue) error {
 	return driver.ErrSkip
 }
 
-func (c *connection) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
 	}
@@ -63,7 +63,7 @@ func (c *connection) ExecContext(ctx context.Context, query string, args []drive
 	return stmt.ExecContext(ctx, args)
 }
 
-func (c *connection) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
 	}
@@ -105,7 +105,7 @@ func (c *connection) QueryContext(ctx context.Context, query string, args []driv
 	return rows, err
 }
 
-func (c *connection) Prepare(cmd string) (driver.Stmt, error) {
+func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
 	if c.closed {
 		panic("database/sql/driver: misuse of duckdb driver: Prepare after Close")
 	}
@@ -113,11 +113,11 @@ func (c *connection) Prepare(cmd string) (driver.Stmt, error) {
 }
 
 // Deprecated: Use BeginTx instead.
-func (c *connection) Begin() (driver.Tx, error) {
+func (c *conn) Begin() (driver.Tx, error) {
 	return c.BeginTx(context.Background(), driver.TxOptions{})
 }
 
-func (c *connection) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if c.tx {
 		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
 	}
@@ -140,9 +140,9 @@ func (c *connection) BeginTx(ctx context.Context, opts driver.TxOptions) (driver
 	return &tx{c}, nil
 }
 
-func (c *connection) Close() error {
+func (c *conn) Close() error {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Close of already closed connection")
+		panic("database/sql/driver: misuse of duckdb driver: Close of already closed conn")
 	}
 	c.closed = true
 
@@ -151,7 +151,7 @@ func (c *connection) Close() error {
 	return nil
 }
 
-func (c *connection) prepareStmt(cmd string) (*stmt, error) {
+func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 	cmdstr := C.CString(cmd)
 	defer C.free(unsafe.Pointer(cmdstr))
 
@@ -165,7 +165,7 @@ func (c *connection) prepareStmt(cmd string) (*stmt, error) {
 	return &stmt{c: c, stmt: &s}, nil
 }
 
-func (c *connection) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
+func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
 	cquery := C.CString(query)
 	defer C.free(unsafe.Pointer(cquery))
 
@@ -183,7 +183,7 @@ func (c *connection) extractStmts(query string) (C.duckdb_extracted_statements, 
 	return stmts, stmtsCount, nil
 }
 
-func (c *connection) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
+func (c *conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
 	var s C.duckdb_prepared_statement
 	if state := C.duckdb_prepare_extracted_statement(c.duckdbConn, extractedStmts, index, &s); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_prepare_error(s))

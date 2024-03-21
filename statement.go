@@ -17,7 +17,7 @@ import (
 )
 
 type stmt struct {
-	c                *connection
+	c                *conn
 	stmt             *C.duckdb_prepared_statement
 	closeOnRowsClose bool
 	closed           bool
@@ -223,7 +223,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	state := C.duckdb_execute_pending(pendingRes, &res)
 	close(mainDoneCh)
 	// also wait for background goroutine to finish
-	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
+	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this conn
 	// it can cancel that query so need to wait for it to finish as well
 	<-bgDoneCh
 	if state == C.DuckDBError {
