@@ -242,7 +242,6 @@ func initPrimitive[T any](duckdbType C.duckdb_type) colInfo {
 }
 
 func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (colInfo, error) {
-
 	duckdbType := C.duckdb_get_type_id(logicalType)
 
 	switch duckdbType {

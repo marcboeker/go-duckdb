@@ -17,7 +17,7 @@ func getDuckDBError(err *C.char) error {
 	return errors.New(C.GoString(err))
 }
 
-var driverErrMsg = "database/sql/driver"
+const driverErrMsg = "database/sql/driver"
 
 var (
 	errParseDSN  = errors.New("could not parse DSN for database")

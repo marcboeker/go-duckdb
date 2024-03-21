@@ -249,6 +249,4 @@ func argsToNamedArgs(values []driver.Value) []driver.NamedValue {
 	return args
 }
 
-var (
-	errCouldNotBind = errors.New("could not bind parameter")
-)
+var errCouldNotBind = errors.New("could not bind parameter")

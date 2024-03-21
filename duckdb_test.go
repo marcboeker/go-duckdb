@@ -667,7 +667,6 @@ func TestBlob(t *testing.T) {
 }
 
 func TestTimestampTZ(t *testing.T) {
-
 	t.Parallel()
 	db := openDB(t)
 	defer db.Close()

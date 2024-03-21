@@ -2,8 +2,9 @@ package duckdb
 
 import (
 	"database/sql"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var testErrOpenMap = map[string]string{
@@ -13,7 +14,6 @@ var testErrOpenMap = map[string]string{
 }
 
 func TestErrOpen(t *testing.T) {
-
 	for errMsg, dsn := range testErrOpenMap {
 		t.Run(errMsg, func(t *testing.T) {
 			_, err := sql.Open("duckdb", dsn)

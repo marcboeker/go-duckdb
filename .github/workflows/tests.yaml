@@ -13,22 +13,22 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-12]
-        go: ["1.18"]
+        go: ["1.22.1"]
       fail-fast: false
 
     steps:
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: "Run Tests"
         run: make test
   freebsd_amd64:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: vmactions/freebsd-vm@v1
         with:
           usesh: true
