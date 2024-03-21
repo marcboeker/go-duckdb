@@ -107,7 +107,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	defer C.free(unsafe.Pointer(cTable))
 
 	var appender C.duckdb_appender
-	state := C.duckdb_appender_create(*c.con, cSchema, cTable, &appender)
+	state := C.duckdb_appender_create(c.duckdbCon, cSchema, cTable, &appender)
 
 	if state == C.DuckDBError {
 		// We'll destroy the error message when destroying the appender.
@@ -242,7 +242,6 @@ func initPrimitive[T any](duckdbType C.duckdb_type) colInfo {
 }
 
 func (a *Appender) initColInfos(logicalType C.duckdb_logical_type, colIdx int) (colInfo, error) {
-
 	duckdbType := C.duckdb_get_type_id(logicalType)
 
 	switch duckdbType {

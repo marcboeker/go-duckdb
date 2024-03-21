@@ -210,7 +210,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	go func() {
 		select {
 		case <-ctx.Done():
-			C.duckdb_interrupt(*s.c.con)
+			C.duckdb_interrupt(s.c.duckdbCon)
 			close(bgDoneCh)
 			return
 		case <-mainDoneCh:
@@ -249,6 +249,4 @@ func argsToNamedArgs(values []driver.Value) []driver.NamedValue {
 	return args
 }
 
-var (
-	errCouldNotBind = errors.New("could not bind parameter")
-)
+var errCouldNotBind = errors.New("could not bind parameter")

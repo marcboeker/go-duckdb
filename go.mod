@@ -1,6 +1,6 @@
 module github.com/marcboeker/go-duckdb
 
-go 1.18
+go 1.21
 
 require (
 	github.com/apache/arrow/go/v14 v14.0.2

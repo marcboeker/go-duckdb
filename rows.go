@@ -95,7 +95,6 @@ func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 }
 
 func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
-
 	// FIXME: implement support for these types:
 	// DUCKDB_TYPE_UHUGEINT
 	// DUCKDB_TYPE_UNION

@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/google/uuid"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
 )
@@ -369,8 +369,10 @@ func TestAppenderNested(t *testing.T) {
 		rows[i].wrappedStruct = wrappedStruct{"wrapped", simpleStruct{1, "foo"}}
 		rows[i].doubleWrappedStruct = doubleWrappedStruct{
 			"so much nesting",
-			wrappedStruct{"wrapped",
-				simpleStruct{1, "foo"}},
+			wrappedStruct{
+				"wrapped",
+				simpleStruct{1, "foo"},
+			},
 		}
 		rows[i].structList = []simpleStruct{{1, "a"}, {2, "b"}, {3, "c"}}
 		rows[i].structWithList.L = []int32{6, 7, 8}
@@ -569,8 +571,10 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 
 	err := appender.AppendRow(doubleWrappedStruct{
 		"so much nesting",
-		wrappedStruct{"wrapped",
-			simpleStruct{1, "foo"}},
+		wrappedStruct{
+			"wrapped",
+			simpleStruct{1, "foo"},
+		},
 	})
 	require.NoError(t, err)
 
@@ -580,8 +584,10 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 
 	err = appender.AppendRow(doubleWrappedStruct{
 		"now we are done nesting NULLs",
-		wrappedStruct{"unwrap",
-			simpleStruct{21, "bar"}},
+		wrappedStruct{
+			"unwrap",
+			simpleStruct{21, "bar"},
+		},
 	})
 	require.NoError(t, err)
 
@@ -1016,7 +1022,6 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 }
 
 func TestAppenderUnsupportedType(t *testing.T) {
-
 	connector, err := NewConnector("", nil)
 	require.NoError(t, err)
 
