@@ -210,7 +210,7 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	go func() {
 		select {
 		case <-ctx.Done():
-			C.duckdb_interrupt(s.c.duckdbConn)
+			C.duckdb_interrupt(s.c.duckdbCon)
 			close(bgDoneCh)
 			return
 		case <-mainDoneCh:

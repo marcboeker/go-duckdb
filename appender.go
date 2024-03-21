@@ -107,7 +107,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	defer C.free(unsafe.Pointer(cTable))
 
 	var appender C.duckdb_appender
-	state := C.duckdb_appender_create(c.duckdbConn, cSchema, cTable, &appender)
+	state := C.duckdb_appender_create(c.duckdbCon, cSchema, cTable, &appender)
 
 	if state == C.DuckDBError {
 		// We'll destroy the error message when destroying the appender.

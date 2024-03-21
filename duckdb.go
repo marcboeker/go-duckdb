@@ -83,12 +83,12 @@ func (*Connector) Driver() driver.Driver {
 }
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-	var duckdbConn C.duckdb_connection
-	if state := C.duckdb_connect(c.db, &duckdbConn); state == C.DuckDBError {
+	var duckdbCon C.duckdb_connection
+	if state := C.duckdb_connect(c.db, &duckdbCon); state == C.DuckDBError {
 		return nil, getError(errConnect, nil)
 	}
 
-	con := &conn{duckdbConn: duckdbConn}
+	con := &conn{duckdbCon: duckdbCon}
 
 	if c.connInitFn != nil {
 		if err := c.connInitFn(con); err != nil {

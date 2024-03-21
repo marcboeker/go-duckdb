@@ -16,9 +16,9 @@ import (
 )
 
 type conn struct {
-	duckdbConn C.duckdb_connection
-	closed     bool
-	tx         bool
+	duckdbCon C.duckdb_connection
+	closed    bool
+	tx        bool
 }
 
 func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
@@ -146,7 +146,7 @@ func (c *conn) Close() error {
 	}
 	c.closed = true
 
-	C.duckdb_disconnect(&c.duckdbConn)
+	C.duckdb_disconnect(&c.duckdbCon)
 
 	return nil
 }
@@ -156,7 +156,7 @@ func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 	defer C.free(unsafe.Pointer(cmdstr))
 
 	var s C.duckdb_prepared_statement
-	if state := C.duckdb_prepare(c.duckdbConn, cmdstr, &s); state == C.DuckDBError {
+	if state := C.duckdb_prepare(c.duckdbCon, cmdstr, &s); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_prepare_error(s))
 		C.duckdb_destroy_prepare(&s)
 		return nil, errors.New(dbErr)
@@ -170,7 +170,7 @@ func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 	defer C.free(unsafe.Pointer(cquery))
 
 	var stmts C.duckdb_extracted_statements
-	stmtsCount := C.duckdb_extract_statements(c.duckdbConn, cquery, &stmts)
+	stmtsCount := C.duckdb_extract_statements(c.duckdbCon, cquery, &stmts)
 	if stmtsCount == 0 {
 		err := C.GoString(C.duckdb_extract_statements_error(stmts))
 		C.duckdb_destroy_extracted(&stmts)
@@ -185,7 +185,7 @@ func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 
 func (c *conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
 	var s C.duckdb_prepared_statement
-	if state := C.duckdb_prepare_extracted_statement(c.duckdbConn, extractedStmts, index, &s); state == C.DuckDBError {
+	if state := C.duckdb_prepare_extracted_statement(c.duckdbCon, extractedStmts, index, &s); state == C.DuckDBError {
 		dbErr := C.GoString(C.duckdb_prepare_error(s))
 		C.duckdb_destroy_prepare(&s)
 		return nil, errors.New(dbErr)
