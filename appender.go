@@ -200,7 +200,7 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 		//	// Use 1-based indexing for readability, as we're talking about columns.
 		//	return columnError(err, i+1)
 		//}
-		vec.fn(a, &vec, a.currSize, v)
+		vec.fn(&vec, a.currSize, v)
 	}
 
 	a.currSize++

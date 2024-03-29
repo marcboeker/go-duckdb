@@ -28,7 +28,7 @@ type vector struct {
 }
 
 // fnSetVectorValue is the setter callback function for any (nested) vectors.
-type fnSetVectorValue func(a *Appender, vec *vector, rowIdx C.idx_t, val any)
+type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 
 func (vec *vector) init(a *Appender, logicalType C.duckdb_logical_type, colIdx int) error {
 	var err error
@@ -128,7 +128,7 @@ func (vec *vector) setTime(rowIdx C.idx_t, value time.Time) {
 	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
 }
 
-func (vec *vector) setList(a *Appender, rowIdx C.idx_t, value driver.Value) {
+func (vec *vector) setList(rowIdx C.idx_t, value driver.Value) {
 
 	refVal := reflect.ValueOf(value)
 	childVector := vec.childVectors[0]
@@ -160,11 +160,11 @@ func (vec *vector) setList(a *Appender, rowIdx C.idx_t, value driver.Value) {
 	// Insert the values into the child vector.
 	for i, e := range values {
 		childVectorRow := C.idx_t(i) + childVectorSize
-		childVector.fn(a, &childVector, childVectorRow, e)
+		childVector.fn(&childVector, childVectorRow, e)
 	}
 }
 
-func (vec *vector) setStruct(a *Appender, rowIdx C.idx_t, value driver.Value) {
+func (vec *vector) setStruct(rowIdx C.idx_t, value driver.Value) {
 	if value == nil {
 		vec.setNull(rowIdx)
 	}
@@ -174,19 +174,19 @@ func (vec *vector) setStruct(a *Appender, rowIdx C.idx_t, value driver.Value) {
 
 	for i := 0; i < structType.NumField(); i++ {
 		childVector := vec.childVectors[i]
-		childVector.fn(a, &childVector, rowIdx, v.Field(i).Interface())
+		childVector.fn(&childVector, rowIdx, v.Field(i).Interface())
 	}
 }
 
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
-	vec.fn = func(a *Appender, vec *vector, rowIdx C.idx_t, val any) {
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
 		setPrimitive[T](vec, rowIdx, val.(T))
 	}
 	vec.duckdbType = duckdbType
 }
 
 func (vec *vector) initVarchar() {
-	vec.fn = func(a *Appender, vec *vector, rowIdx C.idx_t, val any) {
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
 		v := val.(string)
 		vec.setCString(rowIdx, v, len(v))
 	}
@@ -194,7 +194,7 @@ func (vec *vector) initVarchar() {
 }
 
 func (vec *vector) initBlob() {
-	vec.fn = func(a *Appender, vec *vector, rowIdx C.idx_t, val any) {
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
 		blob := val.([]byte)
 		vec.setCString(rowIdx, string(blob[:]), len(blob))
 	}
@@ -202,14 +202,14 @@ func (vec *vector) initBlob() {
 }
 
 func (vec *vector) initTS(duckdbType C.duckdb_type) {
-	vec.fn = func(a *Appender, vec *vector, rowIdx C.idx_t, val any) {
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
 		vec.setTime(rowIdx, val.(time.Time))
 	}
 	vec.duckdbType = duckdbType
 }
 
 func (vec *vector) initUUID() {
-	vec.fn = func(a *Appender, vec *vector, rowIdx C.idx_t, val any) {
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
 		setPrimitive[C.duckdb_hugeint](vec, rowIdx, uuidToHugeInt(val.(UUID)))
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
@@ -227,8 +227,8 @@ func (vec *vector) initList(a *Appender, logicalType C.duckdb_logical_type, colI
 		return err
 	}
 
-	vec.fn = func(a *Appender, vec *vector, rowIdx C.idx_t, val any) {
-		vec.setList(a, rowIdx, val)
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.setList(rowIdx, val)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_LIST
 	return nil
@@ -243,8 +243,8 @@ func (vec *vector) initStruct(a *Appender, logicalType C.duckdb_logical_type) er
 		C.free(unsafe.Pointer(childName))
 	}
 
-	vec.fn = func(a *Appender, vec *vector, rowIdx C.idx_t, val any) {
-		vec.setStruct(a, rowIdx, val)
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.setStruct(rowIdx, val)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_STRUCT
 	vec.childVectors = make([]vector, childCount)
