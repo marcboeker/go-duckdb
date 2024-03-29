@@ -13,6 +13,25 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
+	C.DUCKDB_TYPE_INVALID:      "INVALID",
+	C.DUCKDB_TYPE_DATE:         "DATE",
+	C.DUCKDB_TYPE_TIME:         "TIME",
+	C.DUCKDB_TYPE_INTERVAL:     "INTERVAL",
+	C.DUCKDB_TYPE_HUGEINT:      "HUGEINT",
+	C.DUCKDB_TYPE_UHUGEINT:     "UHUGEINT",
+	C.DUCKDB_TYPE_DECIMAL:      "DECIMAL",
+	C.DUCKDB_TYPE_TIMESTAMP_S:  "TIMESTAMP_S",
+	C.DUCKDB_TYPE_TIMESTAMP_MS: "TIMESTAMP_MS",
+	C.DUCKDB_TYPE_TIMESTAMP_NS: "TIMESTAMP_NS",
+	C.DUCKDB_TYPE_ENUM:         "ENUM",
+	C.DUCKDB_TYPE_MAP:          "MAP",
+	C.DUCKDB_TYPE_UNION:        "UNION",
+	C.DUCKDB_TYPE_BIT:          "BIT",
+	C.DUCKDB_TYPE_TIME_TZ:      "TIME_TZ",
+	C.DUCKDB_TYPE_TIMESTAMP_TZ: "TIMESTAMP_TZ",
+}
+
 type UUID [16]byte
 
 func (u *UUID) Scan(v any) error {
