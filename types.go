@@ -32,6 +32,26 @@ var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_TIMESTAMP_TZ: "TIMESTAMP_TZ",
 }
 
+var appenderTypeIdMap = map[C.duckdb_type]string{
+	C.DUCKDB_TYPE_BOOLEAN:   "bool",
+	C.DUCKDB_TYPE_TINYINT:   "int8",
+	C.DUCKDB_TYPE_SMALLINT:  "int16",
+	C.DUCKDB_TYPE_INTEGER:   "int32",
+	C.DUCKDB_TYPE_BIGINT:    "int64",
+	C.DUCKDB_TYPE_UTINYINT:  "uint8",
+	C.DUCKDB_TYPE_USMALLINT: "uint16",
+	C.DUCKDB_TYPE_UINTEGER:  "uint32",
+	C.DUCKDB_TYPE_UBIGINT:   "uint64",
+	C.DUCKDB_TYPE_FLOAT:     "float32",
+	C.DUCKDB_TYPE_DOUBLE:    "float64",
+	C.DUCKDB_TYPE_VARCHAR:   "string",
+	C.DUCKDB_TYPE_BLOB:      "[]uint8",
+	C.DUCKDB_TYPE_TIMESTAMP: "time.Time",
+	C.DUCKDB_TYPE_UUID:      "duckdb.UUID",
+	C.DUCKDB_TYPE_LIST:      "slice",
+	C.DUCKDB_TYPE_STRUCT:    "struct",
+}
+
 type UUID [16]byte
 
 func (u *UUID) Scan(v any) error {

@@ -129,7 +129,6 @@ func (vec *vector) setTime(rowIdx C.idx_t, value time.Time) {
 }
 
 func (vec *vector) setList(rowIdx C.idx_t, value driver.Value) {
-
 	refVal := reflect.ValueOf(value)
 	childVector := vec.childVectors[0]
 
@@ -261,5 +260,66 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type) error {
 		}
 	}
 
+	return nil
+}
+
+func (vec *vector) duckDBTypeToString() string {
+	if vec.duckdbType == C.DUCKDB_TYPE_LIST {
+		s := vec.childVectors[0].duckDBTypeToString()
+		return "[]" + s
+	}
+
+	if vec.duckdbType == C.DUCKDB_TYPE_STRUCT {
+		s := "{"
+		for i := 0; i < len(vec.childVectors); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			tmp := vec.childVectors[i].duckDBTypeToString()
+			s += tmp
+		}
+		s += "}"
+		return s
+	}
+
+	return appenderTypeIdMap[vec.duckdbType]
+}
+
+func goTypeToString(v reflect.Type) string {
+	switch v.String() {
+	case "int":
+		return "int64"
+	case "uint":
+		return "uint64"
+	case "time.Time":
+		return "time.Time"
+	}
+
+	if v.Kind() == reflect.Slice {
+		return "[]" + goTypeToString(v.Elem())
+	}
+
+	if v.Kind() == reflect.Struct {
+		s := "{"
+		for i := 0; i < v.NumField(); i++ {
+			if i > 0 {
+				s += ", "
+			}
+			s += goTypeToString(v.Field(i).Type)
+		}
+		s += "}"
+		return s
+	}
+
+	return v.String()
+}
+
+func (vec *vector) typeMatch(v reflect.Type) error {
+	actual := goTypeToString(v)
+	expected := vec.duckDBTypeToString()
+
+	if actual != expected {
+		return castError(actual, expected)
+	}
 	return nil
 }

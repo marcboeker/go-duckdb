@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"database/sql/driver"
+	"reflect"
 	"unsafe"
 )
 
@@ -84,7 +85,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	if err != nil {
 		a.destroyColumnTypes()
 		C.duckdb_appender_destroy(&duckdbAppender)
-		return nil, err
+		return nil, getError(errAppenderCreation, err)
 	}
 
 	return a, nil
@@ -194,12 +195,10 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 		}
 
 		// Ensure that the types match before attempting to append anything.
-
-		// TODO.
-		//if err := info.typeMatch(reflect.TypeOf(v)); err != nil {
-		//	// Use 1-based indexing for readability, as we're talking about columns.
-		//	return columnError(err, i+1)
-		//}
+		if err := vec.typeMatch(reflect.TypeOf(v)); err != nil {
+			// Use 1-based indexing for readability, as we're talking about columns.
+			return columnError(err, i+1)
+		}
 		vec.fn(&vec, a.currSize, v)
 	}
 
