@@ -30,7 +30,7 @@ type vector struct {
 // fnSetVectorValue is the setter callback function for any (nested) vectors.
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 
-func (vec *vector) init(a *Appender, logicalType C.duckdb_logical_type, colIdx int) error {
+func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	var err error
 	duckdbType := C.duckdb_get_type_id(logicalType)
 
@@ -66,9 +66,9 @@ func (vec *vector) init(a *Appender, logicalType C.duckdb_logical_type, colIdx i
 	case C.DUCKDB_TYPE_UUID:
 		vec.initUUID()
 	case C.DUCKDB_TYPE_LIST:
-		err = vec.initList(a, logicalType, colIdx)
+		err = vec.initList(logicalType, colIdx)
 	case C.DUCKDB_TYPE_STRUCT:
-		err = vec.initStruct(a, logicalType)
+		err = vec.initStruct(logicalType)
 	default:
 		name, found := unsupportedAppenderTypeMap[duckdbType]
 		if !found {
@@ -215,14 +215,14 @@ func (vec *vector) initUUID() {
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
 }
 
-func (vec *vector) initList(a *Appender, logicalType C.duckdb_logical_type, colIdx int) error {
+func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error {
 	// Get the child vector type.
 	childType := C.duckdb_list_type_child_type(logicalType)
 	defer C.duckdb_destroy_logical_type(&childType)
 
 	// Recurse into the child.
 	vec.childVectors = make([]vector, 1)
-	err := vec.childVectors[0].init(a, childType, colIdx)
+	err := vec.childVectors[0].init(childType, colIdx)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func (vec *vector) initList(a *Appender, logicalType C.duckdb_logical_type, colI
 	return nil
 }
 
-func (vec *vector) initStruct(a *Appender, logicalType C.duckdb_logical_type) error {
+func (vec *vector) initStruct(logicalType C.duckdb_logical_type) error {
 	childCount := int(C.duckdb_struct_type_child_count(logicalType))
 	var childNames []string
 	for i := 0; i < childCount; i++ {
@@ -253,7 +253,7 @@ func (vec *vector) initStruct(a *Appender, logicalType C.duckdb_logical_type) er
 	// Recurse into the children.
 	for i := 0; i < childCount; i++ {
 		childType := C.duckdb_struct_type_child_type(logicalType, C.idx_t(i))
-		err := vec.childVectors[i].init(a, childType, i)
+		err := vec.childVectors[i].init(childType, i)
 		C.duckdb_destroy_logical_type(&childType)
 
 		if err != nil {

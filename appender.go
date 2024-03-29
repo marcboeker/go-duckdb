@@ -77,7 +77,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	a.vectors = make([]vector, columnCount)
 	var err error
 	for i := 0; i < columnCount; i++ {
-		if err = a.vectors[i].init(a, a.colTypes[i], i); err != nil {
+		if err = a.vectors[i].init(a.colTypes[i], i); err != nil {
 			break
 		}
 	}
