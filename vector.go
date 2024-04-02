@@ -62,13 +62,21 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case C.DUCKDB_TYPE_BLOB:
 		vec.initBlob()
 	case C.DUCKDB_TYPE_TIMESTAMP:
-		vec.initTS(C.DUCKDB_TYPE_TIMESTAMP)
+		vec.initTS(duckdbType)
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		vec.initTS(duckdbType)
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		vec.initTS(duckdbType)
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		vec.initTS(duckdbType)
 	case C.DUCKDB_TYPE_UUID:
 		vec.initUUID()
 	case C.DUCKDB_TYPE_LIST:
 		err = vec.initList(logicalType, colIdx)
 	case C.DUCKDB_TYPE_STRUCT:
 		err = vec.initStruct(logicalType)
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		vec.initTS(duckdbType)
 	default:
 		name, found := unsupportedAppenderTypeMap[duckdbType]
 		if !found {
@@ -122,9 +130,9 @@ func (vec *vector) setCString(rowIdx C.idx_t, value string, len int) {
 	C.free(unsafe.Pointer(str))
 }
 
-func (vec *vector) setTime(rowIdx C.idx_t, value time.Time) {
+func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
 	var ts C.duckdb_timestamp
-	ts.micros = C.int64_t(value.UTC().UnixMicro())
+	ts.micros = C.int64_t(ticks)
 	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
 }
 
@@ -202,7 +210,21 @@ func (vec *vector) initBlob() {
 
 func (vec *vector) initTS(duckdbType C.duckdb_type) {
 	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.setTime(rowIdx, val.(time.Time))
+		v := val.(time.Time)
+		var ticks int64
+		switch duckdbType {
+		case C.DUCKDB_TYPE_TIMESTAMP:
+			ticks = v.UTC().UnixMicro()
+		case C.DUCKDB_TYPE_TIMESTAMP_S:
+			ticks = v.UTC().Unix()
+		case C.DUCKDB_TYPE_TIMESTAMP_MS:
+			ticks = v.UTC().UnixMilli()
+		case C.DUCKDB_TYPE_TIMESTAMP_NS:
+			ticks = v.UTC().UnixNano()
+		case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+			ticks = v.UTC().UnixMicro()
+		}
+		vec.setTime(rowIdx, ticks)
 	}
 	vec.duckdbType = duckdbType
 }
