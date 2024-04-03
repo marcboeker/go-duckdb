@@ -195,13 +195,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		initPrimitive[bool](vec, C.DUCKDB_TYPE_BOOLEAN)
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
 		vec.initCString(duckdbType)
-	case C.DUCKDB_TYPE_TIMESTAMP:
-		vec.initTS(duckdbType)
-	case C.DUCKDB_TYPE_TIMESTAMP_S:
-		vec.initTS(duckdbType)
-	case C.DUCKDB_TYPE_TIMESTAMP_MS:
-		vec.initTS(duckdbType)
-	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
+		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ:
 		vec.initTS(duckdbType)
 	case C.DUCKDB_TYPE_UUID:
 		vec.initUUID()
@@ -209,8 +204,6 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		err = vec.initList(logicalType, colIdx)
 	case C.DUCKDB_TYPE_STRUCT:
 		err = vec.initStruct(logicalType)
-	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
-		vec.initTS(duckdbType)
 	default:
 		name, found := unsupportedAppenderTypeMap[duckdbType]
 		if !found {

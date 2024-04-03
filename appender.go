@@ -24,7 +24,7 @@ type Appender struct {
 	colTypes    []C.duckdb_logical_type
 	colTypesPtr unsafe.Pointer
 
-	// The vector storage of each column ind the data chunk.
+	// The vector storage of each column in the data chunk.
 	vectors []vector
 }
 
