@@ -8,9 +8,8 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
-	"math/big"
-
 	"github.com/mitchellh/mapstructure"
+	"math/big"
 )
 
 var unsupportedAppenderTypeMap = map[C.duckdb_type]string{

@@ -21,6 +21,10 @@ func castError(actual string, expected string) error {
 	return fmt.Errorf("%s: cannot cast %s to %s", castErrMsg, actual, expected)
 }
 
+func structFieldError(actual string, expected string) error {
+	return fmt.Errorf("invalid STRUCT fields, expected %s, got %s", expected, actual)
+}
+
 func columnError(err error, colIdx int) error {
 	return fmt.Errorf("%w: %s: %d", err, columnErrMsg, colIdx)
 }
@@ -46,6 +50,8 @@ const (
 )
 
 var (
+	errDriver = errors.New("internal driver error, please file a bug report")
+
 	errParseDSN  = errors.New("could not parse DSN for database")
 	errOpen      = errors.New("could not open database")
 	errSetConfig = errors.New("could not set invalid or local option for global database config")

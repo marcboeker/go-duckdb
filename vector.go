@@ -8,7 +8,9 @@ import "C"
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 	"unsafe"
 )
@@ -29,6 +31,153 @@ type vector struct {
 
 // fnSetVectorValue is the setter callback function for any (nested) vectors.
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
+
+func tryPrimitiveCast[T any](val any, expected string) (any, error) {
+	if v, ok := val.(T); ok {
+		return v, nil
+	}
+
+	goType := reflect.TypeOf(val)
+	return nil, castError(goType.String(), expected)
+}
+
+func (vec *vector) tryCast(val driver.Value) (any, error) {
+	if val == nil {
+		return val, nil
+	}
+
+	switch vec.duckdbType {
+	case C.DUCKDB_TYPE_UTINYINT:
+		return tryPrimitiveCast[uint8](val, reflect.Uint8.String())
+	case C.DUCKDB_TYPE_TINYINT:
+		return tryPrimitiveCast[int8](val, reflect.Int8.String())
+	case C.DUCKDB_TYPE_USMALLINT:
+		return tryPrimitiveCast[uint16](val, reflect.Uint16.String())
+	case C.DUCKDB_TYPE_SMALLINT:
+		return tryPrimitiveCast[int16](val, reflect.Int16.String())
+	case C.DUCKDB_TYPE_UINTEGER:
+		return tryPrimitiveCast[uint32](val, reflect.Uint32.String())
+	case C.DUCKDB_TYPE_INTEGER:
+		return tryPrimitiveCast[int32](val, reflect.Int32.String())
+	case C.DUCKDB_TYPE_UBIGINT:
+		return tryPrimitiveCast[uint64](val, reflect.Uint64.String())
+	case C.DUCKDB_TYPE_BIGINT:
+		return tryPrimitiveCast[int64](val, reflect.Int64.String())
+	case C.DUCKDB_TYPE_FLOAT:
+		return tryPrimitiveCast[float32](val, reflect.Float32.String())
+	case C.DUCKDB_TYPE_DOUBLE:
+		return tryPrimitiveCast[float64](val, reflect.Float64.String())
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return tryPrimitiveCast[bool](val, reflect.Bool.String())
+	case C.DUCKDB_TYPE_VARCHAR:
+		return tryPrimitiveCast[string](val, reflect.String.String())
+	case C.DUCKDB_TYPE_BLOB:
+		return tryPrimitiveCast[[]byte](val, reflect.TypeOf([]byte{}).String())
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
+	case C.DUCKDB_TYPE_UUID:
+		return tryPrimitiveCast[UUID](val, reflect.TypeOf(UUID{}).String())
+	case C.DUCKDB_TYPE_LIST:
+		return vec.tryCastList(val)
+	case C.DUCKDB_TYPE_STRUCT:
+		return vec.tryCastStruct(val)
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
+	}
+
+	return nil, getError(errDriver, nil)
+}
+
+func (vec *vector) canNil(val reflect.Value) bool {
+	//if val.K
+	return true
+}
+
+func (vec *vector) tryCastList(val driver.Value) ([]any, error) {
+	goType := reflect.TypeOf(val)
+	if goType.Kind() != reflect.Slice {
+		return nil, castError(goType.String(), reflect.Slice.String())
+	}
+
+	v := reflect.ValueOf(val)
+	childVector := vec.childVectors[0]
+
+	// Convert v to []any.
+	list := make([]any, v.Len())
+	var err error
+
+	for i := 0; i < v.Len(); i++ {
+
+		idx := v.Index(i)
+
+		fmt.Println(idx)
+		if idx.IsNil() {
+			list[i] = nil
+			continue
+		}
+		//if idx.IsNil() {
+		//	list[i] = nil
+		//	continue
+		//}
+		list[i], err = childVector.tryCast(idx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return list, nil
+}
+
+func (vec *vector) tryCastStruct(val driver.Value) (map[string]any, error) {
+	m, isMap := val.(map[string]any)
+
+	// Transform the struct into map[string]any.
+	if !isMap {
+		// Catch mismatching types.
+		goType := reflect.TypeOf(val)
+		if reflect.TypeOf(val).Kind() != reflect.Struct {
+			return nil, castError(goType.String(), reflect.Struct.String())
+		}
+
+		m = make(map[string]any)
+		v := reflect.ValueOf(val)
+		structType := v.Type()
+
+		for i := 0; i < structType.NumField(); i++ {
+			fieldName := structType.Field(i).Name
+			m[fieldName] = v.Field(i).Interface()
+		}
+	}
+
+	// Catch mismatching field count.
+	if len(m) != len(vec.childNames) {
+		return nil, structFieldError(strconv.Itoa(len(m)), strconv.Itoa(len(vec.childNames)))
+	}
+
+	// Cast child entries and return the map.
+	for i := 0; i < len(vec.childVectors); i++ {
+		childVector := vec.childVectors[i]
+		childName := vec.childNames[i]
+		v, ok := m[childName]
+
+		// Catch mismatching field names.
+		if !ok {
+			return nil, structFieldError("", childName)
+		}
+
+		var err error
+		m[childName], err = childVector.tryCast(v)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return m, nil
+}
 
 func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	var err error
@@ -117,10 +266,15 @@ func (vec *vector) setNull(rowIdx C.idx_t) {
 	}
 }
 
-func setPrimitive[T any](vec *vector, rowIdx C.idx_t, v T) {
+func setPrimitive[T any](vec *vector, rowIdx C.idx_t, v any) {
+	if v == nil {
+		vec.setNull(rowIdx)
+		return
+	}
+
 	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
 	xs := (*[1 << 31]T)(ptr)
-	xs[rowIdx] = v
+	xs[rowIdx] = v.(T)
 }
 
 func (vec *vector) setCString(rowIdx C.idx_t, value string, len int) {
@@ -136,64 +290,50 @@ func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
 	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
 }
 
-func (vec *vector) setList(rowIdx C.idx_t, value driver.Value) {
-	refVal := reflect.ValueOf(value)
-	childVector := vec.childVectors[0]
-
-	if refVal.IsNil() {
-		vec.setNull(rowIdx)
-	}
-
-	// Convert the refVal to []any to iterate over it.
-	values := make([]any, refVal.Len())
-	for i := 0; i < refVal.Len(); i++ {
-		values[i] = refVal.Index(i).Interface()
-	}
-
+func (vec *vector) setList(rowIdx C.idx_t, v []any) {
 	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
 
 	// Set the offset and length of the list vector using the current size of the child vector.
 	listEntry := C.duckdb_list_entry{
 		offset: C.idx_t(childVectorSize),
-		length: C.idx_t(refVal.Len()),
+		length: C.idx_t(len(v)),
 	}
 
 	setPrimitive[C.duckdb_list_entry](vec, rowIdx, listEntry)
 
-	newLength := C.idx_t(refVal.Len()) + childVectorSize
+	newLength := C.idx_t(len(v)) + childVectorSize
 	C.duckdb_list_vector_set_size(vec.duckdbVector, newLength)
 	C.duckdb_list_vector_reserve(vec.duckdbVector, newLength)
 
 	// Insert the values into the child vector.
-	for i, e := range values {
-		childVectorRow := C.idx_t(i) + childVectorSize
-		childVector.fn(&childVector, childVectorRow, e)
+	childVector := vec.childVectors[0]
+	for i, e := range v {
+		offset := C.idx_t(i) + childVectorSize
+		childVector.fn(&childVector, offset, e)
 	}
 }
 
-func (vec *vector) setStruct(rowIdx C.idx_t, value driver.Value) {
-	if value == nil {
-		vec.setNull(rowIdx)
-	}
-
-	v := reflect.ValueOf(value)
-	structType := v.Type()
-
-	for i := 0; i < structType.NumField(); i++ {
+func (vec *vector) setStruct(rowIdx C.idx_t, m map[string]any) {
+	for i := 0; i < len(vec.childVectors); i++ {
 		childVector := vec.childVectors[i]
-		childVector.fn(&childVector, rowIdx, v.Field(i).Interface())
+		childName := vec.childNames[i]
+		childVector.fn(&childVector, rowIdx, m[childName])
 	}
 }
 
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
-		setPrimitive[T](vec, rowIdx, val.(T))
+		setPrimitive[T](vec, rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
 }
 
 func (vec *vector) initVarchar() {
 	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
 		v := val.(string)
 		vec.setCString(rowIdx, v, len(v))
 	}
@@ -202,6 +342,10 @@ func (vec *vector) initVarchar() {
 
 func (vec *vector) initBlob() {
 	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
 		blob := val.([]byte)
 		vec.setCString(rowIdx, string(blob[:]), len(blob))
 	}
@@ -210,6 +354,10 @@ func (vec *vector) initBlob() {
 
 func (vec *vector) initTS(duckdbType C.duckdb_type) {
 	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
 		v := val.(time.Time)
 		var ticks int64
 		switch duckdbType {
@@ -249,7 +397,12 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 	}
 
 	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.setList(rowIdx, val)
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		v := val.([]any)
+		vec.setList(rowIdx, v)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_LIST
 	return nil
@@ -265,7 +418,12 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type) error {
 	}
 
 	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.setStruct(rowIdx, val)
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		v := val.(map[string]any)
+		vec.setStruct(rowIdx, v)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_STRUCT
 	vec.childVectors = make([]vector, childCount)
@@ -282,66 +440,5 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type) error {
 		}
 	}
 
-	return nil
-}
-
-func (vec *vector) duckDBTypeToString() string {
-	if vec.duckdbType == C.DUCKDB_TYPE_LIST {
-		s := vec.childVectors[0].duckDBTypeToString()
-		return "[]" + s
-	}
-
-	if vec.duckdbType == C.DUCKDB_TYPE_STRUCT {
-		s := "{"
-		for i := 0; i < len(vec.childVectors); i++ {
-			if i > 0 {
-				s += ", "
-			}
-			tmp := vec.childVectors[i].duckDBTypeToString()
-			s += tmp
-		}
-		s += "}"
-		return s
-	}
-
-	return appenderTypeIdMap[vec.duckdbType]
-}
-
-func goTypeToString(v reflect.Type) string {
-	switch v.String() {
-	case "int":
-		return "int64"
-	case "uint":
-		return "uint64"
-	case "time.Time":
-		return "time.Time"
-	}
-
-	if v.Kind() == reflect.Slice {
-		return "[]" + goTypeToString(v.Elem())
-	}
-
-	if v.Kind() == reflect.Struct {
-		s := "{"
-		for i := 0; i < v.NumField(); i++ {
-			if i > 0 {
-				s += ", "
-			}
-			s += goTypeToString(v.Field(i).Type)
-		}
-		s += "}"
-		return s
-	}
-
-	return v.String()
-}
-
-func (vec *vector) typeMatch(v reflect.Type) error {
-	actual := goTypeToString(v)
-	expected := vec.duckDBTypeToString()
-
-	if actual != expected {
-		return castError(actual, expected)
-	}
 	return nil
 }

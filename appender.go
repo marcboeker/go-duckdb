@@ -8,7 +8,6 @@ import "C"
 
 import (
 	"database/sql/driver"
-	"reflect"
 	"unsafe"
 )
 
@@ -187,18 +186,18 @@ func (a *Appender) newDataChunk(colCount int) {
 }
 
 func (a *Appender) appendRowSlice(args []driver.Value) error {
-	for i, v := range args {
+	for i, val := range args {
 		vec := a.vectors[i]
-		if v == nil {
-			vec.setNull(a.currSize)
-			continue
-		}
 
 		// Ensure that the types match before attempting to append anything.
-		if err := vec.typeMatch(reflect.TypeOf(v)); err != nil {
+		v, err := vec.tryCast(val)
+		if err != nil {
 			// Use 1-based indexing for readability, as we're talking about columns.
 			return columnError(err, i+1)
 		}
+
+		// Append the row to the data chunk.
+		// TODO: null early-out
 		vec.fn(&vec, a.currSize, v)
 	}
 
