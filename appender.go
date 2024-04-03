@@ -197,7 +197,6 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 		}
 
 		// Append the row to the data chunk.
-		// TODO: null early-out
 		vec.fn(&vec, a.currSize, v)
 	}
 

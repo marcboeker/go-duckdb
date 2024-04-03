@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -758,6 +759,43 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 	}
 
 	require.Equal(t, 3, i)
+	require.NoError(t, res.Close())
+	cleanupAppender(t, c, con, a)
+}
+
+func TestAppenderWithJSON(t *testing.T) {
+	c, con, a := prepareAppender(t, `
+		CREATE TABLE test (
+		    id DOUBLE,
+			l DOUBLE[],
+			s STRUCT(a DOUBLE, b VARCHAR)
+	  	)`)
+
+	jsonBytes := []byte(`{"id": 42, "l":[1, 2, 3], "s":{"a":101, "b":"hello"}}`)
+	var jsonData map[string]interface{}
+	err := json.Unmarshal(jsonBytes, &jsonData)
+	require.NoError(t, err)
+
+	require.NoError(t, a.AppendRow(jsonData["id"], jsonData["l"], jsonData["s"]))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test`)
+	require.NoError(t, err)
+
+	for res.Next() {
+		var (
+			id uint64
+			l  interface{}
+			s  interface{}
+		)
+		err := res.Scan(&id, &l, &s)
+		require.NoError(t, err)
+		require.Equal(t, uint64(42), id)
+		require.Equal(t, "[1 2 3]", fmt.Sprint(l))
+		require.Equal(t, "map[a:101 b:hello]", fmt.Sprint(s))
+	}
+
 	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }

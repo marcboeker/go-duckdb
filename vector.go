@@ -30,15 +30,6 @@ type vector struct {
 // fnSetVectorValue is the setter callback function for any (nested) vectors.
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 
-func tryPrimitiveCast[T any](val any, expected string) (any, error) {
-	if v, ok := val.(T); ok {
-		return v, nil
-	}
-
-	goType := reflect.TypeOf(val)
-	return nil, castError(goType.String(), expected)
-}
-
 func (vec *vector) tryCast(val any) (any, error) {
 	if val == nil {
 		return val, nil
@@ -92,6 +83,15 @@ func (*vector) canNil(val reflect.Value) bool {
 		return true
 	}
 	return false
+}
+
+func tryPrimitiveCast[T any](val any, expected string) (any, error) {
+	if v, ok := val.(T); ok {
+		return v, nil
+	}
+
+	goType := reflect.TypeOf(val)
+	return nil, castError(goType.String(), expected)
 }
 
 func (vec *vector) tryCastList(val any) ([]any, error) {
@@ -167,7 +167,6 @@ func (vec *vector) tryCastStruct(val any) (map[string]any, error) {
 }
 
 func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
-	var err error
 	duckdbType := C.duckdb_get_type_id(logicalType)
 
 	switch duckdbType {
@@ -201,18 +200,18 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case C.DUCKDB_TYPE_UUID:
 		vec.initUUID()
 	case C.DUCKDB_TYPE_LIST:
-		err = vec.initList(logicalType, colIdx)
+		return vec.initList(logicalType, colIdx)
 	case C.DUCKDB_TYPE_STRUCT:
-		err = vec.initStruct(logicalType)
+		return vec.initStruct(logicalType)
 	default:
 		name, found := unsupportedAppenderTypeMap[duckdbType]
 		if !found {
 			name = "unknown type"
 		}
-		err = columnError(unsupportedTypeError(name), colIdx+1)
+		return columnError(unsupportedTypeError(name), colIdx+1)
 	}
 
-	return err
+	return nil
 }
 
 func (vec *vector) getChildVectors(vector C.duckdb_vector) {
