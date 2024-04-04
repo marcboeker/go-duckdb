@@ -37,25 +37,25 @@ func (vec *vector) tryCast(val any) (any, error) {
 
 	switch vec.duckdbType {
 	case C.DUCKDB_TYPE_UTINYINT:
-		return tryPrimitiveCast[uint8](val, reflect.Uint8.String())
+		return tryNumericCast[uint8](val, reflect.Uint8.String())
 	case C.DUCKDB_TYPE_TINYINT:
-		return tryPrimitiveCast[int8](val, reflect.Int8.String())
+		return tryNumericCast[int8](val, reflect.Int8.String())
 	case C.DUCKDB_TYPE_USMALLINT:
-		return tryPrimitiveCast[uint16](val, reflect.Uint16.String())
+		return tryNumericCast[uint16](val, reflect.Uint16.String())
 	case C.DUCKDB_TYPE_SMALLINT:
-		return tryPrimitiveCast[int16](val, reflect.Int16.String())
+		return tryNumericCast[int16](val, reflect.Int16.String())
 	case C.DUCKDB_TYPE_UINTEGER:
-		return tryPrimitiveCast[uint32](val, reflect.Uint32.String())
+		return tryNumericCast[uint32](val, reflect.Uint32.String())
 	case C.DUCKDB_TYPE_INTEGER:
-		return tryPrimitiveCast[int32](val, reflect.Int32.String())
+		return tryNumericCast[int32](val, reflect.Int32.String())
 	case C.DUCKDB_TYPE_UBIGINT:
-		return tryPrimitiveCast[uint64](val, reflect.Uint64.String())
+		return tryNumericCast[uint64](val, reflect.Uint64.String())
 	case C.DUCKDB_TYPE_BIGINT:
-		return tryPrimitiveCast[int64](val, reflect.Int64.String())
+		return tryNumericCast[int64](val, reflect.Int64.String())
 	case C.DUCKDB_TYPE_FLOAT:
-		return tryPrimitiveCast[float32](val, reflect.Float32.String())
+		return tryNumericCast[float32](val, reflect.Float32.String())
 	case C.DUCKDB_TYPE_DOUBLE:
-		return tryPrimitiveCast[float64](val, reflect.Float64.String())
+		return tryNumericCast[float64](val, reflect.Float64.String())
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return tryPrimitiveCast[bool](val, reflect.Bool.String())
 	case C.DUCKDB_TYPE_VARCHAR:
@@ -88,6 +88,22 @@ func (*vector) canNil(val reflect.Value) bool {
 func tryPrimitiveCast[T any](val any, expected string) (any, error) {
 	if v, ok := val.(T); ok {
 		return v, nil
+	}
+
+	goType := reflect.TypeOf(val)
+	return nil, castError(goType.String(), expected)
+}
+
+func tryNumericCast[T numericType](val any, expected string) (any, error) {
+	if v, ok := val.(T); ok {
+		return v, nil
+	}
+
+	// JSON unmarshalling uses float64 for numbers.
+	// We might want to add more implicit casts here.
+	switch v := val.(type) {
+	case float64:
+		return convertNumericType[float64, T](v), nil
 	}
 
 	goType := reflect.TypeOf(val)
