@@ -123,9 +123,9 @@ func (vec *vector) setCString(rowIdx C.idx_t, value string, len int) {
 	C.free(unsafe.Pointer(str))
 }
 
-func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
+func (vec *vector) setTime(rowIdx C.idx_t, value time.Time) {
 	var ts C.duckdb_timestamp
-	ts.micros = C.int64_t(ticks)
+	ts.micros = C.int64_t(value.UTC().UnixMicro())
 	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
 }
 
