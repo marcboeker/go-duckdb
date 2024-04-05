@@ -357,6 +357,7 @@ func (vec *vector) initTS(duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
+
 		v := val.(time.Time)
 		var ticks int64
 		switch duckdbType {
@@ -428,5 +429,6 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type) error {
 			return err
 		}
 	}
+
 	return nil
 }

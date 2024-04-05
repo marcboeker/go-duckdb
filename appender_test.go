@@ -798,6 +798,7 @@ func TestAppenderWithJSON(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, a.AppendRow(jsonData["c1"], jsonData["l1"], jsonData["s1"], jsonData["l2"]))
 	}
+
 	require.NoError(t, a.Flush())
 
 	// Verify results.
@@ -822,6 +823,7 @@ func TestAppenderWithJSON(t *testing.T) {
 	}
 
 	require.Equal(t, len(jsonInputs), i)
-	require.NoError(t, res.Close())
+
+  require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }
