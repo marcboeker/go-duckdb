@@ -763,39 +763,67 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
+var jsonInputs = [][]byte{
+	[]byte(`{"c1": 42, "l1": [1, 2, 3], "s1": {"a": 101, "b": ["hello", "world"]}, "l2": [{"a": [{"a": [4.2, 7.9]}]}]}`),
+	[]byte(`{"c1": null, "l1": [null, 2, null], "s1": {"a": null, "b": ["hello", null]}, "l2": [{"a": [{"a": [null, 7.9]}]}]}`),
+	[]byte(`{"c1": null, "l1": null, "s1": {"a": null, "b": null}, "l2": [{"a": [{"a": null}]}]}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [{"a": [null, {"a": null}]}]}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [{"a": null}]}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": [null, null]}`),
+	[]byte(`{"c1": null, "l1": null, "s1": null, "l2": null}`),
+}
+
+var jsonResults = [][]string{
+	{"42", "[1 2 3]", "map[a:101 b:[hello world]]", "[map[a:[map[a:[4.2 7.9]]]]]"},
+	{"<nil>", "[<nil> 2 <nil>]", "map[a:<nil> b:[hello <nil>]]", "[map[a:[map[a:[<nil> 7.9]]]]]"},
+	{"<nil>", "<nil>", "map[a:<nil> b:<nil>]", "[map[a:[map[a:<nil>]]]]"},
+	{"<nil>", "<nil>", "<nil>", "[map[a:[<nil> map[a:<nil>]]]]"},
+	{"<nil>", "<nil>", "<nil>", "[map[a:<nil>]]"},
+	{"<nil>", "<nil>", "<nil>", "[<nil> <nil>]"},
+	{"<nil>", "<nil>", "<nil>", "<nil>"},
+}
+
 func TestAppenderWithJSON(t *testing.T) {
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (
-		    id DOUBLE,
-			l DOUBLE[],
-			s STRUCT(a DOUBLE, b VARCHAR)
+		    c1 UBIGINT,
+			l1 TINYINT[],
+			s1 STRUCT(a INTEGER, b VARCHAR[]),
+		    l2 STRUCT(a STRUCT(a FLOAT[])[])[]              
 	  	)`)
 
-	jsonBytes := []byte(`{"id": 42, "l":[1, 2, 3], "s":{"a":101, "b":"hello"}}`)
-	var jsonData map[string]interface{}
-	err := json.Unmarshal(jsonBytes, &jsonData)
-	require.NoError(t, err)
+	for _, jsonInput := range jsonInputs {
+		var jsonData map[string]interface{}
+		err := json.Unmarshal(jsonInput, &jsonData)
+		require.NoError(t, err)
+		require.NoError(t, a.AppendRow(jsonData["c1"], jsonData["l1"], jsonData["s1"], jsonData["l2"]))
+	}
 
-	require.NoError(t, a.AppendRow(jsonData["id"], jsonData["l"], jsonData["s"]))
 	require.NoError(t, a.Flush())
 
 	// Verify results.
 	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test`)
 	require.NoError(t, err)
 
+	i := 0
 	for res.Next() {
 		var (
-			id uint64
-			l  interface{}
-			s  interface{}
+			c1 interface{}
+			l1 interface{}
+			s1 interface{}
+			l2 interface{}
 		)
-		err := res.Scan(&id, &l, &s)
+		err = res.Scan(&c1, &l1, &s1, &l2)
 		require.NoError(t, err)
-		require.Equal(t, uint64(42), id)
-		require.Equal(t, "[1 2 3]", fmt.Sprint(l))
-		require.Equal(t, "map[a:101 b:hello]", fmt.Sprint(s))
+		require.Equal(t, jsonResults[i][0], fmt.Sprint(c1))
+		require.Equal(t, jsonResults[i][1], fmt.Sprint(l1))
+		require.Equal(t, jsonResults[i][2], fmt.Sprint(s1))
+		require.Equal(t, jsonResults[i][3], fmt.Sprint(l2))
+		i++
 	}
 
-	require.NoError(t, res.Close())
+	require.Equal(t, len(jsonInputs), i)
+
+  require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }

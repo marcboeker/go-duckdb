@@ -28,6 +28,14 @@ var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_TIME_TZ:  "TIME_TZ",
 }
 
+type numericType interface {
+	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
+}
+
+func convertNumericType[srcT numericType, destT numericType](val srcT) destT {
+	return destT(val)
+}
+
 type UUID [16]byte
 
 func (u *UUID) Scan(v any) error {
