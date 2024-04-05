@@ -169,7 +169,7 @@ func TestErrAppendSimpleStruct(t *testing.T) {
 		I int
 	}
 	err = a.AppendRow(other{"hello", 1})
-	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
+	testError(t, err, errAppenderAppendRow.Error(), structFieldErrMsg)
 
 	err = a.AppendRow(
 		wrappedSimpleStruct{
@@ -185,7 +185,7 @@ func TestErrAppendSimpleStruct(t *testing.T) {
 			simpleStruct{A: 0, B: "one billion ducks"},
 		},
 	)
-	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
+	testError(t, err, errAppenderAppendRow.Error(), structFieldErrMsg)
 
 	cleanupAppender(t, c, con, a)
 }

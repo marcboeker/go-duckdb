@@ -21,6 +21,10 @@ func castError(actual string, expected string) error {
 	return fmt.Errorf("%s: cannot cast %s to %s", castErrMsg, actual, expected)
 }
 
+func structFieldError(actual string, expected string) error {
+	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
+}
+
 func columnError(err error, colIdx int) error {
 	return fmt.Errorf("%w: %s: %d", err, columnErrMsg, colIdx)
 }
@@ -40,12 +44,15 @@ const (
 	driverErrMsg           = "database/sql/driver"
 	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
+	structFieldErrMsg      = "invalid STRUCT field"
 	columnErrMsg           = "column index"
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
 )
 
 var (
+	errDriver = errors.New("internal driver error, please file a bug report")
+
 	errParseDSN  = errors.New("could not parse DSN for database")
 	errOpen      = errors.New("could not open database")
 	errSetConfig = errors.New("could not set invalid or local option for global database config")
