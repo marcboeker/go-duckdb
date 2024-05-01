@@ -1,3 +1,5 @@
+//go:build duckdb_arrow
+
 package duckdb
 
 /*

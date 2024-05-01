@@ -131,7 +131,13 @@ if err != nil {
 
 ## DuckDB Apache Arrow Interface
 
-If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
+To use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you need to build your binary with the `duckdb_arrow` build tag.
+
+```sh
+go build -tags="duckdb_arrow"
+```
+
+Then, you can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
 
 ```go
 connector, err := duckdb.NewConnector("", nil)
