@@ -663,6 +663,24 @@ func TestAppenderTime(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
+func TestAppenderDate(t *testing.T) {
+	c, con, a := prepareAppender(t, `CREATE TABLE test (date DATE)`)
+
+	ts := time.Date(1996, time.July, 23, 11, 42, 23, 0, time.UTC)
+	require.NoError(t, a.AppendRow(ts))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	row := sql.OpenDB(c).QueryRowContext(context.Background(), `SELECT date FROM test`)
+
+	var res time.Time
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, ts.Year(), res.Year())
+	require.Equal(t, ts.Month(), res.Month())
+	require.Equal(t, ts.Day(), res.Day())
+	cleanupAppender(t, c, con, a)
+}
+
 func TestAppenderBlob(t *testing.T) {
 	c, con, a := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
 
@@ -824,6 +842,6 @@ func TestAppenderWithJSON(t *testing.T) {
 
 	require.Equal(t, len(jsonInputs), i)
 
-  require.NoError(t, res.Close())
+	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }
