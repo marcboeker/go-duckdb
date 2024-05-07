@@ -11,11 +11,11 @@ func TestReplacementScan(t *testing.T) {
 	connector, err := NewConnector("", func(execer driver.ExecerContext) error {
 		return nil
 	})
-	defer connector.Close()
 
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer connector.Close()
 
 	var rangeRows = 3
 	_ = RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
@@ -35,7 +35,9 @@ func TestReplacementScan(t *testing.T) {
 	}
 	if rows.Err() != nil {
 		t.Fatal(rows.Err())
-	} else if rangeRows != 0 {
+	}
+
+	if rangeRows != 0 {
 		t.Fatalf("expected 0 rows, got %d", rangeRows)
 	}
 
