@@ -1,0 +1,42 @@
+package duckdb
+
+import (
+	"database/sql"
+	"database/sql/driver"
+	"testing"
+)
+
+func TestReplacementScan(t *testing.T) {
+
+	connector, err := NewConnector("", func(execer driver.ExecerContext) error {
+		return nil
+	})
+	defer connector.Close()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var rangeRows = 3
+	_ = RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
+		return "range", []any{int64(rangeRows)}, nil
+	})
+
+	db := sql.OpenDB(connector)
+
+	rows, err := db.Query("select * from any_table")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		rangeRows--
+	}
+	if rows.Err() != nil {
+		t.Fatal(rows.Err())
+	} else if rangeRows != 0 {
+		t.Fatalf("expected 0 rows, got %d", rangeRows)
+	}
+
+}
