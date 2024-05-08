@@ -15,7 +15,6 @@ import (
 
 var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_INVALID:  "INVALID",
-	C.DUCKDB_TYPE_DATE:     "DATE",
 	C.DUCKDB_TYPE_TIME:     "TIME",
 	C.DUCKDB_TYPE_INTERVAL: "INTERVAL",
 	C.DUCKDB_TYPE_HUGEINT:  "HUGEINT",

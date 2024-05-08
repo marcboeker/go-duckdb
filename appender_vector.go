@@ -13,6 +13,9 @@ import (
 	"unsafe"
 )
 
+// secondsPerDay to calculate the days since 1970-01-01.
+const secondsPerDay = 24 * 60 * 60
+
 // vector storage of a DuckDB column.
 type vector struct {
 	// The underlying DuckDB vector.
@@ -63,7 +66,7 @@ func (vec *vector) tryCast(val any) (any, error) {
 	case C.DUCKDB_TYPE_BLOB:
 		return tryPrimitiveCast[[]byte](val, reflect.TypeOf([]byte{}).String())
 	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
-		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ, C.DUCKDB_TYPE_DATE:
 		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
 	case C.DUCKDB_TYPE_UUID:
 		return tryPrimitiveCast[UUID](val, reflect.TypeOf(UUID{}).String())
@@ -215,6 +218,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		vec.initTS(duckdbType)
 	case C.DUCKDB_TYPE_UUID:
 		vec.initUUID()
+	case C.DUCKDB_TYPE_DATE:
+		vec.initDate()
 	case C.DUCKDB_TYPE_LIST:
 		return vec.initList(logicalType, colIdx)
 	case C.DUCKDB_TYPE_STRUCT:
@@ -293,6 +298,12 @@ func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
 	var ts C.duckdb_timestamp
 	ts.micros = C.int64_t(ticks)
 	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
+}
+
+func (vec *vector) setDate(rowIdx C.idx_t, days int32) {
+	var date C.duckdb_date
+	date.days = C.int32_t(days)
+	setPrimitive[C.duckdb_date](vec, rowIdx, date)
 }
 
 func (vec *vector) setList(rowIdx C.idx_t, val any) {
@@ -382,6 +393,21 @@ func (vec *vector) initUUID() {
 		setPrimitive[C.duckdb_hugeint](vec, rowIdx, uuidToHugeInt(val.(UUID)))
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
+}
+
+func (vec *vector) initDate() {
+	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+
+		v := val.(time.Time)
+		// Days since 1970-01-01.
+		days := int32(v.UTC().Unix() / secondsPerDay)
+		vec.setDate(rowIdx, days)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_DATE
 }
 
 func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error {
