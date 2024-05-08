@@ -113,22 +113,10 @@ func TestErrAppender(t *testing.T) {
 		require.NoError(t, c.Close())
 	})
 
-	t.Run(errAppenderClose.Error(), func(t *testing.T) {
+	t.Run(columnCountErrMsg, func(t *testing.T) {
 		c, con, a := prepareAppender(t, `CREATE TABLE test (a VARCHAR, b VARCHAR)`)
-		require.NoError(t, a.AppendRow("hello"))
-		err := a.Close()
-
-		testError(t, err, errAppenderClose.Error(), duckdbErrMsg, invalidatedAppenderMsg)
-		require.NoError(t, con.Close())
-		require.NoError(t, c.Close())
-	})
-
-	t.Run(errAppenderFlush.Error(), func(t *testing.T) {
-		c, con, a := prepareAppender(t, `CREATE TABLE test (a VARCHAR, b VARCHAR)`)
-		require.NoError(t, a.AppendRow("hello"))
-		err := a.Flush()
-
-		testError(t, err, errAppenderFlush.Error(), duckdbErrMsg, invalidatedAppenderMsg)
+		err := a.AppendRow("hello")
+		testError(t, err, errAppenderAppendRow.Error(), columnCountErrMsg)
 		cleanupAppender(t, c, con, a)
 	})
 

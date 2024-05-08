@@ -139,11 +139,6 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 		return getError(errAppenderAppendAfterClose, nil)
 	}
 
-	// Create a new data chunk if the current chunk is full, or if this is the first row.
-	if a.currSize == C.duckdb_vector_size() || len(a.chunks) == 0 {
-		a.newDataChunk(len(args))
-	}
-
 	err := a.appendRowSlice(args)
 	if err != nil {
 		return getError(errAppenderAppendRow, err)
@@ -186,6 +181,16 @@ func (a *Appender) newDataChunk(colCount int) {
 }
 
 func (a *Appender) appendRowSlice(args []driver.Value) error {
+	// early-out, if the number of args does not match the column count
+	if len(args) != len(a.vectors) {
+		return columnCountError(len(args), len(a.vectors))
+	}
+
+	// Create a new data chunk if the current chunk is full, or if this is the first row.
+	if a.currSize == C.duckdb_vector_size() || len(a.chunks) == 0 {
+		a.newDataChunk(len(args))
+	}
+
 	for i, val := range args {
 		vec := a.vectors[i]
 
