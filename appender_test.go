@@ -824,6 +824,6 @@ func TestAppenderWithJSON(t *testing.T) {
 
 	require.Equal(t, len(jsonInputs), i)
 
-  require.NoError(t, res.Close())
+	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }
