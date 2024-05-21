@@ -10,21 +10,21 @@ on:
       - "Makefile"
 jobs:
   prepare:
-      runs-on: ubuntu-20.04
-      steps:
-        - uses: actions/checkout@v3
-          with:
-            ref: ${{ github.head_ref }}
-        - shell: bash
-          run: make deps.header
-        - uses: actions/upload-artifact@v3
-          with:
-            name: duckdb_h
-            path: duckdb.h
-            retention-days: 1
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - shell: bash
+        run: make deps.header
+      - uses: actions/upload-artifact@v3
+        with:
+          name: duckdb_h
+          path: duckdb.h
+          retention-days: 1
   darwin_amd64:
     needs: prepare
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v3
         with:
