@@ -128,6 +128,28 @@ func TestErrAppender(t *testing.T) {
 		require.NoError(t, con.Close())
 		require.NoError(t, c.Close())
 	})
+
+	t.Run(errAppenderFlush.Error(), func(t *testing.T) {
+		c, con, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
+		require.NoError(t, a.AppendRow(int32(1)))
+		require.NoError(t, a.AppendRow(int32(1)))
+		err := a.Flush()
+		testError(t, err, errAppenderFlush.Error())
+		err = a.Close()
+		testError(t, err, errAppenderClose.Error())
+		require.NoError(t, con.Close())
+		require.NoError(t, c.Close())
+	})
+
+	t.Run(errAppenderClose.Error(), func(t *testing.T) {
+		c, con, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
+		require.NoError(t, a.AppendRow(int32(1)))
+		require.NoError(t, a.AppendRow(int32(1)))
+		err := a.Close()
+		testError(t, err, errAppenderClose.Error())
+		require.NoError(t, con.Close())
+		require.NoError(t, c.Close())
+	})
 }
 
 func TestErrAppend(t *testing.T) {

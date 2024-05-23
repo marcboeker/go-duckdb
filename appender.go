@@ -103,10 +103,11 @@ func (a *Appender) Flush() error {
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
 
-	if state := C.duckdb_appender_flush(a.duckdbAppender); state == C.DuckDBError {
-		return getError(errAppenderFlush, invalidatedAppenderError(nil))
+	state := C.duckdb_appender_flush(a.duckdbAppender)
+	if state == C.DuckDBError {
+		err := duckdbError(C.duckdb_appender_error(a.duckdbAppender))
+		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
-
 	return nil
 }
 
@@ -128,6 +129,7 @@ func (a *Appender) Close() error {
 	state := C.duckdb_appender_destroy(&a.duckdbAppender)
 
 	if err != nil || state == C.DuckDBError {
+		// We destroyed the appender, so we cannot retrieve the duckdb error.
 		return getError(errAppenderClose, invalidatedAppenderError(err))
 	}
 	return nil
