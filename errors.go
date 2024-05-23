@@ -68,10 +68,8 @@ var (
 	errAppenderDoubleClose      = errors.New("could not close appender: already closed")
 	errAppenderAppendRow        = errors.New("could not append row")
 	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
-	// FIXME: not covered by tests. Should be triggered by appending a constraint violation, see #210.
-	errAppenderClose = errors.New("could not close appender")
-	// FIXME: not covered by tests. Should be triggered by appending a constraint violation, see #210.
-	errAppenderFlush = errors.New("could not flush appender")
+	errAppenderClose            = errors.New("could not close appender")
+	errAppenderFlush            = errors.New("could not flush appender")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")
