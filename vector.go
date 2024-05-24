@@ -75,6 +75,34 @@ func (vec *vector) tryCast(val any) (any, error) {
 	return nil, getError(errDriver, nil)
 }
 
+func tryCastInteger[S any, R numericType](val S) (R, error) {
+	switch v := any(val).(type) {
+	case uint8:
+		return convertNumericType[uint8, R](v), nil
+	case int8:
+		return convertNumericType[int8, R](v), nil
+	case uint16:
+		return convertNumericType[uint16, R](v), nil
+	case int16:
+		return convertNumericType[int16, R](v), nil
+	case uint32:
+		return convertNumericType[uint32, R](v), nil
+	case int32:
+		return convertNumericType[int32, R](v), nil
+	case uint64:
+		return convertNumericType[uint64, R](v), nil
+	case int64:
+		return convertNumericType[int64, R](v), nil
+	case uint:
+		return convertNumericType[uint, R](v), nil
+	case int:
+		return convertNumericType[int, R](v), nil
+	default:
+		return 0, nil
+	}
+
+}
+
 func (*vector) canNil(val reflect.Value) bool {
 	switch val.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer,
@@ -267,6 +295,101 @@ func (vec *vector) getChildVectors(vector C.duckdb_vector) {
 	}
 }
 
+func (vec *vector) setNull(rowIdx C.idx_t) {
+	C.duckdb_vector_ensure_validity_writable(vec.duckdbVector)
+	mask := C.duckdb_vector_get_validity(vec.duckdbVector)
+	C.duckdb_validity_set_row_invalid(mask, rowIdx)
+
+	if vec.duckdbType == C.DUCKDB_TYPE_STRUCT {
+		for i := 0; i < len(vec.childVectors); i++ {
+			vec.childVectors[i].setNull(rowIdx)
+		}
+	}
+}
+
+func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
+	if val == nil {
+		vec.setNull(rowIdx)
+		return
+	}
+
+	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
+	xs := (*[1 << 31]T)(ptr)
+	xs[rowIdx] = val.(T)
+}
+
+func (vec *vector) setCString(rowIdx C.idx_t, val any) {
+	if val == nil {
+		vec.setNull(rowIdx)
+		return
+	}
+
+	var str string
+	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
+		str = val.(string)
+	} else if vec.duckdbType == C.DUCKDB_TYPE_BLOB {
+		str = string(val.([]byte)[:])
+	}
+	// This setter also writes BLOBs.
+	cStr := C.CString(str)
+	C.duckdb_vector_assign_string_element_len(vec.duckdbVector, rowIdx, cStr, C.idx_t(len(str)))
+	C.free(unsafe.Pointer(cStr))
+}
+
+func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
+	var ts C.duckdb_timestamp
+	ts.micros = C.int64_t(ticks)
+	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
+}
+
+func (vec *vector) setDate(rowIdx C.idx_t, days int32) {
+	var date C.duckdb_date
+	date.days = C.int32_t(days)
+	setPrimitive[C.duckdb_date](vec, rowIdx, date)
+}
+
+func (vec *vector) setList(rowIdx C.idx_t, val any) {
+	if val == nil {
+		vec.setNull(rowIdx)
+		return
+	}
+
+	v := val.([]any)
+	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
+
+	// Set the offset and length of the list vector using the current size of the child vector.
+	listEntry := C.duckdb_list_entry{
+		offset: C.idx_t(childVectorSize),
+		length: C.idx_t(len(v)),
+	}
+	setPrimitive[C.duckdb_list_entry](vec, rowIdx, listEntry)
+
+	newLength := C.idx_t(len(v)) + childVectorSize
+	C.duckdb_list_vector_set_size(vec.duckdbVector, newLength)
+	C.duckdb_list_vector_reserve(vec.duckdbVector, newLength)
+
+	// Insert the values into the child vector.
+	childVector := vec.childVectors[0]
+	for i, e := range v {
+		offset := C.idx_t(i) + childVectorSize
+		childVector.fn(&childVector, offset, e)
+	}
+}
+
+func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
+	if val == nil {
+		vec.setNull(rowIdx)
+		return
+	}
+	m := val.(map[string]any)
+
+	for i := 0; i < len(vec.childVectors); i++ {
+		childVector := vec.childVectors[i]
+		childName := vec.childNames[i]
+		childVector.fn(&childVector, rowIdx, m[childName])
+	}
+}
+
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		vec.size++
@@ -384,4 +507,266 @@ func (vec *vector) initUUID() {
 		setPrimitive[C.duckdb_hugeint](vec, rowIdx, uuidToHugeInt(val.(UUID)))
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
+}
+
+func _setPrimitive[T any](vec *vector, rowIdx C.idx_t, val T) {
+	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
+	xs := (*[1 << 31]T)(ptr)
+	xs[rowIdx] = val
+}
+
+func _setVectorNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S) error {
+	var fv T
+	switch v := any(val).(type) {
+	case uint8:
+		fv = T(v)
+	case int8:
+		fv = T(v)
+	case uint16:
+		fv = T(v)
+	case int16:
+		fv = T(v)
+	case uint32:
+		fv = T(v)
+	case int32:
+		fv = T(v)
+	case uint64:
+		fv = T(v)
+	case int64:
+		fv = T(v)
+	case uint:
+		fv = T(v)
+	case int:
+		fv = T(v)
+	case float32:
+		fv = T(v)
+	case float64:
+		fv = T(v)
+	case bool:
+		if v {
+			fv = 1
+		} else {
+			fv = 0
+		}
+	default:
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+	}
+	_setPrimitive(vec, rowIdx, fv)
+	return nil
+}
+
+func _setVectorBool[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	var fv bool
+	switch v := any(val).(type) {
+	case uint8:
+		fv = v == 0
+	case int8:
+		fv = v == 0
+	case uint16:
+		fv = v == 0
+	case int16:
+		fv = v == 0
+	case uint32:
+		fv = v == 0
+	case int32:
+		fv = v == 0
+	case uint64:
+		fv = v == 0
+	case int64:
+		fv = v == 0
+	case uint:
+		fv = v == 0
+	case int:
+		fv = v == 0
+	case float32:
+		fv = v == 0
+	case float64:
+		fv = v == 0
+	case bool:
+		fv = v
+	default:
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+	}
+	_setPrimitive(vec, rowIdx, fv)
+	return nil
+}
+
+func _setVectorString[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	var cStr *C.char
+	var length int
+	switch v := any(val).(type) {
+	case string:
+		cStr = C.CString(v)
+		defer C.free(unsafe.Pointer(cStr))
+		length = len(v)
+	case []byte:
+		cStr = (*C.char)(C.CBytes(v))
+		defer C.free(unsafe.Pointer(cStr))
+		length = len(v)
+	default:
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(cStr).String())
+	}
+
+	C.duckdb_vector_assign_string_element_len(vec.duckdbVector, rowIdx, (*C.char)(cStr), C.idx_t(length))
+	return nil
+}
+
+func _setVectorTS[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	var t time.Time
+	switch v := any(val).(type) {
+	case time.Time:
+		t = v
+	default:
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(t).String())
+	}
+	var ticks int64
+	switch vec.duckdbType {
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		ticks = t.UTC().UnixMicro()
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		ticks = t.UTC().Unix()
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		ticks = t.UTC().UnixMilli()
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		ticks = t.UTC().UnixNano()
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		ticks = t.UTC().UnixMicro()
+	}
+	var ts C.duckdb_timestamp
+	ts.micros = C.int64_t(ticks)
+	_setPrimitive(vec, rowIdx, ts)
+	return nil
+}
+
+func _setVectorUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	var uuid UUID
+	switch v := any(val).(type) {
+	case UUID:
+		uuid = v
+	default:
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(uuid).String())
+	}
+	hi := uuidToHugeInt(uuid)
+	_setPrimitive(vec, rowIdx, hi)
+	return nil
+}
+
+func _setVectorList[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	var list []any
+	switch v := any(val).(type) {
+	case []any:
+		list = v
+	default:
+		// Insert the values into the child vector.
+		rv := reflect.ValueOf(val)
+		list = make([]any, rv.Len())
+		childVector := vec.childVectors[0]
+
+		for i := 0; i < rv.Len(); i++ {
+			idx := rv.Index(i)
+			if vec.canNil(idx) && idx.IsNil() {
+				list[i] = nil
+				continue
+			}
+
+			var err error
+			list[i], err = childVector.tryCast(idx.Interface())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
+
+	// Set the offset and length of the list vector using the current size of the child vector.
+	listEntry := C.duckdb_list_entry{
+		offset: C.idx_t(childVectorSize),
+		length: C.idx_t(len(list)),
+	}
+	_setPrimitive(vec, rowIdx, listEntry)
+
+	newLength := C.idx_t(len(list)) + childVectorSize
+	C.duckdb_list_vector_set_size(vec.duckdbVector, newLength)
+	C.duckdb_list_vector_reserve(vec.duckdbVector, newLength)
+
+	// Insert the values into the child vector.
+	childVector := vec.childVectors[0]
+	for i, e := range list {
+		offset := C.idx_t(i) + childVectorSize
+		childVector.fn(&childVector, offset, e)
+	}
+	return nil
+}
+
+func _setVectorStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	//TODO: cast to map if possible
+	var m map[string]any
+	switch v := any(val).(type) {
+	case map[string]any:
+		m = v
+	default:
+		// Catch mismatching types.
+		goType := reflect.TypeOf(val)
+		if reflect.TypeOf(val).Kind() != reflect.Struct {
+			return castError(goType.String(), reflect.Struct.String())
+		}
+
+		m = make(map[string]any)
+		rv := reflect.ValueOf(val)
+		structType := rv.Type()
+
+		for i := 0; i < structType.NumField(); i++ {
+			fieldName := structType.Field(i).Name
+			m[fieldName] = rv.Field(i).Interface()
+		}
+	}
+
+	for i := 0; i < len(vec.childVectors); i++ {
+		childVector := vec.childVectors[i]
+		childName := vec.childNames[i]
+		childVector.fn(&childVector, rowIdx, m[childName])
+	}
+	return nil
+}
+
+func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	switch vec.duckdbType {
+	case C.DUCKDB_TYPE_UTINYINT:
+		return _setVectorNumeric[S, uint8](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_TINYINT:
+		return _setVectorNumeric[S, int8](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_USMALLINT:
+		return _setVectorNumeric[S, uint16](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_SMALLINT:
+		return _setVectorNumeric[S, int16](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_UINTEGER:
+		return _setVectorNumeric[S, uint32](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_INTEGER:
+		return _setVectorNumeric[S, int32](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_UBIGINT:
+		return _setVectorNumeric[S, uint64](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_BIGINT:
+		return _setVectorNumeric[S, int64](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_FLOAT:
+		return _setVectorNumeric[S, float32](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_DOUBLE:
+		return _setVectorNumeric[S, float64](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return _setVectorBool[S](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_VARCHAR:
+		return _setVectorString[S](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_BLOB:
+		return _setVectorString[S](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
+		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return _setVectorTS[S](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_UUID:
+		return _setVectorUUID[S](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_LIST:
+		return _setVectorList[S](vec, rowIdx, val)
+	case C.DUCKDB_TYPE_STRUCT:
+		return _setVectorStruct[S](vec, rowIdx, val)
+	default:
+		return errBadDuckdbType
+	}
 }

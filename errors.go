@@ -77,4 +77,5 @@ var (
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")
 	errCreateConfig = errors.New("could not create config for database")
+	errBadDuckdbType = errors.New("column type not supported by go-duckdb")
 )
