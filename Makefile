@@ -1,5 +1,5 @@
 DUCKDB_REPO=https://github.com/duckdb/duckdb.git
-DUCKDB_BRANCH=v0.10.3
+DUCKDB_BRANCH=feature
 
 .PHONY: install
 install:
@@ -23,7 +23,7 @@ duckdb:
 	rm -rf duckdb
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 
-DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any
+DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any BUILD_JSON=1
 
 .PHONY: deps.darwin.amd64
 deps.darwin.amd64: duckdb
