@@ -44,15 +44,20 @@ func invalidatedAppenderError(err error) error {
 	return fmt.Errorf("%w: %s", err, invalidatedAppenderMsg)
 }
 
+func invalidTableFunctionError() error {
+	return fmt.Errorf(invalidTampleFunctionMsg)
+}
+
 const (
-	driverErrMsg           = "database/sql/driver"
-	duckdbErrMsg           = "duckdb error"
-	castErrMsg             = "cast error"
-	structFieldErrMsg      = "invalid STRUCT field"
-	columnErrMsg           = "column index"
-	columnCountErrMsg      = "invalid column count"
-	unsupportedTypeErrMsg  = "unsupported data type"
-	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
+	driverErrMsg             = "database/sql/driver"
+	duckdbErrMsg             = "duckdb error"
+	castErrMsg               = "cast error"
+	structFieldErrMsg        = "invalid STRUCT field"
+	columnErrMsg             = "column index"
+	columnCountErrMsg        = "invalid column count"
+	unsupportedTypeErrMsg    = "unsupported data type"
+	invalidatedAppenderMsg   = "appended data has been invalidated due to corrupt row"
+	invalidTampleFunctionMsg = "table function was rejected by duckdb for unknown reason"
 )
 
 var (
