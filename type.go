@@ -67,7 +67,10 @@ func canConvertToDuckdb(rt reflect.Type) bool {
 	}
 	switch rt.Kind() {
 	// Invalid types
-	case reflect.Chan, reflect.Func, reflect.UnsafePointer, reflect.Int, reflect.Uint, reflect.Uintptr, reflect.Complex64, reflect.Complex128:
+	case reflect.Chan, reflect.Func,
+		reflect.UnsafePointer, reflect.Uintptr,
+		reflect.Int, reflect.Uint,
+		reflect.Complex64, reflect.Complex128:
 		return false
 	// Valid types
 	case reflect.Bool,
@@ -77,18 +80,8 @@ func canConvertToDuckdb(rt reflect.Type) bool {
 		reflect.String:
 		return true
 	case reflect.Struct:
-		var nfields int
-		for i := rt.NumField() - 1; i >= 0; i-- {
-			if rt.Field(0).IsExported() {
-				nfields++
-			}
-		}
-
-		for i := 0; i < nfields; i++ {
-			if !rt.Field(i).IsExported() {
-				continue
-			}
-			if !canConvertToDuckdb(rt.Field(i).Type) {
+		for i := 0; i < rt.NumField(); i++ {
+			if rt.Field(i).IsExported() && !canConvertToDuckdb(rt.Field(i).Type) {
 				return false
 			}
 		}
@@ -147,31 +140,29 @@ func tryGetDuckdbTypeFromValue(rt reflect.Type) (C.duckdb_logical_type, error) {
 	case reflect.String:
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_VARCHAR), nil
 	case reflect.Struct:
-		var nfields int
-		for i := rt.NumField() - 1; i >= 0; i-- {
-			if rt.Field(0).IsExported() {
-				nfields++
+		var fields []reflect.StructField
+		for i := 0; i < rt.NumField(); i++ {
+			if rt.Field(i).IsExported() {
+				fields = append(fields, rt.Field(i))
 			}
 		}
 
-		types := (*[1 << 31]C.duckdb_logical_type)(C.malloc(C.ulong(uintptr(nfields) * unsafe.Sizeof(C.duckdb_logical_type(nil)))))
-		names := (*[1 << 31]*C.char)(C.malloc(C.ulong(uintptr(nfields) * unsafe.Sizeof((*C.char)(nil)))))
+		types := (*[1 << 31]C.duckdb_logical_type)(C.malloc(C.ulong(uintptr(len(fields)) * unsafe.Sizeof(C.duckdb_logical_type(nil)))))
+		names := (*[1 << 31]*C.char)(C.malloc(C.ulong(uintptr(len(fields)) * unsafe.Sizeof((*C.char)(nil)))))
 		defer C.free(unsafe.Pointer(types))
 		defer C.free(unsafe.Pointer(names))
-		for i := 0; i < nfields; i++ {
-			if !rt.Field(i).IsExported() {
-				continue
-			}
+		for i, field := range fields {
 			var err error
-			(*types)[i], err = tryGetDuckdbTypeFromValue(rt.Field(i).Type)
+			(*types)[i], err = tryGetDuckdbTypeFromValue(field.Type)
 			if err != nil {
 				return C.duckdb_create_logical_type(C.DUCKDB_TYPE_INVALID), err
 			}
-			(*names)[i] = C.CString(rt.Field(i).Name)
+			(*names)[i] = C.CString(field.Name)
+			defer C.free(unsafe.Pointer((*names)[i]))
 		}
 		ctypes := (*C.duckdb_logical_type)(unsafe.Pointer(types))
 		cnames := (**C.char)(unsafe.Pointer(names))
-		return C.duckdb_create_struct_type(ctypes, cnames, C.idx_t(nfields)), nil
+		return C.duckdb_create_struct_type(ctypes, cnames, C.idx_t(len(fields))), nil
 	case reflect.Array:
 		elemt := rt.Elem()
 		t, err := tryGetDuckdbTypeFromValue(elemt)

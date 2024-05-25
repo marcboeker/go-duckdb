@@ -46,12 +46,22 @@ type (
 	pushdownTableUDF struct {
 		n     int64
 		count int64
-		//		T     testing.T
 	}
 
 	incTableNamedUDF struct {
 		n     int64
 		count int64
+	}
+
+	structTableUDF2 struct {
+		n     int64
+		count int64
+	}
+
+	structTableUDFT2 struct {
+		i0 int64
+		I int64
+		i1 int64
 	}
 )
 
@@ -76,6 +86,11 @@ var (
 			udf:   &incTableNamedUDF{},
 			name:  "incTableNamedUDTF",
 			query: "SELECT * FROM %s(ARG=2048)",
+		},
+		{
+			udf:   &structTableUDF2{},
+			name:  "structTableUDTF2",
+			query: "SELECT * FROM %s(2048)",
 		},
 	}
 )
@@ -236,7 +251,6 @@ func (d *incTableNamedUDF) Config() TableFunctionConfig {
 
 func (d *incTableNamedUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableFunction, []ColumnMetaData, error) {
 	d.count = 0
-	fmt.Println(namedArgs)
 	d.n = namedArgs["ARG"].(int64)
 	return d, []ColumnMetaData{
 		{Name: "result", T: NewDuckdbType[int64]()},
@@ -269,6 +283,53 @@ func (d *incTableNamedUDF) GetTypes() []any {
 }
 
 func (d *incTableNamedUDF) Cardinality() *CardinalityData {
+	return nil
+}
+
+func (d *structTableUDF2) Config() TableFunctionConfig {
+	return TableFunctionConfig{
+		Arguments: []Type{NewDuckdbType[int64]()},
+	}
+}
+
+func (d *structTableUDF2) BindArguments(namedArgs map[string]any, args ...interface{}) (TableFunction, []ColumnMetaData, error) {
+	d.count = 0
+	d.n = args[0].(int64)
+
+	t, _ := TryNewDuckdbType[structTableUDFT2]()
+	return d, []ColumnMetaData{
+		{Name: "result", T: t},
+	}, nil
+}
+
+func (d *structTableUDF2) Init() TableFunctionInitData {
+	return TableFunctionInitData{
+		MaxThreads: 1,
+	}
+}
+
+func (d *structTableUDF2) FillRow(row Row) (bool, error) {
+	if d.count > d.n {
+		return false, nil
+	}
+	d.count++
+	err := SetRowValue(row, 0, structTableUDFT2{I: d.count})
+	return true, err
+}
+
+func (d *structTableUDF2) GetTypes() []any {
+	return []any{
+		int(0),
+	}
+}
+
+func (d *structTableUDF2) GetValue(r, c int) any {
+	return map[string]any{
+		"I": int64(r + 1),
+	}
+}
+
+func (d *structTableUDF2) Cardinality() *CardinalityData {
 	return nil
 }
 

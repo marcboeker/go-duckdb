@@ -716,6 +716,9 @@ func _setVectorStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		structType := rv.Type()
 
 		for i := 0; i < structType.NumField(); i++ {
+			if !rv.Field(i).CanInterface() {
+				continue
+			}
 			fieldName := structType.Field(i).Name
 			m[fieldName] = rv.Field(i).Interface()
 		}
