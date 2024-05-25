@@ -65,14 +65,14 @@ type (
 
 //export udf_destroy_data
 func udf_destroy_data(data unsafe.Pointer) {
-	h := *(*cgo.Handle)(data)
+	h := cgo.Handle(data)
 	h.Delete()
 }
 
 //export udf_bind
 func udf_bind(info C.duckdb_bind_info) {
 	extra_info := C.duckdb_bind_get_extra_info(info)
-	h := *(*cgo.Handle)(extra_info)
+	h := cgo.Handle(extra_info)
 	tfunc := h.Value().(TableFunctionProvider)
 
 	config := tfunc.Config()
@@ -136,12 +136,12 @@ func udf_bind(info C.duckdb_bind_info) {
 	}
 
 	handle := cgo.NewHandle(instanceData)
-	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
+	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
 }
 
 //export udf_init
 func udf_init(info C.duckdb_init_info) {
-	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
+	h := cgo.Handle(C.duckdb_init_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
 	initData := instance.fun.Init()
 
@@ -156,7 +156,7 @@ func udf_init(info C.duckdb_init_info) {
 
 //export udf_callback
 func udf_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
-	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
+	h := cgo.Handle(C.duckdb_function_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
 	fun := instance.fun
 
@@ -206,7 +206,7 @@ func RegisterTableUDF(c *sql.Conn, name string, function TableFunctionProvider) 
 		C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind))
 		C.duckdb_table_function_set_init(tableFunction, C.init(C.udf_init))
 		C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_callback))
-		C.duckdb_table_function_set_extra_info(tableFunction, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
+		C.duckdb_table_function_set_extra_info(tableFunction, unsafe.Pointer(handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
 		C.duckdb_table_function_supports_projection_pushdown(tableFunction, C.bool(config.Pushdownprojection))
 
 		for _, t := range config.Arguments {
