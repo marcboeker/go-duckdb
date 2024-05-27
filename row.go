@@ -5,13 +5,12 @@ package duckdb
 #include <duckdb.h>
 */
 import "C"
-import "unsafe"
 
 type (
+	// Row represents one row in duckdb. It references the vectors underneeth.
 	Row struct {
 		vectors    []vector
 		r          C.idx_t
-		info       C.duckdb_function_info
 		projection []int
 	}
 )
@@ -21,6 +20,9 @@ func (r Row) IsProjected(c int) bool {
 	return r.projection[c] != -1
 }
 
+// SetRowValue sets the value at column c to value val.
+// Returns an error when the setting the value failled.
+// If the row is not projected, nil will be returned, no matter the type.
 func SetRowValue[T any](row Row, c int, val T) error {
 	if !row.IsProjected(c) {
 		// we want to allow setting to columns that are not projected,
@@ -31,19 +33,24 @@ func SetRowValue[T any](row Row, c int, val T) error {
 	return setVectorVal(&vec, row.r, val)
 }
 
-func (row Row) SetRowValue(c int, val any) {
+// SetRowValue sets the column c to value val, if possible. If this operation
+// fails an error is returned.
+func (row Row) SetRowValue(c int, val any) error {
+	if !row.IsProjected(c) {
+		// we want to allow setting to columns that are not projected,
+		// it should just be a nop.
+		return nil
+	}
 	vec := row.vectors[c]
 
 	// Ensure the types match before adding to the vector
 	v, err := vec.tryCast(val)
 	if err != nil {
-		cerr := columnError(err, c+1)
-		errstr := C.CString(cerr.Error())
-		defer C.free(unsafe.Pointer(errstr))
-		C.duckdb_function_set_error(row.info, errstr)
+		return columnError(err, c+1)
 	}
 
 	vec.fn(&vec, row.r, v)
+	return nil
 }
 
 func (row *Row) initColumn(i C.idx_t, duckdbVector C.duckdb_vector) error {

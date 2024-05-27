@@ -31,20 +31,23 @@ func (d *tableUDF) Config() duckdb.TableFunctionConfig {
 		Arguments: []duckdb.Type{
 			duckdb.NewDuckdbType[int64](),
 		},
-		Pushdownprojection: false,
 	}
 }
 
-func (d *tableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (duckdb.TableFunction, []duckdb.ColumnMetaData, error) {
+func (d *tableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (duckdb.TableSource, error) {
 	d.count = 0
 	d.n = args[0].(int64)
-	return d, []duckdb.ColumnMetaData{
+	return d, nil
+}
+
+func (d *tableUDF) Columns() ([]duckdb.ColumnMetaData, error) {
+	return []duckdb.ColumnMetaData{
 		{Name: "result", T: duckdb.NewDuckdbType[int64]()},
 	}, nil
 }
 
-func (d *tableUDF) Init() duckdb.TableFunctionInitData {
-	return duckdb.TableFunctionInitData{
+func (d *tableUDF) Init() duckdb.TableSourceInitData {
+	return duckdb.TableSourceInitData{
 		MaxThreads: 1,
 	}
 }

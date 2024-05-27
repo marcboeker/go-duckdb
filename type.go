@@ -12,7 +12,7 @@ import (
 )
 
 type (
-	// Contains a duckdb type, used for indicating the type of columns or parameters.
+	// Type contains a duckdb type, used for indicating the type of columns or parameters.
 	// Consumes resources until closed with `(type).Free`
 	Type struct {
 		t0 reflect.Type
@@ -28,12 +28,16 @@ type SaveTypes interface {
 	~bool | ~int8 | ~int16 | ~int32 | ~int64 | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64 | time.Time | UUID | ~string | ~[]byte
 }
 
+// NewDuckdbType creates a new Type for T. All valid T are guaranteeed to have a valid
+// representation in duckdb, thus no error is returned.
 func NewDuckdbType[T SaveTypes]() Type {
 	return Type{
 		t0: reflect.TypeFor[T](),
 	}
 }
 
+// TryNewDuckdbType creates a new Type for T. Since not all valid T are guaranteeed to have
+// a valid representation in duckdb, an error may be returned.
 func TryNewDuckdbType[T any]() (Type, error) {
 	var err error
 	if !canConvertToDuckdb(reflect.TypeFor[T]()) {
@@ -44,6 +48,8 @@ func TryNewDuckdbType[T any]() (Type, error) {
 	}, err
 }
 
+// TryNewDuckdbTypeFrom Value creates a new Type for the type of v. Since not all valid T
+// guaranteeed to have a valid representation in duckdb, an error may be returned.
 func TryNewDuckdbTypeFromValue(v any) (Type, error) {
 	var err error
 	if !canConvertToDuckdb(reflect.TypeOf(v)) {

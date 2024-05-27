@@ -18,7 +18,7 @@ type (
 	}
 
 	testTableFunction interface {
-		TableFunctionProvider
+		TableFunction
 		GetValue(r, c int) any
 		GetTypes() []any
 	}
@@ -60,7 +60,7 @@ type (
 
 	structTableUDFT2 struct {
 		i0 int64
-		I int64
+		I  int64
 		i1 int64
 	}
 )
@@ -101,16 +101,20 @@ func (d *incTableUDF) Config() TableFunctionConfig {
 	}
 }
 
-func (d *incTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableFunction, []ColumnMetaData, error) {
+func (d *incTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
 	d.count = 0
 	d.n = args[0].(int64)
-	return d, []ColumnMetaData{
+	return d, nil
+}
+
+func (d *incTableUDF) Columns() ([]ColumnMetaData, error) {
+	return []ColumnMetaData{
 		{Name: "result", T: NewDuckdbType[int64]()},
 	}, nil
 }
 
-func (d *incTableUDF) Init() TableFunctionInitData {
-	return TableFunctionInitData{
+func (d *incTableUDF) Init() TableSourceInitData {
+	return TableSourceInitData{
 		MaxThreads: 1,
 	}
 }
@@ -144,18 +148,22 @@ func (d *structTableUDF) Config() TableFunctionConfig {
 	}
 }
 
-func (d *structTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableFunction, []ColumnMetaData, error) {
+func (d *structTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
 	d.count = 0
 	d.n = args[0].(int64)
 
-	t, _ := TryNewDuckdbType[structTableUDFT]()
-	return d, []ColumnMetaData{
-		{Name: "result", T: t},
-	}, nil
+	return d, nil
 }
 
-func (d *structTableUDF) Init() TableFunctionInitData {
-	return TableFunctionInitData{
+func (d *structTableUDF) Columns() ([]ColumnMetaData, error) {
+	t, err := TryNewDuckdbType[structTableUDFT]()
+	return []ColumnMetaData{
+		{Name: "result", T: t},
+	}, err
+}
+
+func (d *structTableUDF) Init() TableSourceInitData {
+	return TableSourceInitData{
 		MaxThreads: 1,
 	}
 }
@@ -187,22 +195,25 @@ func (d *structTableUDF) Cardinality() *CardinalityData {
 
 func (d *pushdownTableUDF) Config() TableFunctionConfig {
 	return TableFunctionConfig{
-		Arguments:          []Type{NewDuckdbType[int64]()},
-		Pushdownprojection: true,
+		Arguments: []Type{NewDuckdbType[int64]()},
 	}
 }
 
-func (d *pushdownTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableFunction, []ColumnMetaData, error) {
+func (d *pushdownTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
 	d.count = 0
 	d.n = args[0].(int64)
-	return d, []ColumnMetaData{
+	return d, nil
+}
+
+func (d *pushdownTableUDF) Columns() ([]ColumnMetaData, error) {
+	return []ColumnMetaData{
 		{Name: "result", T: NewDuckdbType[int64]()},
 		{Name: "result2", T: NewDuckdbType[int64]()},
 	}, nil
 }
 
-func (d *pushdownTableUDF) Init() TableFunctionInitData {
-	return TableFunctionInitData{
+func (d *pushdownTableUDF) Init() TableSourceInitData {
+	return TableSourceInitData{
 		MaxThreads: 1,
 	}
 }
@@ -249,16 +260,20 @@ func (d *incTableNamedUDF) Config() TableFunctionConfig {
 	}
 }
 
-func (d *incTableNamedUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableFunction, []ColumnMetaData, error) {
+func (d *incTableNamedUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
 	d.count = 0
 	d.n = namedArgs["ARG"].(int64)
-	return d, []ColumnMetaData{
+	return d, nil
+}
+
+func (d *incTableNamedUDF) Columns() ([]ColumnMetaData, error) {
+	return []ColumnMetaData{
 		{Name: "result", T: NewDuckdbType[int64]()},
 	}, nil
 }
 
-func (d *incTableNamedUDF) Init() TableFunctionInitData {
-	return TableFunctionInitData{
+func (d *incTableNamedUDF) Init() TableSourceInitData {
+	return TableSourceInitData{
 		MaxThreads: 1,
 	}
 }
@@ -292,18 +307,21 @@ func (d *structTableUDF2) Config() TableFunctionConfig {
 	}
 }
 
-func (d *structTableUDF2) BindArguments(namedArgs map[string]any, args ...interface{}) (TableFunction, []ColumnMetaData, error) {
+func (d *structTableUDF2) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
 	d.count = 0
 	d.n = args[0].(int64)
-
-	t, _ := TryNewDuckdbType[structTableUDFT2]()
-	return d, []ColumnMetaData{
-		{Name: "result", T: t},
-	}, nil
+	return d, nil
 }
 
-func (d *structTableUDF2) Init() TableFunctionInitData {
-	return TableFunctionInitData{
+func (d *structTableUDF2) Columns() ([]ColumnMetaData, error) {
+	t, err := TryNewDuckdbType[structTableUDFT2]()
+	return []ColumnMetaData{
+		{Name: "result", T: t},
+	}, err
+}
+
+func (d *structTableUDF2) Init() TableSourceInitData {
+	return TableSourceInitData{
 		MaxThreads: 1,
 	}
 }

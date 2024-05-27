@@ -26,40 +26,60 @@ import (
 )
 
 type (
+	// A ColumnMetaData value indicates the metatada of a column.
+	// This is used, for example, to indicate the type of returned column for tablefunctions.
 	ColumnMetaData struct {
-		Name string
-		T    Type
+		Name string // Name of the column
+		T    Type   // type of the column
 	}
 
+	// CardinalityData is used to indicate the cardinality of a (table)function.
+	// The IsExact is used to indicate wether or not the cardinality is exact.
+	// When it is impossible/difficult to determine the  cardinality, an inexact cardinality
+	// can be used.
 	CardinalityData struct {
-		Cardinality uint
-		IsExact     bool
+		Cardinality uint // Cardinality
+		IsExact     bool // Wether or not the cardinality is exact
 	}
 
-	TableFunctionInitData struct {
+	// TableSourceInitData contains any info that can be passed to duckdb when initialising
+	// the tablefunction.
+	TableSourceInitData struct {
+		// On how many threads the TableSource is allowed to run.
+		// If left at 0, the default from duckdb is used. This is may change in the future.
 		MaxThreads int
 	}
 
 	tableFunctionData struct {
-		fun        TableFunction
+		fun        TableSource
 		projection []int
 	}
 
-	TableFunction interface {
-		Init() TableFunctionInitData
+	// A TableSource represents anything that produces rows in a non-vectorised way.
+	// The cardinality will be requested before the function is initialised.
+	// After the TableSource is initialised, the rows will be requested. The `FillRow` method
+	// can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
+	// is not 1, `FillRow` must use synchronisation primitives to avoid race conditions.
+	TableSource interface {
+		Columns() ([]ColumnMetaData, error)
+		Init() TableSourceInitData
 		FillRow(Row) (bool, error)
 		Cardinality() *CardinalityData
 	}
 
+	// TableFunctionConfig contains any information passed to duckdb when registring the
+	// tablefunction. At the moment this mostly consists of the arguments of the function.
 	TableFunctionConfig struct {
-		Arguments          []Type
-		NamedArguments     map[string]Type
-		Pushdownprojection bool
+		Arguments      []Type
+		NamedArguments map[string]Type
 	}
 
-	TableFunctionProvider interface {
+	// A TableFunction is a type which can be bound to return a TableFunction.
+	// The `Config` method returns the configuration, including the arguments the function
+	// take. `BindArguments` binds the arguments, returning a TableSource.
+	TableFunction interface {
 		Config() TableFunctionConfig
-		BindArguments(named map[string]any, args ...any) (TableFunction, []ColumnMetaData, error)
+		BindArguments(named map[string]any, args ...any) (TableSource, error)
 	}
 )
 
@@ -73,7 +93,7 @@ func udf_destroy_data(data unsafe.Pointer) {
 func udf_bind(info C.duckdb_bind_info) {
 	extra_info := C.duckdb_bind_get_extra_info(info)
 	h := cgo.Handle(extra_info)
-	tfunc := h.Value().(TableFunctionProvider)
+	tfunc := h.Value().(TableFunction)
 
 	config := tfunc.Config()
 
@@ -107,7 +127,7 @@ func udf_bind(info C.duckdb_bind_info) {
 		}
 	}
 
-	instance, returnvalues, err := tfunc.BindArguments(namedArgs, args...)
+	instance, err := tfunc.BindArguments(namedArgs, args...)
 	if err != nil {
 		errstr := C.CString(err.Error())
 		defer C.free(unsafe.Pointer(errstr))
@@ -115,12 +135,14 @@ func udf_bind(info C.duckdb_bind_info) {
 		return
 	}
 
+	columns, err := instance.Columns()
+
 	instanceData := tableFunctionData{
 		fun:        instance,
-		projection: make([]int, len(returnvalues)),
+		projection: make([]int, len(columns)),
 	}
 
-	for i, v := range returnvalues {
+	for i, v := range columns {
 		dt := v.T.toDuckdb()
 		defer C.duckdb_destroy_logical_type(&dt)
 		colName := C.CString(v.Name)
@@ -191,7 +213,9 @@ func udf_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	C.duckdb_data_chunk_set_size(output, row.r)
 }
 
-func RegisterTableUDF(c *sql.Conn, name string, function TableFunctionProvider) error {
+// RegisterTableUDF registers a TableFunctionProvider to duckdb.
+// Projectionpushdown is enabled by default, and implemented transparently.
+func RegisterTableUDF(c *sql.Conn, name string, function TableFunction) error {
 	err := c.Raw(func(dconn any) error {
 		ddconn := dconn.(*conn)
 		name := C.CString(name)
@@ -207,7 +231,7 @@ func RegisterTableUDF(c *sql.Conn, name string, function TableFunctionProvider) 
 		C.duckdb_table_function_set_init(tableFunction, C.init(C.udf_init))
 		C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_callback))
 		C.duckdb_table_function_set_extra_info(tableFunction, unsafe.Pointer(handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
-		C.duckdb_table_function_supports_projection_pushdown(tableFunction, C.bool(config.Pushdownprojection))
+		C.duckdb_table_function_supports_projection_pushdown(tableFunction, C.bool(true))
 
 		for _, t := range config.Arguments {
 			dt := t.toDuckdb()
