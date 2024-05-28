@@ -20,13 +20,13 @@ type Appender struct {
 	closed         bool
 
 	// The appender storage before flushing any data.
-	chunks []dataChunk
+	chunks []DataChunk
 	// The column types of the table to append to.
 	types []C.duckdb_logical_type
 	// A pointer to the allocated memory of the column types.
 	ptr unsafe.Pointer
 	// The number of appended rows.
-	rowCount C.idx_t
+	rowCount int
 }
 
 // NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
@@ -138,8 +138,8 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 }
 
 func (a *Appender) addDataChunk() error {
-	var chunk dataChunk
-	if err := chunk.init(a.ptr, a.types); err != nil {
+	var chunk DataChunk
+	if err := chunk.InitFromTypes(a.ptr, a.types); err != nil {
 		return err
 	}
 	a.chunks = append(a.chunks, chunk)
@@ -153,25 +153,21 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 	}
 
 	// Create a new data chunk if the current chunk is full.
-	if a.rowCount == C.duckdb_vector_size() || len(a.chunks) == 0 {
+	if C.idx_t(a.rowCount) == C.duckdb_vector_size() || len(a.chunks) == 0 {
 		if err := a.addDataChunk(); err != nil {
 			return err
 		}
 	}
 
+	// Set all values.
 	for i, val := range args {
-		vec := &a.chunks[len(a.chunks)-1].columns[i]
-
-		// Ensure that the types match before attempting to append anything.
-		v, err := vec.tryCast(val)
+		chunk := &a.chunks[len(a.chunks)-1]
+		err := chunk.SetValue(i, a.rowCount, val)
 		if err != nil {
-			// Use 1-based indexing for readability, as we're talking about columns.
-			return columnError(err, i+1)
+			return err
 		}
-
-		// Append the row to the data chunk.
-		vec.setFn(vec, a.rowCount, v)
 	}
+
 	a.rowCount++
 	return nil
 }
@@ -181,7 +177,7 @@ func (a *Appender) appendDataChunks() error {
 	var err error
 
 	for _, chunk := range a.chunks {
-		if err = chunk.setSize(); err != nil {
+		if err = chunk.SetSize(); err != nil {
 			break
 		}
 		state = C.duckdb_append_data_chunk(a.duckdbAppender, chunk.data)
@@ -192,13 +188,13 @@ func (a *Appender) appendDataChunks() error {
 	}
 
 	a.destroyDataChunks()
-	a.rowCount = C.idx_t(0)
+	a.rowCount = 0
 	return err
 }
 
 func (a *Appender) destroyDataChunks() {
 	for _, chunk := range a.chunks {
-		chunk.destroy()
+		chunk.Destroy()
 	}
 	a.chunks = a.chunks[:0]
 }

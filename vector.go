@@ -19,15 +19,14 @@ type vector struct {
 	duckdbVector C.duckdb_vector
 	// A callback function to write to this vector.
 	setFn fnSetVectorValue
-	// A callback function to read from this vector.
-	// FIXME, not yet implemented.
+	// FIXME: Add a callback function to read from this vector.
 	// The data type of the vector.
 	duckdbType C.duckdb_type
 	// The child names of STRUCT vectors.
 	childNames []string
 	// The child vectors of nested data types.
 	childVectors []vector
-	// The size of the vector.
+	// The number of values in this vector.
 	size C.idx_t
 }
 
