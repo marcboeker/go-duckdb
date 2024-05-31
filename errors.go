@@ -72,6 +72,8 @@ var (
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
 
+	errScalarUDFNoName = errors.New("could not create scalar UDF: missing name")
+
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")
 	errCreateConfig = errors.New("could not create config for database")

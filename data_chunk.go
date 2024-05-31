@@ -46,6 +46,44 @@ func (chunk *DataChunk) InitFromTypes(ptr unsafe.Pointer, types []C.duckdb_logic
 	return nil
 }
 
+// InitFromDuckDataChunk initializes a data chunk by providing a duckdb data chunk.
+func (chunk *DataChunk) InitFromDuckDataChunk(data C.duckdb_data_chunk) error {
+	columnCount := int(C.duckdb_data_chunk_get_column_count(data))
+	chunk.columns = make([]vector, columnCount)
+	chunk.data = data
+
+	var err error
+	for i := 0; i < columnCount; i++ {
+		// Initialize the vectors and their child vectors.
+		duckdbVector := C.duckdb_data_chunk_get_vector(data, C.idx_t(i))
+		chunk.columns[i].duckdbVector = duckdbVector
+		chunk.columns[i].getChildVectors(duckdbVector)
+
+		// Initialize the callback functions to read and write values.
+		logicalType := C.duckdb_vector_get_column_type(duckdbVector)
+		err = chunk.columns[i].init(logicalType, i)
+		C.duckdb_destroy_logical_type(&logicalType)
+		if err != nil {
+			break
+		}
+	}
+	return err
+}
+
+// InitFromDuckVector initializes a data chunk by providing a duckdb vector.
+func (chunk *DataChunk) InitFromDuckVector(duckdbVector C.duckdb_vector) error {
+	columnCount := 1
+	chunk.columns = make([]vector, columnCount)
+	chunk.columns[0].duckdbVector = duckdbVector
+	chunk.columns[0].getChildVectors(duckdbVector)
+
+	// Initialize the callback function to read and write values.
+	logicalType := C.duckdb_vector_get_column_type(duckdbVector)
+	err := chunk.columns[0].init(logicalType, 0)
+	C.duckdb_destroy_logical_type(&logicalType)
+	return err
+}
+
 // Destroy the memory of a data chunk. This is crucial to avoid leaks.
 func (chunk *DataChunk) Destroy() {
 	C.duckdb_destroy_data_chunk(&chunk.data)
@@ -76,13 +114,17 @@ func (chunk *DataChunk) SetSize() error {
 	return nil
 }
 
+// GetSize returns the internal size of the data chunk.
+func (chunk *DataChunk) GetSize() int {
+	return int(C.duckdb_data_chunk_get_size(chunk.data))
+}
+
 // SetValue writes a single value to a column. Note that this requires casting the type for
 // each invocation. Try to use the columnar function SetColumn for performance.
 func (chunk *DataChunk) SetValue(columnIdx int, rowIdx int, val any) error {
 	if columnIdx >= len(chunk.columns) {
 		return errDriver
 	}
-
 	column := &chunk.columns[columnIdx]
 
 	// Ensure that the types match before attempting to set anything.
@@ -98,8 +140,11 @@ func (chunk *DataChunk) SetValue(columnIdx int, rowIdx int, val any) error {
 
 // GetValue returns a single value of a column.
 func (chunk *DataChunk) GetValue(columnIdx int, rowIdx int) (any, error) {
-	// TODO
-	return nil, errNotImplemented
+	if columnIdx >= len(chunk.columns) {
+		return nil, errDriver
+	}
+	column := &chunk.columns[columnIdx]
+	return column.getFn(column, C.idx_t(rowIdx)), nil
 }
 
 // SetColumn sets the column to val, where val is a slice []T. T is the type of the column.
