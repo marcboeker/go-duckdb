@@ -19,7 +19,8 @@ type vector struct {
 	duckdbVector C.duckdb_vector
 	// A callback function to write to this vector.
 	setFn fnSetVectorValue
-	// FIXME: Add a callback function to read from this vector.
+	// A callback function to get a value from this vector.
+	getFn fnGetVectorValue
 	// The data type of the vector.
 	duckdbType C.duckdb_type
 	// The child names of STRUCT vectors.
@@ -30,8 +31,11 @@ type vector struct {
 	size C.idx_t
 }
 
-// fnSetVectorValue is the setter callback function for any (nested) vectors.
+// fnSetVectorValue is the setter callback function for any (nested) vector.
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
+
+// fnGetVectorValue is the getter callback function for any (nested) vector.
+type fnGetVectorValue func(vec *vector, rowIdx C.idx_t) any
 
 func (vec *vector) tryCast(val any) (any, error) {
 	if val == nil {
@@ -264,6 +268,11 @@ func (vec *vector) setNull(rowIdx C.idx_t) {
 	}
 }
 
+func (vec *vector) isNull(rowIdx C.idx_t) bool {
+	mask := C.duckdb_vector_get_validity(vec.duckdbVector)
+	return !bool(C.duckdb_validity_row_is_valid(mask, rowIdx))
+}
+
 func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
 	if val == nil {
 		vec.setNull(rowIdx)
@@ -273,6 +282,15 @@ func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
 	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
 	xs := (*[1 << 31]T)(ptr)
 	xs[rowIdx] = val.(T)
+}
+
+func getPrimitive[T any](vec *vector, rowIdx C.idx_t) any {
+	if vec.isNull(rowIdx) {
+		return nil
+	}
+	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
+	xs := (*[1 << 31]T)(ptr)
+	return xs[rowIdx]
 }
 
 func (vec *vector) setCString(rowIdx C.idx_t, val any) {
@@ -352,6 +370,9 @@ func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		vec.size++
 		setPrimitive[T](vec, rowIdx, val)
+	}
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		return getPrimitive[T](vec, rowIdx)
 	}
 	vec.duckdbType = duckdbType
 }
