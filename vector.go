@@ -13,21 +13,21 @@ import (
 	"unsafe"
 )
 
-// secondsPerDay to calculate the days since 1970-01-01.
-const secondsPerDay = 24 * 60 * 60
-
 // vector storage of a DuckDB column.
 type vector struct {
 	// The underlying DuckDB vector.
 	duckdbVector C.duckdb_vector
 	// A callback function to write to this vector.
-	fn fnSetVectorValue
+	setFn fnSetVectorValue
+	// FIXME: Add a callback function to read from this vector.
 	// The data type of the vector.
 	duckdbType C.duckdb_type
 	// The child names of STRUCT vectors.
 	childNames []string
 	// The child vectors of nested data types.
 	childVectors []vector
+	// The number of values in this vector.
+	size C.idx_t
 }
 
 // fnSetVectorValue is the setter callback function for any (nested) vectors.
@@ -330,7 +330,7 @@ func (vec *vector) setList(rowIdx C.idx_t, val any) {
 	childVector := vec.childVectors[0]
 	for i, e := range v {
 		offset := C.idx_t(i) + childVectorSize
-		childVector.fn(&childVector, offset, e)
+		childVector.setFn(&childVector, offset, e)
 	}
 }
 
@@ -344,26 +344,29 @@ func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
 	for i := 0; i < len(vec.childVectors); i++ {
 		childVector := vec.childVectors[i]
 		childName := vec.childNames[i]
-		childVector.fn(&childVector, rowIdx, m[childName])
+		childVector.setFn(&childVector, rowIdx, m[childName])
 	}
 }
 
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
-	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
 		setPrimitive[T](vec, rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
 }
 
 func (vec *vector) initCString(duckdbType C.duckdb_type) {
-	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
 		vec.setCString(rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
 }
 
 func (vec *vector) initTS(duckdbType C.duckdb_type) {
-	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -389,14 +392,16 @@ func (vec *vector) initTS(duckdbType C.duckdb_type) {
 }
 
 func (vec *vector) initUUID() {
-	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
 		setPrimitive[C.duckdb_hugeint](vec, rowIdx, uuidToHugeInt(val.(UUID)))
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
 }
 
 func (vec *vector) initDate() {
-	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -422,7 +427,8 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 		return err
 	}
 
-	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
 		vec.setList(rowIdx, val)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_LIST
@@ -438,7 +444,8 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type) error {
 		C.free(unsafe.Pointer(childName))
 	}
 
-	vec.fn = func(vec *vector, rowIdx C.idx_t, val any) {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
 		vec.setStruct(rowIdx, val)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_STRUCT
