@@ -56,7 +56,8 @@ const (
 )
 
 var (
-	errDriver = errors.New("internal driver error, please file a bug report")
+	errDriver         = errors.New("internal driver error, please file a bug report")
+	errNotImplemented = errors.New("not yet implemented error")
 
 	errParseDSN  = errors.New("could not parse DSN for database")
 	errOpen      = errors.New("could not open database")
@@ -70,6 +71,8 @@ var (
 	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
+
+	errScalarUDFNoName = errors.New("could not create scalar UDF: missing name")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")
