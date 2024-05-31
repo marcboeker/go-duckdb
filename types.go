@@ -27,6 +27,12 @@ var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_TIME_TZ:  "TIME_TZ",
 }
 
+// 	// FIXME: implement support for these types in the scanner
+//	// DUCKDB_TYPE_UHUGEINT
+//	// DUCKDB_TYPE_UNION
+//	// DUCKDB_TYPE_BIT
+//	// DUCKDB_TYPE_TIME_TZ
+
 type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }

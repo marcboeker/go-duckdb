@@ -193,49 +193,68 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	duckdbType := C.duckdb_get_type_id(logicalType)
 
 	switch duckdbType {
-	case C.DUCKDB_TYPE_UTINYINT:
-		initPrimitive[uint8](vec, C.DUCKDB_TYPE_UTINYINT)
+	case C.DUCKDB_TYPE_INVALID:
+		// TODO: "invalid data type"
+	case C.DUCKDB_TYPE_BOOLEAN:
+		initPrimitive[bool](vec, C.DUCKDB_TYPE_BOOLEAN)
 	case C.DUCKDB_TYPE_TINYINT:
 		initPrimitive[int8](vec, C.DUCKDB_TYPE_TINYINT)
-	case C.DUCKDB_TYPE_USMALLINT:
-		initPrimitive[uint16](vec, C.DUCKDB_TYPE_USMALLINT)
 	case C.DUCKDB_TYPE_SMALLINT:
 		initPrimitive[int16](vec, C.DUCKDB_TYPE_SMALLINT)
-	case C.DUCKDB_TYPE_UINTEGER:
-		initPrimitive[uint32](vec, C.DUCKDB_TYPE_UINTEGER)
 	case C.DUCKDB_TYPE_INTEGER:
 		initPrimitive[int32](vec, C.DUCKDB_TYPE_INTEGER)
-	case C.DUCKDB_TYPE_UBIGINT:
-		initPrimitive[uint64](vec, C.DUCKDB_TYPE_UBIGINT)
 	case C.DUCKDB_TYPE_BIGINT:
 		initPrimitive[int64](vec, C.DUCKDB_TYPE_BIGINT)
+	case C.DUCKDB_TYPE_UTINYINT:
+		initPrimitive[uint8](vec, C.DUCKDB_TYPE_UTINYINT)
+	case C.DUCKDB_TYPE_USMALLINT:
+		initPrimitive[uint16](vec, C.DUCKDB_TYPE_USMALLINT)
+	case C.DUCKDB_TYPE_UINTEGER:
+		initPrimitive[uint32](vec, C.DUCKDB_TYPE_UINTEGER)
+	case C.DUCKDB_TYPE_UBIGINT:
+		initPrimitive[uint64](vec, C.DUCKDB_TYPE_UBIGINT)
 	case C.DUCKDB_TYPE_FLOAT:
 		initPrimitive[float32](vec, C.DUCKDB_TYPE_FLOAT)
 	case C.DUCKDB_TYPE_DOUBLE:
 		initPrimitive[float64](vec, C.DUCKDB_TYPE_DOUBLE)
-	case C.DUCKDB_TYPE_BOOLEAN:
-		initPrimitive[bool](vec, C.DUCKDB_TYPE_BOOLEAN)
-	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
-		vec.initCString(duckdbType)
 	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
 		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ:
 		vec.initTS(duckdbType)
-	case C.DUCKDB_TYPE_UUID:
-		vec.initUUID()
 	case C.DUCKDB_TYPE_DATE:
 		vec.initDate()
+	case C.DUCKDB_TYPE_TIME:
+		// TODO
+	case C.DUCKDB_TYPE_INTERVAL:
+		// TODO
+	case C.DUCKDB_TYPE_HUGEINT:
+		// TODO
+	case C.DUCKDB_TYPE_UHUGEINT:
+		// TODO
+	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
+		vec.initCString(duckdbType)
+	case C.DUCKDB_TYPE_DECIMAL:
+		// TODO
+	case C.DUCKDB_TYPE_ENUM:
+		// TODO
 	case C.DUCKDB_TYPE_LIST:
 		return vec.initList(logicalType, colIdx)
 	case C.DUCKDB_TYPE_STRUCT:
 		return vec.initStruct(logicalType)
+	case C.DUCKDB_TYPE_MAP:
+		// TODO
+	case C.DUCKDB_TYPE_ARRAY:
+		// TODO
+	case C.DUCKDB_TYPE_UUID:
+		vec.initUUID()
+	case C.DUCKDB_TYPE_UNION:
+		// TODO
+	case C.DUCKDB_TYPE_BIT:
+		// TODO
+	case C.DUCKDB_TYPE_TIME_TZ:
+		// TODO
 	default:
-		name, found := unsupportedAppenderTypeMap[duckdbType]
-		if !found {
-			name = "unknown type"
-		}
-		return columnError(unsupportedTypeError(name), colIdx+1)
+		return columnError(unsupportedTypeError("unknown type"), colIdx+1)
 	}
-
 	return nil
 }
 
@@ -274,31 +293,18 @@ func (vec *vector) isNull(rowIdx C.idx_t) bool {
 }
 
 func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
-	if val == nil {
-		vec.setNull(rowIdx)
-		return
-	}
-
 	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
 	xs := (*[1 << 31]T)(ptr)
 	xs[rowIdx] = val.(T)
 }
 
-func getPrimitive[T any](vec *vector, rowIdx C.idx_t) any {
-	if vec.isNull(rowIdx) {
-		return nil
-	}
+func getPrimitive[T any](vec *vector, rowIdx C.idx_t) T {
 	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
 	xs := (*[1 << 31]T)(ptr)
 	return xs[rowIdx]
 }
 
 func (vec *vector) setCString(rowIdx C.idx_t, val any) {
-	if val == nil {
-		vec.setNull(rowIdx)
-		return
-	}
-
 	var str string
 	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
 		str = val.(string)
@@ -312,16 +318,68 @@ func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	C.free(unsafe.Pointer(cStr))
 }
 
-func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
+func (vec *vector) getCString(rowIdx C.idx_t) string {
+	cStr := getPrimitive[duckdb_string_t](vec, rowIdx)
+	if cStr.length <= stringInlineLength {
+		// Inlined data is stored from byte 4 to stringInlineLength + 4.
+		return C.GoBytes(unsafe.Pointer(&cStr.prefix), C.int(cStr.length))
+	}
+
+	// Any strings exceeding stringInlineLength are stored as a pointer in `ptr`.
+	return C.GoBytes(unsafe.Pointer(cStr.ptr), C.int(cStr.length))
+}
+
+func (vec *vector) setTime(duckdbType C.duckdb_type, rowIdx C.idx_t, val any) {
+	v := val.(time.Time)
+	var ticks int64
+	switch duckdbType {
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		ticks = v.UTC().UnixMicro()
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		ticks = v.UTC().Unix()
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		ticks = v.UTC().UnixMilli()
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		ticks = v.UTC().UnixNano()
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		ticks = v.UTC().UnixMicro()
+	}
+
 	var ts C.duckdb_timestamp
 	ts.micros = C.int64_t(ticks)
 	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
+}
+
+func (vec *vector) getTime(duckdbType C.duckdb_type, rowIdx C.idx_t) time.Time {
+	val := getPrimitive[C.duckdb_timestamp](vec, rowIdx)
+	micros := val.micros
+
+	switch duckdbType {
+	case C.DUCKDB_TYPE_TIMESTAMP:
+		return time.UnixMicro(int64(micros)).UTC()
+	case C.DUCKDB_TYPE_TIMESTAMP_S:
+		return time.Unix(int64(micros), 0).UTC()
+	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+		return time.UnixMilli(int64(micros)).UTC()
+	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+		return time.Unix(0, int64(micros)).UTC()
+	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return time.UnixMicro(int64(micros)).UTC()
+	}
+
+	return time.Time{}
 }
 
 func (vec *vector) setDate(rowIdx C.idx_t, days int32) {
 	var date C.duckdb_date
 	date.days = C.int32_t(days)
 	setPrimitive[C.duckdb_date](vec, rowIdx, date)
+}
+
+func (vec *vector) getDate(rowIdx C.idx_t) time.Time {
+	primitiveDate := getPrimitive[C.duckdb_date](vec, rowIdx)
+	date := C.duckdb_from_date(primitiveDate)
+	return time.Date(int(date.year), time.Month(date.month), int(date.day), 0, 0, 0, 0, time.UTC)
 }
 
 func (vec *vector) setList(rowIdx C.idx_t, val any) {
@@ -369,9 +427,16 @@ func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		vec.size++
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
 		setPrimitive[T](vec, rowIdx, val)
 	}
 	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.isNull(rowIdx) {
+			return nil
+		}
 		return getPrimitive[T](vec, rowIdx)
 	}
 	vec.duckdbType = duckdbType
@@ -380,7 +445,17 @@ func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 func (vec *vector) initCString(duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		vec.size++
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
 		vec.setCString(rowIdx, val)
+	}
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.isNull(rowIdx) {
+			return nil
+		}
+		return vec.getCString(rowIdx)
 	}
 	vec.duckdbType = duckdbType
 }
@@ -392,22 +467,13 @@ func (vec *vector) initTS(duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
-
-		v := val.(time.Time)
-		var ticks int64
-		switch duckdbType {
-		case C.DUCKDB_TYPE_TIMESTAMP:
-			ticks = v.UTC().UnixMicro()
-		case C.DUCKDB_TYPE_TIMESTAMP_S:
-			ticks = v.UTC().Unix()
-		case C.DUCKDB_TYPE_TIMESTAMP_MS:
-			ticks = v.UTC().UnixMilli()
-		case C.DUCKDB_TYPE_TIMESTAMP_NS:
-			ticks = v.UTC().UnixNano()
-		case C.DUCKDB_TYPE_TIMESTAMP_TZ:
-			ticks = v.UTC().UnixMicro()
+		vec.setTime(duckdbType, rowIdx, val)
+	}
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.isNull(rowIdx) {
+			return nil
 		}
-		vec.setTime(rowIdx, ticks)
+		return vec.getTime(duckdbType, rowIdx)
 	}
 	vec.duckdbType = duckdbType
 }
@@ -415,7 +481,18 @@ func (vec *vector) initTS(duckdbType C.duckdb_type) {
 func (vec *vector) initUUID() {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		vec.size++
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
 		setPrimitive[C.duckdb_hugeint](vec, rowIdx, uuidToHugeInt(val.(UUID)))
+	}
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.isNull(rowIdx) {
+			return nil
+		}
+		hugeInt := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
+		return hugeIntToUUID(hugeInt)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
 }
@@ -427,11 +504,16 @@ func (vec *vector) initDate() {
 			vec.setNull(rowIdx)
 			return
 		}
-
 		v := val.(time.Time)
 		// Days since 1970-01-01.
 		days := int32(v.UTC().Unix() / secondsPerDay)
 		vec.setDate(rowIdx, days)
+	}
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.isNull(rowIdx) {
+			return nil
+		}
+		return vec.getDate(rowIdx)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_DATE
 }

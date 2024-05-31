@@ -17,161 +17,101 @@ import (
 	"unsafe"
 )
 
+// rows is a helper struct for scanning a duckdb result.
 type rows struct {
-	res           C.duckdb_result
-	stmt          *stmt
-	chunk         C.duckdb_data_chunk
-	columns       []string
-	chunkCount    C.idx_t
-	chunkRowCount C.idx_t
-	chunkIdx      C.idx_t
-	chunkRowIdx   C.idx_t
+	// stmt is a pointer to the stmt of which we are scanning the result.
+	stmt *stmt
+	// res is the result of stmt.
+	res C.duckdb_result
+	// chunk holds the currently active data chunk.
+	chunk DataChunk
+	// chunkCount is the number of chunks in the result.
+	chunkCount C.idx_t
+	// chunkIdx is the chunk index in the result.
+	chunkIdx C.idx_t
+	// rowCount is the number of scanned rows.
+	rowCount int
 }
 
 func newRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
-	n := C.duckdb_column_count(&res)
-	columns := make([]string, 0, n)
-	for i := C.idx_t(0); i < n; i++ {
-		columns = append(columns, C.GoString(C.duckdb_column_name(&res, i)))
+	columnCount := C.duckdb_column_count(&res)
+	r := rows{
+		res:        res,
+		stmt:       stmt,
+		chunk:      DataChunk{},
+		chunkCount: C.duckdb_result_chunk_count(res),
+		chunkIdx:   0,
+		rowCount:   0,
 	}
 
-	return &rows{
-		res:           res,
-		stmt:          stmt,
-		columns:       columns,
-		chunkCount:    C.duckdb_result_chunk_count(res),
-		chunkRowCount: 0,
-		chunkIdx:      0,
-		chunkRowIdx:   0,
+	for i := C.idx_t(0); i < columnCount; i++ {
+		columnName := C.GoString(C.duckdb_column_name(&res, i))
+		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
+	return &r
 }
 
 func (r *rows) Columns() []string {
-	return r.columns
+	return r.chunk.columnNames
 }
 
 func (r *rows) Next(dst []driver.Value) error {
-	for r.chunkRowIdx == r.chunkRowCount {
-		C.duckdb_destroy_data_chunk(&r.chunk)
+	for r.rowCount == r.chunk.GetSize() {
+		r.chunk.Destroy()
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
-		r.chunk = C.duckdb_result_get_chunk(r.res, r.chunkIdx)
-		r.chunkIdx++
-		r.chunkRowCount = C.duckdb_data_chunk_get_size(r.chunk)
-		r.chunkRowIdx = 0
-	}
-
-	colCount := len(r.columns)
-
-	for colIdx := C.idx_t(0); colIdx < C.idx_t(colCount); colIdx++ {
-		vector := C.duckdb_data_chunk_get_vector(r.chunk, colIdx)
-		value, err := scanValue(vector, r.chunkRowIdx)
-		if err != nil {
+		data := C.duckdb_result_get_chunk(r.res, r.chunkIdx)
+		if err := r.chunk.InitFromDuckDataChunk(data); err != nil {
 			return err
 		}
-		dst[colIdx] = value
+
+		r.chunkIdx++
+		r.rowCount = 0
 	}
 
-	r.chunkRowIdx++
+	columnCount := len(r.chunk.columns)
+	for colIdx := 0; colIdx < columnCount; colIdx++ {
+		var err error
+		if dst[colIdx], err = r.chunk.GetValue(colIdx, r.rowCount); err != nil {
+			return err
+		}
+	}
 
+	r.rowCount++
 	return nil
 }
 
-func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
-	v, err := scan(vector, rowIdx)
-	if err != nil {
-		return nil, err
-	}
-
-	switch value := v.(type) {
-	case map[string]any, []any, Map, driver.Value:
-		return value, nil
-	case nil:
-		return nil, nil
-	default:
-		panic(fmt.Sprintf("BUG: found unexpected type when scanning: %T", value))
-	}
-}
-
 func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
-	// FIXME: implement support for these types:
-	// DUCKDB_TYPE_UHUGEINT
-	// DUCKDB_TYPE_UNION
-	// DUCKDB_TYPE_BIT
-	// DUCKDB_TYPE_TIME_TZ
-
-	validity := C.duckdb_vector_get_validity(vector)
-	if !C.duckdb_validity_row_is_valid(validity, rowIdx) {
-		return nil, nil
-	}
 
 	columnType := C.duckdb_vector_get_column_type(vector)
 	defer C.duckdb_destroy_logical_type(&columnType)
 
 	typeId := C.duckdb_get_type_id(columnType)
 	switch typeId {
-	case C.DUCKDB_TYPE_INVALID:
-		return nil, errInvalidType
-	case C.DUCKDB_TYPE_BOOLEAN:
-		return get[bool](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_TINYINT:
-		return get[int8](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_SMALLINT:
-		return get[int16](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_INTEGER:
-		return get[int32](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_BIGINT:
-		return get[int64](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_UTINYINT:
-		return get[uint8](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_USMALLINT:
-		return get[uint16](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_UINTEGER:
-		return get[uint32](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_UBIGINT:
-		return get[uint64](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_FLOAT:
-		return get[float32](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_DOUBLE:
-		return get[float64](vector, rowIdx), nil
-	case C.DUCKDB_TYPE_TIMESTAMP:
-		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
-	case C.DUCKDB_TYPE_DATE:
-		date := C.duckdb_from_date(get[C.duckdb_date](vector, rowIdx))
-		return time.Date(int(date.year), time.Month(date.month), int(date.day), 0, 0, 0, 0, time.UTC), nil
 	case C.DUCKDB_TYPE_TIME:
+		// TODO
 		return time.UnixMicro(int64(get[C.duckdb_time](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_INTERVAL:
+		// TODO
 		return scanInterval(vector, rowIdx)
 	case C.DUCKDB_TYPE_HUGEINT:
+		// TODO
 		hugeInt := get[C.duckdb_hugeint](vector, rowIdx)
 		return hugeIntToNative(hugeInt), nil
-	case C.DUCKDB_TYPE_VARCHAR:
-		return scanString(vector, rowIdx), nil
-	case C.DUCKDB_TYPE_BLOB:
-		return scanBlob(vector, rowIdx), nil
 	case C.DUCKDB_TYPE_DECIMAL:
+		// TODO
 		return scanDecimal(columnType, vector, rowIdx)
-	case C.DUCKDB_TYPE_TIMESTAMP_S:
-		return time.Unix(int64(get[C.duckdb_timestamp](vector, rowIdx).micros), 0).UTC(), nil
-	case C.DUCKDB_TYPE_TIMESTAMP_MS:
-		return time.UnixMilli(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
-	case C.DUCKDB_TYPE_TIMESTAMP_NS:
-		return time.Unix(0, int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_ENUM:
+		// TODO
 		return scanENUM(columnType, vector, rowIdx)
 	case C.DUCKDB_TYPE_LIST:
 		return scanList(vector, rowIdx)
 	case C.DUCKDB_TYPE_STRUCT:
 		return scanStruct(columnType, vector, rowIdx)
 	case C.DUCKDB_TYPE_MAP:
+		// TODO
 		return scanMap(columnType, vector, rowIdx)
-	case C.DUCKDB_TYPE_UUID:
-		hugeInt := get[C.duckdb_hugeint](vector, rowIdx)
-		return hugeIntToUUID(hugeInt), nil
-	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
-		return time.UnixMicro(int64(get[C.duckdb_timestamp](vector, rowIdx).micros)).UTC(), nil
 	default:
 		return nil, fmt.Errorf("unsupported type %d", typeId)
 	}
@@ -268,7 +208,7 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 }
 
 func (r *rows) Close() error {
-	C.duckdb_destroy_data_chunk(&r.chunk)
+	r.chunk.Destroy()
 	C.duckdb_destroy_result(&r.res)
 
 	var err error
@@ -279,7 +219,6 @@ func (r *rows) Close() error {
 		}
 		r.stmt = nil
 	}
-
 	return err
 }
 
@@ -324,25 +263,6 @@ func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (
 	}
 
 	return out, nil
-}
-
-func scanString(vector C.duckdb_vector, rowIdx C.idx_t) string {
-	return string(scanBlob(vector, rowIdx))
-}
-
-// duckdb/tools/juliapkg/src/ctypes.jl
-// `json`, `varchar`, and `blob` are C-style char arrays
-func scanBlob(vector C.duckdb_vector, rowIdx C.idx_t) []byte {
-	// we don't have to free s.ptr, as it is part of the data in the vector
-	s := get[duckdb_string_t](vector, rowIdx)
-
-	if s.length <= stringInlineLength {
-		// inlined data is stored from byte 4..16 (up to 12 bytes)
-		return C.GoBytes(unsafe.Pointer(&s.prefix), C.int(s.length))
-	}
-
-	// any longer strings are stored as a pointer in `ptr`
-	return C.GoBytes(unsafe.Pointer(s.ptr), C.int(s.length))
 }
 
 func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
