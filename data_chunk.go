@@ -148,21 +148,3 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 	column := &chunk.columns[colIdx]
 	return column.getFn(column, C.idx_t(rowIdx)), nil
 }
-
-// SetColumn sets the column to val, where val is a slice []T. T is the type of the column.
-func (chunk *DataChunk) SetColumn(colIdx int, val any) error {
-	// TODO
-	return errNotImplemented
-}
-
-// GetColumn returns a slice []T containing the column values. T is the type of the column.
-func (chunk *DataChunk) GetColumn(colIdx int) (any, error) {
-	// TODO
-	return nil, errNotImplemented
-}
-
-// GetColumnData returns a pointer to the underlying data of a column.
-func (chunk *DataChunk) GetColumnData(colIdx int) (unsafe.Pointer, error) {
-	// TODO
-	return nil, errNotImplemented
-}
