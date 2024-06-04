@@ -602,6 +602,7 @@ func TestInterval(t *testing.T) {
 
 func BenchmarkTypes(b *testing.B) {
 	db, err := sql.Open("duckdb", "")
+	require.NoError(b, err)
 	limit := 50000
 	defer require.NoError(b, db.Close())
 
