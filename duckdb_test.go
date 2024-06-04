@@ -5,14 +5,12 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -117,7 +115,7 @@ func TestConnPool(t *testing.T) {
 	db := openDB(t)
 	db.SetMaxOpenConns(2) // set connection pool size greater than 1
 	defer db.Close()
-	createTable(db, t)
+	createFooTable(db, t)
 
 	// Get two separate connections and check they're consistent
 	conn1, err := db.Conn(context.Background())
@@ -209,14 +207,14 @@ func TestExec(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
-	require.NotNil(t, createTable(db, t))
+	require.NotNil(t, createFooTable(db, t))
 }
 
 func TestQuery(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
 	defer db.Close()
-	createTable(db, t)
+	createFooTable(db, t)
 
 	t.Run("simple", func(t *testing.T) {
 		res, err := db.Exec("INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)", 12345, 1234)
@@ -280,446 +278,6 @@ func TestQuery(t *testing.T) {
 	})
 }
 
-func TestStruct(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-	createTable(db, t)
-
-	t.Run("scan single struct", func(t *testing.T) {
-		row := db.QueryRow("SELECT {'x': 1, 'y': 2}")
-
-		type point struct {
-			X int
-			Y int
-		}
-
-		want := Composite[point]{
-			point{1, 2},
-		}
-
-		var result Composite[point]
-		require.NoError(t, row.Scan(&result))
-		require.Equal(t, want, result)
-	})
-
-	t.Run("scan slice of structs", func(t *testing.T) {
-		_, err := db.Exec("INSERT INTO foo VALUES('lala', ?), ('lala', ?), ('lalo', 42), ('lalo', 43)", 12345, 12346)
-		require.NoError(t, err)
-
-		type row struct {
-			Bar string
-			Baz int
-		}
-
-		want := []Composite[row]{
-			{row{"lalo", 42}},
-			{row{"lalo", 43}},
-			{row{"lala", 12345}},
-			{row{"lala", 12346}},
-		}
-
-		rows, err := db.Query("SELECT struct_pack(bar, baz) FROM foo ORDER BY baz")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		var result []Composite[row]
-		for rows.Next() {
-			var res Composite[row]
-			err := rows.Scan(&res)
-			require.NoError(t, err)
-			result = append(result, res)
-		}
-		require.Equal(t, want, result)
-	})
-}
-
-func TestMap(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	t.Run("select map", func(t *testing.T) {
-		var m Map
-		require.NoError(t, db.QueryRow("SELECT map(['foo', 'bar'], ['a', 'e'])").Scan(&m))
-		require.Equal(t, Map{
-			"foo": "a",
-			"bar": "e",
-		}, m)
-	})
-
-	t.Run("select nested map", func(t *testing.T) {
-		var m Map
-		err := db.QueryRow("SELECT map([map([1], [1]), map([2], [2])], ['a', 'e'])").Scan(&m)
-		require.ErrorIs(t, err, errUnsupportedMapKeyType)
-	})
-
-	t.Run("insert map", func(t *testing.T) {
-		tests := []struct {
-			sqlType string
-			input   Map
-		}{
-			// {
-			// 	"MAP(VARCHAR, VARCHAR)",
-			// 	Map{"foo": "bar"},
-			// },
-			// {
-			// 	"MAP(INTEGER, VARCHAR)",
-			// 	Map{int32(1): "bar"},
-			// },
-			// {
-			// 	"MAP(VARCHAR, BIGINT)",
-			// 	Map{"foo": int64(2)},
-			// },
-			// {
-			// 	"MAP(VARCHAR, BOOLEAN)",
-			// 	Map{"foo": true},
-			// },
-			// {
-			// 	"MAP(DOUBLE, VARCHAR)",
-			// 	Map{1.1: "foobar"},
-			// },
-		}
-		for i, test := range tests {
-			_, err := db.Exec(fmt.Sprintf("CREATE TABLE map_test_%d(properties %s)", i, test.sqlType))
-			require.NoError(t, err)
-
-			_, err = db.Exec(fmt.Sprintf("INSERT INTO map_test_%d VALUES(?)", i), test.input)
-			require.NoError(t, err, test.input)
-
-			var m Map
-			require.NoError(t, db.QueryRow(fmt.Sprintf("SELECT properties FROM map_test_%d", i)).Scan(&m))
-			require.Equal(t, test.input, m)
-		}
-	})
-}
-
-func TestList(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	t.Run("integer list", func(t *testing.T) {
-		const n = 1000
-		var row Composite[[]int]
-		require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
-		require.Equal(t, n, len(row.Get()))
-		for i := 0; i < n; i++ {
-			require.Equal(t, i, row.Get()[i])
-		}
-	})
-}
-
-func compareDecimal(t *testing.T, want Decimal, got Decimal) {
-	require.Equal(t, want.Scale, got.Scale)
-	require.Equal(t, want.Width, got.Width)
-	require.Equal(t, want.Value.String(), got.Value.String())
-}
-
-func TestDecimal(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	t.Run("decimal widths", func(t *testing.T) {
-		for i := 1; i <= 38; i++ {
-			var f Decimal
-			require.NoError(t, db.QueryRow(fmt.Sprintf("SELECT 0::DECIMAL(%d, 1)", i)).Scan(&f))
-			require.Equal(t, Decimal{Width: uint8(i), Value: big.NewInt(0), Scale: 1}, f)
-		}
-	})
-
-	t.Run("multiple decimal types", func(t *testing.T) {
-		rows, err := db.Query(`SELECT * FROM (VALUES
-			(1.23::DECIMAL(3, 2)),
-			(-1.23::DECIMAL(3, 2)),
-			(123.45::DECIMAL(5, 2)),
-			(-123.45::DECIMAL(5, 2)),
-			(123456789.01::DECIMAL(11, 2)),
-			(-123456789.01::DECIMAL(11, 2)),
-			(1234567890123456789.234::DECIMAL(22, 3)),
-			(-1234567890123456789.234::DECIMAL(22, 3)),
-		) v
-		ORDER BY v ASC`)
-		require.NoError(t, err)
-		defer rows.Close()
-
-		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
-		require.True(t, success, "failed to parse big number")
-		bigNumberNegative, success := new(big.Int).SetString("-1234567890123456789234", 10)
-		require.True(t, success, "failed to parse big number")
-		tests := []struct {
-			input string
-			want  Decimal
-		}{
-			{input: "1.23::DECIMAL(3, 2)", want: Decimal{Value: big.NewInt(123), Width: 3, Scale: 2}},
-			{input: "-1.23::DECIMAL(3, 2)", want: Decimal{Value: big.NewInt(-123), Width: 3, Scale: 2}},
-			{input: "123.45::DECIMAL(5, 2)", want: Decimal{Value: big.NewInt(12345), Width: 5, Scale: 2}},
-			{input: "-123.45::DECIMAL(5, 2)", want: Decimal{Value: big.NewInt(-12345), Width: 5, Scale: 2}},
-			{input: "123456789.01::DECIMAL(11, 2)", want: Decimal{Value: big.NewInt(12345678901), Width: 11, Scale: 2}},
-			{input: "-123456789.01::DECIMAL(11, 2)", want: Decimal{Value: big.NewInt(-12345678901), Width: 11, Scale: 2}},
-			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNumber, Width: 22, Scale: 3}},
-			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNumberNegative, Width: 22, Scale: 3}},
-		}
-		for _, tc := range tests {
-			row := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input))
-			var fs Decimal
-			require.NoError(t, row.Scan(&fs))
-			compareDecimal(t, tc.want, fs)
-		}
-	})
-
-	t.Run("huge decimal", func(t *testing.T) {
-		bigNumber, success := new(big.Int).SetString("12345678901234567890123456789", 10)
-		require.True(t, success, "failed to parse big number")
-		var f Decimal
-		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
-		compareDecimal(t, Decimal{Value: bigNumber, Width: 29, Scale: 20}, f)
-	})
-
-	t.Run("decimal to float64", func(t *testing.T) {
-		tests := []struct {
-			input string
-			want  float64
-		}{
-			{input: "1.23::DECIMAL(3, 2)", want: 1.23},
-			{input: "-1.23::DECIMAL(3, 2)", want: -1.23},
-			{input: "123.45::DECIMAL(5, 2)", want: 123.45},
-			{input: "-123.45::DECIMAL(5, 2)", want: -123.45},
-			{input: "123456789.01::DECIMAL(11, 2)", want: 123456789.01},
-			{input: "-123456789.01::DECIMAL(11, 2)", want: -123456789.01},
-			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: 1234567890123456789.234},
-			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: -1234567890123456789.234},
-			{input: "123456789.01234567890123456789::DECIMAL(29, 20)", want: 123456789.01234567890123456789},
-			{input: "-123456789.01234567890123456789::DECIMAL(29, 20)", want: -123456789.01234567890123456789},
-		}
-		for _, tc := range tests {
-			row := db.QueryRow(fmt.Sprintf("SELECT %s", tc.input))
-			var fs Decimal
-			require.NoError(t, row.Scan(&fs))
-			require.Equal(t, tc.want, fs.Float64())
-		}
-	})
-}
-
-func TestUUID(t *testing.T) {
-	t.Parallel()
-
-	db := openDB(t)
-	defer db.Close()
-
-	_, err := db.Exec("CREATE TABLE uuid_test(uuid UUID)")
-	require.NoError(t, err)
-
-	tests := []uuid.UUID{
-		uuid.New(),
-		uuid.Nil,
-		uuid.MustParse("80000000-0000-0000-0000-200000000000"),
-	}
-	for _, v := range tests {
-		_, err := db.Exec("INSERT INTO uuid_test VALUES(?)", v)
-		require.NoError(t, err)
-
-		var uuid uuid.UUID
-		require.NoError(t, db.QueryRow("SELECT uuid FROM uuid_test WHERE uuid = ?", v).Scan(&uuid))
-		require.Equal(t, v, uuid)
-
-		require.NoError(t, db.QueryRow("SELECT ?", v).Scan(&uuid))
-		require.Equal(t, v, uuid)
-
-		require.NoError(t, db.QueryRow("SELECT ?::uuid", v).Scan(&uuid))
-		require.Equal(t, v, uuid)
-	}
-}
-
-func TestENUMs(t *testing.T) {
-	t.Parallel()
-
-	type environment string
-	const (
-		Sea  environment = "Sea"
-		Air  environment = "Air"
-		Land environment = "Land"
-	)
-
-	db := openDB(t)
-	defer db.Close()
-
-	_, err := db.Exec("CREATE TYPE element AS ENUM ('Sea', 'Air', 'Land')")
-	require.NoError(t, err)
-
-	_, err = db.Exec("CREATE TABLE vehicles (name text, environment element)")
-	require.NoError(t, err)
-
-	_, err = db.Exec("INSERT INTO vehicles VALUES (?, ?), (?, ?)", "Aircraft", Air, "Boat", Sea)
-	require.NoError(t, err)
-
-	var name string
-	var env environment
-	require.NoError(t, db.QueryRow("SELECT name, environment FROM vehicles WHERE environment = ?", Air).Scan(&name, &env))
-	require.Equal(t, "Aircraft", name)
-	require.Equal(t, Air, env)
-
-	// enum list
-	_, err = db.Exec("CREATE TABLE all_enums (environments element[])")
-	require.NoError(t, err)
-
-	_, err = db.Exec("INSERT INTO all_enums VALUES ([?, ?, ?])", Air, Land, Sea)
-	require.NoError(t, err)
-
-	var row Composite[[]environment]
-	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
-	require.ElementsMatch(t, []environment{Air, Sea, Land}, row.Get())
-}
-
-func TestHugeInt(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	t.Run("scan hugeint", func(t *testing.T) {
-		tests := []string{
-			"0",
-			"1",
-			"-1",
-			"9223372036854775807",
-			"-9223372036854775808",
-			"170141183460469231731687303715884105727",
-			"-170141183460469231731687303715884105727",
-		}
-		for _, expected := range tests {
-			t.Run(expected, func(t *testing.T) {
-				var res *big.Int
-				err := db.QueryRow(fmt.Sprintf("SELECT %s::HUGEINT", expected)).Scan(&res)
-				require.NoError(t, err)
-				require.Equal(t, expected, res.String())
-			})
-		}
-	})
-
-	t.Run("bind hugeint", func(t *testing.T) {
-		_, err := db.Exec("CREATE TABLE hugeint_test (number HUGEINT)")
-		require.NoError(t, err)
-
-		val := big.NewInt(1)
-		val.SetBit(val, 101, 1)
-		_, err = db.Exec("INSERT INTO hugeint_test VALUES(?)", val)
-		require.NoError(t, err)
-
-		var res *big.Int
-		err = db.QueryRow("SELECT number FROM hugeint_test WHERE number = ?", val).Scan(&res)
-		require.NoError(t, err)
-		require.Equal(t, val.String(), res.String())
-
-		tooHuge := big.NewInt(1)
-		tooHuge.SetBit(tooHuge, 129, 1)
-		_, err = db.Exec("INSERT INTO hugeint_test VALUES(?)", tooHuge)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "too big")
-	})
-}
-
-func TestVarchar(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	var s string
-
-	t.Run("size is smaller than 12", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("select 'inline'").Scan(&s))
-		require.Equal(t, "inline", s)
-	})
-
-	t.Run("size is exactly 12", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("select 'inlineSize12'").Scan(&s))
-		require.Equal(t, "inlineSize12", s)
-	})
-
-	t.Run("size is 13", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("select 'inlineSize13_'").Scan(&s))
-		require.Equal(t, "inlineSize13_", s)
-	})
-
-	t.Run("size is greater than 12", func(t *testing.T) {
-		const q = "uninlined string that is greater than 12 bytes long"
-		require.NoError(t, db.QueryRow(fmt.Sprintf("SELECT '%s'", q)).Scan(&s))
-		require.Equal(t, q, s)
-	})
-}
-
-func TestBlob(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	var bytes []byte
-
-	t.Run("select as string", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT 'AB'::BLOB;").Scan(&bytes))
-		require.Equal(t, "AB", string(bytes))
-	})
-
-	t.Run("select as hex", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT '\\xAA'::BLOB").Scan(&bytes))
-		require.Equal(t, []byte{0xAA}, bytes)
-	})
-}
-
-func TestTimestampTZ(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	_, err := db.Exec("CREATE TABLE IF NOT EXISTS tbl (tz TIMESTAMPTZ)")
-	require.NoError(t, err)
-
-	IST, err := time.LoadLocation("Asia/Kolkata")
-	require.NoError(t, err)
-
-	const longForm = "2006-01-02 15:04:05 MST"
-	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", IST)
-	require.NoError(t, err)
-
-	_, err = db.Exec("INSERT INTO tbl (tz) VALUES(?)", ts)
-	require.NoError(t, err)
-
-	var tz time.Time
-	err = db.QueryRow("SELECT tz FROM tbl").Scan(&tz)
-	require.NoError(t, err)
-	require.Equal(t, ts.UTC(), tz)
-}
-
-func TestBoolean(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	var res bool
-
-	t.Run("scan", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT true").Scan(&res))
-		require.Equal(t, true, res)
-
-		require.NoError(t, db.QueryRow("SELECT false").Scan(&res))
-		require.Equal(t, false, res)
-	})
-
-	t.Run("bind", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT ?", true).Scan(&res))
-		require.Equal(t, true, res)
-
-		require.NoError(t, db.QueryRow("SELECT ?", false).Scan(&res))
-		require.Equal(t, false, res)
-
-		require.NoError(t, db.QueryRow("SELECT ?", 0).Scan(&res))
-		require.Equal(t, false, res)
-
-		require.NoError(t, db.QueryRow("SELECT ?", 1).Scan(&res))
-		require.Equal(t, true, res)
-	})
-}
-
 func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
@@ -752,97 +310,6 @@ func TestJSON(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(data), &items))
 		require.Equal(t, len(items), 2)
 		require.Equal(t, items, []string{"foo", "bar"})
-	})
-}
-
-// CAST(? as DATE) generate result of type Date (time.Time)
-func TestDate(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-	tests := map[string]struct {
-		want  time.Time
-		input string
-	}{
-		"epoch":       {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
-		"before 1970": {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"after 1970":  {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			var res time.Time
-			err := db.QueryRow("SELECT CAST(? as DATE)", tc.input).Scan(&res)
-			require.NoError(t, err)
-			require.Equal(t, tc.want, res)
-		})
-	}
-}
-
-func TestTimestamp(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-	tests := map[string]struct {
-		input string
-		want  time.Time
-	}{
-		"epoch":         {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
-		"before 1970":   {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"after 1970":    {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"HH:MM:SS":      {input: "2022-12-12 11:35:43", want: time.Date(2022, 12, 12, 11, 35, 43, 0, time.UTC)},
-		"HH:MM:SS.DDDD": {input: "2022-12-12 11:35:43.5678", want: time.Date(2022, 12, 12, 11, 35, 43, 567800000, time.UTC)},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			var res time.Time
-			if err := db.QueryRow("SELECT CAST(? as TIMESTAMP)", tc.input).Scan(&res); err != nil {
-				t.Errorf("can not scan value %v", err)
-			} else if res != tc.want {
-				t.Errorf("expected value %v != resulting value %v", tc.want, res)
-			}
-		})
-	}
-}
-
-func TestInterval(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
-
-	t.Run("bind interval", func(t *testing.T) {
-		interval := Interval{Days: 10, Months: 4, Micros: 4}
-		row := db.QueryRow("SELECT ?::INTERVAL", interval)
-
-		var res Interval
-		require.NoError(t, row.Scan(&res))
-		require.Equal(t, interval, res)
-	})
-
-	t.Run("scan interval", func(t *testing.T) {
-		tests := map[string]struct {
-			input string
-			want  Interval
-		}{
-			"simple interval": {
-				input: "INTERVAL 5 HOUR",
-				want:  Interval{Days: 0, Months: 0, Micros: 18000000000},
-			},
-			"interval arithmetic": {
-				input: "INTERVAL 1 DAY + INTERVAL 5 DAY",
-				want:  Interval{Days: 6, Months: 0, Micros: 0},
-			},
-			"timestamp arithmetic": {
-				input: "CAST('2022-05-01' as TIMESTAMP) - CAST('2022-04-01' as TIMESTAMP)",
-				want:  Interval{Days: 30, Months: 0, Micros: 0},
-			},
-		}
-		for name, tc := range tests {
-			t.Run(name, func(t *testing.T) {
-				var res Interval
-				require.NoError(t, db.QueryRow(fmt.Sprintf("SELECT %s", tc.input)).Scan(&res))
-				require.Equal(t, tc.want, res)
-			})
-		}
 	})
 }
 
@@ -1212,8 +679,12 @@ func loadJSONExt(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 }
 
-func createTable(db *sql.DB, t *testing.T) *sql.Result {
-	res, err := db.Exec("CREATE TABLE foo(bar VARCHAR, baz INTEGER)")
+func createTable(db *sql.DB, t *testing.T, sql string) *sql.Result {
+	res, err := db.Exec(sql)
 	require.NoError(t, err)
 	return &res
+}
+
+func createFooTable(db *sql.DB, t *testing.T) *sql.Result {
+	return createTable(db, t, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 }

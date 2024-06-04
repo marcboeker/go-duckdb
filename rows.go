@@ -305,7 +305,7 @@ func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (
 			return nil, errMissingKeyOrValue
 		}
 		if !reflect.TypeOf(key).Comparable() {
-			return nil, errUnsupportedMapKeyType
+			return nil, getError(errUnsupportedMapKeyType, nil)
 		}
 	}
 
@@ -439,9 +439,8 @@ func scanENUM(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) 
 }
 
 var (
-	errInvalidType           = errors.New("invalid data type")
-	errMissingKeyOrValue     = errors.New("missing key and/or value for map item")
-	errUnsupportedMapKeyType = errors.New("map key type not supported by driver")
+	errInvalidType       = errors.New("invalid data type")
+	errMissingKeyOrValue = errors.New("missing key and/or value for map item")
 )
 
 func typeName(t C.duckdb_type) string {

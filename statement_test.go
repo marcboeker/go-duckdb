@@ -9,7 +9,7 @@ import (
 func TestPrepareQuery(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
-	createTable(db, t)
+	createFooTable(db, t)
 
 	stmt, err := db.Prepare("SELECT * FROM foo WHERE baz=?")
 	require.NoError(t, err)
@@ -23,7 +23,7 @@ func TestPrepareQuery(t *testing.T) {
 func TestPrepareWithError(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
-	createTable(db, t)
+	createFooTable(db, t)
 
 	testCases := []struct {
 		tpl string
