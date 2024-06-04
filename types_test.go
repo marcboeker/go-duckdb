@@ -14,7 +14,7 @@ import (
 
 type testTypesEnum string
 
-const testTypesEnumSQL = `CREATE TYPE mood AS ENUM ('0', '1', '2')`
+const testTypesEnumSQL = `CREATE TYPE my_enum AS ENUM ('0', '1', '2')`
 
 type testTypesStruct struct {
 	A int32
@@ -73,7 +73,7 @@ const testTypesTableSQL = `CREATE TABLE types_tbl (
 	Timestamp_s_col TIMESTAMP_S,
 	Timestamp_ms_col TIMESTAMP_MS,
 	Timestamp_ns_col TIMESTAMP_NS,
-	Enum_col mood,
+	Enum_col my_enum,
 	List_col INTEGER[],
 	Struct_col STRUCT(A INTEGER, B VARCHAR),
 	Map_col MAP(INTEGER, VARCHAR),
@@ -206,22 +206,21 @@ func testTypesQuery(db *sql.DB) ([]testTypesRow, error) {
 	return slice, res.Close()
 }
 
-// TestTypes tests scanning various duckdb types.
 func TestTypes(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	limit := 3
+	rowCount := 3
 
 	_, err := db.Exec(testTypesEnumSQL)
 	require.NoError(t, err)
 	createTable(db, t, testTypesTableSQL)
 
-	_, err = db.Exec(testTypesInsertSQL, limit)
+	_, err = db.Exec(testTypesInsertSQL, rowCount)
 	require.NoError(t, err)
 
 	slice, err := testTypesQuery(db)
 	require.NoError(t, err)
-	require.Equal(t, limit, len(slice))
+	require.Equal(t, rowCount, len(slice))
 
 	for i, r := range slice {
 		expected := testTypesGenerateRow(i)
@@ -603,18 +602,19 @@ func TestInterval(t *testing.T) {
 func BenchmarkTypes(b *testing.B) {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(b, err)
-	limit := 50000
-	defer require.NoError(b, db.Close())
+	rowCount := 10000
 
 	_, err = db.Exec(testTypesEnumSQL)
 	require.NoError(b, err)
 	_, err = db.Exec(testTypesTableSQL)
 	require.NoError(b, err)
-	_, err = db.Exec(testTypesInsertSQL, limit)
+	_, err = db.Exec(testTypesInsertSQL, rowCount)
 	require.NoError(b, err)
 
 	for n := 0; n < b.N; n++ {
 		_, err = testTypesQuery(db)
 		require.NoError(b, err)
 	}
+
+	require.NoError(b, db.Close())
 }
