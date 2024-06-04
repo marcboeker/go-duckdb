@@ -135,3 +135,12 @@ func (d *Decimal) Float64() float64 {
 	f, _ := value.Float64()
 	return f
 }
+
+// MarshalText implements the encoding.TextMarshaler interface.
+func (d Decimal) MarshalText() ([]byte, error) {
+	scale := big.NewInt(int64(d.Scale))
+	factor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), scale, nil))
+	value := new(big.Float).SetInt(d.Value)
+	value.Quo(value, factor)
+	return value.MarshalText()
+}
