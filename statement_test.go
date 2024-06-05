@@ -35,7 +35,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 	err = stmt.QueryRow(sql.Named("baz", "x"), sql.Named("foo", 1), sql.Named("bar", 2)).Scan(&foo, &bar, &baz, &foo2)
 	require.NoError(t, err)
 	if foo != 1 || bar != 2 || baz != "x" || foo2 != 1 {
-		t.Fatalf("bad values: %d %d %s %d", foo, bar, baz, foo2)
+		require.Fail(t, "bad values: %d %d %s %d", foo, bar, baz, foo2)
 	}
 }
 
