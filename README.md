@@ -188,6 +188,14 @@ LD_LIBRARY_PATH=/path/to/libs ./main
 # On macOS
 CGO_ENABLED=1 CGO_LDFLAGS="-L/path/to/libs" go build -tags=duckdb_use_lib main.go
 DYLD_LIBRARY_PATH=/path/to/libs ./main
+
+# On Windows
+1. Prepare msys2 ucrt64
+2. Enter msys2,run: "pacman -S ucrt64/mingw-w64-ucrt-x86_64-duckdb". verify there "libduckdb.dll" under ucrt64/bin and "libduckdb.dll.a" etc. under ucrt64/lib
+3. Open Windows cmd,run: set PATH=msys2root\ucrt64\bin;%PAHT%, THE RUN: go env -w CGO_LDFLAGS="-Lmsys2root\ucrt64\lib"
+4. Be sure cgo is enabled
+5. In user programe workspace, RUN: go build -tags=duckdb_use_lib youmain.go
+6. COPY "libduckdb.dll" to programe-EXE folder from msys2root\ucrt64\bin
 ```
 
 ## Notes
