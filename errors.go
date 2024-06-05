@@ -63,6 +63,8 @@ var (
 	errOpen      = errors.New("could not open database")
 	errSetConfig = errors.New("could not set invalid or local option for global database config")
 
+	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
+
 	errAppenderInvalidCon       = errors.New("could not create appender: not a DuckDB driver connection")
 	errAppenderClosedCon        = errors.New("could not create appender: appender creation on a closed connection")
 	errAppenderCreation         = errors.New("could not create appender")
