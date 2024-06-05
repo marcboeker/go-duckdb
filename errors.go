@@ -56,8 +56,7 @@ const (
 )
 
 var (
-	errDriver         = errors.New("internal driver error, please file a bug report")
-	errNotImplemented = errors.New("not yet implemented error")
+	errDriver = errors.New("internal driver error, please file a bug report")
 
 	errParseDSN  = errors.New("could not parse DSN for database")
 	errOpen      = errors.New("could not open database")

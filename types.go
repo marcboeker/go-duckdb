@@ -13,7 +13,13 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
+// FIXME: implement support for these types in the scanner
+// DUCKDB_TYPE_UHUGEINT
+// DUCKDB_TYPE_UNION
+// DUCKDB_TYPE_BIT
+// DUCKDB_TYPE_TIME_TZ
+
+var unsupportedTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_INVALID:  "INVALID",
 	C.DUCKDB_TYPE_TIME:     "TIME",
 	C.DUCKDB_TYPE_INTERVAL: "INTERVAL",
