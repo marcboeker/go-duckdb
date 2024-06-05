@@ -131,13 +131,7 @@ if err != nil {
 
 ## DuckDB Apache Arrow Interface
 
-To use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you need to build your binary with the `duckdb_arrow` build tag.
-
-```sh
-go build -tags="duckdb_arrow"
-```
-
-Then, you can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
+If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
 
 ```go
 connector, err := duckdb.NewConnector("", nil)
@@ -167,6 +161,12 @@ defer rdr.Release()
 for rdr.Next() {
   // process records
 }
+```
+
+The Arrow interface is a heavy dependency. If you do not need it, you can disable it by passing `-tags=no_duckdb_arrow` to `go build`. This will be made opt-in in V2.
+
+```sh
+go build -tags="no_duckdb_arrow"
 ```
 
 ## Vendoring
