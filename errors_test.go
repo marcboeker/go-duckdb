@@ -45,6 +45,16 @@ func TestErrOpen(t *testing.T) {
 	})
 }
 
+func TestErrNestedMap(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	var m Map
+	err := db.QueryRow("SELECT MAP([MAP([1], [1]), MAP([2], [2])], ['a', 'e'])").Scan(&m)
+	testError(t, err, errUnsupportedMapKeyType.Error())
+	require.NoError(t, db.Close())
+}
+
 func TestErrAppender(t *testing.T) {
 	t.Run(errAppenderInvalidCon.Error(), func(t *testing.T) {
 		var con driver.Conn
