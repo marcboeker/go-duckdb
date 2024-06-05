@@ -3,6 +3,7 @@ package duckdb
 import (
 	"database/sql"
 	"database/sql/driver"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -34,7 +35,7 @@ func TestReplacementScan(t *testing.T) {
 		rangeRows--
 	}
 	if rows.Err() != nil {
-		t.Fatal(rows.Err())
+		require.NoError(t, rows.Err())
 	}
 
 	if rangeRows != 0 {
