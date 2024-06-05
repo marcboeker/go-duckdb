@@ -19,7 +19,7 @@ func TestReplacementScan(t *testing.T) {
 	defer connector.Close()
 
 	var rangeRows = 3
-	_ = RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
+	RegisterReplacementScan(connector, func(tableName string) (string, []any, error) {
 		return "range", []any{int64(rangeRows)}, nil
 	})
 

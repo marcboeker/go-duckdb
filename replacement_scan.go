@@ -19,12 +19,11 @@ var replacementScanState struct {
 	callback ReplacementScanCallback
 }
 
-func RegisterReplacementScan(connector *Connector, cb ReplacementScanCallback) error {
+func RegisterReplacementScan(connector *Connector, cb ReplacementScanCallback) {
 	replacementScanState.mtx.Lock()
 	replacementScanState.callback = cb
 	replacementScanState.mtx.Unlock()
 	C.duckdb_add_replacement_scan(connector.db, C.duckdb_replacement_callback_t(C.replacement_scan_cb), nil, C.duckdb_delete_callback_t(C.free))
-	return nil
 }
 
 //export replacement_scan_cb
