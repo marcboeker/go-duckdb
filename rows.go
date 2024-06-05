@@ -83,15 +83,11 @@ func (r *rows) Next(dst []driver.Value) error {
 }
 
 func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
-
 	columnType := C.duckdb_vector_get_column_type(vector)
 	defer C.duckdb_destroy_logical_type(&columnType)
 
 	typeId := C.duckdb_get_type_id(columnType)
 	switch typeId {
-	case C.DUCKDB_TYPE_TIME:
-		// TODO
-		return time.UnixMicro(int64(get[C.duckdb_time](vector, rowIdx).micros)).UTC(), nil
 	case C.DUCKDB_TYPE_INTERVAL:
 		// TODO
 		return scanInterval(vector, rowIdx)
@@ -102,12 +98,6 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_DECIMAL:
 		// TODO
 		return scanDecimal(columnType, vector, rowIdx)
-	case C.DUCKDB_TYPE_ENUM:
-		// TODO
-		return scanENUM(columnType, vector, rowIdx)
-	case C.DUCKDB_TYPE_MAP:
-		// TODO
-		return scanMap(columnType, vector, rowIdx)
 	default:
 		return nil, fmt.Errorf("unsupported type %d", typeId)
 	}
@@ -224,51 +214,6 @@ func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
 	return xs[rowIdx]
 }
 
-func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Map, error) {
-	list, err := scanList(vector, rowIdx)
-	if err != nil {
-		return nil, err
-	}
-
-	// DuckDB supports more map key types than Go, which only supports comparable types.
-	// To avoid a panic, we check that the map key type is comparable.
-	// All keys in a DuckDB map have the same type, so we just do this check for the first value.
-	if len(list) > 0 {
-		mapItem := list[0].(map[string]any)
-		key, ok := mapItem["key"]
-		if !ok {
-			return nil, errMissingKeyOrValue
-		}
-		if !reflect.TypeOf(key).Comparable() {
-			return nil, getError(errUnsupportedMapKeyType, nil)
-		}
-	}
-
-	out := Map{}
-	for i := 0; i < len(list); i++ {
-		mapItem := list[i].(map[string]any)
-		key, ok := mapItem["key"]
-		if !ok {
-			return nil, errMissingKeyOrValue
-		}
-		val, ok := mapItem["value"]
-		if !ok {
-			return nil, errMissingKeyOrValue
-		}
-		out[key] = val
-	}
-
-	return out, nil
-}
-
-func scanList(vector C.duckdb_vector, rowIdx C.idx_t) ([]any, error) {
-	return nil, nil
-}
-
-func scanStruct(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (map[string]any, error) {
-	return nil, nil
-}
-
 func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Decimal, error) {
 	scale := C.duckdb_decimal_scale(ty)
 	width := C.duckdb_decimal_width(ty)
@@ -307,31 +252,7 @@ func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
 	return data, nil
 }
 
-func scanENUM(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (string, error) {
-	var idx uint64
-	internalType := C.duckdb_enum_internal_type(ty)
-	switch internalType {
-	case C.DUCKDB_TYPE_UTINYINT:
-		idx = uint64(get[uint8](vector, rowIdx))
-	case C.DUCKDB_TYPE_USMALLINT:
-		idx = uint64(get[uint16](vector, rowIdx))
-	case C.DUCKDB_TYPE_UINTEGER:
-		idx = uint64(get[uint32](vector, rowIdx))
-	case C.DUCKDB_TYPE_UBIGINT:
-		idx = get[uint64](vector, rowIdx)
-	default:
-		return "", errInvalidType
-	}
-
-	val := C.duckdb_enum_dictionary_value(ty, (C.idx_t)(idx))
-	defer C.duckdb_free(unsafe.Pointer(val))
-	return C.GoString(val), nil
-}
-
-var (
-	errInvalidType       = errors.New("invalid data type")
-	errMissingKeyOrValue = errors.New("missing key and/or value for map item")
-)
+var errInvalidType = errors.New("invalid data type")
 
 func logicalTypeName(lt C.duckdb_logical_type) string {
 	t := C.duckdb_get_type_id(lt)
