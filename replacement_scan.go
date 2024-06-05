@@ -14,22 +14,24 @@ import (
 
 type ReplacementScanCallback func(tableName string) (string, []any, error)
 
-var replacementScanFnMxt sync.Mutex
-var replacementScanCallback ReplacementScanCallback
+var replacementScanState struct {
+	mtx      sync.Mutex
+	callback ReplacementScanCallback
+}
 
 func RegisterReplacementScan(connector *Connector, cb ReplacementScanCallback) error {
-	replacementScanFnMxt.Lock()
-	replacementScanCallback = cb
-	replacementScanFnMxt.Unlock()
+	replacementScanState.mtx.Lock()
+	replacementScanState.callback = cb
+	replacementScanState.mtx.Unlock()
 	C.duckdb_add_replacement_scan(connector.db, C.duckdb_replacement_callback_t(C.replacement_scan_cb), nil, C.duckdb_delete_callback_t(C.free))
 	return nil
 }
 
 //export replacement_scan_cb
 func replacement_scan_cb(info C.duckdb_replacement_scan_info, table_name *C.cchar_t, data *C.void) {
-	replacementScanFnMxt.Lock()
-	scanner := replacementScanCallback
-	replacementScanFnMxt.Unlock()
+	replacementScanState.mtx.Lock()
+	scanner := replacementScanState.callback
+	replacementScanState.mtx.Unlock()
 
 	tFunc, params, err := scanner(C.GoString(table_name))
 	if err != nil {
