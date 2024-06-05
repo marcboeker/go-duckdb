@@ -1,6 +1,8 @@
 package duckdb
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,6 +20,23 @@ func TestPrepareQuery(t *testing.T) {
 	rows, err := stmt.Query(0)
 	require.NoError(t, err)
 	defer rows.Close()
+}
+
+func TestPrepareQueryNamed(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+	createFooTable(db, t)
+
+	stmt, err := db.PrepareContext(context.Background(), "SELECT $foo,$bar,$baz,$foo")
+	require.NoError(t, err)
+	defer stmt.Close()
+	var foo, bar, foo2 int
+	var baz string
+	err = stmt.QueryRow(sql.Named("baz", "x"), sql.Named("foo", 1), sql.Named("bar", 2)).Scan(&foo, &bar, &baz, &foo2)
+	require.NoError(t, err)
+	if foo != 1 || bar != 2 || baz != "x" || foo2 != 1 {
+		t.Fatalf("bad values: %d %d %s %d", foo, bar, baz, foo2)
+	}
 }
 
 func TestPrepareWithError(t *testing.T) {
