@@ -6,7 +6,10 @@ package duckdb
 */
 import "C"
 
-import "unsafe"
+import (
+	"math/big"
+	"unsafe"
+)
 
 func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	// FIXME: implement support for UHUGEINT, ARRAY, UNION, BIT, TIME_TZ
@@ -45,15 +48,15 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case C.DUCKDB_TYPE_TIME:
 		vec.initTime()
 	case C.DUCKDB_TYPE_INTERVAL:
-		// TODO
+		vec.initInterval()
 	case C.DUCKDB_TYPE_HUGEINT:
-		// TODO
+		vec.initHugeint()
 	case C.DUCKDB_TYPE_UHUGEINT:
 		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
 		vec.initCString(duckdbType)
 	case C.DUCKDB_TYPE_DECIMAL:
-		// TODO
+		return vec.initDecimal(logicalType, colIdx)
 	case C.DUCKDB_TYPE_ENUM:
 		return vec.initEnum(logicalType, colIdx)
 	case C.DUCKDB_TYPE_LIST:
@@ -145,9 +148,45 @@ func (vec *vector) initTime() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
-		return vec.getDate(rowIdx)
+		return vec.getTime(rowIdx)
 	}
-	vec.duckdbType = C.DUCKDB_TYPE_DATE
+	vec.duckdbType = C.DUCKDB_TYPE_TIME
+}
+
+func (vec *vector) initInterval() {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		vec.setInterval(rowIdx, val)
+	}
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return vec.getInterval(rowIdx)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_INTERVAL
+}
+
+func (vec *vector) initHugeint() {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		vec.size++
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		vec.setHugeint(rowIdx, val)
+	}
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return vec.getHugeint(rowIdx)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_HUGEINT
 }
 
 func (vec *vector) initCString(duckdbType C.duckdb_type) {
@@ -168,7 +207,64 @@ func (vec *vector) initCString(duckdbType C.duckdb_type) {
 	vec.duckdbType = duckdbType
 }
 
+func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) error {
+	// TODO: setDecimal
+
+	scale := C.duckdb_decimal_scale(logicalType)
+	width := C.duckdb_decimal_width(logicalType)
+
+	internalType := C.duckdb_decimal_internal_type(logicalType)
+	switch internalType {
+	case C.DUCKDB_TYPE_SMALLINT:
+		vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+			if vec.getNull(rowIdx) {
+				return nil
+			}
+			v := getPrimitive[int16](vec, rowIdx)
+			val := big.NewInt(int64(v))
+			return Decimal{Width: uint8(width), Scale: uint8(scale), Value: val}
+		}
+	case C.DUCKDB_TYPE_INTEGER:
+		vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+			if vec.getNull(rowIdx) {
+				return nil
+			}
+			v := getPrimitive[int32](vec, rowIdx)
+			val := big.NewInt(int64(v))
+			return Decimal{Width: uint8(width), Scale: uint8(scale), Value: val}
+		}
+	case C.DUCKDB_TYPE_BIGINT:
+		vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+			if vec.getNull(rowIdx) {
+				return nil
+			}
+			v := getPrimitive[int64](vec, rowIdx)
+			val := big.NewInt(v)
+			return Decimal{Width: uint8(width), Scale: uint8(scale), Value: val}
+		}
+	case C.DUCKDB_TYPE_HUGEINT:
+		vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+			if vec.getNull(rowIdx) {
+				return nil
+			}
+			v := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
+			val := hugeIntToNative(C.duckdb_hugeint{
+				lower: v.lower,
+				upper: v.upper,
+			})
+			return Decimal{Width: uint8(width), Scale: uint8(scale), Value: val}
+		}
+	default:
+		return columnError(unsupportedTypeError(duckdbTypeMap[internalType]), colIdx)
+	}
+
+	vec.duckdbType = C.DUCKDB_TYPE_DECIMAL
+	return nil
+}
+
 func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error {
+	// TODO: setEnum
+
 	internalType := C.duckdb_enum_internal_type(logicalType)
 	switch internalType {
 	case C.DUCKDB_TYPE_UTINYINT:
@@ -283,35 +379,28 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 }
 
 func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error {
-	var childNames []string
-	childNames = append(childNames, mapKeysField())
-	childNames = append(childNames, mapValuesField())
+	// A MAP is a LIST of STRUCT values. Each STRUCT holds two children: a key and a value.
 
-	vec.childNames = childNames
-	vec.childVectors = make([]vector, 2)
+	// Get the child vector type.
+	childType := C.duckdb_list_type_child_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&childType)
+
+	// Recurse into the child.
+	vec.childVectors = make([]vector, 1)
+	err := vec.childVectors[0].init(childType, colIdx)
+	if err != nil {
+		return err
+	}
 
 	// DuckDB supports more MAP key types than Go, which only supports comparable types.
-	// First, we recurse into the key type to detect any unsupported types.
+	// We ensure that the key type itself is comparable.
 	keyType := C.duckdb_map_type_key_type(logicalType)
-	duckdbKeyType := C.duckdb_get_type_id(keyType)
-	err := vec.childVectors[0].init(keyType, colIdx)
-	C.duckdb_destroy_logical_type(&keyType)
-	if err != nil {
-		return err
-	}
+	defer C.duckdb_destroy_logical_type(&keyType)
 
-	// Next, we ensure that the key type itself is comparable.
+	duckdbKeyType := C.duckdb_get_type_id(keyType)
 	switch duckdbKeyType {
 	case C.DUCKDB_TYPE_LIST, C.DUCKDB_TYPE_STRUCT, C.DUCKDB_TYPE_MAP, C.DUCKDB_TYPE_ARRAY:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbKeyType]), colIdx)
-	}
-
-	// Recurse into the value type.
-	valueType := C.duckdb_map_type_value_type(logicalType)
-	err = vec.childVectors[1].init(keyType, colIdx)
-	C.duckdb_destroy_logical_type(&valueType)
-	if err != nil {
-		return err
+		return columnError(errUnsupportedMapKeyType, colIdx)
 	}
 
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {

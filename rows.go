@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -63,7 +62,7 @@ func (r *rows) Next(dst []driver.Value) error {
 		}
 		data := C.duckdb_result_get_chunk(r.res, r.chunkIdx)
 		if err := r.chunk.InitFromDuckDataChunk(data); err != nil {
-			return err
+			return getError(err, nil)
 		}
 
 		r.chunkIdx++
@@ -80,27 +79,6 @@ func (r *rows) Next(dst []driver.Value) error {
 
 	r.rowCount++
 	return nil
-}
-
-func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
-	columnType := C.duckdb_vector_get_column_type(vector)
-	defer C.duckdb_destroy_logical_type(&columnType)
-
-	typeId := C.duckdb_get_type_id(columnType)
-	switch typeId {
-	case C.DUCKDB_TYPE_INTERVAL:
-		// TODO
-		return scanInterval(vector, rowIdx)
-	case C.DUCKDB_TYPE_HUGEINT:
-		// TODO
-		hugeInt := get[C.duckdb_hugeint](vector, rowIdx)
-		return hugeIntToNative(hugeInt), nil
-	case C.DUCKDB_TYPE_DECIMAL:
-		// TODO
-		return scanDecimal(columnType, vector, rowIdx)
-	default:
-		return nil, fmt.Errorf("unsupported type %d", typeId)
-	}
 }
 
 // Implements driver.RowsColumnTypeScanType
@@ -207,52 +185,6 @@ func (r *rows) Close() error {
 	}
 	return err
 }
-
-func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
-	ptr := C.duckdb_vector_get_data(vector)
-	xs := (*[1 << 31]T)(ptr)
-	return xs[rowIdx]
-}
-
-func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Decimal, error) {
-	scale := C.duckdb_decimal_scale(ty)
-	width := C.duckdb_decimal_width(ty)
-	var nativeValue *big.Int
-	switch C.duckdb_decimal_internal_type(ty) {
-	case C.DUCKDB_TYPE_SMALLINT:
-		nativeValue = big.NewInt(int64(get[int16](vector, rowIdx)))
-	case C.DUCKDB_TYPE_INTEGER:
-		nativeValue = big.NewInt(int64(get[int32](vector, rowIdx)))
-	case C.DUCKDB_TYPE_BIGINT:
-		nativeValue = big.NewInt(int64(get[int64](vector, rowIdx)))
-	case C.DUCKDB_TYPE_HUGEINT:
-		i := get[C.duckdb_hugeint](vector, rowIdx)
-		nativeValue = hugeIntToNative(C.duckdb_hugeint{
-			lower: i.lower,
-			upper: i.upper,
-		})
-	default:
-		return Decimal{}, errInvalidType
-	}
-
-	if nativeValue == nil {
-		return Decimal{}, fmt.Errorf("unable to convert hugeint to native type")
-	}
-
-	return Decimal{Width: uint8(width), Scale: uint8(scale), Value: nativeValue}, nil
-}
-
-func scanInterval(vector C.duckdb_vector, rowIdx C.idx_t) (Interval, error) {
-	i := get[C.duckdb_interval](vector, rowIdx)
-	data := Interval{
-		Days:   int32(i.days),
-		Months: int32(i.months),
-		Micros: int64(i.micros),
-	}
-	return data, nil
-}
-
-var errInvalidType = errors.New("invalid data type")
 
 func logicalTypeName(lt C.duckdb_logical_type) string {
 	t := C.duckdb_get_type_id(lt)

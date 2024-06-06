@@ -7,6 +7,8 @@ package duckdb
 import "C"
 
 import (
+	"log"
+	"math/big"
 	"time"
 	"unsafe"
 )
@@ -70,6 +72,25 @@ func (vec *vector) setTime(rowIdx C.idx_t, val any) {
 	var t C.duckdb_time
 	t.micros = C.int64_t(ticks)
 	setPrimitive[C.duckdb_time](vec, rowIdx, t)
+}
+
+func (vec *vector) setInterval(rowIdx C.idx_t, val any) {
+	v := val.(Interval)
+	var interval C.duckdb_interval
+	interval.days = C.int32_t(v.Days)
+	interval.months = C.int32_t(v.Months)
+	interval.micros = C.int64_t(v.Micros)
+	setPrimitive[C.duckdb_interval](vec, rowIdx, interval)
+}
+
+func (vec *vector) setHugeint(rowIdx C.idx_t, val any) {
+	v := val.(*big.Int)
+	hugeInt, err := hugeIntFromNative(v)
+	if err != nil {
+		// TODO: fatal logging...
+		log.Fatal(getError(errDriver, err))
+	}
+	setPrimitive[C.duckdb_hugeint](vec, rowIdx, hugeInt)
 }
 
 func (vec *vector) setCString(rowIdx C.idx_t, val any) {

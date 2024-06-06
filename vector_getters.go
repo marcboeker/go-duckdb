@@ -7,6 +7,8 @@ package duckdb
 import "C"
 
 import (
+	"log"
+	"math/big"
 	"time"
 	"unsafe"
 )
@@ -57,15 +59,37 @@ func (vec *vector) getTime(rowIdx C.idx_t) time.Time {
 	return time.UnixMicro(int64(micros)).UTC()
 }
 
-func (vec *vector) getCString(rowIdx C.idx_t) string {
+func (vec *vector) getInterval(rowIdx C.idx_t) Interval {
+	val := getPrimitive[C.duckdb_interval](vec, rowIdx)
+	interval := Interval{
+		Days:   int32(val.days),
+		Months: int32(val.months),
+		Micros: int64(val.micros),
+	}
+	return interval
+}
+
+func (vec *vector) getHugeint(rowIdx C.idx_t) *big.Int {
+	hugeInt := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
+	return hugeIntToNative(hugeInt)
+}
+
+func (vec *vector) getCString(rowIdx C.idx_t) any {
 	cStr := getPrimitive[duckdb_string_t](vec, rowIdx)
+
+	var blob []byte
 	if cStr.length <= stringInlineLength {
 		// Inlined data is stored from byte 4 to stringInlineLength + 4.
-		return string(C.GoBytes(unsafe.Pointer(&cStr.prefix), C.int(cStr.length)))
+		blob = C.GoBytes(unsafe.Pointer(&cStr.prefix), C.int(cStr.length))
+	} else {
+		// Any strings exceeding stringInlineLength are stored as a pointer in `ptr`.
+		blob = C.GoBytes(unsafe.Pointer(cStr.ptr), C.int(cStr.length))
 	}
 
-	// Any strings exceeding stringInlineLength are stored as a pointer in `ptr`.
-	return string(C.GoBytes(unsafe.Pointer(cStr.ptr), C.int(cStr.length)))
+	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
+		return string(blob)
+	}
+	return blob
 }
 
 func (vec *vector) getEnum(idx uint64) string {
@@ -78,18 +102,15 @@ func (vec *vector) getEnum(idx uint64) string {
 }
 
 func (vec *vector) getList(rowIdx C.idx_t) []any {
-	listEntry := getPrimitive[duckdb_list_entry_t](vec, rowIdx)
-	slice := make([]any, 0, listEntry.length)
-
+	entry := getPrimitive[duckdb_list_entry_t](vec, rowIdx)
+	slice := make([]any, 0, entry.length)
 	childVector := &vec.childVectors[0]
-	maxOffset := listEntry.offset + listEntry.length
 
 	// Fill the slice with all child values.
-	for i := listEntry.offset; i < maxOffset; i++ {
-		val := childVector.getFn(childVector, i)
+	for i := C.idx_t(0); i < entry.length; i++ {
+		val := childVector.getFn(childVector, i+entry.offset)
 		slice = append(slice, val)
 	}
-
 	return slice
 }
 
@@ -104,14 +125,21 @@ func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
 }
 
 func (vec *vector) getMap(rowIdx C.idx_t) Map {
-	// A MAP is a LIST of STRUCT values. Each STRUCT holds two children: a key and a value.
 	list := vec.getList(rowIdx)
 
 	m := Map{}
 	for i := 0; i < len(list); i++ {
 		mapItem := list[i].(map[string]any)
-		key := mapItem[mapKeysField()]
-		val := mapItem[mapValuesField()]
+		key, ok := mapItem[mapKeysField()]
+		if !ok {
+			// TODO: fatal logging... also, specific message!
+			log.Fatal(getError(errDriver, nil))
+		}
+		val, ok := mapItem[mapValuesField()]
+		if !ok {
+			// TODO: fatal logging... also, specific message!
+			log.Fatal(getError(errDriver, nil))
+		}
 		m[key] = val
 	}
 	return m

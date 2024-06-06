@@ -24,7 +24,7 @@ type DataChunk struct {
 func (chunk *DataChunk) InitFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type) error {
 	columnCount := len(types)
 
-	// Get the vector storage of each column.
+	// Initialize the callback functions to read and write values.
 	chunk.columns = make([]vector, columnCount)
 	var err error
 	for i := 0; i < columnCount; i++ {
@@ -40,6 +40,7 @@ func (chunk *DataChunk) InitFromTypes(ptr unsafe.Pointer, types []C.duckdb_logic
 	chunk.data = C.duckdb_create_data_chunk(logicalTypesPtr, C.idx_t(columnCount))
 	C.duckdb_data_chunk_set_size(chunk.data, C.duckdb_vector_size())
 
+	// Initialize the vectors and their child vectors.
 	for i := 0; i < columnCount; i++ {
 		duckdbVector := C.duckdb_data_chunk_get_vector(chunk.data, C.idx_t(i))
 		chunk.columns[i].duckdbVector = duckdbVector
@@ -56,10 +57,7 @@ func (chunk *DataChunk) InitFromDuckDataChunk(data C.duckdb_data_chunk) error {
 
 	var err error
 	for i := 0; i < columnCount; i++ {
-		// Initialize the vectors and their child vectors.
 		duckdbVector := C.duckdb_data_chunk_get_vector(data, C.idx_t(i))
-		chunk.columns[i].duckdbVector = duckdbVector
-		chunk.columns[i].getChildVectors(duckdbVector)
 
 		// Initialize the callback functions to read and write values.
 		logicalType := C.duckdb_vector_get_column_type(duckdbVector)
@@ -68,21 +66,24 @@ func (chunk *DataChunk) InitFromDuckDataChunk(data C.duckdb_data_chunk) error {
 		if err != nil {
 			break
 		}
+
+		// Initialize the vectors and their child vectors.
+		chunk.columns[i].duckdbVector = duckdbVector
+		chunk.columns[i].getChildVectors(duckdbVector)
 	}
 	return err
 }
 
 // InitFromDuckVector initializes a data chunk by providing a duckdb vector.
 func (chunk *DataChunk) InitFromDuckVector(duckdbVector C.duckdb_vector) error {
-	columnCount := 1
-	chunk.columns = make([]vector, columnCount)
-	chunk.columns[0].duckdbVector = duckdbVector
-	chunk.columns[0].getChildVectors(duckdbVector)
-
 	// Initialize the callback function to read and write values.
 	logicalType := C.duckdb_vector_get_column_type(duckdbVector)
+	chunk.columns = make([]vector, 1)
 	err := chunk.columns[0].init(logicalType, 0)
 	C.duckdb_destroy_logical_type(&logicalType)
+
+	chunk.columns[0].duckdbVector = duckdbVector
+	chunk.columns[0].getChildVectors(duckdbVector)
 	return err
 }
 

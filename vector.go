@@ -27,7 +27,7 @@ type vector struct {
 func (vec *vector) getChildVectors(vector C.duckdb_vector) {
 	switch vec.duckdbType {
 
-	case C.DUCKDB_TYPE_LIST:
+	case C.DUCKDB_TYPE_LIST, C.DUCKDB_TYPE_MAP:
 		child := C.duckdb_list_vector_get_child(vector)
 		vec.childVectors[0].duckdbVector = child
 		vec.childVectors[0].getChildVectors(child)
