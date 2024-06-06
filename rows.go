@@ -166,7 +166,7 @@ func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 	case C.DUCKDB_TYPE_STRUCT:
 		return scanStruct(columnType, vector, rowIdx)
 	case C.DUCKDB_TYPE_MAP:
-		return scanMap(columnType, vector, rowIdx)
+		return scanMap(vector, rowIdx)
 	case C.DUCKDB_TYPE_UUID:
 		hugeInt := get[C.duckdb_hugeint](vector, rowIdx)
 		return hugeIntToUUID(hugeInt), nil
@@ -289,7 +289,7 @@ func get[T any](vector C.duckdb_vector, rowIdx C.idx_t) T {
 	return xs[rowIdx]
 }
 
-func scanMap(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_t) (Map, error) {
+func scanMap(vector C.duckdb_vector, rowIdx C.idx_t) (Map, error) {
 	list, err := scanList(vector, rowIdx)
 	if err != nil {
 		return nil, err

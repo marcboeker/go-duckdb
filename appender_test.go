@@ -527,9 +527,10 @@ func TestAppenderNullStruct(t *testing.T) {
 	for res.Next() {
 		var row any
 		err = res.Scan(&row)
-		if i == 0 {
+		switch i {
+		case 0:
 			require.NoError(t, err)
-		} else if i == 1 {
+		case 1:
 			require.Equal(t, nil, row)
 		}
 		i++
