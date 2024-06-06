@@ -27,7 +27,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 	defer db.Close()
 	createFooTable(db, t)
 
-	stmt, err := db.PrepareContext(context.Background(), "SELECT $foo,$bar,$baz,$foo")
+	stmt, err := db.PrepareContext(context.Background(), "SELECT $foo, $bar, $baz, $foo")
 	require.NoError(t, err)
 	defer stmt.Close()
 	var foo, bar, foo2 int

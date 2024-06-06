@@ -57,7 +57,6 @@ func (s *stmt) bind(args []driver.NamedValue) error {
 		name := C.duckdb_parameter_name(*s.stmt, C.idx_t(i+1))
 		paramName := C.GoString(name)
 		C.duckdb_free(unsafe.Pointer(name))
-		//t := C.duckdb_param_type(*s.stmt, C.idx_t(i+1))
 
 		// fallback on index position
 		var arg = args[i]
