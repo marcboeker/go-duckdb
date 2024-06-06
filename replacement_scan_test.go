@@ -13,9 +13,7 @@ func TestReplacementScan(t *testing.T) {
 		return nil
 	})
 
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer connector.Close()
 
 	var rangeRows = 100
@@ -24,11 +22,8 @@ func TestReplacementScan(t *testing.T) {
 	})
 
 	db := sql.OpenDB(connector)
-
 	rows, err := db.Query("select * from any_table")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer rows.Close()
 
 	for i := 0; rows.Next(); i++ {
