@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPrepareQuery(t *testing.T) {
+func TestPrepareQueryAutoIncrement(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
 	createFooTable(db, t)
@@ -20,6 +20,24 @@ func TestPrepareQuery(t *testing.T) {
 	rows, err := stmt.Query(0)
 	require.NoError(t, err)
 	defer rows.Close()
+}
+
+func TestPrepareQueryPositional(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+	createFooTable(db, t)
+
+	stmt, err := db.Prepare("SELECT $1, $2 as foo WHERE foo=$2")
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	var foo, bar int
+	row := stmt.QueryRow(1, 2)
+	require.NoError(t, err)
+
+	row.Scan(&foo, &bar)
+	require.Equal(t, 1, foo)
+	require.Equal(t, 2, bar)
 }
 
 func TestPrepareQueryNamed(t *testing.T) {
