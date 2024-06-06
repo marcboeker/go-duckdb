@@ -282,9 +282,10 @@ func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	}
 
 	var str string
-	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
+	switch vec.duckdbType {
+	case C.DUCKDB_TYPE_VARCHAR:
 		str = val.(string)
-	} else if vec.duckdbType == C.DUCKDB_TYPE_BLOB {
+	case C.DUCKDB_TYPE_BLOB:
 		str = string(val.([]byte)[:])
 	}
 
