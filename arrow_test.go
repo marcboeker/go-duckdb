@@ -1,3 +1,5 @@
+//go:build !no_duckdb_arrow
+
 package duckdb
 
 import (
