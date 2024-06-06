@@ -35,7 +35,8 @@ func TestPrepareQueryPositional(t *testing.T) {
 	row := stmt.QueryRow(1, 2)
 	require.NoError(t, err)
 
-	row.Scan(&foo, &bar)
+	err = row.Scan(&foo, &bar)
+	require.NoError(t, err)
 	require.Equal(t, 1, foo)
 	require.Equal(t, 2, bar)
 }
