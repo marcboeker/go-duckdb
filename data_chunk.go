@@ -16,8 +16,6 @@ type DataChunk struct {
 	data C.duckdb_data_chunk
 	// columns is a helper slice providing direct access to all columns.
 	columns []vector
-	// columnNames holds the column names, if known.
-	columnNames []string
 }
 
 // InitFromTypes initializes a data chunk by providing its column types.
@@ -79,13 +77,7 @@ func (chunk *DataChunk) SetSize() error {
 	return nil
 }
 
-// GetSize returns the internal size of the data chunk.
-func (chunk *DataChunk) GetSize() int {
-	return int(C.duckdb_data_chunk_get_size(chunk.data))
-}
-
-// SetValue writes a single value to a column. Note that this requires casting the type for
-// each invocation. Try to use the columnar function SetColumn for performance.
+// SetValue writes a single value to a column. Note that this requires casting the type for each invocation.
 func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
 		return errDriver
