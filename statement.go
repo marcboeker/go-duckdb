@@ -59,7 +59,7 @@ func (s *stmt) bind(args []driver.NamedValue) error {
 		C.duckdb_free(unsafe.Pointer(name))
 
 		// fallback on index position
-		var arg = args[i]
+		arg := args[i]
 
 		// override with ordinal if set
 		for _, v := range args {
