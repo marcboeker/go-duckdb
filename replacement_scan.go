@@ -1,31 +1,34 @@
 package duckdb
 
 /*
-   #include <stdlib.h>
-   #include <duckdb.h>
-   void replacement_scan_cb(duckdb_replacement_scan_info info, const char *table_name, void *data);
-   typedef const char cchar_t;
+   	#include <stdlib.h>
+   	#include <duckdb.h>
+   	void replacement_scan_cb(duckdb_replacement_scan_info info, const char *table_name, void *data);
+   	typedef const char cchar_t;
+	void replacement_scan_destroy_data(void *);
 */
 import "C"
 import (
+	"runtime/cgo"
 	"unsafe"
 )
 
 type ReplacementScanCallback func(tableName string) (string, []any, error)
 
-var replacementScanState struct {
-	callback ReplacementScanCallback
+func RegisterReplacementScan(connector *Connector, cb ReplacementScanCallback) {
+	handle := cgo.NewHandle(cb)
+	C.duckdb_add_replacement_scan(connector.db, C.duckdb_replacement_callback_t(C.replacement_scan_cb), unsafe.Pointer(handle), C.duckdb_delete_callback_t(C.replacement_scan_destroy_data))
 }
 
-func RegisterReplacementScan(connector *Connector, cb ReplacementScanCallback) {
-	replacementScanState.callback = cb
-	C.duckdb_add_replacement_scan(connector.db, C.duckdb_replacement_callback_t(C.replacement_scan_cb), nil, C.duckdb_delete_callback_t(C.free))
+//export replacement_scan_destroy_data
+func replacement_scan_destroy_data(data unsafe.Pointer) {
+	h := cgo.Handle(data)
+	h.Delete()
 }
 
 //export replacement_scan_cb
 func replacement_scan_cb(info C.duckdb_replacement_scan_info, table_name *C.cchar_t, data *C.void) {
-	scanner := replacementScanState.callback
-
+	scanner := cgo.Handle(unsafe.Pointer(data)).Value().(ReplacementScanCallback)
 	tFunc, params, err := scanner(C.GoString(table_name))
 	if err != nil {
 		errstr := C.CString(err.Error())
