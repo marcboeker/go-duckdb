@@ -21,7 +21,7 @@ type DataChunk struct {
 // SetValue writes a single value to a column in a data chunk. Note that this requires casting the type for each invocation.
 func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
-		return errDriver
+		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
 	column := &chunk.columns[colIdx]
 

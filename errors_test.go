@@ -267,3 +267,9 @@ func TestErrAppendNestedList(t *testing.T) {
 
 	cleanupAppender(t, c, con, a)
 }
+
+func TestErrAPISetValue(t *testing.T) {
+	var chunk DataChunk
+	err := chunk.SetValue(1, 42, "hello")
+	testError(t, err, errAPI.Error(), columnCountErrMsg)
+}
