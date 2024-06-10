@@ -18,8 +18,25 @@ type DataChunk struct {
 	columns []vector
 }
 
-// InitFromTypes initializes a data chunk by providing its column types.
-func (chunk *DataChunk) InitFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type) error {
+// SetValue writes a single value to a column in a data chunk. Note that this requires casting the type for each invocation.
+func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
+	if colIdx >= len(chunk.columns) {
+		return errDriver
+	}
+	column := &chunk.columns[colIdx]
+
+	// Ensure that the types match before attempting to set anything.
+	v, err := column.tryCast(val)
+	if err != nil {
+		return columnError(err, colIdx)
+	}
+
+	// Set the value.
+	column.setFn(column, C.idx_t(rowIdx), v)
+	return nil
+}
+
+func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type) error {
 	columnCount := len(types)
 
 	// Initialize the callback functions to read and write values.
@@ -47,13 +64,11 @@ func (chunk *DataChunk) InitFromTypes(ptr unsafe.Pointer, types []C.duckdb_logic
 	return nil
 }
 
-// Destroy the memory of a data chunk. This is crucial to avoid leaks.
-func (chunk *DataChunk) Destroy() {
+func (chunk *DataChunk) close() {
 	C.duckdb_destroy_data_chunk(&chunk.data)
 }
 
-// SetSize sets the internal size of the data chunk. This fails if columns have different sizes.
-func (chunk *DataChunk) SetSize() error {
+func (chunk *DataChunk) setSize() error {
 	if len(chunk.columns) == 0 {
 		C.duckdb_data_chunk_set_size(chunk.data, C.idx_t(0))
 		return nil
@@ -74,23 +89,5 @@ func (chunk *DataChunk) SetSize() error {
 		return errDriver
 	}
 	C.duckdb_data_chunk_set_size(chunk.data, maxSize)
-	return nil
-}
-
-// SetValue writes a single value to a column. Note that this requires casting the type for each invocation.
-func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
-	if colIdx >= len(chunk.columns) {
-		return errDriver
-	}
-	column := &chunk.columns[colIdx]
-
-	// Ensure that the types match before attempting to set anything.
-	v, err := column.tryCast(val)
-	if err != nil {
-		return columnError(err, colIdx)
-	}
-
-	// Set the value.
-	column.setFn(column, C.idx_t(rowIdx), v)
 	return nil
 }

@@ -139,7 +139,7 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 
 func (a *Appender) addDataChunk() error {
 	var chunk DataChunk
-	if err := chunk.InitFromTypes(a.ptr, a.types); err != nil {
+	if err := chunk.initFromTypes(a.ptr, a.types); err != nil {
 		return err
 	}
 	a.chunks = append(a.chunks, chunk)
@@ -177,7 +177,7 @@ func (a *Appender) appendDataChunks() error {
 	var err error
 
 	for _, chunk := range a.chunks {
-		if err = chunk.SetSize(); err != nil {
+		if err = chunk.setSize(); err != nil {
 			break
 		}
 		state = C.duckdb_append_data_chunk(a.duckdbAppender, chunk.data)
@@ -187,14 +187,14 @@ func (a *Appender) appendDataChunks() error {
 		}
 	}
 
-	a.destroyDataChunks()
+	a.closeDataChunks()
 	a.rowCount = 0
 	return err
 }
 
-func (a *Appender) destroyDataChunks() {
+func (a *Appender) closeDataChunks() {
 	for _, chunk := range a.chunks {
-		chunk.Destroy()
+		chunk.close()
 	}
 	a.chunks = a.chunks[:0]
 }
