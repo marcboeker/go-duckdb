@@ -26,10 +26,10 @@ func (vec *vector) setNull(rowIdx C.idx_t) {
 	}
 }
 
-func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
+func setPrimitive[T any](vec *vector, rowIdx C.idx_t, v T) {
 	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
 	xs := (*[1 << 31]T)(ptr)
-	xs[rowIdx] = val.(T)
+	xs[rowIdx] = v
 }
 
 func (vec *vector) setTS(duckdbType C.duckdb_type, rowIdx C.idx_t, val any) {

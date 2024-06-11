@@ -84,29 +84,31 @@ func (*vector) canNil(val reflect.Value) bool {
 	return false
 }
 
-func tryPrimitiveCast[T any](val any, expected string) (any, error) {
-	if v, ok := val.(T); ok {
+func tryPrimitiveCast[T any](val any, expected string) (T, error) {
+	v, ok := val.(T)
+	if ok {
 		return v, nil
 	}
 
 	goType := reflect.TypeOf(val)
-	return nil, castError(goType.String(), expected)
+	return v, castError(goType.String(), expected)
 }
 
-func tryNumericCast[T numericType](val any, expected string) (any, error) {
-	if v, ok := val.(T); ok {
+func tryNumericCast[T numericType](val any, expected string) (T, error) {
+	v, ok := val.(T)
+	if ok {
 		return v, nil
 	}
 
 	// JSON unmarshalling uses float64 for numbers.
 	// We might want to add more implicit casts here.
-	switch v := val.(type) {
+	switch value := val.(type) {
 	case float64:
-		return convertNumericType[float64, T](v), nil
+		return convertNumericType[float64, T](value), nil
 	}
 
 	goType := reflect.TypeOf(val)
-	return nil, castError(goType.String(), expected)
+	return v, castError(goType.String(), expected)
 }
 
 func (vec *vector) tryCastList(val any) ([]any, error) {
@@ -274,7 +276,7 @@ func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive[T](vec, rowIdx, val)
+		setPrimitive[T](vec, rowIdx, val.(T))
 	}
 	vec.duckdbType = duckdbType
 }
