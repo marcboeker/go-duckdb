@@ -39,11 +39,7 @@ func (d *tableUDF) Columns() ([]duckdb.ColumnMetaData, error) {
 	}, nil
 }
 
-func (d *tableUDF) Init() duckdb.TableSourceInitData {
-	return duckdb.TableSourceInitData{
-		MaxThreads: 1,
-	}
-}
+func (d *tableUDF) Init() {}
 
 func (d *tableUDF) FillRow(row duckdb.Row) (bool, error) {
 	if d.count > d.n {

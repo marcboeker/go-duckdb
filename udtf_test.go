@@ -129,11 +129,7 @@ func (d *incTableUDF) Columns() ([]ColumnMetaData, error) {
 	}, nil
 }
 
-func (d *incTableUDF) Init() TableSourceInitData {
-	return TableSourceInitData{
-		MaxThreads: 1,
-	}
-}
+func (d *incTableUDF) Init() {}
 
 func (d *incTableUDF) FillRow(row Row) (bool, error) {
 	if d.count > d.n {
@@ -181,11 +177,7 @@ func (d *structTableUDF) Columns() ([]ColumnMetaData, error) {
 	}, err
 }
 
-func (d *structTableUDF) Init() TableSourceInitData {
-	return TableSourceInitData{
-		MaxThreads: 1,
-	}
-}
+func (d *structTableUDF) Init() {}
 
 func (d *structTableUDF) FillRow(row Row) (bool, error) {
 	if d.count > d.n {
@@ -235,11 +227,7 @@ func (d *pushdownTableUDF) Columns() ([]ColumnMetaData, error) {
 	}, nil
 }
 
-func (d *pushdownTableUDF) Init() TableSourceInitData {
-	return TableSourceInitData{
-		MaxThreads: 1,
-	}
-}
+func (d *pushdownTableUDF) Init() {}
 
 func (d *pushdownTableUDF) FillRow(row Row) (bool, error) {
 	if d.count > d.n {
@@ -299,11 +287,7 @@ func (d *incTableNamedUDF) Columns() ([]ColumnMetaData, error) {
 	}, nil
 }
 
-func (d *incTableNamedUDF) Init() TableSourceInitData {
-	return TableSourceInitData{
-		MaxThreads: 1,
-	}
-}
+func (d *incTableNamedUDF) Init() {}
 
 func (d *incTableNamedUDF) FillRow(row Row) (bool, error) {
 	if d.count > d.n {
@@ -350,11 +334,7 @@ func (d *structTableUDF2) Columns() ([]ColumnMetaData, error) {
 	}, err
 }
 
-func (d *structTableUDF2) Init() TableSourceInitData {
-	return TableSourceInitData{
-		MaxThreads: 1,
-	}
-}
+func (d *structTableUDF2) Init() {}
 
 func (d *structTableUDF2) FillRow(row Row) (bool, error) {
 	if d.count > d.n {
@@ -403,24 +383,20 @@ func (d *chunkIncTableUDF) Columns() ([]ColumnMetaData, error) {
 	}, nil
 }
 
-func (d *chunkIncTableUDF) Init() TableSourceInitData {
-	return TableSourceInitData{
-		MaxThreads: 1,
-	}
-}
+func (d *chunkIncTableUDF) Init() {}
 
-func (d *chunkIncTableUDF) FillChunk(chunk DataChunk) (bool, error) {
+func (d *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
 	size := chunk.GetSize()
 	i := 0
 	defer chunk.SetSize(i)
 	for ; i < size; i++ {
 		if d.count > d.n {
-			return false, nil
+			return nil
 		}
 		d.count++
 		chunk.SetValue(i, 0, d.count)
 	}
-	return true, nil
+	return nil
 }
 
 func (d *chunkIncTableUDF) GetValue(r, c int) any {

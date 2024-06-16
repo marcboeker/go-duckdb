@@ -8,6 +8,7 @@ void udf_bind_row(duckdb_bind_info info);
 void udf_bind_chunk(duckdb_bind_info info);
 
 void udf_init(duckdb_init_info info);
+void udf_local_init(duckdb_init_info info);
 
 void udf_row_callback(duckdb_function_info, duckdb_data_chunk);  // https://golang.org/issue/19837
 void udf_chunk_callback(duckdb_function_info, duckdb_data_chunk);  // https://golang.org/issue/19837
@@ -22,7 +23,6 @@ import "C"
 
 import (
 	"database/sql"
-	"fmt"
 	"reflect"
 	"runtime/cgo"
 	"unsafe"
@@ -45,43 +45,68 @@ type (
 		IsExact     bool // Wether or not the cardinality is exact
 	}
 
-	// TableSourceInitData contains any info that can be passed to duckdb when initialising
-	// the tablefunction.
-	TableSourceInitData struct {
+	// ThreadedTableSourceInitData contains any info that can be passed to duckdb when
+	// initialising the tablefunction.
+	ThreadedTableSourceInitData struct {
 		// On how many threads the TableSource is allowed to run.
 		// If left at 0, the default from duckdb is used. This is may change in the future.
 		MaxThreads int
 	}
 
 	tableFunctionData struct {
-		fun        tableSourceInfo
+		fun        any
 		projection []int
 	}
 
-	tableSourceInfo interface {
+	threadedTableSource interface {
 		Columns() ([]ColumnMetaData, error)
-		Init() TableSourceInitData
+		Init() ThreadedTableSourceInitData
+		Cardinality() *CardinalityData
+		NewLocalState() any
+	}
+
+	tableSource interface {
+		Columns() ([]ColumnMetaData, error)
+		Init()
 		Cardinality() *CardinalityData
 	}
 
 	// A RowTableSource represents anything that produces rows in a non-vectorised way.
 	// The cardinality will be requested before the function is initialised.
 	// After the RowTableSource is initialised, the rows will be requested. The `FillRow` method
-	// can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
-	// is not 1, `FillRow` must use synchronisation primitives to avoid race conditions.
+	// can be called by multiple threads at the same time.
 	RowTableSource interface {
-		tableSourceInfo
+		tableSource
 		FillRow(Row) (bool, error)
+	}
+
+	// A ThreadedRowTableSource represents anything that produces rows in a non-vectorised way.
+	// The cardinality will be requested before the function is initialised.
+	// After the ThreadedRowTableSource is initialised, the rows will be requested. The `FillRow`
+	// method can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
+	// is not 1, `FillRow` must use synchronisation primitives to avoid race conditions.
+	ThreadedRowTableSource interface {
+		threadedTableSource
+		FillRow(any, Row) (bool, error)
 	}
 
 	// A ChunkTableSource represents anything that produces rows in a non-vectorised way.
 	// The cardinality will be requested before the function is initialised.
 	// After the ChunkTableSource is initialised, the rows will be requested. The `FillRow` method
-	// can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
-	// is not 1, `FillChunk` must use synchronisation primitives to avoid race conditions.
+	// can be called by multiple threads at the same time.
 	ChunkTableSource interface {
-		tableSourceInfo
-		FillChunk(DataChunk) (bool, error)
+		tableSource
+		FillChunk(DataChunk) error
+	}
+
+	// A ThreadedChunkTableSource represents anything that produces rows in a non-vectorised way.
+	// The cardinality will be requested before the function is initialised.
+	// After the ThreadedChunkTableSource is initialised, the rows will be requested. The `FillRow`
+	// method can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
+	// is not 1, `FillChunk` must use synchronisation primitives to avoid race conditions.
+	ThreadedChunkTableSource interface {
+		threadedTableSource
+		FillChunk(any, DataChunk) error
 	}
 
 	// TableFunctionConfig contains any information passed to duckdb when registring the
@@ -92,16 +117,27 @@ type (
 	}
 
 	TableFunction interface {
-		RowTableFunction | ChunkTableFunction
+		RowTableFunction | ChunkTableFunction | ThreadedRowTableFunction | ThreadedChunkTableFunction
 	}
 
-	RowTableFunction    = tableFunction[RowTableSource]
-	ChunkTableFunction = tableFunction[ChunkTableSource]
-
-	// A tableFunction is a type which can be bound to return a tableFunction.
+	// A RowTableFunction is a type which can be bound to return a RowTableSource.
 	// The `Config` method returns the configuration, including the arguments the function
 	// take. `BindArguments` binds the arguments, returning a TableSource.
-	tableFunction[T tableSourceInfo] struct {
+	RowTableFunction = tableFunction[RowTableSource]
+	// A ChunkTableFunction is a type which can be bound to return a ChunkTableSource.
+	// The `Config` method returns the configuration, including the arguments the function
+	// take. `BindArguments` binds the arguments, returning a TableSource.
+	ChunkTableFunction = tableFunction[ChunkTableSource]
+	// A ThreadedRowTableFunction is a type which can be bound to return a ThreadedRowTableSource.
+	// The `Config` method returns the configuration, including the arguments the function
+	// take. `BindArguments` binds the arguments, returning a TableSource.
+	ThreadedRowTableFunction = tableFunction[ThreadedRowTableSource]
+	// A ThreadedChunkTableFunction is a type which can be bound to return a ThreadedChunkTableSource.
+	// The `Config` method returns the configuration, including the arguments the function
+	// take. `BindArguments` binds the arguments, returning a TableSource.
+	ThreadedChunkTableFunction = tableFunction[ThreadedChunkTableSource]
+
+	tableFunction[T any] struct {
 		Config        TableFunctionConfig
 		BindArguments func(named map[string]any, args ...any) (T, error)
 	}
@@ -123,7 +159,7 @@ func udf_bind_chunk(info C.duckdb_bind_info) {
 	udfBindTyped[ChunkTableSource](info)
 }
 
-func udfBindTyped[T tableSourceInfo](info C.duckdb_bind_info) {
+func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 	extra_info := C.duckdb_bind_get_extra_info(info)
 	h := *(*cgo.Handle)(extra_info)
 
@@ -159,7 +195,7 @@ func udfBindTyped[T tableSourceInfo](info C.duckdb_bind_info) {
 			return
 		}
 	}
-	fmt.Println(tfunc)
+
 	instance, err := tfunc.BindArguments(namedArgs, args...)
 	if err != nil {
 		errstr := C.CString(err.Error())
@@ -198,7 +234,19 @@ func udfBindTyped[T tableSourceInfo](info C.duckdb_bind_info) {
 func udf_init(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
-	initData := instance.fun.Init()
+
+	columnCount := C.duckdb_init_get_column_count(info)
+	for i := C.idx_t(0); i < columnCount; i++ {
+		srcPos := int(C.duckdb_init_get_column_index(info, i))
+		instance.projection[srcPos] = int(i)
+	}
+	instance.fun.(tableSource).Init()
+}
+
+//export udf_init_threaded
+func udf_init_threaded(info C.duckdb_init_info) {
+	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
+	instance := h.Value().(tableFunctionData)
 
 	columnCount := C.duckdb_init_get_column_count(info)
 	for i := C.idx_t(0); i < columnCount; i++ {
@@ -206,32 +254,62 @@ func udf_init(info C.duckdb_init_info) {
 		instance.projection[srcPos] = int(i)
 	}
 
+	initData := instance.fun.(threadedTableSource).Init()
 	C.duckdb_init_set_max_threads(info, C.idx_t(initData.MaxThreads))
+}
+
+//export udf_local_init
+func udf_local_init(info C.duckdb_init_info) {
+	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
+	instance := h.Value().(tableFunctionData)
+	localState := instance.fun.(threadedTableSource).NewLocalState()
+	handle := cgo.NewHandle(localState)
+	C.duckdb_init_set_init_data(info, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
 }
 
 //export udf_row_callback
 func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
-	fun := instance.fun.(RowTableSource)
 
 	var chunk DataChunk
 	chunk.initFromChunk(output)
-	var row Row
-	row.chunk = chunk
-	row.projection = instance.projection
+	row := Row{
+		chunk:      chunk,
+		projection: instance.projection,
+	}
 
 	maxSize := C.duckdb_vector_size()
-	// At the end of the loop row.r must be the index one past the last added row
-	for row.r = 0; row.r < maxSize; row.r++ {
-		nextResults, err := fun.FillRow(row)
-		if err != nil {
-			errstr := C.CString(err.Error())
-			defer C.free(unsafe.Pointer(errstr))
-			C.duckdb_function_set_error(info, errstr)
+
+	switch fun := instance.fun.(type) {
+	case RowTableSource:
+		// At the end of the loop row.r must be the index one past the last added row
+		for row.r = 0; row.r < maxSize; row.r++ {
+			nextResults, err := fun.FillRow(row)
+			if err != nil {
+				errstr := C.CString(err.Error())
+				defer C.free(unsafe.Pointer(errstr))
+				C.duckdb_function_set_error(info, errstr)
+			}
+			if !nextResults {
+				break
+			}
 		}
-		if !nextResults {
-			break
+	case ThreadedRowTableSource:
+		localstateHandle := *(*cgo.Handle)(C.duckdb_function_get_local_init_data(info))
+		localState := localstateHandle.Value()
+
+		// At the end of the loop row.r must be the index one past the last added row
+		for row.r = 0; row.r < maxSize; row.r++ {
+			nextResults, err := fun.FillRow(localState, row)
+			if err != nil {
+				errstr := C.CString(err.Error())
+				defer C.free(unsafe.Pointer(errstr))
+				C.duckdb_function_set_error(info, errstr)
+			}
+			if !nextResults {
+				break
+			}
 		}
 	}
 	// since row.r points to one past the last value, it is also the size
@@ -242,12 +320,26 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 func udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
-	fun := instance.fun.(ChunkTableSource)
-
 	var chunk DataChunk
 	chunk.initFromChunk(output)
-
-	fun.FillChunk(chunk)
+	switch fun := instance.fun.(type) {
+	case ChunkTableSource:
+		err := fun.FillChunk(chunk)
+		if err != nil {
+			errstr := C.CString(err.Error())
+			defer C.free(unsafe.Pointer(errstr))
+			C.duckdb_function_set_error(info, errstr)
+		}
+	case ThreadedChunkTableSource:
+		localstateHandle := *(*cgo.Handle)(C.duckdb_function_get_local_init_data(info))
+		localState := localstateHandle.Value()
+		err := fun.FillChunk(localState, chunk)
+		if err != nil {
+			errstr := C.CString(err.Error())
+			defer C.free(unsafe.Pointer(errstr))
+			C.duckdb_function_set_error(info, errstr)
+		}
+	}
 }
 
 // RegisterTableUDF registers a TableFunctionProvider to duckdb.
@@ -272,6 +364,7 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 		case RowTableFunction:
 			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind_row))
 			C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_row_callback))
+
 			config = tfunc.Config
 			if tfunc.BindArguments == nil {
 				return invalidTableFunctionError()
@@ -279,6 +372,22 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 		case ChunkTableFunction:
 			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind_chunk))
 			C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_chunk_callback))
+			config = tfunc.Config
+			if tfunc.BindArguments == nil {
+				return invalidTableFunctionError()
+			}
+		case ThreadedRowTableFunction:
+			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind_row))
+			C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_row_callback))
+			C.duckdb_table_function_set_local_init(tableFunction, C.init(C.udf_local_init))
+			config = tfunc.Config
+			if tfunc.BindArguments == nil {
+				return invalidTableFunctionError()
+			}
+		case ThreadedChunkTableFunction:
+			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind_chunk))
+			C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_chunk_callback))
+			C.duckdb_table_function_set_local_init(tableFunction, C.init(C.udf_local_init))
 			config = tfunc.Config
 			if tfunc.BindArguments == nil {
 				return invalidTableFunctionError()
