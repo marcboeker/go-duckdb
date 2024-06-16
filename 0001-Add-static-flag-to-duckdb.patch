@@ -1,0 +1,55 @@
+From c826ed2a5d08711bc5c3a2482b9a00e971dcf819 Mon Sep 17 00:00:00 2001
+From: Jaap Aarts <jaap.aarts1@gmail.com>
+Date: Tue, 25 Jun 2024 20:40:26 +0200
+Subject: [PATCH] Add static flag to duckdb
+
+---
+ src/include/duckdb.h                 | 50 +++++++++++++++-------------
+ src/include/duckdb/common/winapi.hpp |  6 +++-
+ 2 files changed, 32 insertions(+), 24 deletions(-)
+
+diff --git a/src/include/duckdb.h b/src/include/duckdb.h
+index cdd543c6df..9ef1c83001 100644
+--- a/src/include/duckdb.h
++++ b/src/include/duckdb.h
+@@ -12,11 +12,15 @@
+ //! duplicate of duckdb/main/winapi.hpp
+ #ifndef DUCKDB_API
+ #ifdef _WIN32
++#ifdef DUCKDB_STATIC
++#define DUCKDB_API
++#else
+ #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
+ #define DUCKDB_API __declspec(dllexport)
+ #else
+ #define DUCKDB_API __declspec(dllimport)
+ #endif
++#endif
+ #else
+ #define DUCKDB_API
+ #endif
+diff --git a/src/include/duckdb/common/winapi.hpp b/src/include/duckdb/common/winapi.hpp
+index 1b77335ca9..fb1034d3c1 100644
+--- a/src/include/duckdb/common/winapi.hpp
++++ b/src/include/duckdb/common/winapi.hpp
+@@ -9,12 +9,16 @@
+ #pragma once
+ 
+ #ifndef DUCKDB_API
+-#if defined(_WIN32) && !defined(__MINGW32__)
++#ifdef _WIN32
++#ifdef DUCKDB_STATIC
++#define DUCKDB_API
++#else
+ #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
+ #define DUCKDB_API __declspec(dllexport)
+ #else
+ #define DUCKDB_API __declspec(dllimport)
+ #endif
++#endif
+ #else
+ #define DUCKDB_API
+ #endif
+-- 
+2.45.2
+
