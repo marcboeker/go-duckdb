@@ -14,24 +14,6 @@ import (
 // fnSetVectorValue is the setter callback function for any (nested) vector.
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 
-func (vec *vector) setNull(rowIdx C.idx_t) {
-	C.duckdb_vector_ensure_validity_writable(vec.duckdbVector)
-	mask := C.duckdb_vector_get_validity(vec.duckdbVector)
-	C.duckdb_validity_set_row_invalid(mask, rowIdx)
-
-	if vec.duckdbType == C.DUCKDB_TYPE_STRUCT {
-		for i := 0; i < len(vec.childVectors); i++ {
-			vec.childVectors[i].setNull(rowIdx)
-		}
-	}
-}
-
-func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
-	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
-	xs := (*[1 << 31]T)(ptr)
-	xs[rowIdx] = val.(T)
-}
-
 func (vec *vector) setTS(duckdbType C.duckdb_type, rowIdx C.idx_t, val any) {
 	v := val.(time.Time)
 	var ticks int64

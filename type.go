@@ -31,20 +31,23 @@ type SaveTypes interface {
 // NewDuckdbType creates a new Type for T. All valid T are guaranteeed to have a valid
 // representation in duckdb, thus no error is returned.
 func NewDuckdbType[T SaveTypes]() Type {
+	var v T
 	return Type{
-		t0: reflect.TypeFor[T](),
+		t0: reflect.TypeOf(v),
 	}
 }
 
 // TryNewDuckdbType creates a new Type for T. Since not all valid T are guaranteeed to have
 // a valid representation in duckdb, an error may be returned.
 func TryNewDuckdbType[T any]() (Type, error) {
+	var v T
+	t := reflect.TypeOf(v)
 	var err error
-	if !canConvertToDuckdb(reflect.TypeFor[T]()) {
-		err = unsupportedTypeError(reflect.TypeFor[T]().String())
+	if !canConvertToDuckdb(t) {
+		err = unsupportedTypeError(t.String())
 	}
 	return Type{
-		t0: reflect.TypeFor[T](),
+		t0: t,
 	}, err
 }
 
@@ -61,14 +64,15 @@ func TryNewDuckdbTypeFromValue(v any) (Type, error) {
 }
 
 func tryGetDuckdbType[T any]() (C.duckdb_logical_type, error) {
-	return tryGetDuckdbTypeFromValue(reflect.TypeFor[T]())
+	var v T
+	return tryGetDuckdbTypeFromValue(reflect.TypeOf(v))
 }
 
 func canConvertToDuckdb(rt reflect.Type) bool {
 	switch rt {
-	case reflect.TypeFor[time.Time](),
-		reflect.TypeFor[UUID](),
-		reflect.TypeFor[[]byte]():
+	case reflect.TypeOf(time.Time{}),
+		reflect.TypeOf(UUID{}),
+		reflect.TypeOf([]byte{}):
 		return true
 	}
 	switch rt.Kind() {
@@ -109,11 +113,11 @@ func canConvertToDuckdb(rt reflect.Type) bool {
 
 func tryGetDuckdbTypeFromValue(rt reflect.Type) (C.duckdb_logical_type, error) {
 	switch rt {
-	case reflect.TypeFor[time.Time]():
+	case reflect.TypeOf(time.Time{}):
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_TIMESTAMP_NS), nil
-	case reflect.TypeFor[UUID]():
+	case reflect.TypeOf(UUID{}):
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UHUGEINT), nil
-	case reflect.TypeFor[[]byte]():
+	case reflect.TypeOf([]byte{}):
 		return C.duckdb_create_logical_type(C.DUCKDB_TYPE_UUID), nil
 	}
 	switch rt.Kind() {

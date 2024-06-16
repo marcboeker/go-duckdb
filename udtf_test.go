@@ -228,13 +228,13 @@ func (d *pushdownTableUDF) FillRow(row Row) (bool, error) {
 		err = fmt.Errorf("Column 0 is projected while it should not be")
 	}
 	d.count++
-	if _err := SetRowValue(row, 0, d.count); err != nil {
+	if _err := SetRowValue(row, 0, d.count); _err != nil {
 		err = _err
 	}
-	if _err := SetRowValue(row, 1, d.count); err != nil {
+	if _err := SetRowValue(row, 1, d.count); _err != nil {
 		err = _err
 	}
-	return true, nil
+	return true, err
 }
 
 func (d *pushdownTableUDF) GetName() string {

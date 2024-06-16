@@ -318,76 +318,10 @@ func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
 	xs[rowIdx] = val.(T)
 }
 
-func (vec *vector) setCString(rowIdx C.idx_t, val any) {
-	if val == nil {
-		vec.setNull(rowIdx)
-		return
-	}
-
-	var str string
-	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
-		str = val.(string)
-	} else if vec.duckdbType == C.DUCKDB_TYPE_BLOB {
-		str = string(val.([]byte)[:])
-	}
-	// This setter also writes BLOBs.
-	cStr := C.CString(str)
-	C.duckdb_vector_assign_string_element_len(vec.duckdbVector, rowIdx, cStr, C.idx_t(len(str)))
-	C.free(unsafe.Pointer(cStr))
-}
-
 func (vec *vector) setTime(rowIdx C.idx_t, ticks int64) {
 	var ts C.duckdb_timestamp
 	ts.micros = C.int64_t(ticks)
 	setPrimitive[C.duckdb_timestamp](vec, rowIdx, ts)
-}
-
-func (vec *vector) setDate(rowIdx C.idx_t, days int32) {
-	var date C.duckdb_date
-	date.days = C.int32_t(days)
-	setPrimitive[C.duckdb_date](vec, rowIdx, date)
-}
-
-func (vec *vector) setList(rowIdx C.idx_t, val any) {
-	if val == nil {
-		vec.setNull(rowIdx)
-		return
-	}
-
-	v := val.([]any)
-	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
-
-	// Set the offset and length of the list vector using the current size of the child vector.
-	listEntry := C.duckdb_list_entry{
-		offset: C.idx_t(childVectorSize),
-		length: C.idx_t(len(v)),
-	}
-	setPrimitive[C.duckdb_list_entry](vec, rowIdx, listEntry)
-
-	newLength := C.idx_t(len(v)) + childVectorSize
-	C.duckdb_list_vector_set_size(vec.duckdbVector, newLength)
-	C.duckdb_list_vector_reserve(vec.duckdbVector, newLength)
-
-	// Insert the values into the child vector.
-	childVector := vec.childVectors[0]
-	for i, e := range v {
-		offset := C.idx_t(i) + childVectorSize
-		childVector.fn(&childVector, offset, e)
-	}
-}
-
-func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
-	if val == nil {
-		vec.setNull(rowIdx)
-		return
-	}
-	m := val.(map[string]any)
-
-	for i := 0; i < len(vec.childVectors); i++ {
-		childVector := vec.childVectors[i]
-		childName := vec.childNames[i]
-		childVector.fn(&childVector, rowIdx, m[childName])
-	}
 }
 
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
@@ -693,7 +627,7 @@ func _setVectorList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	childVector := vec.childVectors[0]
 	for i, e := range list {
 		offset := C.idx_t(i) + childVectorSize
-		childVector.fn(&childVector, offset, e)
+		childVector.setFn(&childVector, offset, e)
 	}
 	return nil
 }
@@ -727,7 +661,7 @@ func _setVectorStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	for i := 0; i < len(vec.childVectors); i++ {
 		childVector := vec.childVectors[i]
 		childName := vec.childNames[i]
-		childVector.fn(&childVector, rowIdx, m[childName])
+		childVector.setFn(&childVector, rowIdx, m[childName])
 	}
 	return nil
 }

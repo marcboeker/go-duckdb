@@ -49,7 +49,7 @@ func (row Row) SetRowValue(c int, val any) error {
 		return columnError(err, c+1)
 	}
 
-	vec.fn(&vec, row.r, v)
+	vec.setFn(&vec, row.r, v)
 	return nil
 }
 
