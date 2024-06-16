@@ -182,20 +182,12 @@ func udf_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	instance := h.Value().(tableFunctionData)
 	fun := instance.fun
 
-	columnCount := C.duckdb_data_chunk_get_column_count(output)
+	var chunk DataChunk
+	chunk.initFromChunk(output)
 	var row Row
-	row.vectors = make([]vector, columnCount)
+	row.chunk = chunk
 	row.projection = instance.projection
-	for i := C.idx_t(0); i < columnCount; i++ {
-		duckdbVector := C.duckdb_data_chunk_get_vector(output, i)
-		err := row.initColumn(i, duckdbVector)
-		if err != nil {
-			errstr := C.CString(err.Error())
-			defer C.free(unsafe.Pointer(errstr))
-			C.duckdb_function_set_error(info, errstr)
-			return
-		}
-	}
+
 	maxSize := C.duckdb_vector_size()
 	// At the end of the loop row.r must be the index one past the last added row
 	for row.r = 0; row.r < maxSize; row.r++ {

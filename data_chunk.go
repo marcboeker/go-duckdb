@@ -64,6 +64,22 @@ func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logic
 	return nil
 }
 
+func (chunk *DataChunk) initFromChunk(ddbChunk C.duckdb_data_chunk) error {
+	columnCount := C.duckdb_data_chunk_get_column_count(ddbChunk)
+	for i := C.idx_t(0); i < columnCount; i++ {
+		var column vector
+		duckdbVector := C.duckdb_data_chunk_get_vector(ddbChunk, i)
+		t := C.duckdb_vector_get_column_type(duckdbVector)
+		if err := column.init(t, int(i)); err != nil {
+			return err
+		}
+		column.duckdbVector = duckdbVector
+		column.getChildVectors(duckdbVector)
+		chunk.columns = append(chunk.columns, column)
+	}
+	return nil
+}
+
 func (chunk *DataChunk) close() {
 	C.duckdb_destroy_data_chunk(&chunk.data)
 }
