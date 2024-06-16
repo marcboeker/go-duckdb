@@ -17,14 +17,14 @@ type (
 		got      any
 	}
 
-	testTableFunction interface {
-		TableFunction
+	testTableFunction[T TableFunction] interface {
+		GetFunction() T
 		GetValue(r, c int) any
 		GetTypes() []any
 	}
 
-	udfTest struct {
-		udf   testTableFunction
+	rowUDFTest[T TableFunction] struct {
+		udf   testTableFunction[T]
 		name  string
 		query string
 	}
@@ -63,10 +63,15 @@ type (
 		I  int64
 		i1 int64
 	}
+
+	chunkIncTableUDF struct {
+		n     int64
+		count int64
+	}
 )
 
 var (
-	tudfs = []udfTest{
+	rowUdtfs = []rowUDFTest[RowTableFunction]{
 		{
 			udf:   &incTableUDF{},
 			name:  "incTableUDTF",
@@ -93,18 +98,29 @@ var (
 			query: "SELECT * FROM %s(2048)",
 		},
 	}
+	chunkUdtfs = []rowUDFTest[ChunkTableFunction]{
+		{
+			udf:   &chunkIncTableUDF{},
+			name:  "incTableUDTF",
+			query: "SELECT * FROM %s(2048)",
+		},
+	}
 )
 
-func (d *incTableUDF) Config() TableFunctionConfig {
-	return TableFunctionConfig{
-		Arguments: []Type{NewDuckdbType[int64]()},
+func (d *incTableUDF) GetFunction() RowTableFunction {
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []Type{NewDuckdbType[int64]()},
+		},
+		BindArguments: BindIncTableUDF,
 	}
 }
 
-func (d *incTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
-	d.count = 0
-	d.n = args[0].(int64)
-	return d, nil
+func BindIncTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return &incTableUDF{
+		count: 0,
+		n:     args[0].(int64),
+	}, nil
 }
 
 func (d *incTableUDF) Columns() ([]ColumnMetaData, error) {
@@ -142,17 +158,20 @@ func (d *incTableUDF) Cardinality() *CardinalityData {
 	return nil
 }
 
-func (d *structTableUDF) Config() TableFunctionConfig {
-	return TableFunctionConfig{
-		Arguments: []Type{NewDuckdbType[int64]()},
+func (d *structTableUDF) GetFunction() RowTableFunction {
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []Type{NewDuckdbType[int64]()},
+		},
+		BindArguments: BindStructTableUDF,
 	}
 }
 
-func (d *structTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
-	d.count = 0
-	d.n = args[0].(int64)
-
-	return d, nil
+func BindStructTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return &structTableUDF{
+		count: 0,
+		n:     args[0].(int64),
+	}, nil
 }
 
 func (d *structTableUDF) Columns() ([]ColumnMetaData, error) {
@@ -193,16 +212,20 @@ func (d *structTableUDF) Cardinality() *CardinalityData {
 	return nil
 }
 
-func (d *pushdownTableUDF) Config() TableFunctionConfig {
-	return TableFunctionConfig{
-		Arguments: []Type{NewDuckdbType[int64]()},
+func (d *pushdownTableUDF) GetFunction() RowTableFunction {
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []Type{NewDuckdbType[int64]()},
+		},
+		BindArguments: BindPushdownTableUDF,
 	}
 }
 
-func (d *pushdownTableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
-	d.count = 0
-	d.n = args[0].(int64)
-	return d, nil
+func BindPushdownTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return &pushdownTableUDF{
+		count: 0,
+		n:     args[0].(int64),
+	}, nil
 }
 
 func (d *pushdownTableUDF) Columns() ([]ColumnMetaData, error) {
@@ -254,16 +277,20 @@ func (d *pushdownTableUDF) Cardinality() *CardinalityData {
 	return nil
 }
 
-func (d *incTableNamedUDF) Config() TableFunctionConfig {
-	return TableFunctionConfig{
-		NamedArguments: map[string]Type{"ARG": NewDuckdbType[int64]()},
+func (d *incTableNamedUDF) GetFunction() RowTableFunction {
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			NamedArguments: map[string]Type{"ARG": NewDuckdbType[int64]()},
+		},
+		BindArguments: BindIncTableNamedUDF,
 	}
 }
 
-func (d *incTableNamedUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
-	d.count = 0
-	d.n = namedArgs["ARG"].(int64)
-	return d, nil
+func BindIncTableNamedUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return &incTableNamedUDF{
+		count: 0,
+		n:     namedArgs["ARG"].(int64),
+	}, nil
 }
 
 func (d *incTableNamedUDF) Columns() ([]ColumnMetaData, error) {
@@ -301,16 +328,19 @@ func (d *incTableNamedUDF) Cardinality() *CardinalityData {
 	return nil
 }
 
-func (d *structTableUDF2) Config() TableFunctionConfig {
-	return TableFunctionConfig{
-		Arguments: []Type{NewDuckdbType[int64]()},
+func (d *structTableUDF2) GetFunction() RowTableFunction {
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []Type{NewDuckdbType[int64]()},
+		},
+		BindArguments: BindStructTableUDF2,
 	}
 }
 
-func (d *structTableUDF2) BindArguments(namedArgs map[string]any, args ...interface{}) (TableSource, error) {
-	d.count = 0
-	d.n = args[0].(int64)
-	return d, nil
+func BindStructTableUDF2(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return &structTableUDF2{count: 0,
+		n: args[0].(int64),
+	}, nil
 }
 
 func (d *structTableUDF2) Columns() ([]ColumnMetaData, error) {
@@ -351,8 +381,70 @@ func (d *structTableUDF2) Cardinality() *CardinalityData {
 	return nil
 }
 
+func (d *chunkIncTableUDF) GetFunction() ChunkTableFunction {
+	return ChunkTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []Type{NewDuckdbType[int64]()},
+		},
+		BindArguments: BindChunkIncTableUDF,
+	}
+}
+
+func BindChunkIncTableUDF(namedArgs map[string]any, args ...interface{}) (ChunkTableSource, error) {
+	return &chunkIncTableUDF{
+		count: 0,
+		n:     args[0].(int64),
+	}, nil
+}
+
+func (d *chunkIncTableUDF) Columns() ([]ColumnMetaData, error) {
+	return []ColumnMetaData{
+		{Name: "result", T: NewDuckdbType[int64]()},
+	}, nil
+}
+
+func (d *chunkIncTableUDF) Init() TableSourceInitData {
+	return TableSourceInitData{
+		MaxThreads: 1,
+	}
+}
+
+func (d *chunkIncTableUDF) FillChunk(chunk DataChunk) (bool, error) {
+	size := chunk.GetSize()
+	i := 0
+	defer chunk.SetSize(i)
+	for ; i < size; i++ {
+		if d.count > d.n {
+			return false, nil
+		}
+		d.count++
+		chunk.SetValue(i, 0, d.count)
+	}
+	return true, nil
+}
+
+func (d *chunkIncTableUDF) GetValue(r, c int) any {
+	return int64(r + 1)
+}
+
+func (d *chunkIncTableUDF) GetTypes() []any {
+	return []any{
+		int(0),
+	}
+}
+
+func (d *chunkIncTableUDF) Cardinality() *CardinalityData {
+	return nil
+}
+
 func TestTableUDF(t *testing.T) {
-	for _, fun := range tudfs {
+	for _, fun := range rowUdtfs {
+		_fun := fun
+		t.Run(_fun.name, func(t *testing.T) {
+			singleTableUDF(t, _fun)
+		})
+	}
+	for _, fun := range chunkUdtfs {
 		_fun := fun
 		t.Run(_fun.name, func(t *testing.T) {
 			singleTableUDF(t, _fun)
@@ -360,7 +452,7 @@ func TestTableUDF(t *testing.T) {
 	}
 }
 
-func singleTableUDF(t *testing.T, fun udfTest) {
+func singleTableUDF[T TableFunction](t *testing.T, fun rowUDFTest[T]) {
 	var err error
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
 	if err != nil {
@@ -368,7 +460,7 @@ func singleTableUDF(t *testing.T, fun udfTest) {
 	}
 	defer db.Close()
 	conn, _ := db.Conn(context.Background())
-	RegisterTableUDF(conn, fun.name, fun.udf)
+	RegisterTableUDF(conn, fun.name, fun.udf.GetFunction())
 	rows, err := db.QueryContext(context.Background(), fmt.Sprintf(fun.query, fun.name))
 	if err != nil {
 		t.Fatal(err)
@@ -419,7 +511,7 @@ func BenchmarkTableUDF(b *testing.B) {
 	defer db.Close()
 	conn, _ := db.Conn(context.Background())
 	var fun incTableUDF
-	RegisterTableUDF(conn, "whoo", &fun)
+	RegisterTableUDF(conn, "whoo", fun.GetFunction())
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
 		rows, err := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048)")

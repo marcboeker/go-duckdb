@@ -4,11 +4,13 @@ package duckdb
 #include <stdlib.h>
 #include <duckdb.h>
 
-void udf_bind(duckdb_bind_info info);
+void udf_bind_row(duckdb_bind_info info);
+void udf_bind_chunk(duckdb_bind_info info);
 
 void udf_init(duckdb_init_info info);
 
-void udf_callback(duckdb_function_info, duckdb_data_chunk);  // https://golang.org/issue/19837
+void udf_row_callback(duckdb_function_info, duckdb_data_chunk);  // https://golang.org/issue/19837
+void udf_chunk_callback(duckdb_function_info, duckdb_data_chunk);  // https://golang.org/issue/19837
 
 void udf_destroy_data(void *);
 
@@ -20,6 +22,7 @@ import "C"
 
 import (
 	"database/sql"
+	"fmt"
 	"reflect"
 	"runtime/cgo"
 	"unsafe"
@@ -51,20 +54,34 @@ type (
 	}
 
 	tableFunctionData struct {
-		fun        TableSource
+		fun        tableSourceInfo
 		projection []int
 	}
 
-	// A TableSource represents anything that produces rows in a non-vectorised way.
-	// The cardinality will be requested before the function is initialised.
-	// After the TableSource is initialised, the rows will be requested. The `FillRow` method
-	// can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
-	// is not 1, `FillRow` must use synchronisation primitives to avoid race conditions.
-	TableSource interface {
+	tableSourceInfo interface {
 		Columns() ([]ColumnMetaData, error)
 		Init() TableSourceInitData
-		FillRow(Row) (bool, error)
 		Cardinality() *CardinalityData
+	}
+
+	// A RowTableSource represents anything that produces rows in a non-vectorised way.
+	// The cardinality will be requested before the function is initialised.
+	// After the RowTableSource is initialised, the rows will be requested. The `FillRow` method
+	// can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
+	// is not 1, `FillRow` must use synchronisation primitives to avoid race conditions.
+	RowTableSource interface {
+		tableSourceInfo
+		FillRow(Row) (bool, error)
+	}
+
+	// A ChunkTableSource represents anything that produces rows in a non-vectorised way.
+	// The cardinality will be requested before the function is initialised.
+	// After the ChunkTableSource is initialised, the rows will be requested. The `FillRow` method
+	// can be called by multiple threads at the same time. If `TableSourceInitData.MaxThreads`
+	// is not 1, `FillChunk` must use synchronisation primitives to avoid race conditions.
+	ChunkTableSource interface {
+		tableSourceInfo
+		FillChunk(DataChunk) (bool, error)
 	}
 
 	// TableFunctionConfig contains any information passed to duckdb when registring the
@@ -74,28 +91,44 @@ type (
 		NamedArguments map[string]Type
 	}
 
-	// A TableFunction is a type which can be bound to return a TableFunction.
+	TableFunction interface {
+		RowTableFunction | ChunkTableFunction
+	}
+
+	RowTableFunction    = tableFunction[RowTableSource]
+	ChunkTableFunction = tableFunction[ChunkTableSource]
+
+	// A tableFunction is a type which can be bound to return a tableFunction.
 	// The `Config` method returns the configuration, including the arguments the function
 	// take. `BindArguments` binds the arguments, returning a TableSource.
-	TableFunction interface {
-		Config() TableFunctionConfig
-		BindArguments(named map[string]any, args ...any) (TableSource, error)
+	tableFunction[T tableSourceInfo] struct {
+		Config        TableFunctionConfig
+		BindArguments func(named map[string]any, args ...any) (T, error)
 	}
 )
 
 //export udf_destroy_data
 func udf_destroy_data(data unsafe.Pointer) {
-	h := cgo.Handle(data)
+	h := *(*cgo.Handle)(data)
 	h.Delete()
 }
 
-//export udf_bind
-func udf_bind(info C.duckdb_bind_info) {
-	extra_info := C.duckdb_bind_get_extra_info(info)
-	h := cgo.Handle(extra_info)
-	tfunc := h.Value().(TableFunction)
+//export udf_bind_row
+func udf_bind_row(info C.duckdb_bind_info) {
+	udfBindTyped[RowTableSource](info)
+}
 
-	config := tfunc.Config()
+//export udf_bind_chunk
+func udf_bind_chunk(info C.duckdb_bind_info) {
+	udfBindTyped[ChunkTableSource](info)
+}
+
+func udfBindTyped[T tableSourceInfo](info C.duckdb_bind_info) {
+	extra_info := C.duckdb_bind_get_extra_info(info)
+	h := *(*cgo.Handle)(extra_info)
+
+	tfunc := h.Value().(tableFunction[T])
+	config := tfunc.Config
 
 	argCount := len(config.Arguments)
 	args := make([]any, argCount)
@@ -126,7 +159,7 @@ func udf_bind(info C.duckdb_bind_info) {
 			return
 		}
 	}
-
+	fmt.Println(tfunc)
 	instance, err := tfunc.BindArguments(namedArgs, args...)
 	if err != nil {
 		errstr := C.CString(err.Error())
@@ -158,12 +191,12 @@ func udf_bind(info C.duckdb_bind_info) {
 	}
 
 	handle := cgo.NewHandle(instanceData)
-	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
+	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
 }
 
 //export udf_init
 func udf_init(info C.duckdb_init_info) {
-	h := cgo.Handle(C.duckdb_init_get_bind_data(info))
+	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
 	initData := instance.fun.Init()
 
@@ -176,11 +209,11 @@ func udf_init(info C.duckdb_init_info) {
 	C.duckdb_init_set_max_threads(info, C.idx_t(initData.MaxThreads))
 }
 
-//export udf_callback
-func udf_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
-	h := cgo.Handle(C.duckdb_function_get_bind_data(info))
+//export udf_row_callback
+func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
+	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
-	fun := instance.fun
+	fun := instance.fun.(RowTableSource)
 
 	var chunk DataChunk
 	chunk.initFromChunk(output)
@@ -205,25 +238,54 @@ func udf_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	C.duckdb_data_chunk_set_size(output, row.r)
 }
 
+//export udf_chunk_callback
+func udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
+	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
+	instance := h.Value().(tableFunctionData)
+	fun := instance.fun.(ChunkTableSource)
+
+	var chunk DataChunk
+	chunk.initFromChunk(output)
+
+	fun.FillChunk(chunk)
+}
+
 // RegisterTableUDF registers a TableFunctionProvider to duckdb.
 // Projectionpushdown is enabled by default, and implemented transparently.
-func RegisterTableUDF(c *sql.Conn, name string, function TableFunction) error {
+func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT) error {
 	err := c.Raw(func(dconn any) error {
 		ddconn := dconn.(*conn)
 		name := C.CString(name)
 		defer C.free(unsafe.Pointer(name))
 
-		config := function.Config()
-
 		handle := cgo.NewHandle(function)
 
 		tableFunction := C.duckdb_create_table_function()
 		C.duckdb_table_function_set_name(tableFunction, name)
-		C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind))
 		C.duckdb_table_function_set_init(tableFunction, C.init(C.udf_init))
-		C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_callback))
-		C.duckdb_table_function_set_extra_info(tableFunction, unsafe.Pointer(handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
+		C.duckdb_table_function_set_extra_info(tableFunction, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
 		C.duckdb_table_function_supports_projection_pushdown(tableFunction, C.bool(true))
+
+		var config TableFunctionConfig
+		var x any = function
+		switch tfunc := x.(type) {
+		case RowTableFunction:
+			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind_row))
+			C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_row_callback))
+			config = tfunc.Config
+			if tfunc.BindArguments == nil {
+				return invalidTableFunctionError()
+			}
+		case ChunkTableFunction:
+			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.udf_bind_chunk))
+			C.duckdb_table_function_set_function(tableFunction, C.callback(C.udf_chunk_callback))
+			config = tfunc.Config
+			if tfunc.BindArguments == nil {
+				return invalidTableFunctionError()
+			}
+		default:
+			panic("This code should be unreachable, please open a bug report for go-duckdb.")
+		}
 
 		for _, t := range config.Arguments {
 			dt := t.toDuckdb()

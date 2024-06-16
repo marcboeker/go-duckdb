@@ -107,3 +107,11 @@ func (chunk *DataChunk) setSize() error {
 	C.duckdb_data_chunk_set_size(chunk.data, maxSize)
 	return nil
 }
+
+func (chunk *DataChunk) SetSize(size int) {
+	C.duckdb_data_chunk_set_size(chunk.data, C.idx_t(size))
+}
+
+func (chunk *DataChunk) GetSize() int {
+	return int(C.duckdb_data_chunk_get_size(chunk.data))
+}

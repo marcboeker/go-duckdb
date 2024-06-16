@@ -26,18 +26,11 @@ type tableUDF struct {
 	count int64
 }
 
-func (d *tableUDF) Config() duckdb.TableFunctionConfig {
-	return duckdb.TableFunctionConfig{
-		Arguments: []duckdb.Type{
-			duckdb.NewDuckdbType[int64](),
-		},
-	}
-}
-
-func (d *tableUDF) BindArguments(namedArgs map[string]any, args ...interface{}) (duckdb.TableSource, error) {
-	d.count = 0
-	d.n = args[0].(int64)
-	return d, nil
+func BindTableUDF(namedArgs map[string]any, args ...interface{}) (duckdb.RowTableSource, error) {
+	return &tableUDF{
+		count: 0,
+		n:     args[0].(int64),
+	}, nil
 }
 
 func (d *tableUDF) Columns() ([]duckdb.ColumnMetaData, error) {
@@ -76,8 +69,16 @@ func main() {
 	}
 	defer db.Close()
 	conn, _ := db.Conn(context.Background())
-	var fun tableUDF
-	duckdb.RegisterTableUDF(conn, "whoo", &fun)
+	fun := duckdb.RowTableFunction{
+		Config: duckdb.TableFunctionConfig{
+			Arguments: []duckdb.Type{
+				duckdb.NewDuckdbType[int64](),
+			},
+		},
+		BindArguments: BindTableUDF,
+	}
+
+	duckdb.RegisterTableUDF(conn, "whoo", fun)
 
 	check(db.Ping())
 

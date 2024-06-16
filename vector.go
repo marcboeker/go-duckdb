@@ -667,6 +667,7 @@ func _setVectorStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 }
 
 func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	vec.size ++
 	switch vec.duckdbType {
 	case C.DUCKDB_TYPE_UTINYINT:
 		return _setVectorNumeric[S, uint8](vec, rowIdx, val)
@@ -704,6 +705,7 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case C.DUCKDB_TYPE_STRUCT:
 		return _setVectorStruct[S](vec, rowIdx, val)
 	default:
+	vec.size -- // Since we preemtively increment this, we should
 		return errBadDuckdbType
 	}
 }
