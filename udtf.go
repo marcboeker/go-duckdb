@@ -205,6 +205,12 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 	}
 
 	columns, err := instance.Columns()
+	if err != nil {
+		errstr := C.CString(err.Error())
+		defer C.free(unsafe.Pointer(errstr))
+		C.duckdb_bind_set_error(info, errstr)
+		return
+	}
 
 	instanceData := tableFunctionData{
 		fun:        instance,
@@ -273,7 +279,13 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	instance := h.Value().(tableFunctionData)
 
 	var chunk DataChunk
-	chunk.initFromChunk(output)
+	err := chunk.initFromChunk(output)
+	if err != nil {
+		errstr := C.CString(err.Error())
+		defer C.free(unsafe.Pointer(errstr))
+		C.duckdb_function_set_error(info, errstr)
+	}
+
 	row := Row{
 		chunk:      chunk,
 		projection: instance.projection,
@@ -321,7 +333,13 @@ func udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk)
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
 	instance := h.Value().(tableFunctionData)
 	var chunk DataChunk
-	chunk.initFromChunk(output)
+	err := chunk.initFromChunk(output)
+	if err != nil {
+		errstr := C.CString(err.Error())
+		defer C.free(unsafe.Pointer(errstr))
+		C.duckdb_function_set_error(info, errstr)
+	}
+
 	switch fun := instance.fun.(type) {
 	case ChunkTableSource:
 		err := fun.FillChunk(chunk)

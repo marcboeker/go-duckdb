@@ -136,8 +136,8 @@ func (d *incTableUDF) FillRow(row Row) (bool, error) {
 		return false, nil
 	}
 	d.count++
-	SetRowValue(row, 0, d.count)
-	return true, nil
+	err := SetRowValue(row, 0, d.count)
+	return true, err
 }
 
 func (d *incTableUDF) GetValue(r, c int) any {
@@ -294,8 +294,8 @@ func (d *incTableNamedUDF) FillRow(row Row) (bool, error) {
 		return false, nil
 	}
 	d.count++
-	SetRowValue(row, 0, d.count)
-	return true, nil
+	err := SetRowValue(row, 0, d.count)
+	return true, err
 }
 
 func (d *incTableNamedUDF) GetValue(r, c int) any {
@@ -341,7 +341,7 @@ func (d *structTableUDF2) FillRow(row Row) (bool, error) {
 		return false, nil
 	}
 	d.count++
-	err := SetRowValue(row, 0, structTableUDFT2{I: d.count})
+	err := SetRowValue(row, 0, structTableUDFT2{i0: 0, I: d.count, i1: 0})
 	return true, err
 }
 
@@ -394,7 +394,10 @@ func (d *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
 			return nil
 		}
 		d.count++
-		chunk.SetValue(i, 0, d.count)
+		err := chunk.SetValue(i, 0, d.count)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -436,7 +439,11 @@ func singleTableUDF[T TableFunction](t *testing.T, fun rowUDFTest[T]) {
 	}
 	defer db.Close()
 	conn, _ := db.Conn(context.Background())
-	RegisterTableUDF(conn, fun.name, fun.udf.GetFunction())
+	err = RegisterTableUDF(conn, fun.name, fun.udf.GetFunction())
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	rows, err := db.QueryContext(context.Background(), fmt.Sprintf(fun.query, fun.name))
 	if err != nil {
 		t.Fatal(err)
