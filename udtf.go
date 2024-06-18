@@ -162,6 +162,7 @@ func udf_bind_chunk(info C.duckdb_bind_info) {
 
 func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 	extra_info := C.duckdb_bind_get_extra_info(info)
+	fmt.Printf("GET BIND HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_bind_get_extra_info(info)), extra_info)
 	h := *(*cgo.Handle)(extra_info)
 
 	tfunc := h.Value().(tableFunction[T])
@@ -234,13 +235,14 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 	}
 
 	handle := cgo.NewHandle(instanceData)
+	fmt.Printf("CREATE BIND HANDLE: %p: %v\n", &handle, handle)
 	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
 }
 
 //export udf_init
 func udf_init(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
-	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
+	fmt.Printf("GET BIND HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 
 	columnCount := C.duckdb_init_get_column_count(info)
@@ -254,7 +256,7 @@ func udf_init(info C.duckdb_init_info) {
 //export udf_init_threaded
 func udf_init_threaded(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
-	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
+	fmt.Printf("GET BIND HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 	
 	columnCount := C.duckdb_init_get_column_count(info)
@@ -270,7 +272,7 @@ func udf_init_threaded(info C.duckdb_init_info) {
 //export udf_local_init
 func udf_local_init(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
-	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
+	fmt.Printf("GET BIND HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 	localState := instance.fun.(threadedTableSource).NewLocalState()
 	handle := cgo.NewHandle(localState)
@@ -280,7 +282,7 @@ func udf_local_init(info C.duckdb_init_info) {
 //export udf_row_callback
 func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
-	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
+	fmt.Printf("GET BIND HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 
 	var chunk DataChunk
@@ -336,7 +338,7 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 //export udf_chunk_callback
 func udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
-	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
+	fmt.Printf("GET BIND HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 	var chunk DataChunk
 	err := chunk.initFromChunk(output)
