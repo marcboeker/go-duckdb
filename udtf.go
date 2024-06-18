@@ -23,7 +23,6 @@ import "C"
 
 import (
 	"database/sql"
-	"fmt"
 	"reflect"
 	"runtime"
 	"runtime/cgo"
@@ -160,7 +159,6 @@ func (pv pinnedValue[T]) unpin() {
 //export udf_destroy_data
 func udf_destroy_data(data unsafe.Pointer) {
 	h := *(*cgo.Handle)(data)
-	fmt.Printf("DELETE: %p: %v\n", (*cgo.Handle)(data), h)
 	h.Value().(unpinner).unpin()
 	h.Delete()
 }
@@ -177,7 +175,6 @@ func udf_bind_chunk(info C.duckdb_bind_info) {
 
 func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 	extra_info := C.duckdb_bind_get_extra_info(info)
-	fmt.Printf("GET BIND HANDLE6: %p: %v\n", (*cgo.Handle)(C.duckdb_bind_get_extra_info(info)), extra_info)
 	h := *(*cgo.Handle)(extra_info)
 
 	tfunc := h.Value().(pinnedValue[tableFunction[T]]).value
@@ -256,14 +253,12 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 	handle := cgo.NewHandle(pinnedInstanceData)
 	pinnedInstanceData.pinner.Pin(&handle)
-	fmt.Printf("CREATE BIND HANDLE: %p: %v\n", &handle, handle)
 	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
 }
 
 //export udf_init
 func udf_init(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
-	fmt.Printf("GET BIND HANDLE5: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(pinnedValue[tableFunctionData]).value
 
 	columnCount := C.duckdb_init_get_column_count(info)
@@ -277,7 +272,6 @@ func udf_init(info C.duckdb_init_info) {
 //export udf_init_threaded
 func udf_init_threaded(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
-	fmt.Printf("GET BIND HANDLE2: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(pinnedValue[tableFunctionData]).value
 
 	columnCount := C.duckdb_init_get_column_count(info)
@@ -293,7 +287,6 @@ func udf_init_threaded(info C.duckdb_init_info) {
 //export udf_local_init
 func udf_local_init(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
-	fmt.Printf("GET BIND HANDLE3: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(pinnedValue[tableFunctionData]).value
 	localState := pinnedValue[any]{
 		pinner: &runtime.Pinner{},
@@ -307,7 +300,6 @@ func udf_local_init(info C.duckdb_init_info) {
 //export udf_row_callback
 func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
-	fmt.Printf("GET BIND HANDLE4: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
 	instance := h.Value().(pinnedValue[tableFunctionData]).value
 
 	var chunk DataChunk
@@ -317,7 +309,6 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 		defer C.free(unsafe.Pointer(errstr))
 		C.duckdb_function_set_error(info, errstr)
 	}
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
 
 	row := Row{
 		chunk:      chunk,
@@ -325,7 +316,6 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	}
 
 	maxSize := C.duckdb_vector_size()
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
 
 	switch fun := instance.fun.(type) {
 	case RowTableSource:
@@ -358,17 +348,16 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 			}
 		}
 	}
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
+
 	// since row.r points to one past the last value, it is also the size
 	C.duckdb_data_chunk_set_size(output, row.r)
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
 }
 
 //export udf_chunk_callback
 func udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
-	fmt.Printf("GET BIND HANDLE1: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
 	instance := h.Value().(pinnedValue[tableFunctionData]).value
+
 	var chunk DataChunk
 	err := chunk.initFromChunk(output)
 	if err != nil {
