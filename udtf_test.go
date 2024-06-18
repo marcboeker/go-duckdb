@@ -494,7 +494,10 @@ func BenchmarkTableUDF(b *testing.B) {
 	defer db.Close()
 	conn, _ := db.Conn(context.Background())
 	var fun incTableUDF
-	RegisterTableUDF(conn, "whoo", fun.GetFunction())
+	err = RegisterTableUDF(conn, "whoo", fun.GetFunction())
+	if err != nil {
+		b.Fatal(err)
+	}
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
 		rows, err := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048)")
