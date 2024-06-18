@@ -376,10 +376,12 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 
 		handle := cgo.NewHandle(function)
 		fmt.Printf("CREATE FUNCTION: %p: %v\n", &handle, handle)
+		handle2 := unsafe.Pointer(&handle)
+		fmt.Printf("CREATE FUNCTION2: %p: %v\n", handle2, *(*cgo.Handle)(handle2))
 		tableFunction := C.duckdb_create_table_function()
 		C.duckdb_table_function_set_name(tableFunction, name)
 		C.duckdb_table_function_set_init(tableFunction, C.init(C.udf_init))
-		C.duckdb_table_function_set_extra_info(tableFunction, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_destroy_data))
+		C.duckdb_table_function_set_extra_info(tableFunction, handle2, C.duckdb_delete_callback_t(C.udf_destroy_data))
 		C.duckdb_table_function_supports_projection_pushdown(tableFunction, C.bool(true))
 
 		var config TableFunctionConfig
