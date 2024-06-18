@@ -268,7 +268,6 @@ func (vec *vector) getChildVectors(vector C.duckdb_vector) {
 		}
 	}
 }
-
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		vec.size++
