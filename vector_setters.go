@@ -11,6 +11,9 @@ import (
 	"unsafe"
 )
 
+// secondsPerDay to calculate the days since 1970-01-01.
+const secondsPerDay = 24 * 60 * 60
+
 // fnSetVectorValue is the setter callback function for any (nested) vector.
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 
