@@ -293,7 +293,7 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 		defer C.free(unsafe.Pointer(errstr))
 		C.duckdb_function_set_error(info, errstr)
 	}
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), (*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
+	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
 
 	row := Row{
 		chunk:      chunk,
@@ -301,7 +301,7 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	}
 
 	maxSize := C.duckdb_vector_size()
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), (*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
+	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
 
 	switch fun := instance.fun.(type) {
 	case RowTableSource:
@@ -334,10 +334,10 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 			}
 		}
 	}
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), (*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
+	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
 	// since row.r points to one past the last value, it is also the size
 	C.duckdb_data_chunk_set_size(output, row.r)
-	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), (*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
+	fmt.Printf("GET BIND HANDLE4_ALT: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), *(*cgo.Handle)(C.duckdb_function_get_bind_data(info)))
 }
 
 //export udf_chunk_callback
