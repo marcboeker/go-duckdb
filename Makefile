@@ -7,7 +7,7 @@ install:
 
 .PHONY: examples
 examples:
-	go run examples/simple.go
+	go run examples/simple/simple.go
 
 .PHONY: test
 test:
