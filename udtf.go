@@ -147,6 +147,7 @@ type (
 //export udf_destroy_data
 func udf_destroy_data(data unsafe.Pointer) {
 	h := *(*cgo.Handle)(data)
+	fmt.Printf("GET BIND HANDLE: %p: %v\n", (*cgo.Handle)(data), h)
 	h.Delete()
 }
 
