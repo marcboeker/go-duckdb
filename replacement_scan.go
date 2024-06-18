@@ -8,6 +8,7 @@ package duckdb
 	void replacement_scan_destroy_data(void *);
 */
 import "C"
+
 import (
 	"runtime/cgo"
 	"unsafe"

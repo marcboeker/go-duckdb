@@ -25,8 +25,6 @@ type vector struct {
 	childNames []string
 	// The child vectors of nested data types.
 	childVectors []vector
-	// The number of values in this vector.
-	size C.idx_t
 }
 
 func (vec *vector) tryCast(val any) (any, error) {
@@ -268,9 +266,9 @@ func (vec *vector) getChildVectors(vector C.duckdb_vector) {
 		}
 	}
 }
+
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -282,7 +280,6 @@ func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 
 func (vec *vector) initTS(duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -294,7 +291,6 @@ func (vec *vector) initTS(duckdbType C.duckdb_type) {
 
 func (vec *vector) initDate() {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -306,7 +302,6 @@ func (vec *vector) initDate() {
 
 func (vec *vector) initCString(duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -329,7 +324,6 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 	}
 
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -364,7 +358,6 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 	}
 
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -377,7 +370,6 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 
 func (vec *vector) initUUID() {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return

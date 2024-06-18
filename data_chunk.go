@@ -18,6 +18,20 @@ type DataChunk struct {
 	columns []vector
 }
 
+// GetCapacity returns the capacity of a data chunk.
+func (chunk *DataChunk) GetCapacity() int {
+	return int(C.duckdb_vector_size())
+}
+
+// SetSize sets the internal size of the data chunk. Cannot exceed GetCapacity().
+func (chunk *DataChunk) SetSize(size int) error {
+	if size > chunk.GetCapacity() {
+		return getError(errAPI, errVectorSize)
+	}
+	C.duckdb_data_chunk_set_size(chunk.data, C.idx_t(size))
+	return nil
+}
+
 // SetValue writes a single value to a column in a data chunk. Note that this requires casting the type for each invocation.
 func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
@@ -66,28 +80,4 @@ func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logic
 
 func (chunk *DataChunk) close() {
 	C.duckdb_destroy_data_chunk(&chunk.data)
-}
-
-func (chunk *DataChunk) setSize() error {
-	if len(chunk.columns) == 0 {
-		C.duckdb_data_chunk_set_size(chunk.data, C.idx_t(0))
-		return nil
-	}
-
-	allEqual := true
-	maxSize := C.idx_t(chunk.columns[0].size)
-	for i := 0; i < len(chunk.columns); i++ {
-		if chunk.columns[i].size != maxSize {
-			allEqual = false
-		}
-		if chunk.columns[i].size > maxSize {
-			maxSize = chunk.columns[i].size
-		}
-	}
-
-	if !allEqual {
-		return errDriver
-	}
-	C.duckdb_data_chunk_set_size(chunk.data, maxSize)
-	return nil
 }
