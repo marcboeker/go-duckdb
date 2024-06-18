@@ -40,6 +40,8 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	column := &chunk.columns[colIdx]
 
 	// Ensure that the types match before attempting to set anything.
+	// This is done to prevent failures 'halfway through' writing column values,
+	// potentially corrupting data in that column.
 	v, err := column.tryCast(val)
 	if err != nil {
 		return columnError(err, colIdx)
