@@ -23,6 +23,7 @@ import "C"
 
 import (
 	"database/sql"
+	"fmt"
 	"reflect"
 	"runtime/cgo"
 	"unsafe"
@@ -239,6 +240,7 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 //export udf_init
 func udf_init(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
+	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 
 	columnCount := C.duckdb_init_get_column_count(info)
@@ -252,8 +254,9 @@ func udf_init(info C.duckdb_init_info) {
 //export udf_init_threaded
 func udf_init_threaded(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
+	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
-
+	
 	columnCount := C.duckdb_init_get_column_count(info)
 	for i := C.idx_t(0); i < columnCount; i++ {
 		srcPos := int(C.duckdb_init_get_column_index(info, i))
@@ -267,6 +270,7 @@ func udf_init_threaded(info C.duckdb_init_info) {
 //export udf_local_init
 func udf_local_init(info C.duckdb_init_info) {
 	h := *(*cgo.Handle)(C.duckdb_init_get_bind_data(info))
+	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_init_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 	localState := instance.fun.(threadedTableSource).NewLocalState()
 	handle := cgo.NewHandle(localState)
@@ -276,6 +280,7 @@ func udf_local_init(info C.duckdb_init_info) {
 //export udf_row_callback
 func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
+	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 
 	var chunk DataChunk
@@ -331,6 +336,7 @@ func udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 //export udf_chunk_callback
 func udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
 	h := *(*cgo.Handle)(C.duckdb_function_get_bind_data(info))
+	fmt.Printf("GET HANDLE: %p: %v\n", (*cgo.Handle)(C.duckdb_function_get_bind_data(info)), h)
 	instance := h.Value().(tableFunctionData)
 	var chunk DataChunk
 	err := chunk.initFromChunk(output)
@@ -369,7 +375,7 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 		defer C.free(unsafe.Pointer(name))
 
 		handle := cgo.NewHandle(function)
-
+		fmt.Printf("CREATE FUNCTION: %p: %v\n", &handle, handle)
 		tableFunction := C.duckdb_create_table_function()
 		C.duckdb_table_function_set_name(tableFunction, name)
 		C.duckdb_table_function_set_init(tableFunction, C.init(C.udf_init))
