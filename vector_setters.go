@@ -7,6 +7,7 @@ package duckdb
 import "C"
 
 import (
+	"math/big"
 	"time"
 	"unsafe"
 )
@@ -66,6 +67,30 @@ func (vec *vector) setDate(rowIdx C.idx_t, val any) {
 	setPrimitive[C.duckdb_date](vec, rowIdx, date)
 }
 
+func (vec *vector) setTime(rowIdx C.idx_t, val any) {
+	v := val.(time.Time)
+	ticks := v.UTC().UnixMicro()
+
+	var t C.duckdb_time
+	t.micros = C.int64_t(ticks)
+	setPrimitive[C.duckdb_time](vec, rowIdx, t)
+}
+
+func (vec *vector) setInterval(rowIdx C.idx_t, val any) {
+	v := val.(Interval)
+	var interval C.duckdb_interval
+	interval.days = C.int32_t(v.Days)
+	interval.months = C.int32_t(v.Months)
+	interval.micros = C.int64_t(v.Micros)
+	setPrimitive[C.duckdb_interval](vec, rowIdx, interval)
+}
+
+func (vec *vector) setHugeint(rowIdx C.idx_t, val any) {
+	v := val.(*big.Int)
+	hugeInt, _ := hugeIntFromNative(v)
+	setPrimitive[C.duckdb_hugeint](vec, rowIdx, hugeInt)
+}
+
 func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	var str string
 	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
@@ -78,6 +103,37 @@ func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	cStr := C.CString(str)
 	C.duckdb_vector_assign_string_element_len(vec.duckdbVector, rowIdx, cStr, C.idx_t(len(str)))
 	C.free(unsafe.Pointer(cStr))
+}
+
+func (vec *vector) setDecimal(internalType C.duckdb_type, rowIdx C.idx_t, val any) {
+	v := val.(*big.Int)
+
+	switch internalType {
+	case C.DUCKDB_TYPE_SMALLINT:
+		setPrimitive[int16](vec, rowIdx, int16(v.Int64()))
+	case C.DUCKDB_TYPE_INTEGER:
+		setPrimitive[int32](vec, rowIdx, int32(v.Int64()))
+	case C.DUCKDB_TYPE_BIGINT:
+		setPrimitive[int64](vec, rowIdx, v.Int64())
+	case C.DUCKDB_TYPE_HUGEINT:
+		value, _ := hugeIntFromNative(v)
+		setPrimitive[C.duckdb_hugeint](vec, rowIdx, value)
+	}
+}
+
+func (vec *vector) setEnum(internalType C.duckdb_type, rowIdx C.idx_t, val any) {
+	v := vec.dict[val.(string)]
+
+	switch internalType {
+	case C.DUCKDB_TYPE_UTINYINT:
+		setPrimitive[uint8](vec, rowIdx, uint8(v))
+	case C.DUCKDB_TYPE_USMALLINT:
+		setPrimitive[uint16](vec, rowIdx, uint16(v))
+	case C.DUCKDB_TYPE_UINTEGER:
+		setPrimitive[uint32](vec, rowIdx, v)
+	case C.DUCKDB_TYPE_UBIGINT:
+		setPrimitive[uint64](vec, rowIdx, uint64(v))
+	}
 }
 
 func (vec *vector) setList(rowIdx C.idx_t, val any) {
@@ -110,4 +166,17 @@ func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
 		childName := vec.childNames[i]
 		childVector.setFn(childVector, rowIdx, m[childName])
 	}
+}
+
+func (vec *vector) setMap(rowIdx C.idx_t, val any) {
+	m := val.(Map)
+
+	// Create a LIST of STRUCT values.
+	entries := make([]map[string]any, len(m))
+	for key, value := range m {
+		entry := map[string]any{mapKeysField(): key, mapValuesField(): value}
+		entries = append(entries, entry)
+	}
+
+	vec.setList(rowIdx, entries)
 }

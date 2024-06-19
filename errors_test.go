@@ -110,7 +110,7 @@ func TestErrAppender(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
 
-		_, err = sql.OpenDB(c).Exec(`CREATE TABLE test AS SELECT MAP() AS m`)
+		_, err = sql.OpenDB(c).Exec(`CREATE TABLE test (int_array INTEGER[2])`)
 		require.NoError(t, err)
 
 		con, err := c.Connect(context.Background())

@@ -95,12 +95,6 @@ func scanValue(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
 }
 
 func scan(vector C.duckdb_vector, rowIdx C.idx_t) (any, error) {
-	// FIXME: implement support for these types:
-	// DUCKDB_TYPE_UHUGEINT
-	// DUCKDB_TYPE_UNION
-	// DUCKDB_TYPE_BIT
-	// DUCKDB_TYPE_TIME_TZ
-
 	validity := C.duckdb_vector_get_validity(vector)
 	if !C.duckdb_validity_row_is_valid(validity, rowIdx) {
 		return nil, nil
@@ -389,7 +383,7 @@ func scanDecimal(ty C.duckdb_logical_type, vector C.duckdb_vector, rowIdx C.idx_
 	case C.DUCKDB_TYPE_INTEGER:
 		nativeValue = big.NewInt(int64(get[int32](vector, rowIdx)))
 	case C.DUCKDB_TYPE_BIGINT:
-		nativeValue = big.NewInt(int64(get[int64](vector, rowIdx)))
+		nativeValue = big.NewInt(get[int64](vector, rowIdx))
 	case C.DUCKDB_TYPE_HUGEINT:
 		i := get[C.duckdb_hugeint](vector, rowIdx)
 		nativeValue = hugeIntToNative(C.duckdb_hugeint{

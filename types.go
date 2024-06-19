@@ -13,15 +13,11 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-var unsupportedAppenderTypeMap = map[C.duckdb_type]string{
+// FIXME: Implement support for these types.
+var unsupportedTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_INVALID:  "INVALID",
-	C.DUCKDB_TYPE_TIME:     "TIME",
-	C.DUCKDB_TYPE_INTERVAL: "INTERVAL",
-	C.DUCKDB_TYPE_HUGEINT:  "HUGEINT",
 	C.DUCKDB_TYPE_UHUGEINT: "UHUGEINT",
-	C.DUCKDB_TYPE_DECIMAL:  "DECIMAL",
-	C.DUCKDB_TYPE_ENUM:     "ENUM",
-	C.DUCKDB_TYPE_MAP:      "MAP",
+	C.DUCKDB_TYPE_ARRAY:    "ARRAY",
 	C.DUCKDB_TYPE_UNION:    "UNION",
 	C.DUCKDB_TYPE_BIT:      "BIT",
 	C.DUCKDB_TYPE_TIME_TZ:  "TIME_TZ",
@@ -137,6 +133,14 @@ func (m *Map) Scan(v any) error {
 
 	*m = data
 	return nil
+}
+
+func mapKeysField() string {
+	return "key"
+}
+
+func mapValuesField() string {
+	return "value"
 }
 
 type Interval struct {
