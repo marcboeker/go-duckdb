@@ -184,14 +184,17 @@ func (a *Appender) appendDataChunks() error {
 			size = a.rowCount
 		}
 		if err = chunk.SetSize(size); err != nil {
-			continue
+			break
 		}
 
 		state = C.duckdb_append_data_chunk(a.duckdbAppender, chunk.data)
 		if state == C.DuckDBError {
 			err = duckdbError(C.duckdb_appender_error(a.duckdbAppender))
-			continue
+			break
 		}
+	}
+
+	for _, chunk := range a.chunks {
 		chunk.close()
 	}
 
