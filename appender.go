@@ -177,26 +177,23 @@ func (a *Appender) appendDataChunks() error {
 	var state C.duckdb_state
 	var err error
 
-	for i := 0; i < len(a.chunks); i++ {
+	for i, chunk := range a.chunks {
 		// All data chunks except the last are at maximum capacity.
 		size := GetDataChunkCapacity()
 		if i == len(a.chunks)-1 {
 			size = a.rowCount
 		}
-		if err = a.chunks[i].SetSize(size); err != nil {
+		if err = chunk.SetSize(size); err != nil {
 			break
 		}
 
-		state = C.duckdb_append_data_chunk(a.duckdbAppender, a.chunks[i].data)
+		state = C.duckdb_append_data_chunk(a.duckdbAppender, chunk.data)
 		if state == C.DuckDBError {
 			err = duckdbError(C.duckdb_appender_error(a.duckdbAppender))
 			break
 		}
-		a.chunks[i].close()
+		chunk.close()
 	}
-
-	//for i, chunk := range a.chunks {
-	//}
 
 	a.chunks = a.chunks[:0]
 	a.rowCount = 0
