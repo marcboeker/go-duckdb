@@ -15,8 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const numAppenderTestRows = 10000
-
 type simpleStruct struct {
 	A int32
 	B string
@@ -169,6 +167,8 @@ func TestAppenderPrimitive(t *testing.T) {
 			bool BOOLEAN
 	  	)`)
 
+	// Test appending a few data chunks.
+	rowCount := GetDataChunkCapacity() * 5
 	type row struct {
 		ID          int64
 		UInt8       uint8
@@ -198,8 +198,8 @@ func TestAppenderPrimitive(t *testing.T) {
 	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", IST)
 	require.NoError(t, err)
 
-	rowsToAppend := make([]row, numAppenderTestRows)
-	for i := 0; i < numAppenderTestRows; i++ {
+	rowsToAppend := make([]row, rowCount)
+	for i := 0; i < rowCount; i++ {
 
 		u64 := rand.Uint64()
 		// Go SQL does not support uint64 values with their high bit set (see for example https://github.com/lib/pq/issues/72).
@@ -248,10 +248,6 @@ func TestAppenderPrimitive(t *testing.T) {
 			rowsToAppend[i].String,
 			rowsToAppend[i].Bool,
 		))
-
-		if i%1000 == 0 {
-			require.NoError(t, a.Flush())
-		}
 	}
 	require.NoError(t, a.Flush())
 
@@ -291,7 +287,7 @@ func TestAppenderPrimitive(t *testing.T) {
 		i++
 	}
 
-	require.Equal(t, numAppenderTestRows, i)
+	require.Equal(t, rowCount, i)
 	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }

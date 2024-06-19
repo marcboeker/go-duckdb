@@ -18,14 +18,14 @@ type DataChunk struct {
 	columns []vector
 }
 
-// GetCapacity returns the capacity of a data chunk.
-func (chunk *DataChunk) GetCapacity() int {
+// GetDataChunkCapacity returns the capacity of a data chunk.
+func GetDataChunkCapacity() int {
 	return int(C.duckdb_vector_size())
 }
 
 // SetSize sets the internal size of the data chunk. Cannot exceed GetCapacity().
 func (chunk *DataChunk) SetSize(size int) error {
-	if size > chunk.GetCapacity() {
+	if size > GetDataChunkCapacity() {
 		return getError(errAPI, errVectorSize)
 	}
 	C.duckdb_data_chunk_set_size(chunk.data, C.idx_t(size))

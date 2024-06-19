@@ -153,10 +153,11 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 	}
 
 	// Create a new data chunk if the current chunk is full.
-	if C.idx_t(a.rowCount) == C.duckdb_vector_size() || len(a.chunks) == 0 {
+	if a.rowCount == GetDataChunkCapacity() || len(a.chunks) == 0 {
 		if err := a.addDataChunk(); err != nil {
 			return err
 		}
+		a.rowCount = 0
 	}
 
 	// Set all values.
@@ -177,9 +178,8 @@ func (a *Appender) appendDataChunks() error {
 	var err error
 
 	for i, chunk := range a.chunks {
-
 		// All data chunks except the last are at maximum capacity.
-		size := chunk.GetCapacity()
+		size := GetDataChunkCapacity()
 		if i == len(a.chunks)-1 {
 			size = a.rowCount
 		}
@@ -194,16 +194,13 @@ func (a *Appender) appendDataChunks() error {
 		}
 	}
 
-	a.closeDataChunks()
-	a.rowCount = 0
-	return err
-}
-
-func (a *Appender) closeDataChunks() {
 	for _, chunk := range a.chunks {
 		chunk.close()
 	}
+
 	a.chunks = a.chunks[:0]
+	a.rowCount = 0
+	return err
 }
 
 func mallocTypeSlice(count int) (unsafe.Pointer, []C.duckdb_logical_type) {
