@@ -278,12 +278,12 @@ func TestAppenderPrimitive(t *testing.T) {
 			&r.String,
 			&r.Bool,
 		))
-		rowsToAppend[r.ID].Timestamp = rowsToAppend[i].Timestamp.UTC()
-		rowsToAppend[r.ID].TimestampS = rowsToAppend[i].TimestampS.UTC()
-		rowsToAppend[r.ID].TimestampMS = rowsToAppend[i].TimestampMS.UTC()
-		rowsToAppend[r.ID].TimestampNS = rowsToAppend[i].TimestampNS.UTC()
-		rowsToAppend[r.ID].TimestampTZ = rowsToAppend[i].TimestampTZ.UTC()
-		require.Equal(t, rowsToAppend[r.ID], r)
+		rowsToAppend[i].Timestamp = rowsToAppend[i].Timestamp.UTC()
+		rowsToAppend[i].TimestampS = rowsToAppend[i].TimestampS.UTC()
+		rowsToAppend[i].TimestampMS = rowsToAppend[i].TimestampMS.UTC()
+		rowsToAppend[i].TimestampNS = rowsToAppend[i].TimestampNS.UTC()
+		rowsToAppend[i].TimestampTZ = rowsToAppend[i].TimestampTZ.UTC()
+		require.Equal(t, rowsToAppend[i], r)
 		i++
 	}
 
