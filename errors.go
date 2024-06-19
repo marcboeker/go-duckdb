@@ -57,7 +57,9 @@ const (
 
 var (
 	errDriver = errors.New("internal driver error: please file a bug report")
-	errAPI    = errors.New("API error")
+
+	errAPI        = errors.New("API error")
+	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
 
 	errParseDSN  = errors.New("could not parse DSN for database")
 	errOpen      = errors.New("could not open database")

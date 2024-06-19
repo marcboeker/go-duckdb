@@ -25,8 +25,6 @@ type vector struct {
 	childNames []string
 	// The child vectors of nested data types.
 	childVectors []vector
-	// The number of values in this vector.
-	size C.idx_t
 }
 
 func (vec *vector) tryCast(val any) (any, error) {
@@ -84,29 +82,31 @@ func (*vector) canNil(val reflect.Value) bool {
 	return false
 }
 
-func tryPrimitiveCast[T any](val any, expected string) (any, error) {
-	if v, ok := val.(T); ok {
+func tryPrimitiveCast[T any](val any, expected string) (T, error) {
+	v, ok := val.(T)
+	if ok {
 		return v, nil
 	}
 
 	goType := reflect.TypeOf(val)
-	return nil, castError(goType.String(), expected)
+	return v, castError(goType.String(), expected)
 }
 
-func tryNumericCast[T numericType](val any, expected string) (any, error) {
-	if v, ok := val.(T); ok {
+func tryNumericCast[T numericType](val any, expected string) (T, error) {
+	v, ok := val.(T)
+	if ok {
 		return v, nil
 	}
 
 	// JSON unmarshalling uses float64 for numbers.
 	// We might want to add more implicit casts here.
-	switch v := val.(type) {
+	switch value := val.(type) {
 	case float64:
-		return convertNumericType[float64, T](v), nil
+		return convertNumericType[float64, T](value), nil
 	}
 
 	goType := reflect.TypeOf(val)
-	return nil, castError(goType.String(), expected)
+	return v, castError(goType.String(), expected)
 }
 
 func (vec *vector) tryCastList(val any) ([]any, error) {
@@ -269,19 +269,17 @@ func (vec *vector) getChildVectors(vector C.duckdb_vector) {
 
 func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive[T](vec, rowIdx, val)
+		setPrimitive[T](vec, rowIdx, val.(T))
 	}
 	vec.duckdbType = duckdbType
 }
 
 func (vec *vector) initTS(duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -293,7 +291,6 @@ func (vec *vector) initTS(duckdbType C.duckdb_type) {
 
 func (vec *vector) initDate() {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -305,7 +302,6 @@ func (vec *vector) initDate() {
 
 func (vec *vector) initCString(duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -328,7 +324,6 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 	}
 
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -363,7 +358,6 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 	}
 
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
@@ -376,7 +370,6 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 
 func (vec *vector) initUUID() {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
-		vec.size++
 		if val == nil {
 			vec.setNull(rowIdx)
 			return

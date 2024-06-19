@@ -11,6 +11,9 @@ import (
 	"unsafe"
 )
 
+// secondsPerDay to calculate the days since 1970-01-01.
+const secondsPerDay = 24 * 60 * 60
+
 // fnSetVectorValue is the setter callback function for any (nested) vector.
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 
@@ -26,10 +29,10 @@ func (vec *vector) setNull(rowIdx C.idx_t) {
 	}
 }
 
-func setPrimitive[T any](vec *vector, rowIdx C.idx_t, val any) {
+func setPrimitive[T any](vec *vector, rowIdx C.idx_t, v T) {
 	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
 	xs := (*[1 << 31]T)(ptr)
-	xs[rowIdx] = val.(T)
+	xs[rowIdx] = v
 }
 
 func (vec *vector) setTS(duckdbType C.duckdb_type, rowIdx C.idx_t, val any) {
