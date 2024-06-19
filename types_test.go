@@ -42,7 +42,7 @@ type testTypesRow struct {
 	Date_col         time.Time
 	Time_col         time.Time
 	Interval_col     Interval
-	Hugeint_col      Composite[big.Int]
+	Hugeint_col      *big.Int
 	Varchar_col      string
 	Blob_col         []byte
 	Timestamp_s_col  time.Time
@@ -88,9 +88,6 @@ func testTypesGenerateRow(i int) testTypesRow {
 	ts := time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC)
 	date := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
 	t := time.Date(1970, 1, 1, 11, 42, 7, 0, time.UTC)
-	hugeintCol := Composite[big.Int]{
-		*big.NewInt(int64(i)),
-	}
 	varcharCol := ""
 	for j := 0; j < i; j++ {
 		varcharCol += "hello!"
@@ -121,7 +118,7 @@ func testTypesGenerateRow(i int) testTypesRow {
 		date,
 		t,
 		Interval{Days: 0, Months: int32(i), Micros: 0},
-		hugeintCol,
+		big.NewInt(int64(i)),
 		varcharCol,
 		[]byte{'A', 'B'},
 		ts,
@@ -187,7 +184,7 @@ func testTypes[T require.TestingT](t T, c *Connector, con driver.Conn, a *Append
 			r.Timestamp_s_col,
 			r.Timestamp_ms_col,
 			r.Timestamp_ns_col,
-			r.Enum_col,
+			string(r.Enum_col),
 			r.List_col,
 			r.Struct_col,
 			r.Map_col,

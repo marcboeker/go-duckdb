@@ -33,6 +33,7 @@ func (chunk *DataChunk) SetSize(size int) error {
 }
 
 // SetValue writes a single value to a column in a data chunk. Note that this requires casting the type for each invocation.
+// NOTE: Custom ENUM types must be passed as string.
 func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))

@@ -66,15 +66,8 @@ func (vec *vector) tryCast(val any) (any, error) {
 	case C.DUCKDB_TYPE_INTERVAL:
 		return tryPrimitiveCast[Interval](val, reflect.TypeOf(Interval{}).String())
 	case C.DUCKDB_TYPE_HUGEINT:
-		v, ok := val.(big.Int)
-		if ok {
-			return v, nil
-		}
-
-		goType := reflect.TypeOf(val)
-		return v, castError(goType.String(), reflect.TypeOf(big.Int{}).String())
-		//// Note that this expects *big.Int.
-		//return tryPrimitiveCast[big.Int](val, reflect.TypeOf(big.Int{}).String())
+		// Note that this expects *big.Int.
+		return tryPrimitiveCast[*big.Int](val, reflect.TypeOf(big.Int{}).String())
 	case C.DUCKDB_TYPE_UHUGEINT:
 		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_ENUM:
