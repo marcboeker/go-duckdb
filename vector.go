@@ -66,8 +66,15 @@ func (vec *vector) tryCast(val any) (any, error) {
 	case C.DUCKDB_TYPE_INTERVAL:
 		return tryPrimitiveCast[Interval](val, reflect.TypeOf(Interval{}).String())
 	case C.DUCKDB_TYPE_HUGEINT:
-		// Note that this expects *big.Int.
-		return tryPrimitiveCast[*big.Int](val, reflect.TypeOf(big.Int{}).String())
+		v, ok := val.(big.Int)
+		if ok {
+			return v, nil
+		}
+
+		goType := reflect.TypeOf(val)
+		return v, castError(goType.String(), reflect.TypeOf(big.Int{}).String())
+		//// Note that this expects *big.Int.
+		//return tryPrimitiveCast[big.Int](val, reflect.TypeOf(big.Int{}).String())
 	case C.DUCKDB_TYPE_UHUGEINT:
 		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_ENUM:
@@ -396,9 +403,11 @@ func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) er
 func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error {
 	// Initialize the dictionary.
 	dictSize := uint32(C.duckdb_enum_dictionary_size(logicalType))
+	vec.dict = make(map[string]uint32)
 	for i := uint32(0); i < dictSize; i++ {
 		cStr := C.duckdb_enum_dictionary_value(logicalType, C.idx_t(i))
-		vec.dict[C.GoString(cStr)] = i
+		str := C.GoString(cStr)
+		vec.dict[str] = i
 		C.duckdb_free(unsafe.Pointer(cStr))
 	}
 

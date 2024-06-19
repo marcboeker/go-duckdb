@@ -1,7 +1,9 @@
 package duckdb
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -12,6 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// First, this test inserts all types (except UUID and DECIMAL) with the Appender.
+// Then, it tests scanning these types.
+
 type testTypesEnum string
 
 const testTypesEnumSQL = `CREATE TYPE my_enum AS ENUM ('0', '1', '2')`
@@ -21,7 +26,6 @@ type testTypesStruct struct {
 	B string
 }
 
-// NOTE: Includes all supported types except UUID and DECIMAL.
 type testTypesRow struct {
 	Boolean_col      bool
 	Tinyint_col      int8
@@ -80,37 +84,6 @@ const testTypesTableSQL = `CREATE TABLE types_tbl (
 	Timestamp_tz_col TIMESTAMPTZ
 )`
 
-// We could perform the insertions via the testTypesRow struct by iterating over the rows,
-// but that significantly decreases performance.
-const testTypesInsertSQL = `INSERT INTO types_tbl SELECT
-	r % 2 AS Boolean_col,
-	r % 127 AS Tinyint_col,
-	r % 32767 AS Smallint_col,
-	2147483647 - r AS Integer_col,
-	9223372036854775807 - r AS Bigint_col,
-	r % 256 AS Utinyint_col,
-	r % 65535 AS Usmallint_col,
-	2147483647 - r AS Uinteger_col,
-	9223372036854775807 - r AS Ubigint_col,
-	r AS Float_col,
-	r AS Double_col,
-	'1992-09-20 11:30:00'::TIMESTAMP AS Timestamp_col,
-	'1992-09-20'::DATE AS Date_col,
-	'11:42:07'::TIME AS Time_col,
-	INTERVAL (r) MONTH AS Interval_col,
-	r AS Hugeint_col,
-	repeat('hello!', r) AS Varchar_col,
-	'AB' AS Blob_col,
-	'1992-09-20 11:30:00'::TIMESTAMP_S AS Timestamp_s_col,
-	'1992-09-20 11:30:00'::TIMESTAMP_MS AS Timestamp_ms_col,
-	'1992-09-20 11:30:00'::TIMESTAMP_NS AS Timestamp_ns_col,
-	(r % 3)::VARCHAR AS Enum_col,
-	list_value(r) AS List_col,
-	ROW(r, 'a' || r) AS Struct_col,
-	MAP{r: 'other_longer_val'} AS Map_col,
-	'1992-09-20 11:30:00'::TIMESTAMPTZ AS Timestamp_tz_col
-FROM range(?) tbl(r)`
-
 func testTypesGenerateRow(i int) testTypesRow {
 	ts := time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC)
 	date := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
@@ -162,13 +135,72 @@ func testTypesGenerateRow(i int) testTypesRow {
 	}
 }
 
-func testTypesQuery(db *sql.DB) ([]testTypesRow, error) {
-	res, err := db.Query(`SELECT * FROM types_tbl ORDER BY Smallint_col`)
-	if err != nil {
-		return nil, err
+func testTypesSetup[T require.TestingT](t T, rowCount int) (*Connector, driver.Conn, *Appender, []testTypesRow) {
+	c, err := NewConnector("", nil)
+	require.NoError(t, err)
+
+	_, err = sql.OpenDB(c).Exec(testTypesEnumSQL)
+	require.NoError(t, err)
+
+	_, err = sql.OpenDB(c).Exec(testTypesTableSQL)
+	require.NoError(t, err)
+
+	con, err := c.Connect(context.Background())
+	require.NoError(t, err)
+
+	a, err := NewAppenderFromConn(con, "", "types_tbl")
+	require.NoError(t, err)
+
+	// Generate rows.
+	var expectedRows []testTypesRow
+	for i := 0; i < rowCount; i++ {
+		r := testTypesGenerateRow(i)
+		expectedRows = append(expectedRows, r)
 	}
 
-	var slice []testTypesRow
+	return c, con, a, expectedRows
+}
+
+func testTypes[T require.TestingT](t T, c *Connector, con driver.Conn, a *Appender, expectedRows []testTypesRow) []testTypesRow {
+	// Append the rows.
+	for i := 0; i < len(expectedRows); i++ {
+		r := &expectedRows[i]
+		err := a.AppendRow(
+			r.Boolean_col,
+			r.Tinyint_col,
+			r.Smallint_col,
+			r.Integer_col,
+			r.Bigint_col,
+			r.Utinyint_col,
+			r.Usmallint_col,
+			r.Uinteger_col,
+			r.Ubigint_col,
+			r.Float_col,
+			r.Double_col,
+			r.Timestamp_col,
+			r.Date_col,
+			r.Time_col,
+			r.Interval_col,
+			r.Hugeint_col,
+			r.Varchar_col,
+			r.Blob_col,
+			r.Timestamp_s_col,
+			r.Timestamp_ms_col,
+			r.Timestamp_ns_col,
+			r.Enum_col,
+			r.List_col,
+			r.Struct_col,
+			r.Map_col,
+			r.Timestamp_tz_col)
+		require.NoError(t, err)
+	}
+	require.NoError(t, a.Close())
+
+	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM types_tbl ORDER BY Smallint_col`)
+	require.NoError(t, err)
+
+	// Scan the rows.
+	var actualRows []testTypesRow
 	for res.Next() {
 		var r testTypesRow
 		err = res.Scan(
@@ -198,36 +230,26 @@ func testTypesQuery(db *sql.DB) ([]testTypesRow, error) {
 			&r.Struct_col,
 			&r.Map_col,
 			&r.Timestamp_tz_col)
-		if err != nil {
-			return slice, err
-		}
-		slice = append(slice, r)
+		require.NoError(t, err)
+		actualRows = append(actualRows, r)
 	}
-	return slice, res.Close()
+
+	require.NoError(t, err)
+	require.Equal(t, len(expectedRows), len(actualRows))
+
+	require.NoError(t, con.Close())
+	require.NoError(t, c.Close())
+
+	return actualRows
 }
 
 func TestTypes(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
-	rowCount := 3
+	c, con, a, expectedRows := testTypesSetup[*testing.T](t, 3)
+	actualRows := testTypes[*testing.T](t, c, con, a, expectedRows)
 
-	_, err := db.Exec(testTypesEnumSQL)
-	require.NoError(t, err)
-	createTable(db, t, testTypesTableSQL)
-
-	_, err = db.Exec(testTypesInsertSQL, rowCount)
-	require.NoError(t, err)
-
-	slice, err := testTypesQuery(db)
-	require.NoError(t, err)
-	require.Equal(t, rowCount, len(slice))
-
-	for i, r := range slice {
-		expected := testTypesGenerateRow(i)
-		require.Equal(t, expected, r)
+	for i, _ := range actualRows {
+		require.Equal(t, expectedRows[i], actualRows[i])
 	}
-
-	require.NoError(t, db.Close())
 }
 
 func compareDecimal(t *testing.T, want Decimal, got Decimal) {
@@ -600,21 +622,6 @@ func TestInterval(t *testing.T) {
 // of its main functionalities. I.e., functions related to implementing the database/sql interface.
 
 func BenchmarkTypes(b *testing.B) {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(b, err)
-	rowCount := 10000
-
-	_, err = db.Exec(testTypesEnumSQL)
-	require.NoError(b, err)
-	_, err = db.Exec(testTypesTableSQL)
-	require.NoError(b, err)
-	_, err = db.Exec(testTypesInsertSQL, rowCount)
-	require.NoError(b, err)
-
-	for n := 0; n < b.N; n++ {
-		_, err = testTypesQuery(db)
-		require.NoError(b, err)
-	}
-
-	require.NoError(b, db.Close())
+	c, con, a, expectedRows := testTypesSetup[*testing.B](b, 10000)
+	_ = testTypes[*testing.B](b, c, con, a, expectedRows)
 }

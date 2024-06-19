@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// INTERVAL, HUGEINT, DECIMAL, ENUM, MAP
+
 const numAppenderTestRows = 10000
 
 type simpleStruct struct {
@@ -648,7 +650,7 @@ func TestAppenderUUID(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
-func TestAppenderTime(t *testing.T) {
+func TestAppenderTS(t *testing.T) {
 	c, con, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP)`)
 
 	ts := time.Date(2022, time.January, 1, 12, 0, 0, 0, time.UTC)
@@ -667,7 +669,7 @@ func TestAppenderTime(t *testing.T) {
 func TestAppenderDate(t *testing.T) {
 	c, con, a := prepareAppender(t, `CREATE TABLE test (date DATE)`)
 
-	ts := time.Date(1996, time.July, 23, 11, 42, 23, 0, time.UTC)
+	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123, time.UTC)
 	require.NoError(t, a.AppendRow(ts))
 	require.NoError(t, a.Flush())
 
@@ -679,6 +681,22 @@ func TestAppenderDate(t *testing.T) {
 	require.Equal(t, ts.Year(), res.Year())
 	require.Equal(t, ts.Month(), res.Month())
 	require.Equal(t, ts.Day(), res.Day())
+	cleanupAppender(t, c, con, a)
+}
+
+func TestAppenderTime(t *testing.T) {
+	c, con, a := prepareAppender(t, `CREATE TABLE test (time TIME)`)
+
+	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123, time.UTC)
+	require.NoError(t, a.AppendRow(ts))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	row := sql.OpenDB(c).QueryRowContext(context.Background(), `SELECT time FROM test`)
+
+	var res time.Time
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, ts.UnixMicro(), res.UnixMicro())
 	cleanupAppender(t, c, con, a)
 }
 
