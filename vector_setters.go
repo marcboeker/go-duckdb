@@ -106,17 +106,17 @@ func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 }
 
 func (vec *vector) setDecimal(internalType C.duckdb_type, rowIdx C.idx_t, val any) {
-	v := val.(*big.Int)
+	v := val.(Decimal)
 
 	switch internalType {
 	case C.DUCKDB_TYPE_SMALLINT:
-		setPrimitive(vec, rowIdx, int16(v.Int64()))
+		setPrimitive(vec, rowIdx, int16(v.Value.Int64()))
 	case C.DUCKDB_TYPE_INTEGER:
-		setPrimitive(vec, rowIdx, int32(v.Int64()))
+		setPrimitive(vec, rowIdx, int32(v.Value.Int64()))
 	case C.DUCKDB_TYPE_BIGINT:
-		setPrimitive(vec, rowIdx, v.Int64())
+		setPrimitive(vec, rowIdx, v.Value.Int64())
 	case C.DUCKDB_TYPE_HUGEINT:
-		value, _ := hugeIntFromNative(v)
+		value, _ := hugeIntFromNative(v.Value)
 		setPrimitive(vec, rowIdx, value)
 	}
 }

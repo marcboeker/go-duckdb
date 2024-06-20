@@ -3,7 +3,6 @@ package duckdb
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -55,7 +54,7 @@ type testTypesRow struct {
 	Timestamp_tz_col time.Time
 }
 
-const testTypesTableSQL = `CREATE TABLE types_tbl (
+const testTypesTableSQL = `CREATE TABLE test (
 	Boolean_col BOOLEAN,
 	Tinyint_col TINYINT,
 	Smallint_col SMALLINT,
@@ -158,26 +157,8 @@ func testTypesGenerateRows[T require.TestingT](t T, rowCount int) []testTypesRow
 	return expectedRows
 }
 
-func testTypesSetup[T require.TestingT](t T) (*Connector, driver.Conn, *Appender) {
-	c, err := NewConnector("", nil)
-	require.NoError(t, err)
-
-	_, err = sql.OpenDB(c).Exec(testTypesEnumSQL)
-	require.NoError(t, err)
-
-	_, err = sql.OpenDB(c).Exec(testTypesTableSQL)
-	require.NoError(t, err)
-
-	con, err := c.Connect(context.Background())
-	require.NoError(t, err)
-
-	a, err := NewAppenderFromConn(con, "", "types_tbl")
-	require.NoError(t, err)
-	return c, con, a
-}
-
 func testTypesReset[T require.TestingT](t T, c *Connector) {
-	_, err := sql.OpenDB(c).ExecContext(context.Background(), `DELETE FROM types_tbl`)
+	_, err := sql.OpenDB(c).ExecContext(context.Background(), `DELETE FROM test`)
 	require.NoError(t, err)
 }
 
@@ -216,7 +197,7 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 	}
 	require.NoError(t, a.Flush())
 
-	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM types_tbl ORDER BY Smallint_col`)
+	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test ORDER BY Smallint_col`)
 	require.NoError(t, err)
 
 	// Scan the rows.
@@ -260,8 +241,9 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 }
 
 func TestTypes(t *testing.T) {
+	t.Parallel()
 	expectedRows := testTypesGenerateRows(t, 3)
-	c, con, a := testTypesSetup(t)
+	c, con, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
 	actualRows := testTypes(t, c, a, expectedRows)
 
 	for i := range actualRows {
@@ -278,7 +260,7 @@ func TestTypes(t *testing.T) {
 
 func BenchmarkTypes(b *testing.B) {
 	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
-	c, con, a := testTypesSetup(b)
+	c, con, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
 
 	for n := 0; n < b.N; n++ {
 		_ = testTypes(b, c, a, expectedRows)

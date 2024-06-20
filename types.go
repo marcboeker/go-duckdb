@@ -176,3 +176,7 @@ func (d *Decimal) Float64() float64 {
 	f, _ := value.Float64()
 	return f
 }
+
+func (d *Decimal) toString() string {
+	return fmt.Sprintf("DECIMAL(%d,%d)", d.Width, d.Scale)
+}

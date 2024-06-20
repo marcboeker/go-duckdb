@@ -173,6 +173,26 @@ func TestErrAppend(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
+func TestErrAppendDecimal(t *testing.T) {
+	c, con, a := prepareAppender(t, `CREATE TABLE test (d DECIMAL(8, 2))`)
+
+	err := a.AppendRow(Decimal{Width: 9, Scale: 2})
+	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
+	err = a.AppendRow(Decimal{Width: 8, Scale: 3})
+	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
+
+	cleanupAppender(t, c, con, a)
+}
+
+func TestErrAppendEnum(t *testing.T) {
+	c, con, a := prepareAppender(t, testTypesEnumSQL+";"+`CREATE TABLE test (e my_enum)`)
+
+	err := a.AppendRow("3")
+	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
+
+	cleanupAppender(t, c, con, a)
+}
+
 func TestErrAppendSimpleStruct(t *testing.T) {
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (

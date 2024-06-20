@@ -43,7 +43,7 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	// Ensure that the types match before attempting to set anything.
 	// This is done to prevent failures 'halfway through' writing column values,
 	// potentially corrupting data in that column.
-	// FIXME: Can we improve efficiency here? We are casting back-and-forth to any A LOT currently.
+	// FIXME: Can we improve efficiency here? We are casting back-and-forth to any A LOT.
 	// FIXME: Maybe we can make columnar insertions unsafe, i.e., we always assume a correct type.
 	v, err := column.tryCast(val)
 	if err != nil {

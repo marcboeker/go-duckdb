@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"testing"
 	"time"
@@ -115,7 +116,7 @@ func cleanupAppender[T require.TestingT](t T, c *Connector, con driver.Conn, a *
 	require.NoError(t, c.Close())
 }
 
-func prepareAppender(t *testing.T, createTbl string) (*Connector, driver.Conn, *Appender) {
+func prepareAppender[T require.TestingT](t T, createTbl string) (*Connector, driver.Conn, *Appender) {
 	c, err := NewConnector("", nil)
 	require.NoError(t, err)
 
@@ -132,12 +133,14 @@ func prepareAppender(t *testing.T, createTbl string) (*Connector, driver.Conn, *
 }
 
 func TestAppenderClose(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (i INTEGER)`)
 	require.NoError(t, a.AppendRow(int32(42)))
 	cleanupAppender(t, c, con, a)
 }
 
 func TestAppendChunks(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (
 			id BIGINT,
@@ -176,6 +179,7 @@ func TestAppendChunks(t *testing.T) {
 }
 
 func TestAppenderList(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 	CREATE TABLE test (
 		string_list VARCHAR[],
@@ -212,6 +216,7 @@ func TestAppenderList(t *testing.T) {
 }
 
 func TestAppenderNested(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (
 			id BIGINT,
@@ -352,6 +357,7 @@ func TestAppenderNested(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (int_slice VARCHAR[][][])`)
 
 	require.NoError(t, a.AppendRow([][][]string{{{}}}))
@@ -394,6 +400,7 @@ func TestAppenderNullList(t *testing.T) {
 }
 
 func TestAppenderNullStruct(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 	CREATE TABLE test (
 		simple_struct STRUCT(A INT, B VARCHAR)
@@ -425,6 +432,7 @@ func TestAppenderNullStruct(t *testing.T) {
 }
 
 func TestAppenderNestedNullStruct(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 	CREATE TABLE test (
 		double_wrapped_struct STRUCT(
@@ -477,6 +485,7 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 }
 
 func TestAppenderNullIntAndString(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
 
 	require.NoError(t, a.AppendRow(int64(32), "hello"))
@@ -517,6 +526,7 @@ func TestAppenderNullIntAndString(t *testing.T) {
 }
 
 func TestAppenderUUID(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (id UUID)`)
 
 	id := UUID(uuid.New())
@@ -533,6 +543,7 @@ func TestAppenderUUID(t *testing.T) {
 }
 
 func TestAppenderTsNs(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP_NS)`)
 
 	ts := time.Date(2022, time.January, 1, 12, 0, 33, 242, time.UTC)
@@ -549,6 +560,7 @@ func TestAppenderTsNs(t *testing.T) {
 }
 
 func TestAppenderDate(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (date DATE)`)
 
 	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123, time.UTC)
@@ -567,6 +579,7 @@ func TestAppenderDate(t *testing.T) {
 }
 
 func TestAppenderTime(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (time TIME)`)
 
 	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123, time.UTC)
@@ -583,6 +596,7 @@ func TestAppenderTime(t *testing.T) {
 }
 
 func TestAppenderBlob(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
 
 	data := []byte{0x01, 0x02, 0x00, 0x03, 0x04}
@@ -611,6 +625,7 @@ func TestAppenderBlob(t *testing.T) {
 }
 
 func TestAppenderBlobTinyInt(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data UTINYINT[]
@@ -649,6 +664,7 @@ func TestAppenderBlobTinyInt(t *testing.T) {
 }
 
 func TestAppenderUint8SliceTinyInt(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data UTINYINT[]
@@ -667,6 +683,41 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 		"NULL",
 		"[1, 0, 3, 4, 8, 9, 7, 6, 5, 4, 3, 2, 1, 0]",
 		"[]",
+	}
+
+	i := 0
+	for res.Next() {
+		var str string
+		require.NoError(t, res.Scan(&str))
+		require.Equal(t, expected[i], str)
+		i++
+	}
+
+	require.Equal(t, 3, i)
+	require.NoError(t, res.Close())
+	cleanupAppender(t, c, con, a)
+}
+
+func TestAppenderDecimal(t *testing.T) {
+	t.Parallel()
+	c, con, a := prepareAppender(t, `
+	CREATE TABLE test (
+		data DECIMAL(4,3)
+	)`)
+
+	require.NoError(t, a.AppendRow(nil))
+	require.NoError(t, a.AppendRow(Decimal{Width: uint8(4), Value: big.NewInt(1), Scale: 3}))
+	require.NoError(t, a.AppendRow(Decimal{Width: uint8(4), Value: big.NewInt(2), Scale: 3}))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT CASE WHEN data IS NULL THEN 'NULL' ELSE data::VARCHAR END FROM test`)
+	require.NoError(t, err)
+
+	expected := []string{
+		"NULL",
+		"0.001",
+		"0.002",
 	}
 
 	i := 0
@@ -703,6 +754,7 @@ var jsonResults = [][]string{
 }
 
 func TestAppenderWithJSON(t *testing.T) {
+	t.Parallel()
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (
 		    c1 UBIGINT,

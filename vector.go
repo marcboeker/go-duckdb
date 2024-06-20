@@ -22,12 +22,17 @@ type vector struct {
 	setFn fnSetVectorValue
 	// The data type of the vector.
 	duckdbType C.duckdb_type
-	// The child names of STRUCT vectors.
-	childNames []string
 	// The child vectors of nested data types.
 	childVectors []vector
+
+	// The child names of STRUCT vectors.
+	childNames []string
 	// The dictionary for ENUM types.
 	dict map[string]uint32
+	// The  width of DECIMAL types.
+	width uint8
+	// The scale of DECIMAL types.
+	scale uint8
 }
 
 func (vec *vector) tryCast(val any) (any, error) {
@@ -70,12 +75,14 @@ func (vec *vector) tryCast(val any) (any, error) {
 		return tryPrimitiveCast[*big.Int](val, reflect.TypeOf(big.Int{}).String())
 	case C.DUCKDB_TYPE_UHUGEINT:
 		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
-	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_ENUM:
+	case C.DUCKDB_TYPE_VARCHAR:
 		return tryPrimitiveCast[string](val, reflect.String.String())
 	case C.DUCKDB_TYPE_BLOB:
 		return tryPrimitiveCast[[]byte](val, reflect.TypeOf([]byte{}).String())
 	case C.DUCKDB_TYPE_DECIMAL:
-		return tryPrimitiveCast[Decimal](val, reflect.TypeOf(Decimal{}).String())
+		return vec.tryCastDecimal(val)
+	case C.DUCKDB_TYPE_ENUM:
+		return vec.tryCastEnum(val)
 	case C.DUCKDB_TYPE_LIST:
 		return vec.tryCastList(val)
 	case C.DUCKDB_TYPE_STRUCT:
@@ -131,6 +138,34 @@ func tryNumericCast[T numericType](val any, expected string) (T, error) {
 
 	goType := reflect.TypeOf(val)
 	return v, castError(goType.String(), expected)
+}
+
+func (vec *vector) tryCastDecimal(val any) (Decimal, error) {
+	v, ok := val.(Decimal)
+	if !ok {
+		goType := reflect.TypeOf(val)
+		return v, castError(goType.String(), reflect.TypeOf(Decimal{}).String())
+	}
+
+	if v.Width != vec.width || v.Scale != vec.scale {
+		d := Decimal{Width: vec.width, Scale: vec.scale}
+		return v, castError(d.toString(), v.toString())
+	}
+	return v, nil
+}
+
+func (vec *vector) tryCastEnum(val any) (string, error) {
+	v, ok := val.(string)
+	if !ok {
+		goType := reflect.TypeOf(val)
+		return v, castError(goType.String(), reflect.String.String())
+	}
+
+	_, ok = vec.dict[v]
+	if !ok {
+		return v, castError(v, "ENUM value")
+	}
+	return v, nil
 }
 
 func (vec *vector) tryCastList(val any) ([]any, error) {
@@ -369,6 +404,10 @@ func (vec *vector) initCString(duckdbType C.duckdb_type) {
 }
 
 func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) error {
+	// Get the width and scale.
+	vec.width = uint8(C.duckdb_decimal_width(logicalType))
+	vec.scale = uint8(C.duckdb_decimal_scale(logicalType))
+
 	internalType := C.duckdb_decimal_internal_type(logicalType)
 	switch internalType {
 	case C.DUCKDB_TYPE_SMALLINT, C.DUCKDB_TYPE_INTEGER, C.DUCKDB_TYPE_BIGINT, C.DUCKDB_TYPE_HUGEINT:
