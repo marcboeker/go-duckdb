@@ -149,7 +149,16 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	}
 }
 
-func testTypesSetup[T require.TestingT](t T, rowCount int) (*Connector, driver.Conn, *Appender, []testTypesRow) {
+func testTypesGenerateRows[T require.TestingT](t T, rowCount int) []testTypesRow {
+	var expectedRows []testTypesRow
+	for i := 0; i < rowCount; i++ {
+		r := testTypesGenerateRow(t, i)
+		expectedRows = append(expectedRows, r)
+	}
+	return expectedRows
+}
+
+func testTypesSetup[T require.TestingT](t T) (*Connector, driver.Conn, *Appender) {
 	c, err := NewConnector("", nil)
 	require.NoError(t, err)
 
@@ -164,18 +173,15 @@ func testTypesSetup[T require.TestingT](t T, rowCount int) (*Connector, driver.C
 
 	a, err := NewAppenderFromConn(con, "", "types_tbl")
 	require.NoError(t, err)
-
-	// Generate rows.
-	var expectedRows []testTypesRow
-	for i := 0; i < rowCount; i++ {
-		r := testTypesGenerateRow[T](t, i)
-		expectedRows = append(expectedRows, r)
-	}
-
-	return c, con, a, expectedRows
+	return c, con, a
 }
 
-func testTypes[T require.TestingT](t T, c *Connector, con driver.Conn, a *Appender, expectedRows []testTypesRow) []testTypesRow {
+func testTypesReset[T require.TestingT](t T, c *Connector) {
+	_, err := sql.OpenDB(c).ExecContext(context.Background(), `DELETE FROM types_tbl`)
+	require.NoError(t, err)
+}
+
+func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows []testTypesRow) []testTypesRow {
 	// Append the rows. We cannot append Composite types.
 	for i := 0; i < len(expectedRows); i++ {
 		r := &expectedRows[i]
@@ -208,7 +214,7 @@ func testTypes[T require.TestingT](t T, c *Connector, con driver.Conn, a *Append
 			r.Timestamp_tz_col)
 		require.NoError(t, err)
 	}
-	require.NoError(t, a.Close())
+	require.NoError(t, a.Flush())
 
 	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM types_tbl ORDER BY Smallint_col`)
 	require.NoError(t, err)
@@ -250,21 +256,35 @@ func testTypes[T require.TestingT](t T, c *Connector, con driver.Conn, a *Append
 
 	require.NoError(t, err)
 	require.Equal(t, len(expectedRows), len(actualRows))
-
-	require.NoError(t, con.Close())
-	require.NoError(t, c.Close())
-
 	return actualRows
 }
 
 func TestTypes(t *testing.T) {
-	c, con, a, expectedRows := testTypesSetup[*testing.T](t, 3)
-	actualRows := testTypes[*testing.T](t, c, con, a, expectedRows)
+	expectedRows := testTypesGenerateRows(t, 3)
+	c, con, a := testTypesSetup(t)
+	actualRows := testTypes(t, c, a, expectedRows)
 
 	for i := range actualRows {
 		expectedRows[i].toUTC()
 		require.Equal(t, expectedRows[i], actualRows[i])
 	}
+
+	require.Equal(t, len(expectedRows), len(actualRows))
+	cleanupAppender(t, c, con, a)
+}
+
+// NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
+// of its main functionalities. I.e., functions related to implementing the database/sql interface.
+
+func BenchmarkTypes(b *testing.B) {
+	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
+	c, con, a := testTypesSetup(b)
+
+	for n := 0; n < b.N; n++ {
+		_ = testTypes(b, c, a, expectedRows)
+		testTypesReset(b, c)
+	}
+	cleanupAppender(b, c, con, a)
 }
 
 func compareDecimal(t *testing.T, want Decimal, got Decimal) {
@@ -631,12 +651,4 @@ func TestInterval(t *testing.T) {
 	})
 
 	require.NoError(t, db.Close())
-}
-
-// NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
-// of its main functionalities. I.e., functions related to implementing the database/sql interface.
-
-func BenchmarkTypes(b *testing.B) {
-	c, con, a, expectedRows := testTypesSetup[*testing.B](b, GetDataChunkCapacity()*3+10)
-	_ = testTypes[*testing.B](b, c, con, a, expectedRows)
 }

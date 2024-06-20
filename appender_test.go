@@ -46,6 +46,9 @@ type mixedStruct struct {
 	B []struct {
 		L []int32
 	}
+	C struct {
+		L Map
+	}
 }
 
 type nestedDataRow struct {
@@ -106,7 +109,7 @@ func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
 }
 
-func cleanupAppender(t *testing.T, c *Connector, con driver.Conn, a *Appender) {
+func cleanupAppender[T require.TestingT](t T, c *Connector, con driver.Conn, a *Appender) {
 	require.NoError(t, a.Close())
 	require.NoError(t, con.Close())
 	require.NoError(t, c.Close())
@@ -232,11 +235,13 @@ func TestAppenderNested(t *testing.T) {
 			struct_with_list STRUCT(L INT[]),
 			mix STRUCT(
 				A STRUCT(L VARCHAR[]),
-				B STRUCT(L INT[])[]
+				B STRUCT(L INT[])[],
+			    C STRUCT(L MAP(VARCHAR, INT))
 			),
 			mix_list STRUCT(
 				A STRUCT(L VARCHAR[]),
-				B STRUCT(L INT[])[]
+				B STRUCT(L INT[])[],
+			    C STRUCT(L MAP(VARCHAR, INT))
 			)[]
 		)
 	`)
@@ -252,6 +257,9 @@ func TestAppenderNested(t *testing.T) {
 		}{
 			{[]int32{1, 2, 3}},
 		},
+		C: struct {
+			L Map
+		}{L: Map{"foo": int32(1), "bar": int32(2)}},
 	}
 	rowsToAppend := make([]nestedDataRow, 10)
 	for i := 0; i < 10; i++ {

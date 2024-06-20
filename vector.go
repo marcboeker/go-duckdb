@@ -297,7 +297,7 @@ func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive[T](vec, rowIdx, val.(T))
+		setPrimitive(vec, rowIdx, val.(T))
 	}
 	vec.duckdbType = duckdbType
 }
@@ -515,7 +515,7 @@ func (vec *vector) initUUID() {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive[C.duckdb_hugeint](vec, rowIdx, uuidToHugeInt(val.(UUID)))
+		setPrimitive(vec, rowIdx, uuidToHugeInt(val.(UUID)))
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
 }
