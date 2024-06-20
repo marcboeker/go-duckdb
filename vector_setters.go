@@ -172,11 +172,12 @@ func (vec *vector) setMap(rowIdx C.idx_t, val any) {
 	m := val.(Map)
 
 	// Create a LIST of STRUCT values.
-	entries := make([]map[string]any, len(m))
+	i := 0
+	list := make([]any, len(m))
 	for key, value := range m {
-		entry := map[string]any{mapKeysField(): key, mapValuesField(): value}
-		entries = append(entries, entry)
+		list[i] = map[string]any{mapKeysField(): key, mapValuesField(): value}
+		i++
 	}
 
-	vec.setList(rowIdx, entries)
+	vec.setList(rowIdx, list)
 }

@@ -81,7 +81,6 @@ func (vec *vector) tryCast(val any) (any, error) {
 	case C.DUCKDB_TYPE_STRUCT:
 		return vec.tryCastStruct(val)
 	case C.DUCKDB_TYPE_MAP:
-		// TODO: pretty sure that this will break.
 		return tryPrimitiveCast[Map](val, reflect.TypeOf(Map{}).String())
 	case C.DUCKDB_TYPE_ARRAY:
 		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
@@ -204,11 +203,6 @@ func (vec *vector) tryCastStruct(val any) (map[string]any, error) {
 		}
 	}
 	return m, nil
-}
-
-func (vec *vector) tryCastMap(val any) ([]any, error) {
-	// TODO
-	return nil, nil
 }
 
 func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {

@@ -84,10 +84,27 @@ const testTypesTableSQL = `CREATE TABLE types_tbl (
 	Timestamp_tz_col TIMESTAMPTZ
 )`
 
-func testTypesGenerateRow(i int) testTypesRow {
-	ts := time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC)
-	date := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
-	t := time.Date(1970, 1, 1, 11, 42, 7, 0, time.UTC)
+func (r *testTypesRow) toUTC() {
+	r.Timestamp_col = r.Timestamp_col.UTC()
+	r.Timestamp_s_col = r.Timestamp_s_col.UTC()
+	r.Timestamp_ms_col = r.Timestamp_ms_col.UTC()
+	r.Timestamp_ns_col = r.Timestamp_ns_col.UTC()
+	r.Timestamp_tz_col = r.Timestamp_tz_col.UTC()
+}
+
+func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
+	// Get the timestamp for all TS columns.
+	IST, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+
+	const longForm = "2006-01-02 15:04:05 MST"
+	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", IST)
+	require.NoError(t, err)
+
+	// Get the DATE and TIME column values.
+	dateUTC := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
+	timeUTC := time.Date(1970, 1, 1, 11, 42, 7, 0, time.UTC)
+
 	varcharCol := ""
 	for j := 0; j < i; j++ {
 		varcharCol += "hello!"
@@ -115,8 +132,8 @@ func testTypesGenerateRow(i int) testTypesRow {
 		float32(i),
 		float64(i),
 		ts,
-		date,
-		t,
+		dateUTC,
+		timeUTC,
 		Interval{Days: 0, Months: int32(i), Micros: 0},
 		big.NewInt(int64(i)),
 		varcharCol,
@@ -151,7 +168,7 @@ func testTypesSetup[T require.TestingT](t T, rowCount int) (*Connector, driver.C
 	// Generate rows.
 	var expectedRows []testTypesRow
 	for i := 0; i < rowCount; i++ {
-		r := testTypesGenerateRow(i)
+		r := testTypesGenerateRow[T](t, i)
 		expectedRows = append(expectedRows, r)
 	}
 
@@ -159,7 +176,7 @@ func testTypesSetup[T require.TestingT](t T, rowCount int) (*Connector, driver.C
 }
 
 func testTypes[T require.TestingT](t T, c *Connector, con driver.Conn, a *Appender, expectedRows []testTypesRow) []testTypesRow {
-	// Append the rows.
+	// Append the rows. We cannot append Composite types.
 	for i := 0; i < len(expectedRows); i++ {
 		r := &expectedRows[i]
 		err := a.AppendRow(
@@ -185,8 +202,8 @@ func testTypes[T require.TestingT](t T, c *Connector, con driver.Conn, a *Append
 			r.Timestamp_ms_col,
 			r.Timestamp_ns_col,
 			string(r.Enum_col),
-			r.List_col,
-			r.Struct_col,
+			r.List_col.Get(),
+			r.Struct_col.Get(),
 			r.Map_col,
 			r.Timestamp_tz_col)
 		require.NoError(t, err)
@@ -244,7 +261,8 @@ func TestTypes(t *testing.T) {
 	c, con, a, expectedRows := testTypesSetup[*testing.T](t, 3)
 	actualRows := testTypes[*testing.T](t, c, con, a, expectedRows)
 
-	for i, _ := range actualRows {
+	for i := range actualRows {
+		expectedRows[i].toUTC()
 		require.Equal(t, expectedRows[i], actualRows[i])
 	}
 }
@@ -619,6 +637,6 @@ func TestInterval(t *testing.T) {
 // of its main functionalities. I.e., functions related to implementing the database/sql interface.
 
 func BenchmarkTypes(b *testing.B) {
-	c, con, a, expectedRows := testTypesSetup[*testing.B](b, 10000)
+	c, con, a, expectedRows := testTypesSetup[*testing.B](b, GetDataChunkCapacity()*3+10)
 	_ = testTypes[*testing.B](b, c, con, a, expectedRows)
 }

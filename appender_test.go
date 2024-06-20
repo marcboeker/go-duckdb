@@ -106,16 +106,6 @@ func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-
-func randString(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
-}
-
 func cleanupAppender(t *testing.T, c *Connector, con driver.Conn, a *Appender) {
 	require.NoError(t, a.Close())
 	require.NoError(t, con.Close())
@@ -144,110 +134,24 @@ func TestAppenderClose(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
-func TestAppenderPrimitive(t *testing.T) {
+func TestAppendChunks(t *testing.T) {
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (
 			id BIGINT,
-			uint8 UTINYINT,
-			int8 TINYINT,
-			uint16 USMALLINT,
-			int16 SMALLINT,
-			uint32 UINTEGER,
-			int32 INTEGER,
-			uint64 UBIGINT,
-			int64 BIGINT,
-			timestamp TIMESTAMP,
-			timestampS TIMESTAMP_S,
-			timestampMS TIMESTAMP_MS,
-			timestampNS TIMESTAMP_NS,
-			timestampTZ TIMESTAMPTZ,
-			float REAL,
-			double DOUBLE,
-			string VARCHAR,
-			bool BOOLEAN
+			uint8 UTINYINT
 	  	)`)
 
 	// Test appending a few data chunks.
 	rowCount := GetDataChunkCapacity() * 5
 	type row struct {
-		ID          int64
-		UInt8       uint8
-		Int8        int8
-		UInt16      uint16
-		Int16       int16
-		UInt32      uint32
-		Int32       int32
-		UInt64      uint64
-		Int64       int64
-		Timestamp   time.Time
-		TimestampS  time.Time
-		TimestampMS time.Time
-		TimestampNS time.Time
-		TimestampTZ time.Time
-		Float       float32
-		Double      float64
-		String      string
-		Bool        bool
+		ID    int64
+		UInt8 uint8
 	}
-
-	// Get the timestamp for all TS columns.
-	IST, err := time.LoadLocation("Asia/Kolkata")
-	require.NoError(t, err)
-
-	const longForm = "2006-01-02 15:04:05 MST"
-	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", IST)
-	require.NoError(t, err)
 
 	rowsToAppend := make([]row, rowCount)
 	for i := 0; i < rowCount; i++ {
-
-		u64 := rand.Uint64()
-		// Go SQL does not support uint64 values with their high bit set (see for example https://github.com/lib/pq/issues/72).
-		if u64 > 9223372036854775807 {
-			u64 = 9223372036854775807
-		}
-
-		rowsToAppend[i] = row{
-			ID:          int64(i),
-			UInt8:       uint8(randInt(0, 255)),
-			Int8:        int8(randInt(-128, 127)),
-			UInt16:      uint16(randInt(0, 65535)),
-			Int16:       int16(randInt(-32768, 32767)),
-			UInt32:      uint32(randInt(0, 4294967295)),
-			Int32:       int32(randInt(-2147483648, 2147483647)),
-			UInt64:      u64,
-			Int64:       rand.Int63(),
-			Timestamp:   ts,
-			TimestampS:  ts,
-			TimestampMS: ts,
-			TimestampNS: ts,
-			TimestampTZ: ts,
-			Float:       rand.Float32(),
-			Double:      rand.Float64(),
-			String:      randString(int(randInt(0, 128))),
-			Bool:        rand.Int()%2 == 0,
-		}
-
-		require.NoError(t, a.AppendRow(
-			rowsToAppend[i].ID,
-			rowsToAppend[i].UInt8,
-			rowsToAppend[i].Int8,
-			rowsToAppend[i].UInt16,
-			rowsToAppend[i].Int16,
-			rowsToAppend[i].UInt32,
-			rowsToAppend[i].Int32,
-			rowsToAppend[i].UInt64,
-			rowsToAppend[i].Int64,
-			rowsToAppend[i].Timestamp,
-			rowsToAppend[i].TimestampS,
-			rowsToAppend[i].TimestampMS,
-			rowsToAppend[i].TimestampNS,
-			rowsToAppend[i].TimestampTZ,
-			rowsToAppend[i].Float,
-			rowsToAppend[i].Double,
-			rowsToAppend[i].String,
-			rowsToAppend[i].Bool,
-		))
+		rowsToAppend[i] = row{ID: int64(i), UInt8: uint8(randInt(0, 255))}
+		require.NoError(t, a.AppendRow(rowsToAppend[i].ID, rowsToAppend[i].UInt8))
 	}
 	require.NoError(t, a.Flush())
 
@@ -258,31 +162,7 @@ func TestAppenderPrimitive(t *testing.T) {
 	i := 0
 	for res.Next() {
 		r := row{}
-		require.NoError(t, res.Scan(
-			&r.ID,
-			&r.UInt8,
-			&r.Int8,
-			&r.UInt16,
-			&r.Int16,
-			&r.UInt32,
-			&r.Int32,
-			&r.UInt64,
-			&r.Int64,
-			&r.Timestamp,
-			&r.TimestampS,
-			&r.TimestampMS,
-			&r.TimestampNS,
-			&r.TimestampTZ,
-			&r.Float,
-			&r.Double,
-			&r.String,
-			&r.Bool,
-		))
-		rowsToAppend[i].Timestamp = rowsToAppend[i].Timestamp.UTC()
-		rowsToAppend[i].TimestampS = rowsToAppend[i].TimestampS.UTC()
-		rowsToAppend[i].TimestampMS = rowsToAppend[i].TimestampMS.UTC()
-		rowsToAppend[i].TimestampNS = rowsToAppend[i].TimestampNS.UTC()
-		rowsToAppend[i].TimestampTZ = rowsToAppend[i].TimestampTZ.UTC()
+		require.NoError(t, res.Scan(&r.ID, &r.UInt8))
 		require.Equal(t, rowsToAppend[i], r)
 		i++
 	}
@@ -644,10 +524,10 @@ func TestAppenderUUID(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
-func TestAppenderTS(t *testing.T) {
-	c, con, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP)`)
+func TestAppenderTsNs(t *testing.T) {
+	c, con, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP_NS)`)
 
-	ts := time.Date(2022, time.January, 1, 12, 0, 0, 0, time.UTC)
+	ts := time.Date(2022, time.January, 1, 12, 0, 33, 242, time.UTC)
 	require.NoError(t, a.AppendRow(ts))
 	require.NoError(t, a.Flush())
 
