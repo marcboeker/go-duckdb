@@ -404,7 +404,6 @@ func (vec *vector) initCString(duckdbType C.duckdb_type) {
 }
 
 func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) error {
-	// Get the width and scale.
 	vec.width = uint8(C.duckdb_decimal_width(logicalType))
 	vec.scale = uint8(C.duckdb_decimal_scale(logicalType))
 
