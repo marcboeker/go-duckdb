@@ -125,7 +125,6 @@ const (
 	ErrorTypeMissingExtension // Thrown when an extension is used but not loaded
 	ErrorTypeAutoLoad         // Thrown when an extension is used but not loaded
 	ErrorTypeSequence
-	DuckDBExceptionUnknown DuckDBErrorType = -1
 )
 
 var exceptionPrefixMap = map[DuckDBErrorType]string{
@@ -190,7 +189,7 @@ func (de *DuckDBError) Is(err error) bool {
 }
 
 func getDuckDBError(errMsg string) error {
-	errType := DuckDBExceptionUnknown
+	errType := ErrorTypeInvalid
 	for k, v := range exceptionPrefixMap {
 		if strings.HasPrefix(errMsg, v) {
 			errType = k
