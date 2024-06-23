@@ -315,7 +315,7 @@ func TestGetDuckDBError(t *testing.T) {
 			typ: DuckDBExceptionUnknown,
 		},
 		{
-			msg: "Unknown Type Error: xxx",
+			msg: "Error: xxx",
 			typ: ErrorTypeUnknownType,
 		},
 		{

@@ -86,7 +86,7 @@ const (
 	ErrorTypeInvalid              DuckDBErrorType = iota // invalid type
 	ErrorTypeOutOfRange                                  // value out of range error
 	ErrorTypeConversion                                  // conversion/casting error
-	ErrorTypeUnknownType                                 // unknown type
+	ErrorTypeUnknownType                                 // unknown type error
 	ErrorTypeDecimal                                     // decimal related
 	ErrorTypeMismatchType                                // type mismatch
 	ErrorTypeDivideByZero                                // divide by 0
@@ -129,48 +129,48 @@ const (
 )
 
 var exceptionPrefixMap = map[DuckDBErrorType]string{
-	ErrorTypeInvalid:              "Invalid",
-	ErrorTypeOutOfRange:           "Out of Range",
-	ErrorTypeConversion:           "Conversion",
-	ErrorTypeUnknownType:          "Unknown Type",
-	ErrorTypeDecimal:              "Decimal",
-	ErrorTypeMismatchType:         "Mismatch Type",
-	ErrorTypeDivideByZero:         "Divide by Zero",
-	ErrorTypeObjectSize:           "Object Size",
-	ErrorTypeInvalidType:          "Invalid type",
-	ErrorTypeSerialization:        "Serialization",
-	ErrorTypeTransaction:          "TransactionContext",
-	ErrorTypeNotImplemented:       "Not implemented",
-	ErrorTypeExpression:           "Expression",
-	ErrorTypeCatalog:              "Catalog",
-	ErrorTypeParser:               "Parser",
-	ErrorTypePlanner:              "Planner",
-	ErrorTypeScheduler:            "Scheduler",
-	ErrorTypeExecutor:             "Executor",
-	ErrorTypeConstraint:           "Constraint",
-	ErrorTypeIndex:                "Index",
-	ErrorTypeStat:                 "Stat",
-	ErrorTypeConnection:           "Connection",
-	ErrorTypeSyntax:               "Syntax",
-	ErrorTypeSettings:             "Settings",
-	ErrorTypeBinder:               "Binder",
-	ErrorTypeNetwork:              "Network",
-	ErrorTypeOptimizer:            "Optimizer",
-	ErrorTypeNullPointer:          "NullPointer",
-	ErrorTypeIO:                   "IO",
-	ErrorTypeInterrupt:            "INTERRUPT",
-	ErrorTypeFatal:                "FATAL",
-	ErrorTypeInternal:             "INTERNAL",
-	ErrorTypeInvalidInput:         "Invalid Input",
-	ErrorTypeOutOfMemory:          "Out of Memory",
-	ErrorTypePermission:           "Permission",
-	ErrorTypeParameterNotResolved: "Parameter Not Resolved",
-	ErrorTypeParameterNotAllowed:  "Parameter Not Allowed",
-	ErrorTypeDependency:           "Dependency",
-	ErrorTypeHTTP:                 "HTTP",
-	ErrorTypeMissingExtension:     "Missing Extension",
-	ErrorTypeAutoLoad:             "Extension Autoloading",
-	ErrorTypeSequence:             "Sequence",
+	ErrorTypeInvalid:              "Invalid Error: ",
+	ErrorTypeOutOfRange:           "Out of Range Error: ",
+	ErrorTypeConversion:           "Conversion Error: ",
+	ErrorTypeUnknownType:          "Error: ",
+	ErrorTypeDecimal:              "Decimal Error: ",
+	ErrorTypeMismatchType:         "Mismatch Type Error: ",
+	ErrorTypeDivideByZero:         "Divide by Zero Error: ",
+	ErrorTypeObjectSize:           "Object Size Error: ",
+	ErrorTypeInvalidType:          "Invalid type Error: ",
+	ErrorTypeSerialization:        "Serialization Error: ",
+	ErrorTypeTransaction:          "TransactionContext Error: ",
+	ErrorTypeNotImplemented:       "Not implemented Error: ",
+	ErrorTypeExpression:           "Expression Error: ",
+	ErrorTypeCatalog:              "Catalog Error: ",
+	ErrorTypeParser:               "Parser Error: ",
+	ErrorTypePlanner:              "Planner Error: ",
+	ErrorTypeScheduler:            "Scheduler Error: ",
+	ErrorTypeExecutor:             "Executor Error: ",
+	ErrorTypeConstraint:           "Constraint Error: ",
+	ErrorTypeIndex:                "Index Error: ",
+	ErrorTypeStat:                 "Stat Error: ",
+	ErrorTypeConnection:           "Connection Error: ",
+	ErrorTypeSyntax:               "Syntax Error: ",
+	ErrorTypeSettings:             "Settings Error: ",
+	ErrorTypeBinder:               "Binder Error: ",
+	ErrorTypeNetwork:              "Network Error: ",
+	ErrorTypeOptimizer:            "Optimizer Error: ",
+	ErrorTypeNullPointer:          "NullPointer Error: ",
+	ErrorTypeIO:                   "IO Error: ",
+	ErrorTypeInterrupt:            "INTERRUPT Error: ",
+	ErrorTypeFatal:                "FATAL Error: ",
+	ErrorTypeInternal:             "INTERNAL Error: ",
+	ErrorTypeInvalidInput:         "Invalid Input Error: ",
+	ErrorTypeOutOfMemory:          "Out of Memory Error: ",
+	ErrorTypePermission:           "Permission Error: ",
+	ErrorTypeParameterNotResolved: "Parameter Not Resolved Error: ",
+	ErrorTypeParameterNotAllowed:  "Parameter Not Allowed Error: ",
+	ErrorTypeDependency:           "Dependency Error: ",
+	ErrorTypeHTTP:                 "HTTP Error: ",
+	ErrorTypeMissingExtension:     "Missing Extension Error: ",
+	ErrorTypeAutoLoad:             "Extension Autoloading Error: ",
+	ErrorTypeSequence:             "Sequence Error: ",
 }
 
 type DuckDBError struct {
@@ -192,7 +192,7 @@ func (de *DuckDBError) Is(err error) bool {
 func getDuckDBError(errMsg string) error {
 	errType := DuckDBExceptionUnknown
 	for k, v := range exceptionPrefixMap {
-		if strings.HasPrefix(errMsg, v+" Error") {
+		if strings.HasPrefix(errMsg, v) {
 			errType = k
 			break
 		}
