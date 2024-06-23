@@ -330,6 +330,14 @@ func TestGetDuckDBError(t *testing.T) {
 			msg: "Invalid Input Error: xxx",
 			typ: ErrorTypeInvalidInput,
 		},
+		{
+			msg: "Parameter Not Resolved Error",
+			typ: ErrorTypeInvalid,
+		},
+		{
+			msg: "Parameter Not Resolved Error: correct error messages format",
+			typ: ErrorTypeParameterNotResolved,
+		},
 	}
 
 	for _, tc := range testCases {

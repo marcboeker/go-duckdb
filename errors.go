@@ -127,49 +127,49 @@ const (
 	ErrorTypeSequence
 )
 
-var exceptionPrefixMap = map[DuckDBErrorType]string{
-	ErrorTypeInvalid:              "Invalid Error: ",
-	ErrorTypeOutOfRange:           "Out of Range Error: ",
-	ErrorTypeConversion:           "Conversion Error: ",
-	ErrorTypeUnknownType:          "Error: ",
-	ErrorTypeDecimal:              "Decimal Error: ",
-	ErrorTypeMismatchType:         "Mismatch Type Error: ",
-	ErrorTypeDivideByZero:         "Divide by Zero Error: ",
-	ErrorTypeObjectSize:           "Object Size Error: ",
-	ErrorTypeInvalidType:          "Invalid type Error: ",
-	ErrorTypeSerialization:        "Serialization Error: ",
-	ErrorTypeTransaction:          "TransactionContext Error: ",
-	ErrorTypeNotImplemented:       "Not implemented Error: ",
-	ErrorTypeExpression:           "Expression Error: ",
-	ErrorTypeCatalog:              "Catalog Error: ",
-	ErrorTypeParser:               "Parser Error: ",
-	ErrorTypePlanner:              "Planner Error: ",
-	ErrorTypeScheduler:            "Scheduler Error: ",
-	ErrorTypeExecutor:             "Executor Error: ",
-	ErrorTypeConstraint:           "Constraint Error: ",
-	ErrorTypeIndex:                "Index Error: ",
-	ErrorTypeStat:                 "Stat Error: ",
-	ErrorTypeConnection:           "Connection Error: ",
-	ErrorTypeSyntax:               "Syntax Error: ",
-	ErrorTypeSettings:             "Settings Error: ",
-	ErrorTypeBinder:               "Binder Error: ",
-	ErrorTypeNetwork:              "Network Error: ",
-	ErrorTypeOptimizer:            "Optimizer Error: ",
-	ErrorTypeNullPointer:          "NullPointer Error: ",
-	ErrorTypeIO:                   "IO Error: ",
-	ErrorTypeInterrupt:            "INTERRUPT Error: ",
-	ErrorTypeFatal:                "FATAL Error: ",
-	ErrorTypeInternal:             "INTERNAL Error: ",
-	ErrorTypeInvalidInput:         "Invalid Input Error: ",
-	ErrorTypeOutOfMemory:          "Out of Memory Error: ",
-	ErrorTypePermission:           "Permission Error: ",
-	ErrorTypeParameterNotResolved: "Parameter Not Resolved Error: ",
-	ErrorTypeParameterNotAllowed:  "Parameter Not Allowed Error: ",
-	ErrorTypeDependency:           "Dependency Error: ",
-	ErrorTypeHTTP:                 "HTTP Error: ",
-	ErrorTypeMissingExtension:     "Missing Extension Error: ",
-	ErrorTypeAutoLoad:             "Extension Autoloading Error: ",
-	ErrorTypeSequence:             "Sequence Error: ",
+var exceptionPrefixMap = map[string]DuckDBErrorType{
+	"Invalid Error":                ErrorTypeInvalid,
+	"Out of Range Error":           ErrorTypeOutOfRange,
+	"Conversion Error":             ErrorTypeConversion,
+	"Error":                        ErrorTypeUnknownType,
+	"Decimal Error":                ErrorTypeDecimal,
+	"Mismatch Type Error":          ErrorTypeMismatchType,
+	"Divide by Zero Error":         ErrorTypeDivideByZero,
+	"Object Size Error":            ErrorTypeObjectSize,
+	"Invalid type Error":           ErrorTypeInvalidType,
+	"Serialization Error":          ErrorTypeSerialization,
+	"TransactionContext Error":     ErrorTypeTransaction,
+	"Not implemented Error":        ErrorTypeNotImplemented,
+	"Expression Error":             ErrorTypeExpression,
+	"Catalog Error":                ErrorTypeCatalog,
+	"Parser Error":                 ErrorTypeParser,
+	"Planner Error":                ErrorTypePlanner,
+	"Scheduler Error":              ErrorTypeScheduler,
+	"Executor Error":               ErrorTypeExecutor,
+	"Constraint Error":             ErrorTypeConstraint,
+	"Index Error":                  ErrorTypeIndex,
+	"Stat Error":                   ErrorTypeStat,
+	"Connection Error":             ErrorTypeConnection,
+	"Syntax Error":                 ErrorTypeSyntax,
+	"Settings Error":               ErrorTypeSettings,
+	"Binder Error":                 ErrorTypeBinder,
+	"Network Error":                ErrorTypeNetwork,
+	"Optimizer Error":              ErrorTypeOptimizer,
+	"NullPointer Error":            ErrorTypeNullPointer,
+	"IO Error":                     ErrorTypeIO,
+	"INTERRUPT Error":              ErrorTypeInterrupt,
+	"FATAL Error":                  ErrorTypeFatal,
+	"INTERNAL Error":               ErrorTypeInternal,
+	"Invalid Input Error":          ErrorTypeInvalidInput,
+	"Out of Memory Error":          ErrorTypeOutOfMemory,
+	"Permission Error":             ErrorTypePermission,
+	"Parameter Not Resolved Error": ErrorTypeParameterNotResolved,
+	"Parameter Not Allowed Error":  ErrorTypeParameterNotAllowed,
+	"Dependency Error":             ErrorTypeDependency,
+	"HTTP Error":                   ErrorTypeHTTP,
+	"Missing Extension Error":      ErrorTypeMissingExtension,
+	"Extension Autoloading Error":  ErrorTypeAutoLoad,
+	"Sequence Error":               ErrorTypeSequence,
 }
 
 type DuckDBError struct {
@@ -190,10 +190,10 @@ func (de *DuckDBError) Is(err error) bool {
 
 func getDuckDBError(errMsg string) error {
 	errType := ErrorTypeInvalid
-	for k, v := range exceptionPrefixMap {
-		if strings.HasPrefix(errMsg, v) {
-			errType = k
-			break
+	// find the end of the prefix ("<error-type> Error: ")
+	if idx := strings.Index(errMsg, ": "); idx != -1 {
+		if typ, ok := exceptionPrefixMap[errMsg[:idx]]; ok {
+			errType = typ
 		}
 	}
 	return &DuckDBError{
