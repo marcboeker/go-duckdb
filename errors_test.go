@@ -300,3 +300,41 @@ func TestErrAPISetValue(t *testing.T) {
 	err := chunk.SetValue(1, 42, "hello")
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
+
+func TestGetDuckDBError(t *testing.T) {
+	testCases := []struct {
+		msg string
+		typ DuckDBErrorType
+	}{
+		{
+			msg: "",
+			typ: DuckDBExceptionUnknown,
+		},
+		{
+			msg: "Unknown",
+			typ: DuckDBExceptionUnknown,
+		},
+		{
+			msg: "Unknown Type Error: xxx",
+			typ: ErrorTypeUnknownType,
+		},
+		{
+			msg: "Constraint Error: Duplicate key \"key\" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).",
+			typ: ErrorTypeConstraint,
+		},
+		{
+			msg: "Invalid Error: xxx",
+			typ: ErrorTypeInvalid,
+		},
+		{
+			msg: "Invalid Input Error: xxx",
+			typ: ErrorTypeInvalidInput,
+		},
+	}
+
+	for _, tc := range testCases {
+		err := getDuckDBError(tc.msg).(*DuckDBError)
+		require.Equal(t, tc.typ, err.Type)
+		require.Equal(t, tc.msg, err.Msg)
+	}
+}

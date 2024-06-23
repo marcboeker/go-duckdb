@@ -157,9 +157,9 @@ func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 
 	var s C.duckdb_prepared_statement
 	if state := C.duckdb_prepare(c.duckdbCon, cmdstr, &s); state == C.DuckDBError {
-		dbErr := C.GoString(C.duckdb_prepare_error(s))
+		dbErr := getDuckDBError(C.GoString(C.duckdb_prepare_error(s)))
 		C.duckdb_destroy_prepare(&s)
-		return nil, errors.New(dbErr)
+		return nil, dbErr
 	}
 
 	return &stmt{c: c, stmt: &s}, nil
@@ -175,7 +175,7 @@ func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 		err := C.GoString(C.duckdb_extract_statements_error(stmts))
 		C.duckdb_destroy_extracted(&stmts)
 		if err != "" {
-			return nil, 0, errors.New(err)
+			return nil, 0, getDuckDBError(err)
 		}
 		return nil, 0, errors.New("no statements found")
 	}
@@ -186,9 +186,9 @@ func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 func (c *conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
 	var s C.duckdb_prepared_statement
 	if state := C.duckdb_prepare_extracted_statement(c.duckdbCon, extractedStmts, index, &s); state == C.DuckDBError {
-		dbErr := C.GoString(C.duckdb_prepare_error(s))
+		dbErr := getDuckDBError(C.GoString(C.duckdb_prepare_error(s)))
 		C.duckdb_destroy_prepare(&s)
-		return nil, errors.New(dbErr)
+		return nil, dbErr
 	}
 
 	return &stmt{c: c, stmt: &s}, nil

@@ -4,6 +4,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 func getError(errDriver error, err error) error {
@@ -78,3 +79,126 @@ var (
 	errConnect      = errors.New("could not connect to database")
 	errCreateConfig = errors.New("could not create config for database")
 )
+
+type DuckDBErrorType int
+
+const (
+	ErrorTypeInvalid              DuckDBErrorType = iota // invalid type
+	ErrorTypeOutOfRange                                  // value out of range error
+	ErrorTypeConversion                                  // conversion/casting error
+	ErrorTypeUnknownType                                 // unknown type
+	ErrorTypeDecimal                                     // decimal related
+	ErrorTypeMismatchType                                // type mismatch
+	ErrorTypeDivideByZero                                // divide by 0
+	ErrorTypeObjectSize                                  // object size exceeded
+	ErrorTypeInvalidType                                 // incompatible for operation
+	ErrorTypeSerialization                               // serialization
+	ErrorTypeTransaction                                 // transaction management
+	ErrorTypeNotImplemented                              // method not implemented
+	ErrorTypeExpression                                  // expression parsing
+	ErrorTypeCatalog                                     // catalog related
+	ErrorTypeParser                                      // parser related
+	ErrorTypePlanner                                     // planner related
+	ErrorTypeScheduler                                   // scheduler related
+	ErrorTypeExecutor                                    // executor related
+	ErrorTypeConstraint                                  // constraint related
+	ErrorTypeIndex                                       // index related
+	ErrorTypeStat                                        // stat related
+	ErrorTypeConnection                                  // connection related
+	ErrorTypeSyntax                                      // syntax related
+	ErrorTypeSettings                                    // settings related
+	ErrorTypeBinder                                      // binder related
+	ErrorTypeNetwork                                     // network related
+	ErrorTypeOptimizer                                   // optimizer related
+	ErrorTypeNullPointer                                 // nullptr exception
+	ErrorTypeIO                                          // IO exception
+	ErrorTypeInterrupt                                   // interrupt
+	ErrorTypeFatal                                       // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
+	ErrorTypeInternal                                    // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
+	ErrorTypeInvalidInput                                // Input or arguments error
+	ErrorTypeOutOfMemory                                 // out of memory
+	ErrorTypePermission                                  // insufficient permissions
+	ErrorTypeParameterNotResolved                        // parameter types could not be resolved
+	ErrorTypeParameterNotAllowed                         // parameter types not allowed
+	ErrorTypeDependency                                  // dependency
+	ErrorTypeHTTP
+	ErrorTypeMissingExtension // Thrown when an extension is used but not loaded
+	ErrorTypeAutoLoad         // Thrown when an extension is used but not loaded
+	ErrorTypeSequence
+	DuckDBExceptionUnknown DuckDBErrorType = -1
+)
+
+var exceptionPrefixMap = map[DuckDBErrorType]string{
+	ErrorTypeInvalid:              "Invalid",
+	ErrorTypeOutOfRange:           "Out of Range",
+	ErrorTypeConversion:           "Conversion",
+	ErrorTypeUnknownType:          "Unknown Type",
+	ErrorTypeDecimal:              "Decimal",
+	ErrorTypeMismatchType:         "Mismatch Type",
+	ErrorTypeDivideByZero:         "Divide by Zero",
+	ErrorTypeObjectSize:           "Object Size",
+	ErrorTypeInvalidType:          "Invalid type",
+	ErrorTypeSerialization:        "Serialization",
+	ErrorTypeTransaction:          "TransactionContext",
+	ErrorTypeNotImplemented:       "Not implemented",
+	ErrorTypeExpression:           "Expression",
+	ErrorTypeCatalog:              "Catalog",
+	ErrorTypeParser:               "Parser",
+	ErrorTypePlanner:              "Planner",
+	ErrorTypeScheduler:            "Scheduler",
+	ErrorTypeExecutor:             "Executor",
+	ErrorTypeConstraint:           "Constraint",
+	ErrorTypeIndex:                "Index",
+	ErrorTypeStat:                 "Stat",
+	ErrorTypeConnection:           "Connection",
+	ErrorTypeSyntax:               "Syntax",
+	ErrorTypeSettings:             "Settings",
+	ErrorTypeBinder:               "Binder",
+	ErrorTypeNetwork:              "Network",
+	ErrorTypeOptimizer:            "Optimizer",
+	ErrorTypeNullPointer:          "NullPointer",
+	ErrorTypeIO:                   "IO",
+	ErrorTypeInterrupt:            "INTERRUPT",
+	ErrorTypeFatal:                "FATAL",
+	ErrorTypeInternal:             "INTERNAL",
+	ErrorTypeInvalidInput:         "Invalid Input",
+	ErrorTypeOutOfMemory:          "Out of Memory",
+	ErrorTypePermission:           "Permission",
+	ErrorTypeParameterNotResolved: "Parameter Not Resolved",
+	ErrorTypeParameterNotAllowed:  "Parameter Not Allowed",
+	ErrorTypeDependency:           "Dependency",
+	ErrorTypeHTTP:                 "HTTP",
+	ErrorTypeMissingExtension:     "Missing Extension",
+	ErrorTypeAutoLoad:             "Extension Autoloading",
+	ErrorTypeSequence:             "Sequence",
+}
+
+type DuckDBError struct {
+	Type DuckDBErrorType
+	Msg  string
+}
+
+func (de *DuckDBError) Error() string {
+	return de.Msg
+}
+
+func (de *DuckDBError) Is(err error) bool {
+	if derr, ok := err.(*DuckDBError); ok {
+		return derr.Msg == de.Msg
+	}
+	return false
+}
+
+func getDuckDBError(errMsg string) error {
+	errType := DuckDBExceptionUnknown
+	for k, v := range exceptionPrefixMap {
+		if strings.HasPrefix(errMsg, v+" Error") {
+			errType = k
+			break
+		}
+	}
+	return &DuckDBError{
+		Type: errType,
+		Msg:  errMsg,
+	}
+}
