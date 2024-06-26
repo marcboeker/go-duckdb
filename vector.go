@@ -7,6 +7,7 @@ package duckdb
 import "C"
 
 import (
+	"math/big"
 	"reflect"
 	"strconv"
 	"time"
@@ -21,10 +22,17 @@ type vector struct {
 	setFn fnSetVectorValue
 	// The data type of the vector.
 	duckdbType C.duckdb_type
-	// The child names of STRUCT vectors.
-	childNames []string
 	// The child vectors of nested data types.
 	childVectors []vector
+
+	// The child names of STRUCT vectors.
+	childNames []string
+	// The dictionary for ENUM types.
+	dict map[string]uint32
+	// The  width of DECIMAL types.
+	width uint8
+	// The scale of DECIMAL types.
+	scale uint8
 }
 
 func (vec *vector) tryCast(val any) (any, error) {
@@ -33,44 +41,67 @@ func (vec *vector) tryCast(val any) (any, error) {
 	}
 
 	switch vec.duckdbType {
-	case C.DUCKDB_TYPE_UTINYINT:
-		return tryNumericCast[uint8](val, reflect.Uint8.String())
+	case C.DUCKDB_TYPE_INVALID:
+		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
+	case C.DUCKDB_TYPE_BOOLEAN:
+		return tryPrimitiveCast[bool](val, reflect.Bool.String())
 	case C.DUCKDB_TYPE_TINYINT:
 		return tryNumericCast[int8](val, reflect.Int8.String())
-	case C.DUCKDB_TYPE_USMALLINT:
-		return tryNumericCast[uint16](val, reflect.Uint16.String())
 	case C.DUCKDB_TYPE_SMALLINT:
 		return tryNumericCast[int16](val, reflect.Int16.String())
-	case C.DUCKDB_TYPE_UINTEGER:
-		return tryNumericCast[uint32](val, reflect.Uint32.String())
 	case C.DUCKDB_TYPE_INTEGER:
 		return tryNumericCast[int32](val, reflect.Int32.String())
-	case C.DUCKDB_TYPE_UBIGINT:
-		return tryNumericCast[uint64](val, reflect.Uint64.String())
 	case C.DUCKDB_TYPE_BIGINT:
 		return tryNumericCast[int64](val, reflect.Int64.String())
+	case C.DUCKDB_TYPE_UTINYINT:
+		return tryNumericCast[uint8](val, reflect.Uint8.String())
+	case C.DUCKDB_TYPE_USMALLINT:
+		return tryNumericCast[uint16](val, reflect.Uint16.String())
+	case C.DUCKDB_TYPE_UINTEGER:
+		return tryNumericCast[uint32](val, reflect.Uint32.String())
+	case C.DUCKDB_TYPE_UBIGINT:
+		return tryNumericCast[uint64](val, reflect.Uint64.String())
 	case C.DUCKDB_TYPE_FLOAT:
 		return tryNumericCast[float32](val, reflect.Float32.String())
 	case C.DUCKDB_TYPE_DOUBLE:
 		return tryNumericCast[float64](val, reflect.Float64.String())
-	case C.DUCKDB_TYPE_BOOLEAN:
-		return tryPrimitiveCast[bool](val, reflect.Bool.String())
+	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
+		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ, C.DUCKDB_TYPE_DATE, C.DUCKDB_TYPE_TIME:
+		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
+	case C.DUCKDB_TYPE_INTERVAL:
+		return tryPrimitiveCast[Interval](val, reflect.TypeOf(Interval{}).String())
+	case C.DUCKDB_TYPE_HUGEINT:
+		// Note that this expects *big.Int.
+		return tryPrimitiveCast[*big.Int](val, reflect.TypeOf(big.Int{}).String())
+	case C.DUCKDB_TYPE_UHUGEINT:
+		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
 	case C.DUCKDB_TYPE_VARCHAR:
 		return tryPrimitiveCast[string](val, reflect.String.String())
 	case C.DUCKDB_TYPE_BLOB:
 		return tryPrimitiveCast[[]byte](val, reflect.TypeOf([]byte{}).String())
-	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
-		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ, C.DUCKDB_TYPE_DATE:
-		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
-	case C.DUCKDB_TYPE_UUID:
-		return tryPrimitiveCast[UUID](val, reflect.TypeOf(UUID{}).String())
+	case C.DUCKDB_TYPE_DECIMAL:
+		return vec.tryCastDecimal(val)
+	case C.DUCKDB_TYPE_ENUM:
+		return vec.tryCastEnum(val)
 	case C.DUCKDB_TYPE_LIST:
 		return vec.tryCastList(val)
 	case C.DUCKDB_TYPE_STRUCT:
 		return vec.tryCastStruct(val)
+	case C.DUCKDB_TYPE_MAP:
+		return tryPrimitiveCast[Map](val, reflect.TypeOf(Map{}).String())
+	case C.DUCKDB_TYPE_ARRAY:
+		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
+	case C.DUCKDB_TYPE_UUID:
+		return tryPrimitiveCast[UUID](val, reflect.TypeOf(UUID{}).String())
+	case C.DUCKDB_TYPE_UNION:
+		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
+	case C.DUCKDB_TYPE_BIT:
+		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
+	case C.DUCKDB_TYPE_TIME_TZ:
+		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
+	default:
+		return nil, unsupportedTypeError("unknown type")
 	}
-
-	return nil, getError(errDriver, nil)
 }
 
 func (*vector) canNil(val reflect.Value) bool {
@@ -107,6 +138,34 @@ func tryNumericCast[T numericType](val any, expected string) (T, error) {
 
 	goType := reflect.TypeOf(val)
 	return v, castError(goType.String(), expected)
+}
+
+func (vec *vector) tryCastDecimal(val any) (Decimal, error) {
+	v, ok := val.(Decimal)
+	if !ok {
+		goType := reflect.TypeOf(val)
+		return v, castError(goType.String(), reflect.TypeOf(Decimal{}).String())
+	}
+
+	if v.Width != vec.width || v.Scale != vec.scale {
+		d := Decimal{Width: vec.width, Scale: vec.scale}
+		return v, castError(d.toString(), v.toString())
+	}
+	return v, nil
+}
+
+func (vec *vector) tryCastEnum(val any) (string, error) {
+	v, ok := val.(string)
+	if !ok {
+		goType := reflect.TypeOf(val)
+		return v, castError(goType.String(), reflect.String.String())
+	}
+
+	_, ok = vec.dict[v]
+	if !ok {
+		return v, castError(v, "ENUM value")
+	}
+	return v, nil
 }
 
 func (vec *vector) tryCastList(val any) ([]any, error) {
@@ -215,25 +274,25 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case C.DUCKDB_TYPE_DATE:
 		vec.initDate()
 	case C.DUCKDB_TYPE_TIME:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		vec.initTime()
 	case C.DUCKDB_TYPE_INTERVAL:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		vec.initInterval()
 	case C.DUCKDB_TYPE_HUGEINT:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		vec.initHugeint()
 	case C.DUCKDB_TYPE_UHUGEINT:
 		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
 		vec.initCString(duckdbType)
 	case C.DUCKDB_TYPE_DECIMAL:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return vec.initDecimal(logicalType, colIdx)
 	case C.DUCKDB_TYPE_ENUM:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return vec.initEnum(logicalType, colIdx)
 	case C.DUCKDB_TYPE_LIST:
 		return vec.initList(logicalType, colIdx)
 	case C.DUCKDB_TYPE_STRUCT:
 		return vec.initStruct(logicalType, colIdx)
 	case C.DUCKDB_TYPE_MAP:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return vec.initMap(logicalType, colIdx)
 	case C.DUCKDB_TYPE_ARRAY:
 		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_UUID:
@@ -253,7 +312,7 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 func (vec *vector) getChildVectors(vector C.duckdb_vector) {
 	switch vec.duckdbType {
 
-	case C.DUCKDB_TYPE_LIST:
+	case C.DUCKDB_TYPE_LIST, C.DUCKDB_TYPE_MAP:
 		child := C.duckdb_list_vector_get_child(vector)
 		vec.childVectors[0].duckdbVector = child
 		vec.childVectors[0].getChildVectors(child)
@@ -273,7 +332,7 @@ func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive[T](vec, rowIdx, val.(T))
+		setPrimitive(vec, rowIdx, val.(T))
 	}
 	vec.duckdbType = duckdbType
 }
@@ -300,6 +359,39 @@ func (vec *vector) initDate() {
 	vec.duckdbType = C.DUCKDB_TYPE_DATE
 }
 
+func (vec *vector) initTime() {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		vec.setTime(rowIdx, val)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_TIME
+}
+
+func (vec *vector) initInterval() {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		vec.setInterval(rowIdx, val)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_INTERVAL
+}
+
+func (vec *vector) initHugeint() {
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		vec.setHugeint(rowIdx, val)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_HUGEINT
+}
+
 func (vec *vector) initCString(duckdbType C.duckdb_type) {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		if val == nil {
@@ -309,6 +401,57 @@ func (vec *vector) initCString(duckdbType C.duckdb_type) {
 		vec.setCString(rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
+}
+
+func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) error {
+	vec.width = uint8(C.duckdb_decimal_width(logicalType))
+	vec.scale = uint8(C.duckdb_decimal_scale(logicalType))
+
+	internalType := C.duckdb_decimal_internal_type(logicalType)
+	switch internalType {
+	case C.DUCKDB_TYPE_SMALLINT, C.DUCKDB_TYPE_INTEGER, C.DUCKDB_TYPE_BIGINT, C.DUCKDB_TYPE_HUGEINT:
+		vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+			if val == nil {
+				vec.setNull(rowIdx)
+				return
+			}
+			vec.setDecimal(internalType, rowIdx, val)
+		}
+	default:
+		return columnError(unsupportedTypeError(duckdbTypeMap[internalType]), colIdx)
+	}
+
+	vec.duckdbType = C.DUCKDB_TYPE_DECIMAL
+	return nil
+}
+
+func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error {
+	// Initialize the dictionary.
+	dictSize := uint32(C.duckdb_enum_dictionary_size(logicalType))
+	vec.dict = make(map[string]uint32)
+	for i := uint32(0); i < dictSize; i++ {
+		cStr := C.duckdb_enum_dictionary_value(logicalType, C.idx_t(i))
+		str := C.GoString(cStr)
+		vec.dict[str] = i
+		C.duckdb_free(unsafe.Pointer(cStr))
+	}
+
+	internalType := C.duckdb_enum_internal_type(logicalType)
+	switch internalType {
+	case C.DUCKDB_TYPE_UTINYINT, C.DUCKDB_TYPE_USMALLINT, C.DUCKDB_TYPE_UINTEGER, C.DUCKDB_TYPE_UBIGINT:
+		vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+			if val == nil {
+				vec.setNull(rowIdx)
+				return
+			}
+			vec.setEnum(internalType, rowIdx, val)
+		}
+	default:
+		return columnError(unsupportedTypeError(duckdbTypeMap[internalType]), colIdx)
+	}
+
+	vec.duckdbType = C.DUCKDB_TYPE_ENUM
+	return nil
 }
 
 func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error {
@@ -368,13 +511,49 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 	return nil
 }
 
+func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error {
+	// A MAP is a LIST of STRUCT values. Each STRUCT holds two children: a key and a value.
+
+	// Get the child vector type.
+	childType := C.duckdb_list_type_child_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&childType)
+
+	// Recurse into the child.
+	vec.childVectors = make([]vector, 1)
+	err := vec.childVectors[0].init(childType, colIdx)
+	if err != nil {
+		return err
+	}
+
+	// DuckDB supports more MAP key types than Go, which only supports comparable types.
+	// We ensure that the key type itself is comparable.
+	keyType := C.duckdb_map_type_key_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&keyType)
+
+	duckdbKeyType := C.duckdb_get_type_id(keyType)
+	switch duckdbKeyType {
+	case C.DUCKDB_TYPE_LIST, C.DUCKDB_TYPE_STRUCT, C.DUCKDB_TYPE_MAP, C.DUCKDB_TYPE_ARRAY:
+		return columnError(errUnsupportedMapKeyType, colIdx)
+	}
+
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		vec.setMap(rowIdx, val)
+	}
+	vec.duckdbType = C.DUCKDB_TYPE_MAP
+	return nil
+}
+
 func (vec *vector) initUUID() {
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive[C.duckdb_hugeint](vec, rowIdx, uuidToHugeInt(val.(UUID)))
+		setPrimitive(vec, rowIdx, uuidToHugeInt(val.(UUID)))
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
 }

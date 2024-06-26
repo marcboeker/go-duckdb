@@ -56,6 +56,8 @@ func TestErrNestedMap(t *testing.T) {
 }
 
 func TestErrAppender(t *testing.T) {
+	t.Parallel()
+
 	t.Run(errAppenderInvalidCon.Error(), func(t *testing.T) {
 		var con driver.Conn
 		_, err := NewAppenderFromConn(con, "", "test")
@@ -110,7 +112,7 @@ func TestErrAppender(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
 
-		_, err = sql.OpenDB(c).Exec(`CREATE TABLE test AS SELECT MAP() AS m`)
+		_, err = sql.OpenDB(c).Exec(`CREATE TABLE test (int_array INTEGER[2])`)
 		require.NoError(t, err)
 
 		con, err := c.Connect(context.Background())
@@ -160,6 +162,13 @@ func TestErrAppender(t *testing.T) {
 		require.NoError(t, con.Close())
 		require.NoError(t, c.Close())
 	})
+
+	t.Run(errUnsupportedMapKeyType.Error(), func(t *testing.T) {
+		c, con, a := prepareAppender(t, `CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
+		err := a.AppendRow(nil)
+		testError(t, err, errAppenderAppendRow.Error(), errUnsupportedMapKeyType.Error())
+		cleanupAppender(t, c, con, a)
+	})
 }
 
 func TestErrAppend(t *testing.T) {
@@ -170,6 +179,24 @@ func TestErrAppend(t *testing.T) {
 	err = a.AppendRow(false, 42)
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
 
+	cleanupAppender(t, c, con, a)
+}
+
+func TestErrAppendDecimal(t *testing.T) {
+	c, con, a := prepareAppender(t, `CREATE TABLE test (d DECIMAL(8, 2))`)
+
+	err := a.AppendRow(Decimal{Width: 9, Scale: 2})
+	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
+	err = a.AppendRow(Decimal{Width: 8, Scale: 3})
+	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
+
+	cleanupAppender(t, c, con, a)
+}
+
+func TestErrAppendEnum(t *testing.T) {
+	c, con, a := prepareAppender(t, testTypesEnumSQL+";"+`CREATE TABLE test (e my_enum)`)
+	err := a.AppendRow("3")
+	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
 	cleanupAppender(t, c, con, a)
 }
 
