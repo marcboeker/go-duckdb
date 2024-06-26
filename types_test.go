@@ -257,15 +257,21 @@ func TestTypes(t *testing.T) {
 
 // NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
 // of its main functionalities. I.e., functions related to implementing the database/sql interface.
+var benchmarkTypesResult []testTypesRow
 
 func BenchmarkTypes(b *testing.B) {
 	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
 	c, con, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
 
+	var r []testTypesRow
+	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_ = testTypes(b, c, a, expectedRows)
+		r = testTypes(b, c, a, expectedRows)
 		testTypesReset(b, c)
 	}
+
+	// Ensure that the compiler does not eliminate the line by storing the result.
+	benchmarkTypesResult = r
 	cleanupAppender(b, c, con, a)
 }
 
