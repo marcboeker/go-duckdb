@@ -127,7 +127,7 @@ const (
 	ErrorTypeSequence
 )
 
-var exceptionPrefixMap = map[string]DuckDBErrorType{
+var errorPrefixMap = map[string]DuckDBErrorType{
 	"Invalid Error":                ErrorTypeInvalid,
 	"Out of Range Error":           ErrorTypeOutOfRange,
 	"Conversion Error":             ErrorTypeConversion,
@@ -192,7 +192,7 @@ func getDuckDBError(errMsg string) error {
 	errType := ErrorTypeInvalid
 	// find the end of the prefix ("<error-type> Error: ")
 	if idx := strings.Index(errMsg, ": "); idx != -1 {
-		if typ, ok := exceptionPrefixMap[errMsg[:idx]]; ok {
+		if typ, ok := errorPrefixMap[errMsg[:idx]]; ok {
 			errType = typ
 		}
 	}

@@ -301,48 +301,88 @@ func TestErrAPISetValue(t *testing.T) {
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
 
-func TestGetDuckDBError(t *testing.T) {
+func TestDuckDBErrors(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+	createTable(db, t, `CREATE TABLE duckdberror_test(bar VARCHAR UNIQUE, baz INT32)`)
+	_, err := db.Exec("INSERT INTO duckdberror_test(bar, baz) VALUES('bar', 0)")
+	require.NoError(t, err)
+
 	testCases := []struct {
-		msg string
-		typ DuckDBErrorType
+		tpl    string
+		errTyp DuckDBErrorType
 	}{
 		{
-			msg: "",
-			typ: ErrorTypeInvalid,
+			tpl:    "SELECT * FROM not_exist WHERE baz=0",
+			errTyp: ErrorTypeCatalog,
 		},
 		{
-			msg: "Unknown",
-			typ: ErrorTypeInvalid,
+			tpl:    "COPY duckdberror_test FROM 'test.json'",
+			errTyp: ErrorTypeCatalog,
 		},
 		{
-			msg: "Error: xxx",
-			typ: ErrorTypeUnknownType,
+			tpl:    "SELECT * FROM duckdberror_test WHERE col=?",
+			errTyp: ErrorTypeBinder,
 		},
 		{
-			msg: "Constraint Error: Duplicate key \"key\" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).",
-			typ: ErrorTypeConstraint,
+			tpl:    "SELEC * FROM duckdberror_test baz=0",
+			errTyp: ErrorTypeParser,
 		},
 		{
-			msg: "Invalid Error: xxx",
-			typ: ErrorTypeInvalid,
+			tpl:    "INSERT INTO duckdberror_test(bar, baz) VALUES('bar', 1)",
+			errTyp: ErrorTypeConstraint,
 		},
 		{
-			msg: "Invalid Input Error: xxx",
-			typ: ErrorTypeInvalidInput,
+			tpl:    "INSERT INTO duckdberror_test(bar, baz) VALUES('foo', 18446744073709551615)",
+			errTyp: ErrorTypeConversion,
 		},
 		{
-			msg: "Parameter Not Resolved Error",
-			typ: ErrorTypeInvalid,
+			tpl:    "INSTALL not_exist",
+			errTyp: ErrorTypeHTTP,
 		},
 		{
-			msg: "Parameter Not Resolved Error: correct error messages format",
-			typ: ErrorTypeParameterNotResolved,
+			tpl:    "LOAD not_exist",
+			errTyp: ErrorTypeIO,
+		},
+	}
+	for _, tc := range testCases {
+		_, err := db.Exec(tc.tpl)
+		de, ok := err.(*DuckDBError)
+		if !ok {
+			require.Fail(t, "error type is not DuckDBError", "tql: %s\ngot: %#v", tc.tpl, err)
+		}
+		require.Equal(t, de.Type, tc.errTyp, "tql: %s\nactual error msg: %s", tc.tpl, de.Msg)
+	}
+}
+
+func TestGetDuckDBError(t *testing.T) {
+	// only for the corner cases
+	testCases := []*DuckDBError{
+		{
+			Msg:  "",
+			Type: ErrorTypeInvalid,
+		},
+		{
+			Msg:  "Unknown",
+			Type: ErrorTypeInvalid,
+		},
+		{
+			Msg:  "Error: xxx",
+			Type: ErrorTypeUnknownType,
+		},
+		// next two for the prefix testing
+		{
+			Msg:  "Invalid Error: xxx",
+			Type: ErrorTypeInvalid,
+		},
+		{
+			Msg:  "Invalid Input Error: xxx",
+			Type: ErrorTypeInvalidInput,
 		},
 	}
 
 	for _, tc := range testCases {
-		err := getDuckDBError(tc.msg).(*DuckDBError)
-		require.Equal(t, tc.typ, err.Type)
-		require.Equal(t, tc.msg, err.Msg)
+		err := getDuckDBError(tc.Msg).(*DuckDBError)
+		require.Equal(t, tc, err)
 	}
 }
