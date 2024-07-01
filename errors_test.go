@@ -310,7 +310,7 @@ func TestDuckDBErrors(t *testing.T) {
 
 	testCases := []struct {
 		tpl    string
-		errTyp DuckDBErrorType
+		errTyp ErrorType
 	}{
 		{
 			tpl:    "SELECT * FROM not_exist WHERE baz=0",
@@ -347,7 +347,7 @@ func TestDuckDBErrors(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		_, err := db.Exec(tc.tpl)
-		de, ok := err.(*DuckDBError)
+		de, ok := err.(*Error)
 		if !ok {
 			require.Fail(t, "error type is not DuckDBError", "tql: %s\ngot: %#v", tc.tpl, err)
 		}
@@ -357,7 +357,7 @@ func TestDuckDBErrors(t *testing.T) {
 
 func TestGetDuckDBError(t *testing.T) {
 	// only for the corner cases
-	testCases := []*DuckDBError{
+	testCases := []*Error{
 		{
 			Msg:  "",
 			Type: ErrorTypeInvalid,
@@ -382,7 +382,7 @@ func TestGetDuckDBError(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		err := getDuckDBError(tc.Msg).(*DuckDBError)
+		err := getDuckDBError(tc.Msg).(*Error)
 		require.Equal(t, tc, err)
 	}
 }
