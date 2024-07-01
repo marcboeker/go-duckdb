@@ -300,3 +300,89 @@ func TestErrAPISetValue(t *testing.T) {
 	err := chunk.SetValue(1, 42, "hello")
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
+
+func TestDuckDBErrors(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+	createTable(db, t, `CREATE TABLE duckdberror_test(bar VARCHAR UNIQUE, baz INT32)`)
+	_, err := db.Exec("INSERT INTO duckdberror_test(bar, baz) VALUES('bar', 0)")
+	require.NoError(t, err)
+
+	testCases := []struct {
+		tpl    string
+		errTyp DuckDBErrorType
+	}{
+		{
+			tpl:    "SELECT * FROM not_exist WHERE baz=0",
+			errTyp: ErrorTypeCatalog,
+		},
+		{
+			tpl:    "COPY duckdberror_test FROM 'test.json'",
+			errTyp: ErrorTypeCatalog,
+		},
+		{
+			tpl:    "SELECT * FROM duckdberror_test WHERE col=?",
+			errTyp: ErrorTypeBinder,
+		},
+		{
+			tpl:    "SELEC * FROM duckdberror_test baz=0",
+			errTyp: ErrorTypeParser,
+		},
+		{
+			tpl:    "INSERT INTO duckdberror_test(bar, baz) VALUES('bar', 1)",
+			errTyp: ErrorTypeConstraint,
+		},
+		{
+			tpl:    "INSERT INTO duckdberror_test(bar, baz) VALUES('foo', 18446744073709551615)",
+			errTyp: ErrorTypeConversion,
+		},
+		{
+			tpl:    "INSTALL not_exist",
+			errTyp: ErrorTypeHTTP,
+		},
+		{
+			tpl:    "LOAD not_exist",
+			errTyp: ErrorTypeIO,
+		},
+	}
+	for _, tc := range testCases {
+		_, err := db.Exec(tc.tpl)
+		de, ok := err.(*DuckDBError)
+		if !ok {
+			require.Fail(t, "error type is not DuckDBError", "tql: %s\ngot: %#v", tc.tpl, err)
+		}
+		require.Equal(t, de.Type, tc.errTyp, "tql: %s\nactual error msg: %s", tc.tpl, de.Msg)
+	}
+}
+
+func TestGetDuckDBError(t *testing.T) {
+	// only for the corner cases
+	testCases := []*DuckDBError{
+		{
+			Msg:  "",
+			Type: ErrorTypeInvalid,
+		},
+		{
+			Msg:  "Unknown",
+			Type: ErrorTypeInvalid,
+		},
+		{
+			Msg:  "Error: xxx",
+			Type: ErrorTypeUnknownType,
+		},
+		// next two for the prefix testing
+		{
+			Msg:  "Invalid Error: xxx",
+			Type: ErrorTypeInvalid,
+		},
+		{
+			Msg:  "Invalid Input Error: xxx",
+			Type: ErrorTypeInvalidInput,
+		},
+	}
+
+	for _, tc := range testCases {
+		err := getDuckDBError(tc.Msg).(*DuckDBError)
+		require.Equal(t, tc, err)
+	}
+}
