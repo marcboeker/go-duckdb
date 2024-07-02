@@ -84,7 +84,7 @@ func TestPrepareWithError(t *testing.T) {
 		stmt, err := db.Prepare(tc.tpl)
 		if err != nil {
 			if _, ok := err.(*Error); !ok {
-				require.Fail(t, "error type is not DuckDBError")
+				require.Fail(t, "error type is not (*duckdb.Error)")
 			}
 			require.ErrorContains(t, err, tc.err)
 			continue
