@@ -148,7 +148,7 @@ defer conn.Close()
 
 // obtain the Arrow from the connection
 arrow, err := duckdb.NewArrowFromConn(conn)
-if err != nil w
+if err != nil {
 	...
 }
 
