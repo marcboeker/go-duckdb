@@ -249,27 +249,27 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case C.DUCKDB_TYPE_INVALID:
 		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_BOOLEAN:
-		initPrimitive[bool](vec, C.DUCKDB_TYPE_BOOLEAN)
+		initBool(vec, C.DUCKDB_TYPE_BOOLEAN)
 	case C.DUCKDB_TYPE_TINYINT:
-		initPrimitive[int8](vec, C.DUCKDB_TYPE_TINYINT)
+		initNumeric[int8](vec, C.DUCKDB_TYPE_TINYINT)
 	case C.DUCKDB_TYPE_SMALLINT:
-		initPrimitive[int16](vec, C.DUCKDB_TYPE_SMALLINT)
+		initNumeric[int16](vec, C.DUCKDB_TYPE_SMALLINT)
 	case C.DUCKDB_TYPE_INTEGER:
-		initPrimitive[int32](vec, C.DUCKDB_TYPE_INTEGER)
+		initNumeric[int32](vec, C.DUCKDB_TYPE_INTEGER)
 	case C.DUCKDB_TYPE_BIGINT:
-		initPrimitive[int64](vec, C.DUCKDB_TYPE_BIGINT)
+		initNumeric[int64](vec, C.DUCKDB_TYPE_BIGINT)
 	case C.DUCKDB_TYPE_UTINYINT:
-		initPrimitive[uint8](vec, C.DUCKDB_TYPE_UTINYINT)
+		initNumeric[uint8](vec, C.DUCKDB_TYPE_UTINYINT)
 	case C.DUCKDB_TYPE_USMALLINT:
-		initPrimitive[uint16](vec, C.DUCKDB_TYPE_USMALLINT)
+		initNumeric[uint16](vec, C.DUCKDB_TYPE_USMALLINT)
 	case C.DUCKDB_TYPE_UINTEGER:
-		initPrimitive[uint32](vec, C.DUCKDB_TYPE_UINTEGER)
+		initNumeric[uint32](vec, C.DUCKDB_TYPE_UINTEGER)
 	case C.DUCKDB_TYPE_UBIGINT:
-		initPrimitive[uint64](vec, C.DUCKDB_TYPE_UBIGINT)
+		initNumeric[uint64](vec, C.DUCKDB_TYPE_UBIGINT)
 	case C.DUCKDB_TYPE_FLOAT:
-		initPrimitive[float32](vec, C.DUCKDB_TYPE_FLOAT)
+		initNumeric[float32](vec, C.DUCKDB_TYPE_FLOAT)
 	case C.DUCKDB_TYPE_DOUBLE:
-		initPrimitive[float64](vec, C.DUCKDB_TYPE_DOUBLE)
+		initNumeric[float64](vec, C.DUCKDB_TYPE_DOUBLE)
 	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
 		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ:
 		vec.initTS(duckdbType)
@@ -328,7 +328,24 @@ func (vec *vector) getChildVectors(vector C.duckdb_vector) {
 	}
 }
 
-func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
+func initBool(vec *vector, duckdbType C.duckdb_type) {
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return getPrimitive[bool](vec, rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		setBool(vec, rowIdx, val)
+	}
+	vec.duckdbType = duckdbType
+}
+
+func initNumeric[T numericType](vec *vector, duckdbType C.duckdb_type) {
 	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
 		if vec.getNull(rowIdx) {
 			return nil
@@ -340,7 +357,7 @@ func initPrimitive[T any](vec *vector, duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive(vec, rowIdx, val.(T))
+		setNumeric[any, T](vec, rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
 }
@@ -357,7 +374,7 @@ func (vec *vector) initTS(duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setTS(duckdbType, rowIdx, val)
+		setTS(vec, rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
 }
@@ -442,7 +459,7 @@ func (vec *vector) initCString(duckdbType C.duckdb_type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setCString(rowIdx, val)
+		setString(vec, rowIdx, val)
 	}
 	vec.duckdbType = duckdbType
 }
@@ -533,7 +550,7 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setList(rowIdx, val)
+		setList(vec, rowIdx, val)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_LIST
 	return nil
@@ -573,7 +590,7 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setStruct(rowIdx, val)
+		setStruct(vec, rowIdx, val)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_STRUCT
 	return nil
@@ -634,7 +651,7 @@ func (vec *vector) initUUID() {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive(vec, rowIdx, uuidToHugeInt(val.(UUID)))
+		setUUID(vec, rowIdx, val)
 	}
 	vec.duckdbType = C.DUCKDB_TYPE_UUID
 }
