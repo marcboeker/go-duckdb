@@ -3,7 +3,7 @@ module github.com/marcboeker/go-duckdb
 go 1.21
 
 require (
-	github.com/apache/arrow/go/v14 v14.0.2
+	github.com/apache/arrow/go/v15 v15.0.2
 	github.com/google/uuid v1.3.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/stretchr/testify v1.8.4
@@ -19,6 +19,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
