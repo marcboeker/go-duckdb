@@ -100,7 +100,7 @@ defer connector.Close()
 
 ## DuckDB Appender API
 
-If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new `Appender` by passing a DuckDB connection to `NewAppenderFromConn()`.
+If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new `Appender` by passing a DuckDB connection to `NewAppenderFromConn()`. See `examples/appender.go` for a complete example.
 
 ```go
 connector, err := duckdb.NewConnector("test.db", nil)
