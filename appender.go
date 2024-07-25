@@ -139,7 +139,7 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 
 func (a *Appender) addDataChunk() error {
 	var chunk DataChunk
-	if err := chunk.initFromTypes(a.ptr, a.types); err != nil {
+	if err := chunk.initFromTypes(a.ptr, a.types, true); err != nil {
 		return err
 	}
 	a.chunks = append(a.chunks, chunk)

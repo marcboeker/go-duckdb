@@ -18,6 +18,10 @@ import (
 type vector struct {
 	// The underlying DuckDB vector.
 	duckdbVector C.duckdb_vector
+	// The underlying data ptr.
+	ptr unsafe.Pointer
+	// The vector's validity mask.
+	mask *C.uint64_t
 	// A callback function to get a value from this vector.
 	getFn fnGetVectorValue
 	// A callback function to write to this vector.
@@ -311,19 +315,27 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) getChildVectors(vector C.duckdb_vector) {
+func (vec *vector) initVectors(v C.duckdb_vector, writable bool) {
+	vec.duckdbVector = v
+	vec.ptr = C.duckdb_vector_get_data(v)
+	if writable {
+		C.duckdb_vector_ensure_validity_writable(v)
+	}
+	vec.mask = C.duckdb_vector_get_validity(v)
+	vec.getChildVectors(v, writable)
+}
+
+func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
 	switch vec.duckdbType {
 
 	case C.DUCKDB_TYPE_LIST, C.DUCKDB_TYPE_MAP:
-		child := C.duckdb_list_vector_get_child(vector)
-		vec.childVectors[0].duckdbVector = child
-		vec.childVectors[0].getChildVectors(child)
+		child := C.duckdb_list_vector_get_child(v)
+		vec.childVectors[0].initVectors(child, writable)
 
 	case C.DUCKDB_TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
-			child := C.duckdb_struct_vector_get_child(vector, C.idx_t(i))
-			vec.childVectors[i].duckdbVector = child
-			vec.childVectors[i].getChildVectors(child)
+			child := C.duckdb_struct_vector_get_child(v, C.idx_t(i))
+			vec.childVectors[i].initVectors(child, writable)
 		}
 	}
 }

@@ -407,6 +407,7 @@ type wrappedDuckDBError struct {
 func (w *wrappedDuckDBError) Error() string {
 	return w.e.Error()
 }
+
 func (w *wrappedDuckDBError) Unwrap() error {
 	return w.e
 }

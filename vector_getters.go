@@ -16,13 +16,20 @@ import (
 type fnGetVectorValue func(vec *vector, rowIdx C.idx_t) any
 
 func (vec *vector) getNull(rowIdx C.idx_t) bool {
-	mask := C.duckdb_vector_get_validity(vec.duckdbVector)
-	return !bool(C.duckdb_validity_row_is_valid(mask, rowIdx))
+	mask := unsafe.Pointer(vec.mask)
+	if mask == nil {
+		return false
+	}
+
+	entryIdx := rowIdx / 64
+	idxInEntry := rowIdx % 64
+	maskPtr := (*[1 << 31]C.uint64_t)(mask)
+	isValid := maskPtr[entryIdx] & (C.uint64_t(1) << idxInEntry)
+	return uint64(isValid) == 0
 }
 
 func getPrimitive[T any](vec *vector, rowIdx C.idx_t) T {
-	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
-	xs := (*[1 << 31]T)(ptr)
+	xs := (*[1 << 31]T)(vec.ptr)
 	return xs[rowIdx]
 }
 

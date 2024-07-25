@@ -55,13 +55,13 @@ func (r *rows) Columns() []string {
 }
 
 func (r *rows) Next(dst []driver.Value) error {
-	for r.rowCount == r.chunk.GetSize() {
+	for r.rowCount == r.chunk.size {
 		r.chunk.close()
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
 		data := C.duckdb_result_get_chunk(r.res, r.chunkIdx)
-		if err := r.chunk.initFromDuckDataChunk(data); err != nil {
+		if err := r.chunk.initFromDuckDataChunk(data, false); err != nil {
 			return getError(err, nil)
 		}
 
