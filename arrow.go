@@ -58,9 +58,9 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/apache/arrow/go/v15/arrow"
-	"github.com/apache/arrow/go/v15/arrow/array"
-	"github.com/apache/arrow/go/v15/arrow/cdata"
+	"github.com/apache/arrow/go/v17/arrow"
+	"github.com/apache/arrow/go/v17/arrow/array"
+	"github.com/apache/arrow/go/v17/arrow/cdata"
 )
 
 // Arrow exposes DuckDB Apache Arrow interface.
