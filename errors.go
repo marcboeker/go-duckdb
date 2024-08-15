@@ -40,7 +40,7 @@ func unsupportedTypeError(name string) error {
 
 func invalidatedAppenderError(err error) error {
 	if err == nil {
-		return fmt.Errorf(invalidatedAppenderMsg)
+		return errors.New(invalidatedAppenderMsg)
 	}
 	return fmt.Errorf("%w: %s", err, invalidatedAppenderMsg)
 }
