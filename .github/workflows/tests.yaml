@@ -17,11 +17,11 @@ jobs:
       fail-fast: false
 
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-
-      - uses: actions/checkout@v4
 
       - name: "Run Tests"
         run: make test
