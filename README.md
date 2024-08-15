@@ -27,11 +27,10 @@ defer db.Close()
 This creates an in-memory instance of DuckDB. To open a persistent database, you need to specify a filepath to the database file. If
 the file does not exist, then DuckDB creates it.
 
-
 ```go
 db, err := sql.Open("duckdb", "/path/to/foo.db")
 if err != nil {
-	...
+ ...
 }
 defer db.Close()
 ```
@@ -46,7 +45,7 @@ if err != nil {
 defer db.Close()
 ```
 
-Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/refs/tags/go1.22.6:src/database/sql/sql.go;l=814). That way, you can perform initialization steps in a callback function before opening the database.
+Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/refs/tags/go1.23.0:src/database/sql/sql.go;l=855). That way, you can perform initialization steps in a callback function before opening the database.
 Here's an example that installs and loads the JSON extension when opening a database with `sql.OpenDB(connector)`.
 
 ```go
@@ -79,6 +78,7 @@ Please refer to the [database/sql](https://godoc.org/database/sql) documentation
 DuckDB lives in-process. Therefore, all its memory lives in the driver. All allocations live in the host process, which
 is the Go application. Especially for long-running applications, it is crucial to call the corresponding `Close`-functions as specified
 in [database/sql](https://godoc.org/database/sql). The following is a list of examples.
+
 ```go
 db, err := sql.Open("duckdb", "")
 defer db.Close()
@@ -105,13 +105,13 @@ If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/append
 ```go
 connector, err := duckdb.NewConnector("test.db", nil)
 if err != nil {
-	...
+ ...
 }
 defer connector.Close()
 
 conn, err := connector.Connect(context.Background())
 if err != nil {
-	...
+ ...
 }
 defer conn.Close()
 
@@ -119,13 +119,13 @@ defer conn.Close()
 // NOTE: the table 'test_tbl' must exist in test.db
 appender, err := NewAppenderFromConn(conn, "", "test_tbl")
 if err != nil {
-	...
+ ...
 }
 defer appender.Close()
 
 err = appender.AppendRow(...)
 if err != nil {
-	...
+ ...
 }
 ```
 
@@ -136,25 +136,25 @@ If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/ap
 ```go
 connector, err := duckdb.NewConnector("", nil)
 if err != nil {
-	...
+ ...
 }
 defer connector.Close()
 
 conn, err := connector.Connect(context.Background())
 if err != nil {
-	...
+ ...
 }
 defer conn.Close()
 
 // obtain the Arrow from the connection
 arrow, err := duckdb.NewArrowFromConn(conn)
 if err != nil {
-	...
+ ...
 }
 
 rdr, err := arrow.QueryContext(context.Background(), "SELECT * FROM generate_series(1, 10)")
 if err != nil {
-	...
+ ...
 }
 defer rdr.Release()
 
@@ -201,7 +201,7 @@ DYLD_LIBRARY_PATH=/path/to/libs ./main
 `TIMESTAMP vs. TIMESTAMP_TZ`
 
 In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of
-microseconds elapsed since January 1, 1970 UTC (i.e., an instant without offset information). 
-When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`, 
-even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model 
+microseconds elapsed since January 1, 1970 UTC (i.e., an instant without offset information).
+When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`,
+even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model
 time zone information for individual values.
