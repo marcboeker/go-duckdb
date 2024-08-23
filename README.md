@@ -45,7 +45,7 @@ if err != nil {
 defer db.Close()
 ```
 
-Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/refs/tags/go1.23.0:src/database/sql/sql.go;l=855). That way, you can perform initialization steps in a callback function before opening the database.
+Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/refs/tags/go1.23.0:src/database/sql/sql.go;l=824). That way, you can perform initialization steps in a callback function before opening the database.
 Here's an example that installs and loads the JSON extension when opening a database with `sql.OpenDB(connector)`.
 
 ```go
