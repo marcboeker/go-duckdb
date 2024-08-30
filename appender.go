@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"database/sql/driver"
+	"errors"
 	"unsafe"
 )
 
@@ -111,15 +112,26 @@ func (a *Appender) Close() error {
 	a.closed = true
 
 	// Append all remaining chunks.
-	err := a.appendDataChunks()
+	errAppend := a.appendDataChunks()
 
-	// Destroy all appender data.
+	// We flush before closing to get a meaningful error message.
+	var errFlush error
+	state := C.duckdb_appender_flush(a.duckdbAppender)
+	if state == C.DuckDBError {
+		errFlush = duckdbError(C.duckdb_appender_error(a.duckdbAppender))
+	}
+
+	// Destroy all appender data and the appender.
 	destroyTypeSlice(a.ptr, a.types)
-	state := C.duckdb_appender_destroy(&a.duckdbAppender)
+	var errClose error
+	state = C.duckdb_appender_destroy(&a.duckdbAppender)
+	if state == C.DuckDBError {
+		errClose = errAppenderClose
+	}
 
-	if err != nil || state == C.DuckDBError {
-		// We destroyed the appender, so we cannot retrieve the duckdb internal error.
-		return getError(errAppenderClose, invalidatedAppenderError(err))
+	err := errors.Join(errAppend, errFlush, errClose)
+	if err != nil {
+		return getError(invalidatedAppenderError(err), nil)
 	}
 	return nil
 }
