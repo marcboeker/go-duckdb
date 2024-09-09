@@ -45,6 +45,10 @@ func invalidatedAppenderError(err error) error {
 	return fmt.Errorf("%w: %s", err, invalidatedAppenderMsg)
 }
 
+func apiUsageError(hint string) error {
+	return fmt.Errorf("%s: %s", apiUsageErrMsg, hint)
+}
+
 const (
 	driverErrMsg           = "database/sql/driver"
 	duckdbErrMsg           = "duckdb error"
@@ -54,6 +58,8 @@ const (
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
+	apiUsageErrMsg         = "please try using this function instead"
+	emptyDictErrMsg        = "empty dictionary"
 )
 
 var (

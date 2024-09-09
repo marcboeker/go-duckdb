@@ -26,19 +26,11 @@ type vector struct {
 	getFn fnGetVectorValue
 	// A callback function to write to this vector.
 	setFn fnSetVectorValue
-	// The data type of the vector.
-	duckdbType C.duckdb_type
 	// The child vectors of nested data types.
 	childVectors []vector
 
-	// The child names of STRUCT vectors.
-	childNames []string
-	// The dictionary for ENUM types.
-	dict map[string]uint32
-	// The  width of DECIMAL types.
-	width uint8
-	// The scale of DECIMAL types.
-	scale uint8
+	// The vector's type information.
+	vectorType
 }
 
 func (vec *vector) tryCast(val any) (any, error) {
