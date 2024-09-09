@@ -39,7 +39,8 @@ func (vec *vector) tryCast(val any) (any, error) {
 	}
 
 	switch vec.duckdbType {
-	case C.DUCKDB_TYPE_INVALID:
+	case C.DUCKDB_TYPE_INVALID, C.DUCKDB_TYPE_UHUGEINT, C.DUCKDB_TYPE_ARRAY, C.DUCKDB_TYPE_UNION,
+		C.DUCKDB_TYPE_BIT, C.DUCKDB_TYPE_TIME_TZ:
 		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
 	case C.DUCKDB_TYPE_BOOLEAN:
 		return tryPrimitiveCast[bool](val, reflect.Bool.String())
@@ -71,8 +72,6 @@ func (vec *vector) tryCast(val any) (any, error) {
 	case C.DUCKDB_TYPE_HUGEINT:
 		// Note that this expects *big.Int.
 		return tryPrimitiveCast[*big.Int](val, reflect.TypeOf(big.Int{}).String())
-	case C.DUCKDB_TYPE_UHUGEINT:
-		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
 	case C.DUCKDB_TYPE_VARCHAR:
 		return tryPrimitiveCast[string](val, reflect.String.String())
 	case C.DUCKDB_TYPE_BLOB:
@@ -87,16 +86,8 @@ func (vec *vector) tryCast(val any) (any, error) {
 		return vec.tryCastStruct(val)
 	case C.DUCKDB_TYPE_MAP:
 		return tryPrimitiveCast[Map](val, reflect.TypeOf(Map{}).String())
-	case C.DUCKDB_TYPE_ARRAY:
-		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
 	case C.DUCKDB_TYPE_UUID:
 		return tryPrimitiveCast[UUID](val, reflect.TypeOf(UUID{}).String())
-	case C.DUCKDB_TYPE_UNION:
-		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
-	case C.DUCKDB_TYPE_BIT:
-		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
-	case C.DUCKDB_TYPE_TIME_TZ:
-		return nil, unsupportedTypeError(duckdbTypeMap[vec.duckdbType])
 	default:
 		return nil, unsupportedTypeError("unknown type")
 	}
@@ -214,14 +205,14 @@ func (vec *vector) tryCastStruct(val any) (map[string]any, error) {
 	}
 
 	// Catch mismatching field count.
-	if len(m) != len(vec.childNames) {
-		return nil, structFieldError(strconv.Itoa(len(m)), strconv.Itoa(len(vec.childNames)))
+	if len(m) != len(vec.names) {
+		return nil, structFieldError(strconv.Itoa(len(m)), strconv.Itoa(len(vec.names)))
 	}
 
 	// Cast child entries and return the map.
 	for i := 0; i < len(vec.childVectors); i++ {
 		childVector := vec.childVectors[i]
-		childName := vec.childNames[i]
+		childName := vec.names[i]
 		v, ok := m[childName]
 
 		// Catch mismatching field names.
@@ -242,7 +233,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	duckdbType := C.duckdb_get_type_id(logicalType)
 
 	switch duckdbType {
-	case C.DUCKDB_TYPE_INVALID:
+	case C.DUCKDB_TYPE_INVALID, C.DUCKDB_TYPE_UHUGEINT, C.DUCKDB_TYPE_ARRAY, C.DUCKDB_TYPE_UNION,
+		C.DUCKDB_TYPE_BIT, C.DUCKDB_TYPE_TIME_TZ:
 		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_BOOLEAN:
 		initPrimitive[bool](vec, C.DUCKDB_TYPE_BOOLEAN)
@@ -277,8 +269,6 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		vec.initInterval()
 	case C.DUCKDB_TYPE_HUGEINT:
 		vec.initHugeint()
-	case C.DUCKDB_TYPE_UHUGEINT:
-		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
 		vec.initCString(duckdbType)
 	case C.DUCKDB_TYPE_DECIMAL:
@@ -291,16 +281,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		return vec.initStruct(logicalType, colIdx)
 	case C.DUCKDB_TYPE_MAP:
 		return vec.initMap(logicalType, colIdx)
-	case C.DUCKDB_TYPE_ARRAY:
-		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_UUID:
 		vec.initUUID()
-	case C.DUCKDB_TYPE_UNION:
-		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
-	case C.DUCKDB_TYPE_BIT:
-		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
-	case C.DUCKDB_TYPE_TIME_TZ:
-		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	default:
 		return addIndexToError(unsupportedTypeError("unknown type"), colIdx)
 	}
@@ -545,15 +527,15 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 
 func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) error {
 	childCount := int(C.duckdb_struct_type_child_count(logicalType))
-	var childNames []string
+	var names []string
 	for i := 0; i < childCount; i++ {
 		childName := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
-		childNames = append(childNames, C.GoString(childName))
+		names = append(names, C.GoString(childName))
 		C.free(unsafe.Pointer(childName))
 	}
 
 	vec.childVectors = make([]vector, childCount)
-	vec.childNames = childNames
+	vec.names = names
 
 	// Recurse into the children.
 	for i := 0; i < childCount; i++ {

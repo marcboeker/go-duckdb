@@ -159,9 +159,9 @@ func (vec *vector) setList(rowIdx C.idx_t, val any) {
 func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
 	m := val.(map[string]any)
 	for i := 0; i < len(vec.childVectors); i++ {
-		childVector := &vec.childVectors[i]
-		childName := vec.childNames[i]
-		childVector.setFn(childVector, rowIdx, m[childName])
+		child := &vec.childVectors[i]
+		name := vec.names[i]
+		child.setFn(child, rowIdx, m[name])
 	}
 }
 

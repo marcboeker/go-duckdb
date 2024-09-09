@@ -62,8 +62,9 @@ const (
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
 	tryOtherFuncErrMsg     = "please try using this function instead"
-	structFieldCountErrMsg = "type count must match the name count"
+	structFieldCountErrMsg = "name count must match the type count"
 	indexErrMsg            = "index"
+	unknownTypeErrMsg      = "unknown type"
 )
 
 var (
