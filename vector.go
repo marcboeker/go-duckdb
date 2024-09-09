@@ -243,7 +243,7 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 
 	switch duckdbType {
 	case C.DUCKDB_TYPE_INVALID:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_BOOLEAN:
 		initPrimitive[bool](vec, C.DUCKDB_TYPE_BOOLEAN)
 	case C.DUCKDB_TYPE_TINYINT:
@@ -278,7 +278,7 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case C.DUCKDB_TYPE_HUGEINT:
 		vec.initHugeint()
 	case C.DUCKDB_TYPE_UHUGEINT:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_BLOB:
 		vec.initCString(duckdbType)
 	case C.DUCKDB_TYPE_DECIMAL:
@@ -292,17 +292,17 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case C.DUCKDB_TYPE_MAP:
 		return vec.initMap(logicalType, colIdx)
 	case C.DUCKDB_TYPE_ARRAY:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_UUID:
 		vec.initUUID()
 	case C.DUCKDB_TYPE_UNION:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_BIT:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	case C.DUCKDB_TYPE_TIME_TZ:
-		return columnError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[duckdbType]), colIdx)
 	default:
-		return columnError(unsupportedTypeError("unknown type"), colIdx)
+		return addIndexToError(unsupportedTypeError("unknown type"), colIdx)
 	}
 	return nil
 }
@@ -472,7 +472,7 @@ func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) er
 			vec.setDecimal(internalType, rowIdx, val)
 		}
 	default:
-		return columnError(unsupportedTypeError(duckdbTypeMap[internalType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[internalType]), colIdx)
 	}
 
 	vec.duckdbType = C.DUCKDB_TYPE_DECIMAL
@@ -507,7 +507,7 @@ func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error
 			vec.setEnum(internalType, rowIdx, val)
 		}
 	default:
-		return columnError(unsupportedTypeError(duckdbTypeMap[internalType]), colIdx)
+		return addIndexToError(unsupportedTypeError(duckdbTypeMap[internalType]), colIdx)
 	}
 
 	vec.duckdbType = C.DUCKDB_TYPE_ENUM
@@ -605,7 +605,7 @@ func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error 
 	duckdbKeyType := C.duckdb_get_type_id(keyType)
 	switch duckdbKeyType {
 	case C.DUCKDB_TYPE_LIST, C.DUCKDB_TYPE_STRUCT, C.DUCKDB_TYPE_MAP, C.DUCKDB_TYPE_ARRAY:
-		return columnError(errUnsupportedMapKeyType, colIdx)
+		return addIndexToError(errUnsupportedMapKeyType, colIdx)
 	}
 
 	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {

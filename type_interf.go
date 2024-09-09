@@ -41,6 +41,8 @@ type Type struct {
 	dict []string
 }
 
+// NewPrimitiveType returns a new primitive type. go-duckdb's primitive types (without aliases) are as follows:
+// BOOL, TINYINT, SMALLINT, INTEGER, BIGINT, UTINYINT, USMALLINT, UINTEGER, UBIGINT, FLOAT, DOUBLE, VARCHAR.
 func NewPrimitiveType(kind reflect.Kind) (Type, error) {
 	switch kind {
 	case reflect.Bool:
@@ -68,64 +70,80 @@ func NewPrimitiveType(kind reflect.Kind) (Type, error) {
 	case reflect.String:
 		return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_VARCHAR}}, nil
 	case reflect.Array, reflect.Slice:
-		return Type{}, getError(errAPI, apiUsageError(funcName(NewListType)))
+		return Type{}, getError(errAPI, tryOtherFuncError(funcName(NewListType)))
 	case reflect.Struct:
-		return Type{}, getError(errAPI, apiUsageError(funcName(NewStructType)))
+		return Type{}, getError(errAPI, tryOtherFuncError(funcName(NewStructType)))
 	case reflect.Map:
-		return Type{}, getError(errAPI, apiUsageError(funcName(NewMapType)))
+		return Type{}, getError(errAPI, tryOtherFuncError(funcName(NewMapType)))
 	}
 
 	// Remaining cases:	Invalid, Uintptr, Complex64, Complex128, Chan, Func, Interface, Pointer, UnsafePointer.
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_INVALID}}, getError(errAPI, unsupportedTypeError(kind.String()))
 }
 
+// NewTimestampType returns a new TIMESTAMP type.
 func NewTimestampType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_TIMESTAMP}}
 }
 
+// NewTimestampSType returns a new TIMESTAMP_S type.
 func NewTimestampSType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_TIMESTAMP_S}}
 }
 
+// NewTimestampMSType returns a new TIMESTAMP_MS type.
 func NewTimestampMSType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_TIMESTAMP_MS}}
 }
 
+// NewTimestampNSType returns a new TIMESTAMP_NS type.
 func NewTimestampNSType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_TIMESTAMP_NS}}
 }
 
+// NewTimestampTZType returns a new TIMESTAMP_TZ type.
 func NewTimestampTZType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_TIMESTAMP_TZ}}
 }
 
+// NewDateType returns a new DATE type.
 func NewDateType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_DATE}}
 }
 
+// NewTimeType returns a new TIME type.
 func NewTimeType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_TIME}}
 }
 
+// NewIntervalType returns a new INTERVAL type.
 func NewIntervalType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_INTERVAL}}
 }
 
+// NewHugeIntType returns a new HUGEINT type.
 func NewHugeIntType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_UHUGEINT}}
 }
 
+// NewBlobType returns a new BLOB type.
 func NewBlobType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_BLOB}}
 }
 
+// NewDecimalType returns a new DECIMAL type.
 func NewDecimalType(width uint8, scale uint8) Type {
-	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_DECIMAL, width: width, scale: scale}}
+	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_DECIMAL,
+		width: width,
+		scale: scale,
+	},
+	}
 }
 
+// NewEnumType returns a new ENUM type.
 func NewEnumType(dict []string) (Type, error) {
 	if len(dict) == 0 {
-		return Type{}, getError(errAPI, unsupportedTypeError(emptyDictErrMsg))
+		return Type{}, getError(errAPI, errEmptyDict)
 	}
 
 	t := Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_ENUM}}
@@ -134,21 +152,68 @@ func NewEnumType(dict []string) (Type, error) {
 	return t, nil
 }
 
-func NewListType() (Type, error) {
-	// TODO
-	return Type{}, nil
+// NewListType returns a new LIST type.
+func NewListType(child Type) (Type, error) {
+	t := Type{
+		baseType:   baseType{duckdbType: C.DUCKDB_TYPE_LIST},
+		childTypes: make([]Type, 1),
+	}
+
+	if child.duckdbType == C.DUCKDB_TYPE_INVALID {
+		return t, getError(errAPI, errInvalidChildType)
+	}
+	t.childTypes[0] = child
+	return t, nil
 }
 
-func NewStructType() (Type, error) {
-	// TODO
-	return Type{}, nil
+// NewStructType returns a new STRUCT type.
+func NewStructType(names []string, types []Type) (Type, error) {
+	t := Type{
+		baseType: baseType{
+			duckdbType: C.DUCKDB_TYPE_STRUCT,
+			childNames: make([]string, len(names))},
+		childTypes: make([]Type, len(types)),
+	}
+
+	if len(names) != len(types) {
+		return t, getError(errAPI, structFieldCountError(len(types), len(names)))
+	}
+	for i, name := range names {
+		if name == "" {
+			return t, getError(errAPI, addIndexToError(errEmptyName, i))
+		}
+	}
+	for i, childType := range types {
+		if childType.duckdbType == C.DUCKDB_TYPE_INVALID {
+			return t, getError(errAPI, addIndexToError(errInvalidChildType, i))
+		}
+	}
+
+	copy(t.childNames, names)
+	copy(t.childTypes, types)
+	return t, nil
 }
 
-func NewMapType() (Type, error) {
-	// TODO
-	return Type{}, nil
+// NewMapType returns a new MAP type.
+func NewMapType(key Type, value Type) (Type, error) {
+	t := Type{
+		baseType:   baseType{duckdbType: C.DUCKDB_TYPE_MAP},
+		childTypes: make([]Type, 2),
+	}
+
+	if key.duckdbType == C.DUCKDB_TYPE_INVALID {
+		return t, getError(errAPI, errInvalidKeyType)
+	}
+	if value.duckdbType == C.DUCKDB_TYPE_INVALID {
+		return t, getError(errAPI, errInvalidValueType)
+	}
+
+	t.childTypes[0] = key
+	t.childTypes[1] = value
+	return t, nil
 }
 
+// NewUuidType returns a new UUID type.
 func NewUuidType() Type {
 	return Type{baseType: baseType{duckdbType: C.DUCKDB_TYPE_UUID}}
 }
