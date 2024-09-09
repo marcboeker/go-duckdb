@@ -1,5 +1,5 @@
 DUCKDB_REPO=https://github.com/duckdb/duckdb.git
-DUCKDB_BRANCH=feature
+DUCKDB_BRANCH=main
 
 .PHONY: install
 install:
@@ -7,7 +7,8 @@ install:
 
 .PHONY: examples
 examples:
-	go run examples/simple.go
+	go run examples/simple/main.go
+	go run examples/appender/main.go
 
 .PHONY: test
 test:
@@ -23,7 +24,7 @@ duckdb:
 	rm -rf duckdb
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 
-DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any BUILD_JSON=1
+DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any
 
 .PHONY: deps.darwin.amd64
 deps.darwin.amd64: duckdb

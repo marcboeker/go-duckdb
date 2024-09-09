@@ -12,17 +12,73 @@ import (
 
 // DataChunk storage of a DuckDB table.
 type DataChunk struct {
-	// The underlying duckdb data chunk.
+	// data holds the underlying duckdb data chunk.
 	data C.duckdb_data_chunk
-	// A helper slice providing direct access to all columns.
+	// columns is a helper slice providing direct access to all columns.
 	columns []vector
+	// columnNames holds the column names, if known.
+	columnNames []string
+	// size caches the size after initialization.
+	size int
 }
 
-// InitFromTypes initializes a data chunk by providing its column types.
-func (chunk *DataChunk) InitFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type) error {
+// GetDataChunkCapacity returns the capacity of a data chunk.
+func GetDataChunkCapacity() int {
+	return int(C.duckdb_vector_size())
+}
+
+// GetSize returns the internal size of the data chunk.
+func (chunk *DataChunk) GetSize() int {
+	chunk.size = int(C.duckdb_data_chunk_get_size(chunk.data))
+	return chunk.size
+}
+
+// SetSize sets the internal size of the data chunk. Cannot exceed GetCapacity().
+func (chunk *DataChunk) SetSize(size int) error {
+	if size > GetDataChunkCapacity() {
+		return getError(errAPI, errVectorSize)
+	}
+	C.duckdb_data_chunk_set_size(chunk.data, C.idx_t(size))
+	return nil
+}
+
+// GetValue returns a single value of a column.
+func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
+	if colIdx >= len(chunk.columns) {
+		return nil, getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
+	}
+	column := &chunk.columns[colIdx]
+	return column.getFn(column, C.idx_t(rowIdx)), nil
+}
+
+// SetValue writes a single value to a column in a data chunk. Note that this requires casting the type for each invocation.
+// NOTE: Custom ENUM types must be passed as string.
+func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
+	if colIdx >= len(chunk.columns) {
+		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
+	}
+	column := &chunk.columns[colIdx]
+
+	// Ensure that the types match before attempting to set anything.
+	// This is done to prevent failures 'halfway through' writing column values,
+	// potentially corrupting data in that column.
+	// FIXME: Can we improve efficiency here? We are casting back-and-forth to any A LOT.
+	// FIXME: Maybe we can make columnar insertions unsafe, i.e., we always assume a correct type.
+	v, err := column.tryCast(val)
+	if err != nil {
+		return columnError(err, colIdx)
+	}
+
+	// Set the value.
+	column.setFn(column, C.idx_t(rowIdx), v)
+	return nil
+}
+
+func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type, writable bool) error {
+	// NOTE: initFromTypes does not initialize the column names.
 	columnCount := len(types)
 
-	// Get the vector storage of each column.
+	// Initialize the callback functions to read and write values.
 	chunk.columns = make([]vector, columnCount)
 	var err error
 	for i := 0; i < columnCount; i++ {
@@ -38,26 +94,22 @@ func (chunk *DataChunk) InitFromTypes(ptr unsafe.Pointer, types []C.duckdb_logic
 	chunk.data = C.duckdb_create_data_chunk(logicalTypesPtr, C.idx_t(columnCount))
 	C.duckdb_data_chunk_set_size(chunk.data, C.duckdb_vector_size())
 
+	// Initialize the vectors and their child vectors.
 	for i := 0; i < columnCount; i++ {
-		duckdbVector := C.duckdb_data_chunk_get_vector(chunk.data, C.idx_t(i))
-		chunk.columns[i].duckdbVector = duckdbVector
-		chunk.columns[i].getChildVectors(duckdbVector)
+		v := C.duckdb_data_chunk_get_vector(chunk.data, C.idx_t(i))
+		chunk.columns[i].initVectors(v, writable)
 	}
 	return nil
 }
 
-// InitFromDuckDataChunk initializes a data chunk by providing a duckdb data chunk.
-func (chunk *DataChunk) InitFromDuckDataChunk(data C.duckdb_data_chunk) error {
+func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk, writable bool) error {
 	columnCount := int(C.duckdb_data_chunk_get_column_count(data))
 	chunk.columns = make([]vector, columnCount)
 	chunk.data = data
 
 	var err error
 	for i := 0; i < columnCount; i++ {
-		// Initialize the vectors and their child vectors.
 		duckdbVector := C.duckdb_data_chunk_get_vector(data, C.idx_t(i))
-		chunk.columns[i].duckdbVector = duckdbVector
-		chunk.columns[i].getChildVectors(duckdbVector)
 
 		// Initialize the callback functions to read and write values.
 		logicalType := C.duckdb_vector_get_column_type(duckdbVector)
@@ -66,7 +118,12 @@ func (chunk *DataChunk) InitFromDuckDataChunk(data C.duckdb_data_chunk) error {
 		if err != nil {
 			break
 		}
+
+		// Initialize the vector and its child vectors.
+		chunk.columns[i].initVectors(duckdbVector, writable)
 	}
+
+	chunk.GetSize()
 	return err
 }
 
@@ -84,85 +141,8 @@ func (chunk *DataChunk) InitFromDuckVector(duckdbVector C.duckdb_vector) error {
 	return err
 }
 
-// Destroy the memory of a data chunk. This is crucial to avoid leaks.
-func (chunk *DataChunk) Destroy() {
+func (chunk *DataChunk) close() {
 	C.duckdb_destroy_data_chunk(&chunk.data)
-}
-
-// SetSize sets the internal size of the data chunk. This fails if columns have different sizes.
-func (chunk *DataChunk) SetSize() error {
-	if len(chunk.columns) == 0 {
-		C.duckdb_data_chunk_set_size(chunk.data, C.idx_t(0))
-		return nil
-	}
-
-	allEqual := true
-	maxSize := C.idx_t(chunk.columns[0].size)
-	for i := 0; i < len(chunk.columns); i++ {
-		if chunk.columns[i].size != maxSize {
-			allEqual = false
-		}
-		if chunk.columns[i].size > maxSize {
-			maxSize = chunk.columns[i].size
-		}
-	}
-
-	if !allEqual {
-		return errDriver
-	}
-	C.duckdb_data_chunk_set_size(chunk.data, maxSize)
-	return nil
-}
-
-// GetSize returns the internal size of the data chunk.
-func (chunk *DataChunk) GetSize() int {
-	return int(C.duckdb_data_chunk_get_size(chunk.data))
-}
-
-// SetValue writes a single value to a column. Note that this requires casting the type for
-// each invocation. Try to use the columnar function SetColumn for performance.
-func (chunk *DataChunk) SetValue(columnIdx int, rowIdx int, val any) error {
-	if columnIdx >= len(chunk.columns) {
-		return errDriver
-	}
-	column := &chunk.columns[columnIdx]
-
-	// Ensure that the types match before attempting to set anything.
-	v, err := column.tryCast(val)
-	if err != nil {
-		return columnError(err, columnIdx)
-	}
-
-	// Set the value.
-	column.setFn(column, C.idx_t(rowIdx), v)
-	return nil
-}
-
-// GetValue returns a single value of a column.
-func (chunk *DataChunk) GetValue(columnIdx int, rowIdx int) (any, error) {
-	if columnIdx >= len(chunk.columns) {
-		return nil, errDriver
-	}
-	column := &chunk.columns[columnIdx]
-	return column.getFn(column, C.idx_t(rowIdx)), nil
-}
-
-// SetColumn sets the column to val, where val is a slice []T. T is the type of the column.
-func (chunk *DataChunk) SetColumn(columnIdx int, val any) error {
-	// TODO
-	return errNotImplemented
-}
-
-// GetColumn returns a slice []T containing the column values. T is the type of the column.
-func (chunk *DataChunk) GetColumn(columnIdx int) (any, error) {
-	// TODO
-	return nil, errNotImplemented
-}
-
-// GetColumnData returns a pointer to the underlying data of a column.
-func (chunk *DataChunk) GetColumnData(columnIdx int) (unsafe.Pointer, error) {
-	// TODO
-	return nil, errNotImplemented
 }
 
 // TODO: GetMetaData, see table UDF PR.

@@ -1,3 +1,5 @@
+//go:build !no_duckdb_arrow
+
 package duckdb
 
 import (
@@ -13,7 +15,7 @@ func TestArrow(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()
 
-	createTable(db, t)
+	createFooTable(db, t)
 
 	conn, err := db.Conn(context.Background())
 	require.NoError(t, err)

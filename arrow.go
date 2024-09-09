@@ -1,3 +1,5 @@
+//go:build !no_duckdb_arrow
+
 package duckdb
 
 /*
@@ -56,9 +58,9 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/apache/arrow/go/v14/arrow"
-	"github.com/apache/arrow/go/v14/arrow/array"
-	"github.com/apache/arrow/go/v14/arrow/cdata"
+	"github.com/apache/arrow/go/v17/arrow"
+	"github.com/apache/arrow/go/v17/arrow/array"
+	"github.com/apache/arrow/go/v17/arrow/cdata"
 )
 
 // Arrow exposes DuckDB Apache Arrow interface.

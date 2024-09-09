@@ -46,14 +46,36 @@ func (s *stmt) NumInput() int {
 }
 
 func (s *stmt) bind(args []driver.NamedValue) error {
-	if s.NumInput() != len(args) {
+	if s.NumInput() > len(args) {
 		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
 
 	// FIXME (feature): we can't pass nested types as parameters (bind_value) yet
 
-	for i, v := range args {
-		switch v := v.Value.(type) {
+	// relaxed length check allow for unused parameters.
+	for i := 0; i < s.NumInput(); i++ {
+		name := C.duckdb_parameter_name(*s.stmt, C.idx_t(i+1))
+		paramName := C.GoString(name)
+		C.duckdb_free(unsafe.Pointer(name))
+
+		// fallback on index position
+		arg := args[i]
+
+		// override with ordinal if set
+		for _, v := range args {
+			if v.Ordinal == i+1 {
+				arg = v
+			}
+		}
+
+		// override with name if set
+		for _, v := range args {
+			if v.Name == paramName {
+				arg = v
+			}
+		}
+
+		switch v := arg.Value.(type) {
 		case bool:
 			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), C.bool(v)); rv == C.DuckDBError {
 				return errCouldNotBind
@@ -199,9 +221,9 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 
 	var pendingRes C.duckdb_pending_result
 	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
-		dbErr := C.GoString(C.duckdb_pending_error(pendingRes))
+		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))
 		C.duckdb_destroy_pending(&pendingRes)
-		return nil, errors.New(dbErr)
+		return nil, dbErr
 	}
 	defer C.duckdb_destroy_pending(&pendingRes)
 
@@ -232,9 +254,9 @@ func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 			return nil, ctx.Err()
 		}
 
-		err := C.GoString(C.duckdb_result_error(&res))
+		err := getDuckDBError(C.GoString(C.duckdb_result_error(&res)))
 		C.duckdb_destroy_result(&res)
-		return nil, errors.New(err)
+		return nil, err
 	}
 
 	return &res, nil
