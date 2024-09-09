@@ -127,12 +127,11 @@ func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk, writable
 	return err
 }
 
-// InitFromDuckVector initializes a data chunk by providing a duckdb vector.
-func (chunk *DataChunk) InitFromDuckVector(duckdbVector C.duckdb_vector) error {
+func (chunk *DataChunk) initFromDuckVector(duckdbVector C.duckdb_vector, writable bool) error {
 	columnCount := 1
 	chunk.columns = make([]vector, columnCount)
 	chunk.columns[0].duckdbVector = duckdbVector
-	chunk.columns[0].getChildVectors(duckdbVector)
+	chunk.columns[0].getChildVectors(duckdbVector, writable)
 
 	// Initialize the callback function to read and write values.
 	logicalType := C.duckdb_vector_get_column_type(duckdbVector)

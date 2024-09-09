@@ -42,6 +42,7 @@ func TestScalarUDFPrimitive(t *testing.T) {
 
 	var udf scalarUDF
 	err = RegisterScalarUDF(c, "my_sum", &udf)
+	require.NoError(t, err)
 
 	var msg int
 	row := db.QueryRow(`SELECT my_sum(10, 42) AS msg`)

@@ -16,6 +16,7 @@ import "C"
 import (
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"runtime/cgo"
 	"strings"
 	"unsafe"
@@ -47,13 +48,13 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
-	if err = inputChunk.InitFromDuckDataChunk(input); err != nil {
+	if err = inputChunk.initFromDuckDataChunk(input, false); err != nil {
 		scalarFunction.SetError(err)
 		return
 	}
 	// Initialize the output chunk.
 	var outputChunk DataChunk
-	if err = outputChunk.InitFromDuckVector(output); err != nil {
+	if err = outputChunk.initFromDuckVector(output, true); err != nil {
 		scalarFunction.SetError(err)
 		return
 	}
@@ -144,7 +145,9 @@ func RegisterScalarUDF(c *sql.Conn, name string, function ScalarFunction) error 
 		state := C.duckdb_register_scalar_function(driverConn.duckdbCon, scalarFunction)
 		C.duckdb_destroy_scalar_function(&scalarFunction)
 		if state == C.DuckDBError {
-			return getError(errDriver, nil)
+			// TODO: return failure to create scalar function
+			// return getError(errDriver, nil)
+			return errors.New("TODO create error")
 		}
 		return nil
 	})
