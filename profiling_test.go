@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestProfiling(t *testing.T) {
@@ -40,7 +41,7 @@ func TestProfiling(t *testing.T) {
 	// Verify the metrics.
 	// TODO: currently failing due to C API bug.
 	fmt.Println(info) // Dummy print to use variable.
-	//require.NotEmpty(t, info.Metrics, "metrics must not be empty")
-	//require.NotEmpty(t, info.Children, "children must not be empty")
-	//require.NotEmpty(t, info.Children[0].Metrics, "child metrics must not be empty")
+	// require.NotEmpty(t, info.Metrics, "metrics must not be empty")
+	// require.NotEmpty(t, info.Children, "children must not be empty")
+	// require.NotEmpty(t, info.Children[0].Metrics, "child metrics must not be empty")
 }

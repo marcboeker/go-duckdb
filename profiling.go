@@ -4,6 +4,7 @@ package duckdb
 #include <duckdb.h>
 */
 import "C"
+
 import (
 	"unsafe"
 )
