@@ -61,7 +61,7 @@ const (
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
-	tryOtherFuncErrMsg     = "please try using this function instead"
+	tryOtherFuncErrMsg     = "please try this function instead"
 	structFieldCountErrMsg = "name count must match the type count"
 	indexErrMsg            = "index"
 	unknownTypeErrMsg      = "unknown type"
