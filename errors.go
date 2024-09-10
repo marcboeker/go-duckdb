@@ -125,6 +125,7 @@ const (
 	ErrorTypeMissingExtension // Thrown when an extension is used but not loaded
 	ErrorTypeAutoLoad         // Thrown when an extension is used but not loaded
 	ErrorTypeSequence
+	ErrorTypeInvalidConfiguration // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
 )
 
 var errorPrefixMap = map[string]ErrorType{
@@ -170,6 +171,7 @@ var errorPrefixMap = map[string]ErrorType{
 	"Missing Extension Error":      ErrorTypeMissingExtension,
 	"Extension Autoloading Error":  ErrorTypeAutoLoad,
 	"Sequence Error":               ErrorTypeSequence,
+	"Invalid Configuration Error":  ErrorTypeInvalidConfiguration,
 }
 
 type Error struct {
