@@ -302,6 +302,43 @@ func TestErrAPISetValue(t *testing.T) {
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
 
+func TestErrProfiling(t *testing.T) {
+	t.Parallel()
+
+	t.Run(errInvalidCon.Error(), func(t *testing.T) {
+		var con driver.Conn
+		_, err := GetProfilingInfo(con)
+		testError(t, err, errInvalidCon.Error())
+	})
+
+	t.Run(errClosedCon.Error(), func(t *testing.T) {
+		c, err := NewConnector("", nil)
+		require.NoError(t, err)
+
+		con, err := c.Connect(context.Background())
+		require.NoError(t, err)
+		require.NoError(t, con.Close())
+
+		_, err = GetProfilingInfo(con)
+		testError(t, err, errClosedCon.Error())
+		require.NoError(t, c.Close())
+	})
+
+	t.Run(errProfilingInfoEmpty.Error(), func(t *testing.T) {
+		c, err := NewConnector("", nil)
+		require.NoError(t, err)
+
+		con, err := c.Connect(context.Background())
+		require.NoError(t, err)
+
+		_, err = GetProfilingInfo(con)
+		testError(t, err, errProfilingInfoEmpty.Error())
+
+		require.NoError(t, con.Close())
+		require.NoError(t, c.Close())
+	})
+}
+
 func TestDuckDBErrors(t *testing.T) {
 	db := openDB(t)
 	defer db.Close()

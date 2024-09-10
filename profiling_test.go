@@ -9,6 +9,8 @@ import (
 )
 
 func TestProfiling(t *testing.T) {
+	t.Parallel()
+
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
 
@@ -24,23 +26,21 @@ func TestProfiling(t *testing.T) {
 	res, err := con.QueryContext(context.Background(), "SELECT range AS i FROM range(100) ORDER BY i")
 	require.NoError(t, err)
 
-	//var info ProfilingInfo
+	var info ProfilingInfo
 	err = con.Raw(func(driverCon any) error {
-		info, errGetInfo := GetProfilingInfo(driverCon)
-		require.NoError(t, errGetInfo)
-		fmt.Println(info)
-		return nil
+		info, err = GetProfilingInfo(driverCon)
+		return err
 	})
-
-	//info, err := GetProfilingInfo(con)
-	//require.NoError(t, err)
+	require.NoError(t, err)
 
 	require.NoError(t, res.Close())
 	require.NoError(t, con.Close())
 	require.NoError(t, db.Close())
 
-	// Verify our metrics.
+	// Verify the metrics.
+	// TODO: currently failing due to C API bug.
+	fmt.Println(info) // Dummy print to use variable.
 	//require.NotEmpty(t, info.Metrics, "metrics must not be empty")
 	//require.NotEmpty(t, info.Children, "children must not be empty")
-	//fmt.Println(info)
+	//require.NotEmpty(t, info.Children[0].Metrics, "child metrics must not be empty")
 }
