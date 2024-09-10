@@ -12,6 +12,25 @@ import (
 	"unsafe"
 )
 
+const (
+	TYPE_INVALID  TypeEnum = 0
+	TYPE_BOOLEAN  TypeEnum = 1
+	TYPE_TINYINT  TypeEnum = 2
+	TYPE_SMALLINT TypeEnum = 3
+)
+
+var typeMap = map[TypeEnum]C.duckdb_type{
+	TYPE_INVALID:  C.DUCKDB_TYPE_INVALID,
+	TYPE_BOOLEAN:  C.DUCKDB_TYPE_BOOLEAN,
+	TYPE_TINYINT:  C.DUCKDB_TYPE_TINYINT,
+	TYPE_SMALLINT: C.DUCKDB_TYPE_SMALLINT,
+}
+
+func NewTypeAlt(enum TypeEnum) (Type, error) {
+	// TODO: error, if INVALID, not in MAP, or complex (needs its own function).
+	return Type{baseType: baseType{duckdbType: typeMap[enum]}}, nil
+}
+
 // Type represents a DuckDB type.
 type Type struct {
 	baseType
