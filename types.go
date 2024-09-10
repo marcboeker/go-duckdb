@@ -60,8 +60,6 @@ var duckdbTypeMap = map[C.duckdb_type]string{
 	C.DUCKDB_TYPE_TIMESTAMP_TZ: "TIMESTAMPTZ",
 }
 
-type TypeEnum int
-
 type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }

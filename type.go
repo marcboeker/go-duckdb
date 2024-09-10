@@ -12,6 +12,8 @@ import (
 	"unsafe"
 )
 
+type TypeEnum int
+
 const (
 	TYPE_INVALID  TypeEnum = 0
 	TYPE_BOOLEAN  TypeEnum = 1
