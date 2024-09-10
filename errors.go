@@ -60,20 +60,22 @@ var (
 	errAPI        = errors.New("API error")
 	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
 
-	errParseDSN  = errors.New("could not parse DSN for database")
-	errOpen      = errors.New("could not open database")
-	errSetConfig = errors.New("could not set invalid or local option for global database config")
+	errParseDSN   = errors.New("could not parse DSN for database")
+	errOpen       = errors.New("could not open database")
+	errSetConfig  = errors.New("could not set invalid or local option for global database config")
+	errInvalidCon = errors.New("not a DuckDB driver connection")
+	errClosedCon  = errors.New("closed connection")
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 
-	errAppenderInvalidCon       = errors.New("could not create appender: not a DuckDB driver connection")
-	errAppenderClosedCon        = errors.New("could not create appender: appender creation on a closed connection")
 	errAppenderCreation         = errors.New("could not create appender")
 	errAppenderDoubleClose      = errors.New("could not close appender: already closed")
 	errAppenderAppendRow        = errors.New("could not append row")
 	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
+
+	errProfilingInfoEmpty = errors.New("no profiling information available for this connection")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")
