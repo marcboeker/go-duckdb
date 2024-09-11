@@ -420,7 +420,7 @@ func TestGetDuckDBError(t *testing.T) {
 			Msg:  "Error: xxx",
 			Type: ErrorTypeUnknownType,
 		},
-		// next two for the prefix testing
+		// next 3 cases for the prefix testing
 		{
 			Msg:  "Invalid Error: xxx",
 			Type: ErrorTypeInvalid,
@@ -428,6 +428,10 @@ func TestGetDuckDBError(t *testing.T) {
 		{
 			Msg:  "Invalid Input Error: xxx",
 			Type: ErrorTypeInvalidInput,
+		},
+		{
+			Msg:  "Invalid Configuration Error: xxx",
+			Type: ErrorTypeInvalidConfiguration,
 		},
 	}
 
