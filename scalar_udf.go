@@ -34,6 +34,7 @@ type ScalarFunction interface {
 func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk, output C.duckdb_vector) {
 	// info is a void* pointer to our ScalarFunction.
 	h := *(*cgo.Handle)(unsafe.Pointer(info))
+	// If we hardcoded h = 1 here, it no longer segfaults.
 	scalarFunction := h.Value().(ScalarFunction)
 
 	var err error
