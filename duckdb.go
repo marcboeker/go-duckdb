@@ -5,7 +5,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -58,7 +57,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	defer C.duckdb_destroy_config(&config)
 
 	connStr := C.CString(getConnString(dsn))
-	defer C.free(unsafe.Pointer(connStr))
+	defer C.duckdb_free(unsafe.Pointer(connStr))
 
 	var outError *C.char
 	defer C.duckdb_free(unsafe.Pointer(outError))
@@ -143,10 +142,10 @@ func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 
 func setConfigOption(config C.duckdb_config, name string, option string) error {
 	cName := C.CString(name)
-	defer C.free(unsafe.Pointer(cName))
+	defer C.duckdb_free(unsafe.Pointer(cName))
 
 	cOption := C.CString(option)
-	defer C.free(unsafe.Pointer(cOption))
+	defer C.duckdb_free(unsafe.Pointer(cOption))
 
 	state := C.duckdb_set_config(config, cName, cOption)
 	if state == C.DuckDBError {

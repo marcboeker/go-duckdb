@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -532,7 +531,7 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 	for i := 0; i < childCount; i++ {
 		childName := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
 		names = append(names, C.GoString(childName))
-		C.free(unsafe.Pointer(childName))
+		C.duckdb_free(unsafe.Pointer(childName))
 	}
 
 	vec.childVectors = make([]vector, childCount)

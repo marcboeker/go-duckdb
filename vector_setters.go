@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -99,7 +98,7 @@ func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	// This setter also writes BLOBs.
 	cStr := C.CString(str)
 	C.duckdb_vector_assign_string_element_len(vec.duckdbVector, rowIdx, cStr, C.idx_t(len(str)))
-	C.free(unsafe.Pointer(cStr))
+	C.duckdb_free(unsafe.Pointer(cStr))
 }
 
 func (vec *vector) setDecimal(t Type, rowIdx C.idx_t, val any) {

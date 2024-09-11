@@ -175,9 +175,8 @@ func logicalTypeName(logicalType C.duckdb_logical_type) string {
 		return "ENUM"
 	case TYPE_LIST:
 		childType := C.duckdb_list_type_child_type(logicalType)
-		name := logicalTypeName(childType) + "[]"
-		C.duckdb_destroy_logical_type(&childType)
-		return name
+		defer C.duckdb_destroy_logical_type(&childType)
+		return logicalTypeName(childType) + "[]"
 	case TYPE_STRUCT:
 		return logicalTypeNameStruct(logicalType)
 	case TYPE_MAP:

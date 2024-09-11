@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-   #include <stdlib.h>
    #include <duckdb.h>
 */
 import "C"
@@ -13,9 +12,9 @@ import (
 )
 
 type baseTypeInfo struct {
-	// The data type of the vector.
+	// The data type.
 	t Type
-	// The names slice serves different purposes depending on the vector's type.
+	// This slice serves different purposes.
 	// - STRUCT child names.
 	// - ENUM dictionary names.
 	names []string
@@ -30,8 +29,6 @@ type TypeInfo struct {
 	baseTypeInfo
 	// The child type information of nested types.
 	childTypes []TypeInfo
-	// The dictionary names for ENUM types.
-	dict []string
 }
 
 type vectorTypeInfo struct {
@@ -81,8 +78,8 @@ func EnumTypeInfo(dict []string) (TypeInfo, error) {
 	}
 
 	typeInfo := TypeInfo{baseTypeInfo: baseTypeInfo{t: TYPE_ENUM}}
-	typeInfo.dict = make([]string, len(dict))
-	copy(typeInfo.dict, dict)
+	typeInfo.names = make([]string, len(dict))
+	copy(typeInfo.names, dict)
 	return typeInfo, nil
 }
 
@@ -188,9 +185,9 @@ func (typeInfo *TypeInfo) logicalEnumType() C.duckdb_logical_type {
 	logicalType := C.duckdb_create_enum_type(cNames, C.idx_t(count))
 
 	for i := 0; i < count; i++ {
-		C.free(unsafe.Pointer((*names)[i]))
+		C.duckdb_free(unsafe.Pointer((*names)[i]))
 	}
-	C.free(unsafe.Pointer(names))
+	C.duckdb_free(unsafe.Pointer(names))
 	return logicalType
 }
 
@@ -220,10 +217,10 @@ func (typeInfo *TypeInfo) logicalStructType() C.duckdb_logical_type {
 
 	for i := 0; i < count; i++ {
 		C.duckdb_destroy_logical_type(&types[i])
-		C.free(unsafe.Pointer((*names)[i]))
+		C.duckdb_free(unsafe.Pointer((*names)[i]))
 	}
-	C.free(unsafe.Pointer(types))
-	C.free(unsafe.Pointer(names))
+	C.duckdb_free(unsafe.Pointer(types))
+	C.duckdb_free(unsafe.Pointer(names))
 
 	return logicalType
 }
@@ -238,6 +235,7 @@ func (typeInfo *TypeInfo) logicalMapType() C.duckdb_logical_type {
 }
 
 func deleteLogicalType(logicalType C.duckdb_logical_type) {
+	// FIXME: This is a placeholder for testing until we can test the logical types with UDFs.
 	C.duckdb_destroy_logical_type(&logicalType)
 }
 

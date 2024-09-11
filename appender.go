@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -43,11 +42,11 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	var cSchema *C.char
 	if schema != "" {
 		cSchema = C.CString(schema)
-		defer C.free(unsafe.Pointer(cSchema))
+		defer C.duckdb_free(unsafe.Pointer(cSchema))
 	}
 
 	cTable := C.CString(table)
-	defer C.free(unsafe.Pointer(cTable))
+	defer C.duckdb_free(unsafe.Pointer(cTable))
 
 	var duckdbAppender C.duckdb_appender
 	state := C.duckdb_appender_create(con.duckdbCon, cSchema, cTable, &duckdbAppender)
@@ -229,5 +228,5 @@ func destroyTypeSlice(ptr unsafe.Pointer, slice []C.duckdb_logical_type) {
 	for _, t := range slice {
 		C.duckdb_destroy_logical_type(&t)
 	}
-	C.free(ptr)
+	C.duckdb_free(ptr)
 }

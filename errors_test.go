@@ -324,6 +324,12 @@ func TestErrPrimitiveTypeInfo(t *testing.T) {
 		_, err := PrimitiveTypeInfo(unsupported)
 		testError(t, err, errAPI.Error(), unsupportedTypeErrMsg)
 	}
+
+	// Invalid type information.
+	// FIXME: Remove this once we can test this code path with UDFs.
+	var invalidInfo TypeInfo
+	_, err := invalidInfo.logicalType()
+	require.ErrorContains(t, err, unsupportedTypeErrMsg)
 }
 
 func TestErrNestedTypeInfo(t *testing.T) {
