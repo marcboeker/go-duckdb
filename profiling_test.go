@@ -24,7 +24,7 @@ func TestProfiling(t *testing.T) {
 	_, err = con.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
 	require.NoError(t, err)
 
-	res, err := con.QueryContext(context.Background(), "SELECT range AS i FROM range(100) ORDER BY i")
+	res, err := con.QueryContext(context.Background(), `SELECT range AS i FROM range(100) ORDER BY i`)
 	require.NoError(t, err)
 
 	var info ProfilingInfo
@@ -32,6 +32,9 @@ func TestProfiling(t *testing.T) {
 		info, err = GetProfilingInfo(driverCon)
 		return err
 	})
+	require.NoError(t, err)
+
+	_, err = con.ExecContext(context.Background(), `PRAGMA disable_profiling`)
 	require.NoError(t, err)
 
 	require.NoError(t, res.Close())

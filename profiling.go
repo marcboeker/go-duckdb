@@ -9,11 +9,19 @@ import (
 	"unsafe"
 )
 
+// ProfilingInfo is a recursive type containing metrics for each node in DuckDB's query plan.
+// There are two types of nodes: the QUERY_ROOT and OPERATOR nodes.
+// The QUERY_ROOT refers exclusively to the top-level node; its metrics are measured over the entire query.
+// The OPERATOR nodes refer to the individual operators in the query plan.
 type ProfilingInfo struct {
-	Metrics  map[string]string
+	// Metrics contains all key-value pairs of the current node.
+	// The key represents the name and corresponds to the measured value.
+	Metrics map[string]string
+	// Children contains all children of the node and their respective metrics.
 	Children []ProfilingInfo
 }
 
+// GetProfilingInfo obtains all available metrics set by the current connection.
 func GetProfilingInfo(driverConn any) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
 
