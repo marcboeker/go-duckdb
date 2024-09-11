@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -33,20 +32,20 @@ func getPrimitive[T any](vec *vector, rowIdx C.idx_t) T {
 	return xs[rowIdx]
 }
 
-func (vec *vector) getTS(duckdbType C.duckdb_type, rowIdx C.idx_t) time.Time {
+func (vec *vector) getTS(t Type, rowIdx C.idx_t) time.Time {
 	val := getPrimitive[C.duckdb_timestamp](vec, rowIdx)
 	micros := val.micros
 
-	switch duckdbType {
-	case C.DUCKDB_TYPE_TIMESTAMP:
+	switch t {
+	case TYPE_TIMESTAMP:
 		return time.UnixMicro(int64(micros)).UTC()
-	case C.DUCKDB_TYPE_TIMESTAMP_S:
+	case TYPE_TIMESTAMP_S:
 		return time.Unix(int64(micros), 0).UTC()
-	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+	case TYPE_TIMESTAMP_MS:
 		return time.UnixMilli(int64(micros)).UTC()
-	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+	case TYPE_TIMESTAMP_NS:
 		return time.Unix(0, int64(micros)).UTC()
-	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP_TZ:
 		return time.UnixMicro(int64(micros)).UTC()
 	}
 
@@ -92,25 +91,25 @@ func (vec *vector) getCString(rowIdx C.idx_t) any {
 		blob = C.GoBytes(unsafe.Pointer(cStr.ptr), C.int(cStr.length))
 	}
 
-	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
+	if vec.t == TYPE_VARCHAR {
 		return string(blob)
 	}
 	return blob
 }
 
-func (vec *vector) getDecimal(internalType C.duckdb_type, rowIdx C.idx_t) Decimal {
+func (vec *vector) getDecimal(t Type, rowIdx C.idx_t) Decimal {
 	var val *big.Int
-	switch internalType {
-	case C.DUCKDB_TYPE_SMALLINT:
+	switch t {
+	case TYPE_SMALLINT:
 		v := getPrimitive[int16](vec, rowIdx)
 		val = big.NewInt(int64(v))
-	case C.DUCKDB_TYPE_INTEGER:
+	case TYPE_INTEGER:
 		v := getPrimitive[int32](vec, rowIdx)
 		val = big.NewInt(int64(v))
-	case C.DUCKDB_TYPE_BIGINT:
+	case TYPE_BIGINT:
 		v := getPrimitive[int64](vec, rowIdx)
 		val = big.NewInt(v)
-	case C.DUCKDB_TYPE_HUGEINT:
+	case TYPE_HUGEINT:
 		v := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
 		val = hugeIntToNative(C.duckdb_hugeint{
 			lower: v.lower,
@@ -121,16 +120,16 @@ func (vec *vector) getDecimal(internalType C.duckdb_type, rowIdx C.idx_t) Decima
 	return Decimal{Width: vec.width, Scale: vec.scale, Value: val}
 }
 
-func (vec *vector) getEnum(internalType C.duckdb_type, rowIdx C.idx_t) string {
+func (vec *vector) getEnum(t Type, rowIdx C.idx_t) string {
 	var idx uint64
-	switch internalType {
-	case C.DUCKDB_TYPE_UTINYINT:
+	switch t {
+	case TYPE_UTINYINT:
 		idx = uint64(getPrimitive[uint8](vec, rowIdx))
-	case C.DUCKDB_TYPE_USMALLINT:
+	case TYPE_USMALLINT:
 		idx = uint64(getPrimitive[uint16](vec, rowIdx))
-	case C.DUCKDB_TYPE_UINTEGER:
+	case TYPE_UINTEGER:
 		idx = uint64(getPrimitive[uint32](vec, rowIdx))
-	case C.DUCKDB_TYPE_UBIGINT:
+	case TYPE_UBIGINT:
 		idx = getPrimitive[uint64](vec, rowIdx)
 	}
 
@@ -145,11 +144,11 @@ func (vec *vector) getEnum(internalType C.duckdb_type, rowIdx C.idx_t) string {
 func (vec *vector) getList(rowIdx C.idx_t) []any {
 	entry := getPrimitive[duckdb_list_entry_t](vec, rowIdx)
 	slice := make([]any, 0, entry.length)
-	childVector := &vec.childVectors[0]
+	child := &vec.childVectors[0]
 
 	// Fill the slice with all child values.
 	for i := C.idx_t(0); i < entry.length; i++ {
-		val := childVector.getFn(childVector, i+entry.offset)
+		val := child.getFn(child, i+entry.offset)
 		slice = append(slice, val)
 	}
 	return slice
@@ -158,9 +157,9 @@ func (vec *vector) getList(rowIdx C.idx_t) []any {
 func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
 	m := map[string]any{}
 	for i := 0; i < len(vec.childVectors); i++ {
-		childVector := &vec.childVectors[i]
-		val := childVector.getFn(childVector, rowIdx)
-		m[vec.childNames[i]] = val
+		child := &vec.childVectors[i]
+		val := child.getFn(child, rowIdx)
+		m[vec.names[i]] = val
 	}
 	return m
 }

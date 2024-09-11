@@ -297,16 +297,89 @@ func TestErrAppendNestedList(t *testing.T) {
 }
 
 func TestErrAPISetValue(t *testing.T) {
+	t.Parallel()
+
 	var chunk DataChunk
 	err := chunk.SetValue(1, 42, "hello")
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
 
+func TestErrPrimitiveTypeInfo(t *testing.T) {
+	t.Parallel()
+
+	var incorrectTypes []Type
+	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP)
+
+	for _, incorrect := range incorrectTypes {
+		_, err := PrimitiveTypeInfo(incorrect)
+		testError(t, err, errAPI.Error(), tryOtherFuncErrMsg)
+	}
+
+	var unsupportedTypes []Type
+	for k := range unsupportedTypeToStringMap {
+		unsupportedTypes = append(unsupportedTypes, k)
+	}
+
+	for _, unsupported := range unsupportedTypes {
+		_, err := PrimitiveTypeInfo(unsupported)
+		testError(t, err, errAPI.Error(), unsupportedTypeErrMsg)
+	}
+
+	// Invalid type information.
+	// FIXME: Remove this once we can test this code path with UDFs.
+	var invalidInfo TypeInfo
+	_, err := invalidInfo.logicalType()
+	require.ErrorContains(t, err, unsupportedTypeErrMsg)
+}
+
+func TestErrNestedTypeInfo(t *testing.T) {
+	t.Parallel()
+
+	// ENUM
+	var emptyNames []string
+	_, err := EnumTypeInfo(emptyNames)
+	testError(t, err, errAPI.Error(), errEmptySlice.Error())
+
+	// LIST
+	var invalidInfo TypeInfo
+	_, err = ListTypeInfo(invalidInfo)
+	testError(t, err, errAPI.Error(), errInvalidChildType.Error())
+
+	// STRUCT
+	validInfo, err := PrimitiveTypeInfo(TYPE_BIGINT)
+	require.NoError(t, err)
+
+	names := []string{"hello", "world"}
+	childInfos := []TypeInfo{validInfo}
+	var emptyInfos []TypeInfo
+
+	_, err = StructTypeInfo(emptyInfos, names)
+	testError(t, err, errAPI.Error(), errEmptySlice.Error())
+	_, err = StructTypeInfo(childInfos, emptyNames)
+	testError(t, err, errAPI.Error(), errEmptySlice.Error())
+
+	_, err = StructTypeInfo(childInfos, names)
+	testError(t, err, errAPI.Error(), structFieldCountErrMsg)
+
+	invalidNames := []string{""}
+	invalidInfos := []TypeInfo{invalidInfo, invalidInfo}
+
+	_, err = StructTypeInfo(invalidInfos, names)
+	testError(t, err, errAPI.Error(), errInvalidChildType.Error())
+	_, err = StructTypeInfo(childInfos, invalidNames)
+	testError(t, err, errAPI.Error(), errEmptyName.Error())
+
+	// MAP
+	_, err = MapTypeInfo(invalidInfo, validInfo)
+	testError(t, err, errAPI.Error(), errInvalidKeyType.Error())
+	_, err = MapTypeInfo(validInfo, invalidInfo)
+	testError(t, err, errAPI.Error(), errInvalidValueType.Error())
+}
+
 func TestDuckDBErrors(t *testing.T) {
 	db := openDB(t)
-	defer db.Close()
-	createTable(db, t, `CREATE TABLE duckdberror_test(bar VARCHAR UNIQUE, baz INT32, u_1 UNION("string" VARCHAR))`)
-	_, err := db.Exec("INSERT INTO duckdberror_test(bar, baz) VALUES('bar', 0)")
+	createTable(db, t, `CREATE TABLE duckdb_error_test(bar VARCHAR UNIQUE, baz INT32, u_1 UNION("string" VARCHAR))`)
+	_, err := db.Exec(`INSERT INTO duckdb_error_test(bar, baz) VALUES ('bar', 0)`)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -314,62 +387,64 @@ func TestDuckDBErrors(t *testing.T) {
 		errTyp ErrorType
 	}{
 		{
-			tpl:    "SELECT * FROM not_exist WHERE baz=0",
+			tpl:    `SELECT * FROM not_exist WHERE baz=0`,
 			errTyp: ErrorTypeCatalog,
 		},
 		{
-			tpl:    "SELECT * FROM duckdberror_test WHERE col=?",
+			tpl:    `SELECT * FROM duckdb_error_test WHERE col=?`,
 			errTyp: ErrorTypeBinder,
 		},
 		{
-			tpl:    "SELEC * FROM duckdberror_test baz=0",
+			tpl:    `SELEC * FROM duckdb_error_test baz=0`,
 			errTyp: ErrorTypeParser,
 		},
 		{
-			tpl:    "INSERT INTO duckdberror_test(bar, baz) VALUES('bar', 1)",
+			tpl:    `INSERT INTO duckdb_error_test(bar, baz) VALUES ('bar', 1)`,
 			errTyp: ErrorTypeConstraint,
 		},
 		{
-			tpl:    "INSERT INTO duckdberror_test(bar, baz) VALUES('foo', 18446744073709551615)",
+			tpl:    `INSERT INTO duckdb_error_test(bar, baz) VALUES ('foo', 18446744073709551615)`,
 			errTyp: ErrorTypeConversion,
 		},
 		{
-			tpl:    "INSTALL not_exist",
+			tpl:    `INSTALL not_exist`,
 			errTyp: ErrorTypeHTTP,
 		},
 		{
-			tpl:    "LOAD not_exist",
+			tpl:    `LOAD not_exist`,
 			errTyp: ErrorTypeIO,
 		},
 		{
-			tpl:    "SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 3)",
+			tpl:    `SELECT array_length(array_value(array_value(1, 2, 2), array_value(3, 4, 3)), 3)`,
 			errTyp: ErrorTypeOutOfRange,
 		},
 		{
-			tpl:    "SELECT '010110'::BIT & '11000'::BIT",
+			tpl:    `SELECT '010110'::BIT & '11000'::BIT`,
 			errTyp: ErrorTypeInvalidInput,
 		},
 		{
-			tpl:    "SET external_threads=-1",
+			tpl:    `SET external_threads=-1`,
 			errTyp: ErrorTypeSyntax,
 		},
 		{
-			tpl:    "CREATE UNIQUE INDEX idx ON duckdberror_test(u_1)",
+			tpl:    `CREATE UNIQUE INDEX idx ON duckdb_error_test(u_1)`,
 			errTyp: ErrorTypeInvalidType,
 		},
 	}
 	for _, tc := range testCases {
-		_, err := db.Exec(tc.tpl)
-		de, ok := err.(*Error)
+		_, err = db.Exec(tc.tpl)
+		var de *Error
+		ok := errors.As(err, &de)
 		if !ok {
 			require.Fail(t, "error type is not (*duckdb.Error)", "tql: %s\ngot: %#v", tc.tpl, err)
 		}
 		require.Equal(t, de.Type, tc.errTyp, "tpl: %s\nactual error msg: %s", tc.tpl, de.Msg)
 	}
+
+	require.NoError(t, db.Close())
 }
 
-func TestGetDuckDBError(t *testing.T) {
-	// only for the corner cases
+func TestDuckDBErrorsCornerCases(t *testing.T) {
 	testCases := []*Error{
 		{
 			Msg:  "",
@@ -383,7 +458,7 @@ func TestGetDuckDBError(t *testing.T) {
 			Msg:  "Error: xxx",
 			Type: ErrorTypeUnknownType,
 		},
-		// next two for the prefix testing
+		// Prefix testing.
 		{
 			Msg:  "Invalid Error: xxx",
 			Type: ErrorTypeInvalid,
@@ -392,10 +467,15 @@ func TestGetDuckDBError(t *testing.T) {
 			Msg:  "Invalid Input Error: xxx",
 			Type: ErrorTypeInvalidInput,
 		},
+		{
+			Msg:  "Invalid Configuration Error: xxx",
+			Type: ErrorTypeInvalidConfiguration,
+		},
 	}
 
 	for _, tc := range testCases {
-		err := getDuckDBError(tc.Msg).(*Error)
+		var err *Error
+		errors.As(getDuckDBError(tc.Msg), &err)
 		require.Equal(t, tc, err)
 	}
 }

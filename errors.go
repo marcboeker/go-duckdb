@@ -26,10 +26,6 @@ func structFieldError(actual string, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
 }
 
-func columnError(err error, colIdx int) error {
-	return fmt.Errorf("%w: %s: %d", err, columnErrMsg, colIdx)
-}
-
 func columnCountError(actual int, expected int) error {
 	return fmt.Errorf("%s: expected %d, got %d", columnCountErrMsg, expected, actual)
 }
@@ -45,15 +41,30 @@ func invalidatedAppenderError(err error) error {
 	return fmt.Errorf("%w: %s", err, invalidatedAppenderMsg)
 }
 
+func tryOtherFuncError(hint string) error {
+	return fmt.Errorf("%s: %s", tryOtherFuncErrMsg, hint)
+}
+
+func structFieldCountError(actual int, expected int) error {
+	return fmt.Errorf("%s: expected %d, got %d", structFieldCountErrMsg, expected, actual)
+}
+
+func addIndexToError(err error, idx int) error {
+	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
+}
+
 const (
 	driverErrMsg           = "database/sql/driver"
 	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
 	structFieldErrMsg      = "invalid STRUCT field"
-	columnErrMsg           = "column index"
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
+	tryOtherFuncErrMsg     = "please try this function instead"
+	structFieldCountErrMsg = "name count must match the type count"
+	indexErrMsg            = "index"
+	unknownTypeErrMsg      = "unknown type"
 )
 
 var (
@@ -74,6 +85,12 @@ var (
 	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
+
+	errEmptySlice       = errors.New("empty slice")
+	errInvalidChildType = errors.New("INVALID child type")
+	errEmptyName        = errors.New("empty name")
+	errInvalidKeyType   = errors.New("INVALID key type")
+	errInvalidValueType = errors.New("INVALID value type")
 
 	errScalarUDFNoName = errors.New("could not create scalar UDF: missing name")
 
@@ -127,6 +144,7 @@ const (
 	ErrorTypeMissingExtension // Thrown when an extension is used but not loaded
 	ErrorTypeAutoLoad         // Thrown when an extension is used but not loaded
 	ErrorTypeSequence
+	ErrorTypeInvalidConfiguration // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
 )
 
 var errorPrefixMap = map[string]ErrorType{
@@ -172,6 +190,7 @@ var errorPrefixMap = map[string]ErrorType{
 	"Missing Extension Error":      ErrorTypeMissingExtension,
 	"Extension Autoloading Error":  ErrorTypeAutoLoad,
 	"Sequence Error":               ErrorTypeSequence,
+	"Invalid Configuration Error":  ErrorTypeInvalidConfiguration,
 }
 
 type Error struct {
