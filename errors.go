@@ -86,7 +86,7 @@ var (
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
 
-	errEmptyDict        = errors.New("empty dictionary")
+	errEmptySlice       = errors.New("empty slice")
 	errInvalidChildType = errors.New("INVALID child type")
 	errEmptyName        = errors.New("empty name")
 	errInvalidKeyType   = errors.New("INVALID key type")

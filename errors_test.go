@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -298,32 +297,77 @@ func TestErrAppendNestedList(t *testing.T) {
 }
 
 func TestErrAPISetValue(t *testing.T) {
+	t.Parallel()
+
 	var chunk DataChunk
 	err := chunk.SetValue(1, 42, "hello")
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
 
-func TestErrPrimitiveType(t *testing.T) {
-	var incorrectTypes []reflect.Kind
-	incorrectTypes = append(incorrectTypes, reflect.Array, reflect.Slice, reflect.Struct, reflect.Map)
+func TestErrPrimitiveTypeInfo(t *testing.T) {
+	t.Parallel()
 
-	for _, incorrectType := range incorrectTypes {
-		_, err := NewPrimitiveType(incorrectType)
+	var incorrectTypes []Type
+	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP)
+
+	for _, incorrect := range incorrectTypes {
+		_, err := PrimitiveTypeInfo(incorrect)
 		testError(t, err, errAPI.Error(), tryOtherFuncErrMsg)
 	}
 
-	var unsupportedTypes []reflect.Kind
-	unsupportedTypes = append(unsupportedTypes, reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128,
-		reflect.Chan, reflect.Func, reflect.Interface, reflect.Pointer, reflect.UnsafePointer)
+	var unsupportedTypes []Type
+	for k := range unsupportedTypeToStringMap {
+		unsupportedTypes = append(unsupportedTypes, k)
+	}
 
-	for _, unsupportedType := range unsupportedTypes {
-		_, err := NewPrimitiveType(unsupportedType)
+	for _, unsupported := range unsupportedTypes {
+		_, err := PrimitiveTypeInfo(unsupported)
 		testError(t, err, errAPI.Error(), unsupportedTypeErrMsg)
 	}
 }
 
-func TestErrNestedType(t *testing.T) {
-	// TODO
+func TestErrNestedTypeInfo(t *testing.T) {
+	t.Parallel()
+
+	// ENUM
+	var emptyNames []string
+	_, err := EnumTypeInfo(emptyNames)
+	testError(t, err, errAPI.Error(), errEmptySlice.Error())
+
+	// LIST
+	var invalidInfo TypeInfo
+	_, err = ListTypeInfo(invalidInfo)
+	testError(t, err, errAPI.Error(), errInvalidChildType.Error())
+
+	// STRUCT
+	validInfo, err := PrimitiveTypeInfo(TYPE_BIGINT)
+	require.NoError(t, err)
+
+	names := []string{"hello", "world"}
+	childInfos := []TypeInfo{validInfo}
+	var emptyInfos []TypeInfo
+
+	_, err = StructTypeInfo(emptyInfos, names)
+	testError(t, err, errAPI.Error(), errEmptySlice.Error())
+	_, err = StructTypeInfo(childInfos, emptyNames)
+	testError(t, err, errAPI.Error(), errEmptySlice.Error())
+
+	_, err = StructTypeInfo(childInfos, names)
+	testError(t, err, errAPI.Error(), structFieldCountErrMsg)
+
+	invalidNames := []string{""}
+	invalidInfos := []TypeInfo{invalidInfo, invalidInfo}
+
+	_, err = StructTypeInfo(invalidInfos, names)
+	testError(t, err, errAPI.Error(), errInvalidChildType.Error())
+	_, err = StructTypeInfo(childInfos, invalidNames)
+	testError(t, err, errAPI.Error(), errEmptyName.Error())
+
+	// MAP
+	_, err = MapTypeInfo(invalidInfo, validInfo)
+	testError(t, err, errAPI.Error(), errInvalidKeyType.Error())
+	_, err = MapTypeInfo(validInfo, invalidInfo)
+	testError(t, err, errAPI.Error(), errInvalidValueType.Error())
 }
 
 func TestDuckDBErrors(t *testing.T) {

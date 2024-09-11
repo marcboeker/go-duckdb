@@ -74,8 +74,8 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 		a.types[i] = C.duckdb_appender_column_type(duckdbAppender, C.idx_t(i))
 
 		// Ensure that we only create an appender for supported column types.
-		duckdbType := C.duckdb_get_type_id(a.types[i])
-		name, found := unsupportedTypeMap[duckdbType]
+		t := Type(C.duckdb_get_type_id(a.types[i]))
+		name, found := unsupportedTypeToStringMap[t]
 		if found {
 			err := addIndexToError(unsupportedTypeError(name), i+1)
 			destroyTypeSlice(a.ptr, a.types)
