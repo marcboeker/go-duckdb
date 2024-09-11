@@ -234,11 +234,6 @@ func (typeInfo *TypeInfo) logicalMapType() C.duckdb_logical_type {
 	return logicalType
 }
 
-func deleteLogicalType(logicalType C.duckdb_logical_type) {
-	// FIXME: This is a placeholder for testing until we can test the logical types with UDFs.
-	C.duckdb_destroy_logical_type(&logicalType)
-}
-
 func funcName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }

@@ -57,11 +57,5 @@ func TestTypeInterface(t *testing.T) {
 	for _, info := range typeInfos {
 		_, err = ListTypeInfo(info)
 		require.NoError(t, err)
-
-		// FIXME: Remove testing of private function once we add support for UDFs and can test it there.
-		logicalType, errLogicalType := info.logicalType()
-		require.NoError(t, errLogicalType)
-		require.NotEqual(t, nil, logicalType, "logical type must not be nil")
-		deleteLogicalType(logicalType)
 	}
 }
