@@ -461,6 +461,10 @@ func TestDuckDBErrorsCornerCases(t *testing.T) {
 			Msg:  "Invalid Input Error: xxx",
 			Type: ErrorTypeInvalidInput,
 		},
+		{
+			Msg:  "Invalid Configuration Error: xxx",
+			Type: ErrorTypeInvalidConfiguration,
+		},
 	}
 
 	for _, tc := range testCases {
