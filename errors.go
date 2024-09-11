@@ -93,6 +93,7 @@ var (
 	errInvalidValueType = errors.New("INVALID value type")
 
 	errScalarUDFNoName = errors.New("could not create scalar UDF: missing name")
+	errScalarUDFCreate = errors.New("could not create scalar UDF")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")

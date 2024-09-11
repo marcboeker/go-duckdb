@@ -14,16 +14,22 @@ type scalarUDF struct {
 	err error
 }
 
-func (udf *scalarUDF) Config() ScalarFunctionConfig {
-	return ScalarFunctionConfig{
-		InputTypes: []string{"INT", "INT"},
-		ResultType: "INT",
+func (udf *scalarUDF) Config() (ScalarFunctionConfig, error) {
+	var config ScalarFunctionConfig
+
+	intInfo, err := PrimitiveTypeInfo(TYPE_INTEGER)
+	if err != nil {
+		return config, err
 	}
+
+	config.InputTypeInfos = []TypeInfo{intInfo, intInfo}
+	config.ResultTypeInfo = intInfo
+	return config, nil
 }
 
 func (udf *scalarUDF) ExecuteRow(args []driver.Value) (any, error) {
 	if len(args) != 2 {
-		return nil, errors.New("expected two values")
+		return nil, errors.New("error executing row: expected two input values")
 	}
 	val := args[0].(int32) + args[1].(int32)
 	return val, nil

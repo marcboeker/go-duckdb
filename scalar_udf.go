@@ -3,7 +3,6 @@ package duckdb
 // Related issues: https://golang.org/issue/19835, https://golang.org/issue/19837.
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 
 void scalar_udf_callback(duckdb_function_info, duckdb_data_chunk, duckdb_vector);
@@ -16,24 +15,17 @@ import "C"
 import (
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"runtime/cgo"
-	"strings"
 	"unsafe"
 )
 
-/*
-Interface notes.
-- Currently, you must cast your driver.Value's to int32. Casting to just int is not implemented.
-*/
-
 type ScalarFunctionConfig struct {
-	InputTypes []string
-	ResultType string
+	InputTypeInfos []TypeInfo
+	ResultTypeInfo TypeInfo
 }
 
 type ScalarFunction interface {
-	Config() ScalarFunctionConfig
+	Config() (ScalarFunctionConfig, error)
 	ExecuteRow(args []driver.Value) (any, error)
 	SetError(err error)
 }
@@ -49,25 +41,26 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 	// Initialize the input chunk.
 	var inputChunk DataChunk
 	if err = inputChunk.initFromDuckDataChunk(input, false); err != nil {
-		scalarFunction.SetError(err)
+		scalarFunction.SetError(getError(errAPI, err))
 		return
 	}
 	// Initialize the output chunk.
 	var outputChunk DataChunk
 	if err = outputChunk.initFromDuckVector(output, true); err != nil {
-		scalarFunction.SetError(err)
+		scalarFunction.SetError(getError(errAPI, err))
 		return
 	}
 
 	// Execute the user-defined scalar function for each row.
-	inputSize := inputChunk.GetSize()
-	args := make([]driver.Value, len(scalarFunction.Config().InputTypes))
-	for rowIdx := 0; rowIdx < inputSize; rowIdx++ {
+	args := make([]driver.Value, len(inputChunk.columns))
+	rowCount := inputChunk.GetSize()
+	columnCount := len(args)
+	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
 
 		// Set the input arguments for each column of a row.
-		for colIdx := 0; colIdx < len(args); colIdx++ {
+		for colIdx := 0; colIdx < columnCount; colIdx++ {
 			if args[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
-				scalarFunction.SetError(err)
+				scalarFunction.SetError(getError(errAPI, err))
 				return
 			}
 		}
@@ -83,7 +76,7 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 	}
 
 	if err != nil {
-		scalarFunction.SetError(err)
+		scalarFunction.SetError(getError(errAPI, err))
 	}
 }
 
@@ -96,39 +89,55 @@ func scalar_udf_delete_callback(data unsafe.Pointer) {
 // RegisterScalarUDF registers a scalar UDF.
 func RegisterScalarUDF(c *sql.Conn, name string, function ScalarFunction) error {
 	if name == "" {
-		return errScalarUDFNoName
+		return getError(errAPI, errScalarUDFNoName)
 	}
 
 	// c.Raw exposes the underlying driver connection.
-	err := c.Raw(func(anyConn any) error {
-		driverConn := anyConn.(*conn)
+	err := c.Raw(func(driverConn any) error {
+		con := driverConn.(*conn)
 		functionName := C.CString(name)
-		defer C.free(unsafe.Pointer(functionName))
+		defer C.duckdb_free(unsafe.Pointer(functionName))
 
 		extraInfoHandle := cgo.NewHandle(function)
 
 		scalarFunction := C.duckdb_create_scalar_function()
 		C.duckdb_scalar_function_set_name(scalarFunction, functionName)
 
+		// Get the configuration.
+		config, err := function.Config()
+		if err != nil {
+			return getError(errAPI, err)
+		}
+
 		// Add input parameters.
-		for _, inputType := range function.Config().InputTypes {
-			sqlType := strings.ToUpper(inputType)
-			duckdbType, ok := SQLToDuckDBMap[sqlType]
-			if !ok {
-				return unsupportedTypeError(sqlType)
+		for _, inputTypeInfo := range config.InputTypeInfos {
+			typeName, ok := unsupportedTypeToStringMap[inputTypeInfo.t]
+			if ok {
+				return getError(errAPI, unsupportedTypeError(typeName))
 			}
-			logicalType := C.duckdb_create_logical_type(duckdbType)
+
+			logicalType, errInputType := inputTypeInfo.logicalType()
+			if errInputType != nil {
+				C.duckdb_destroy_logical_type(&logicalType)
+				return getError(errAPI, errInputType)
+			}
+
 			C.duckdb_scalar_function_add_parameter(scalarFunction, logicalType)
 			C.duckdb_destroy_logical_type(&logicalType)
 		}
 
 		// Add result parameter.
-		sqlType := strings.ToUpper(function.Config().ResultType)
-		duckdbType, ok := SQLToDuckDBMap[sqlType]
-		if !ok {
-			return unsupportedTypeError(sqlType)
+		typeName, ok := unsupportedTypeToStringMap[config.ResultTypeInfo.t]
+		if ok {
+			return getError(errAPI, unsupportedTypeError(typeName))
 		}
-		logicalType := C.duckdb_create_logical_type(duckdbType)
+
+		logicalType, err := config.ResultTypeInfo.logicalType()
+		if err != nil {
+			C.duckdb_destroy_logical_type(&logicalType)
+			return getError(errAPI, err)
+		}
+
 		C.duckdb_scalar_function_set_return_type(scalarFunction, logicalType)
 		C.duckdb_destroy_logical_type(&logicalType)
 
@@ -142,12 +151,10 @@ func RegisterScalarUDF(c *sql.Conn, name string, function ScalarFunction) error 
 			C.duckdb_delete_callback_t(C.scalar_udf_delete_callback))
 
 		// Register the function.
-		state := C.duckdb_register_scalar_function(driverConn.duckdbCon, scalarFunction)
+		state := C.duckdb_register_scalar_function(con.duckdbCon, scalarFunction)
 		C.duckdb_destroy_scalar_function(&scalarFunction)
 		if state == C.DuckDBError {
-			// TODO: return failure to create scalar function
-			// return getError(errDriver, nil)
-			return errors.New("TODO create error")
+			return getError(errAPI, errScalarUDFCreate)
 		}
 		return nil
 	})
