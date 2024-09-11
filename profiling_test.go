@@ -28,8 +28,8 @@ func TestProfiling(t *testing.T) {
 	require.NoError(t, err)
 
 	var info ProfilingInfo
-	err = con.Raw(func(driverCon any) error {
-		info, err = GetProfilingInfo(driverCon)
+	err = con.Raw(func(driverConn any) error {
+		info, err = GetProfilingInfo(driverConn)
 		return err
 	})
 	require.NoError(t, err)
