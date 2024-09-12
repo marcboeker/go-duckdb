@@ -27,28 +27,32 @@ type ScalarFunctionConfig struct {
 type ScalarFunction interface {
 	Config() (ScalarFunctionConfig, error)
 	ExecuteRow(args []driver.Value) (any, error)
-	SetError(err error)
+}
+
+func setFunctionError(info C.duckdb_function_info, msg string) {
+	err := C.CString(msg)
+	C.duckdb_scalar_function_set_error(info, err)
+	C.duckdb_free(unsafe.Pointer(err))
 }
 
 //export scalar_udf_callback
 func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk, output C.duckdb_vector) {
-	// info is a void* pointer to our ScalarFunction.
-	h := *(*cgo.Handle)(unsafe.Pointer(info))
-	// If we hardcoded h = 1 here, it no longer segfaults.
-	scalarFunction := h.Value().(ScalarFunction)
+	extraInfo := C.duckdb_scalar_function_get_extra_info(info)
 
-	var err error
+	// extraInfo is a void* pointer to our ScalarFunction.
+	h := *(*cgo.Handle)(unsafe.Pointer(extraInfo))
+	scalarFunction := h.Value().(ScalarFunction)
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
-	if err = inputChunk.initFromDuckDataChunk(input, false); err != nil {
-		scalarFunction.SetError(getError(errAPI, err))
+	if err := inputChunk.initFromDuckDataChunk(input, false); err != nil {
+		setFunctionError(info, getError(errAPI, err).Error())
 		return
 	}
 	// Initialize the output chunk.
 	var outputChunk DataChunk
-	if err = outputChunk.initFromDuckVector(output, true); err != nil {
-		scalarFunction.SetError(getError(errAPI, err))
+	if err := outputChunk.initFromDuckVector(output, true); err != nil {
+		setFunctionError(info, getError(errAPI, err).Error())
 		return
 	}
 
@@ -56,12 +60,13 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 	args := make([]driver.Value, len(inputChunk.columns))
 	rowCount := inputChunk.GetSize()
 	columnCount := len(args)
-	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
+	var err error
 
+	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
 		// Set the input arguments for each column of a row.
 		for colIdx := 0; colIdx < columnCount; colIdx++ {
 			if args[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
-				scalarFunction.SetError(getError(errAPI, err))
+				setFunctionError(info, getError(errAPI, err).Error())
 				return
 			}
 		}
@@ -77,7 +82,7 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 	}
 
 	if err != nil {
-		scalarFunction.SetError(getError(errAPI, err))
+		setFunctionError(info, getError(errAPI, err).Error())
 	}
 }
 

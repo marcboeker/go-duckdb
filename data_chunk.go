@@ -129,20 +129,20 @@ func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk, writable
 func (chunk *DataChunk) initFromDuckVector(duckdbVector C.duckdb_vector, writable bool) error {
 	columnCount := 1
 	chunk.columns = make([]vector, columnCount)
-	chunk.columns[0].duckdbVector = duckdbVector
-	chunk.columns[0].getChildVectors(duckdbVector, writable)
 
-	// Initialize the callback function to read and write values.
+	// Initialize the callback functions to read and write values.
 	logicalType := C.duckdb_vector_get_column_type(duckdbVector)
 	err := chunk.columns[0].init(logicalType, 0)
 	C.duckdb_destroy_logical_type(&logicalType)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Initialize the vector and its child vectors.
+	chunk.columns[0].initVectors(duckdbVector, writable)
+	return nil
 }
 
 func (chunk *DataChunk) close() {
 	C.duckdb_destroy_data_chunk(&chunk.data)
 }
-
-// TODO: GetMetaData, see table UDF PR.
-// TODO: Add all templated functions.
-// TODO: Projection pushdown.
