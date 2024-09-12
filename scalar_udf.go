@@ -87,8 +87,8 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 }
 
 //export scalar_udf_delete_callback
-func scalar_udf_delete_callback(data unsafe.Pointer) {
-	h := cgo.Handle(data)
+func scalar_udf_delete_callback(extraInfo unsafe.Pointer) {
+	h := cgo.Handle(extraInfo)
 	h.Delete()
 }
 
@@ -158,6 +158,7 @@ func RegisterScalarUDF(c *sql.Conn, name string, function ScalarFunction) error 
 
 		// Register the function.
 		state := C.duckdb_register_scalar_function(con.duckdbCon, scalarFunction)
+		// TODO: we crash here if DuckDBError (e.g., register same twice)
 		C.duckdb_destroy_scalar_function(&scalarFunction)
 		if state == C.DuckDBError {
 			return getError(errAPI, errScalarUDFCreate)

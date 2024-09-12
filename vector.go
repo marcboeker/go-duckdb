@@ -87,7 +87,7 @@ func (vec *vector) tryCast(val any) (any, error) {
 	case TYPE_MAP:
 		return tryPrimitiveCast[Map](val, reflect.TypeOf(Map{}).String())
 	case TYPE_UUID:
-		return tryPrimitiveCast[UUID](val, reflect.TypeOf(UUID{}).String())
+		return vec.tryCastUUID(val)
 	}
 	return nil, unsupportedTypeError(unknownTypeErrMsg)
 }
@@ -226,6 +226,26 @@ func (vec *vector) tryCastStruct(val any) (map[string]any, error) {
 		}
 	}
 	return m, nil
+}
+
+func (vec *vector) tryCastUUID(val any) (UUID, error) {
+	uuid, ok := val.(UUID)
+	if ok {
+		return uuid, nil
+	}
+
+	bytes, ok := val.([]byte)
+	if ok {
+		if len(bytes) == UUIDLength {
+			for i := 0; i < UUIDLength; i++ {
+				uuid[i] = bytes[i]
+			}
+			return uuid, nil
+		}
+	}
+
+	goType := reflect.TypeOf(val)
+	return uuid, castError(goType.String(), reflect.TypeOf(UUID{}).String())
 }
 
 func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
