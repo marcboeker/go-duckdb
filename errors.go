@@ -77,14 +77,17 @@ var (
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 
-	errAppenderInvalidCon       = errors.New("could not create appender: not a DuckDB driver connection")
-	errAppenderClosedCon        = errors.New("could not create appender: appender creation on a closed connection")
-	errAppenderCreation         = errors.New("could not create appender")
-	errAppenderDoubleClose      = errors.New("could not close appender: already closed")
+	errAppenderCreation   = errors.New("could not create appender")
+	errAppenderInvalidCon = errors.New(errAppenderCreation.Error() + ": not a DuckDB driver connection")
+	errAppenderClosedCon  = errors.New(errAppenderCreation.Error() + ": appender creation on a closed connection")
+
+	errAppenderClose       = errors.New("could not close appender")
+	errAppenderDoubleClose = errors.New(errAppenderClose.Error() + ": already closed")
+
 	errAppenderAppendRow        = errors.New("could not append row")
-	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
-	errAppenderClose            = errors.New("could not close appender")
-	errAppenderFlush            = errors.New("could not flush appender")
+	errAppenderAppendAfterClose = errors.New(errAppenderAppendRow.Error() + ": appender already closed")
+
+	errAppenderFlush = errors.New("could not flush appender")
 
 	errEmptySlice       = errors.New("empty slice")
 	errInvalidChildType = errors.New("INVALID child type")
@@ -92,8 +95,9 @@ var (
 	errInvalidKeyType   = errors.New("INVALID key type")
 	errInvalidValueType = errors.New("INVALID value type")
 
-	errScalarUDFNoName = errors.New("could not create scalar UDF: missing name")
 	errScalarUDFCreate = errors.New("could not create scalar UDF")
+	errScalarUDFNoName = errors.New(errScalarUDFCreate.Error() + ": missing name")
+	errScalarUDFIsNil  = errors.New(errScalarUDFCreate.Error() + ": function is nil")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")

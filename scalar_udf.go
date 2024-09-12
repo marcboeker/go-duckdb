@@ -49,6 +49,7 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 		setFunctionError(info, getError(errAPI, err).Error())
 		return
 	}
+
 	// Initialize the output chunk.
 	var outputChunk DataChunk
 	if err := outputChunk.initFromDuckVector(output, true); err != nil {
@@ -88,14 +89,18 @@ func scalar_udf_callback(info C.duckdb_function_info, input C.duckdb_data_chunk,
 
 //export scalar_udf_delete_callback
 func scalar_udf_delete_callback(extraInfo unsafe.Pointer) {
-	h := cgo.Handle(extraInfo)
+	h := (*cgo.Handle)(extraInfo)
 	h.Delete()
 }
 
 // RegisterScalarUDF registers a scalar UDF.
-func RegisterScalarUDF(c *sql.Conn, name string, function ScalarFunction) error {
+// This function takes ownership of f, so you must pass it as a pointer.
+func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
 	if name == "" {
 		return getError(errAPI, errScalarUDFNoName)
+	}
+	if f == nil {
+		return getError(errAPI, errScalarUDFIsNil)
 	}
 
 	// c.Raw exposes the underlying driver connection.
@@ -104,13 +109,13 @@ func RegisterScalarUDF(c *sql.Conn, name string, function ScalarFunction) error 
 		functionName := C.CString(name)
 		defer C.duckdb_free(unsafe.Pointer(functionName))
 
-		extraInfoHandle := cgo.NewHandle(function)
+		extraInfoHandle := cgo.NewHandle(f)
 
 		scalarFunction := C.duckdb_create_scalar_function()
 		C.duckdb_scalar_function_set_name(scalarFunction, functionName)
 
 		// Get the configuration.
-		config, err := function.Config()
+		config, err := f.Config()
 		if err != nil {
 			return getError(errAPI, err)
 		}
@@ -158,7 +163,6 @@ func RegisterScalarUDF(c *sql.Conn, name string, function ScalarFunction) error 
 
 		// Register the function.
 		state := C.duckdb_register_scalar_function(con.duckdbCon, scalarFunction)
-		// TODO: we crash here if DuckDBError (e.g., register same twice)
 		C.duckdb_destroy_scalar_function(&scalarFunction)
 		if state == C.DuckDBError {
 			return getError(errAPI, errScalarUDFCreate)
