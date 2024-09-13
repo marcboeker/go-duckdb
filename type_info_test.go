@@ -10,7 +10,7 @@ func TestTypeInfo(t *testing.T) {
 	var primitiveTypes []Type
 	for k := range typeToStringMap {
 		_, inMap := unsupportedTypeToStringMap[k]
-		if inMap {
+		if inMap && k != TYPE_ANY {
 			continue
 		}
 		switch k {
@@ -75,7 +75,9 @@ func TestErrTypeInfo(t *testing.T) {
 
 	var unsupportedTypes []Type
 	for k := range unsupportedTypeToStringMap {
-		unsupportedTypes = append(unsupportedTypes, k)
+		if k != TYPE_ANY {
+			unsupportedTypes = append(unsupportedTypes, k)
+		}
 	}
 
 	for _, unsupported := range unsupportedTypes {

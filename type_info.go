@@ -72,7 +72,7 @@ type TypeInfo interface {
 // NewTypeInfo returns type information for DuckDB's primitive types.
 func NewTypeInfo(t Type) (TypeInfo, error) {
 	name, inMap := unsupportedTypeToStringMap[t]
-	if inMap {
+	if inMap && t != TYPE_ANY {
 		return nil, getError(errAPI, unsupportedTypeError(name))
 	}
 
@@ -183,7 +183,7 @@ func (info *typeInfo) logicalType() C.duckdb_logical_type {
 	case TYPE_BOOLEAN, TYPE_TINYINT, TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_UTINYINT, TYPE_USMALLINT,
 		TYPE_UINTEGER, TYPE_UBIGINT, TYPE_FLOAT, TYPE_DOUBLE, TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS,
 		TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ, TYPE_DATE, TYPE_TIME, TYPE_INTERVAL, TYPE_HUGEINT, TYPE_VARCHAR,
-		TYPE_BLOB, TYPE_UUID:
+		TYPE_BLOB, TYPE_UUID, TYPE_ANY:
 		return C.duckdb_create_logical_type(C.duckdb_type(info.Type))
 
 	case TYPE_DECIMAL:
