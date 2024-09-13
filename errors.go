@@ -45,12 +45,12 @@ func tryOtherFuncError(hint string) error {
 	return fmt.Errorf("%s: %s", tryOtherFuncErrMsg, hint)
 }
 
-func structFieldCountError(actual int, expected int) error {
-	return fmt.Errorf("%s: expected %d, got %d", structFieldCountErrMsg, expected, actual)
-}
-
 func addIndexToError(err error, idx int) error {
 	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
+}
+
+func interfaceIsNilError(interfaceName string) error {
+	return fmt.Errorf("%s: %s", interfaceIsNilErrMsg, interfaceName)
 }
 
 const (
@@ -62,9 +62,9 @@ const (
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
 	tryOtherFuncErrMsg     = "please try this function instead"
-	structFieldCountErrMsg = "name count must match the type count"
 	indexErrMsg            = "index"
 	unknownTypeErrMsg      = "unknown type"
+	interfaceIsNilErrMsg   = "interface is nil"
 )
 
 var (
@@ -89,11 +89,7 @@ var (
 
 	errAppenderFlush = errors.New("could not flush appender")
 
-	errEmptySlice       = errors.New("empty slice")
-	errInvalidChildType = errors.New("INVALID child type")
-	errEmptyName        = errors.New("empty name")
-	errInvalidKeyType   = errors.New("INVALID key type")
-	errInvalidValueType = errors.New("INVALID value type")
+	errEmptyName = errors.New("empty name")
 
 	errScalarUDFCreate = errors.New("could not create scalar UDF")
 	errScalarUDFNoName = errors.New(errScalarUDFCreate.Error() + ": missing name")

@@ -91,7 +91,7 @@ func (vec *vector) getCString(rowIdx C.idx_t) any {
 		blob = C.GoBytes(unsafe.Pointer(cStr.ptr), C.int(cStr.length))
 	}
 
-	if vec.t == TYPE_VARCHAR {
+	if vec.Type == TYPE_VARCHAR {
 		return string(blob)
 	}
 	return blob
@@ -117,7 +117,7 @@ func (vec *vector) getDecimal(t Type, rowIdx C.idx_t) Decimal {
 		})
 	}
 
-	return Decimal{Width: vec.width, Scale: vec.scale, Value: val}
+	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
 
 func (vec *vector) getEnum(t Type, rowIdx C.idx_t) string {
@@ -159,7 +159,7 @@ func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
 	for i := 0; i < len(vec.childVectors); i++ {
 		child := &vec.childVectors[i]
 		val := child.getFn(child, rowIdx)
-		m[vec.names[i]] = val
+		m[vec.structEntries[i].Name()] = val
 	}
 	return m
 }
