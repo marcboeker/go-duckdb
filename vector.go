@@ -530,11 +530,10 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 	childCount := int(C.duckdb_struct_type_child_count(logicalType))
 	var structEntries []StructEntry
 	for i := 0; i < childCount; i++ {
-		childName := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
-		entry, err := NewStructEntry(nil, C.GoString(childName))
+		name := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
+		entry, err := NewStructEntry(nil, C.GoString(name))
 		structEntries = append(structEntries, entry)
-		C.duckdb_free(unsafe.Pointer(childName))
-
+		C.duckdb_free(unsafe.Pointer(name))
 		if err != nil {
 			return err
 		}

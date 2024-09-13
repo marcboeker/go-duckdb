@@ -11,27 +11,17 @@ import (
 	"unsafe"
 )
 
+type structEntry struct {
+	TypeInfo
+	name string
+}
+
 // StructEntry is an interface to provide STRUCT entry information.
 type StructEntry interface {
 	// Info returns a STRUCT entry's type information.
 	Info() TypeInfo
 	// Name returns a STRUCT entry's name.
 	Name() string
-}
-
-type structEntry struct {
-	TypeInfo
-	name string
-}
-
-// Info returns a STRUCT entry's type information.
-func (entry *structEntry) Info() TypeInfo {
-	return entry.TypeInfo
-}
-
-// Name returns a STRUCT entry's name.
-func (entry *structEntry) Name() string {
-	return entry.name
 }
 
 // NewStructEntry returns a STRUCT entry.
@@ -46,6 +36,16 @@ func NewStructEntry(info TypeInfo, name string) (StructEntry, error) {
 	}, nil
 }
 
+// Info returns a STRUCT entry's type information.
+func (entry *structEntry) Info() TypeInfo {
+	return entry.TypeInfo
+}
+
+// Name returns a STRUCT entry's name.
+func (entry *structEntry) Name() string {
+	return entry.name
+}
+
 type baseTypeInfo struct {
 	Type
 	structEntries []StructEntry
@@ -58,18 +58,18 @@ type vectorTypeInfo struct {
 	dict map[string]uint32
 }
 
-// TypeInfo is an interface to work with DuckDB types.
-type TypeInfo interface {
-	logicalType() C.duckdb_logical_type
-}
-
 type typeInfo struct {
 	baseTypeInfo
 	childTypes []TypeInfo
 	enumNames  []string
 }
 
-// NewTypeInfo returns type information for primitive types.
+// TypeInfo is an interface for DuckDB types.
+type TypeInfo interface {
+	logicalType() C.duckdb_logical_type
+}
+
+// NewTypeInfo returns type information for DuckDB's primitive types.
 func NewTypeInfo(t Type) (TypeInfo, error) {
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap {
@@ -124,7 +124,6 @@ func NewListInfo(childInfo TypeInfo) TypeInfo {
 		baseTypeInfo: baseTypeInfo{Type: TYPE_LIST},
 		childTypes:   make([]TypeInfo, 1),
 	}
-
 	info.childTypes[0] = childInfo
 	return info
 }
@@ -137,7 +136,6 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) TypeInfo {
 			structEntries: make([]StructEntry, 0),
 		},
 	}
-
 	info.structEntries = append(info.structEntries, firstEntry)
 	info.structEntries = append(info.structEntries, others...)
 	return info
@@ -149,7 +147,6 @@ func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) TypeInfo {
 		baseTypeInfo: baseTypeInfo{Type: TYPE_MAP},
 		childTypes:   make([]TypeInfo, 2),
 	}
-
 	info.childTypes[0] = keyInfo
 	info.childTypes[1] = valueInfo
 	return info
@@ -225,7 +222,6 @@ func (info *typeInfo) logicalStructType() C.duckdb_logical_type {
 	}
 	C.duckdb_free(unsafe.Pointer(types))
 	C.duckdb_free(unsafe.Pointer(names))
-
 	return logicalType
 }
 
@@ -233,14 +229,10 @@ func (info *typeInfo) logicalMapType() C.duckdb_logical_type {
 	key := info.childTypes[0].logicalType()
 	value := info.childTypes[1].logicalType()
 	logicalType := C.duckdb_create_map_type(key, value)
+
 	C.duckdb_destroy_logical_type(&key)
 	C.duckdb_destroy_logical_type(&value)
 	return logicalType
-}
-
-func deleteLogicalType(logicalType C.duckdb_logical_type) {
-	// FIXME: This is a placeholder for testing until we can test the logical types with UDFs.
-	C.duckdb_destroy_logical_type(&logicalType)
 }
 
 func funcName(i interface{}) string {
