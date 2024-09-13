@@ -49,6 +49,10 @@ func addIndexToError(err error, idx int) error {
 	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
 }
 
+func interfaceIsNilError(interfaceName string) error {
+	return fmt.Errorf("%s: %s", interfaceIsNilErrMsg, interfaceName)
+}
+
 const (
 	driverErrMsg           = "database/sql/driver"
 	duckdbErrMsg           = "duckdb error"
@@ -60,6 +64,7 @@ const (
 	tryOtherFuncErrMsg     = "please try this function instead"
 	indexErrMsg            = "index"
 	unknownTypeErrMsg      = "unknown type"
+	interfaceIsNilErrMsg   = "interface is nil"
 )
 
 var (

@@ -119,17 +119,36 @@ func NewEnumInfo(first string, others ...string) TypeInfo {
 }
 
 // NewListInfo returns LIST type information.
-func NewListInfo(childInfo TypeInfo) TypeInfo {
+func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
+	if childInfo == nil {
+		return nil, getError(errAPI, interfaceIsNilError("childInfo"))
+	}
+
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_LIST},
 		childTypes:   make([]TypeInfo, 1),
 	}
 	info.childTypes[0] = childInfo
-	return info
+	return info, nil
 }
 
 // NewStructInfo returns STRUCT type information.
-func NewStructInfo(firstEntry StructEntry, others ...StructEntry) TypeInfo {
+func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, error) {
+	if firstEntry == nil {
+		return nil, getError(errAPI, interfaceIsNilError("firstEntry"))
+	}
+	if firstEntry.Info() == nil {
+		return nil, getError(errAPI, interfaceIsNilError("firstEntry.Info()"))
+	}
+	for i, entry := range others {
+		if entry == nil {
+			return nil, getError(errAPI, addIndexToError(interfaceIsNilError("entry"), i))
+		}
+		if entry.Info() == nil {
+			return nil, getError(errAPI, addIndexToError(interfaceIsNilError("entry.Info()"), i))
+		}
+	}
+
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{
 			Type:          TYPE_STRUCT,
@@ -138,18 +157,25 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) TypeInfo {
 	}
 	info.structEntries = append(info.structEntries, firstEntry)
 	info.structEntries = append(info.structEntries, others...)
-	return info
+	return info, nil
 }
 
 // NewMapInfo returns MAP type information.
-func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) TypeInfo {
+func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
+	if keyInfo == nil {
+		return nil, getError(errAPI, interfaceIsNilError("keyInfo"))
+	}
+	if valueInfo == nil {
+		return nil, getError(errAPI, interfaceIsNilError("valueInfo"))
+	}
+
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_MAP},
 		childTypes:   make([]TypeInfo, 2),
 	}
 	info.childTypes[0] = keyInfo
 	info.childTypes[1] = valueInfo
-	return info
+	return info, nil
 }
 
 func (info *typeInfo) logicalType() C.duckdb_logical_type {

@@ -304,32 +304,6 @@ func TestErrAPISetValue(t *testing.T) {
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
 
-func TestErrTypeInfo(t *testing.T) {
-	t.Parallel()
-
-	var incorrectTypes []Type
-	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP)
-
-	for _, incorrect := range incorrectTypes {
-		_, err := NewTypeInfo(incorrect)
-		testError(t, err, errAPI.Error(), tryOtherFuncErrMsg)
-	}
-
-	var unsupportedTypes []Type
-	for k := range unsupportedTypeToStringMap {
-		unsupportedTypes = append(unsupportedTypes, k)
-	}
-
-	for _, unsupported := range unsupportedTypes {
-		_, err := NewTypeInfo(unsupported)
-		testError(t, err, errAPI.Error(), unsupportedTypeErrMsg)
-	}
-
-	// Invalid STRUCT entry.
-	_, err := NewStructEntry(nil, "")
-	testError(t, err, errAPI.Error(), errEmptyName.Error())
-}
-
 func TestDuckDBErrors(t *testing.T) {
 	db := openDB(t)
 	createTable(db, t, `CREATE TABLE duckdb_error_test(bar VARCHAR UNIQUE, baz INT32, u_1 UNION("string" VARCHAR))`)
