@@ -97,8 +97,9 @@ func (*vector) canNil(val reflect.Value) bool {
 	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer,
 		reflect.UnsafePointer, reflect.Interface, reflect.Slice:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 func tryPrimitiveCast[T any](val any, expected string) (T, error) {
