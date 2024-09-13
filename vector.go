@@ -37,12 +37,12 @@ func (vec *vector) tryCast(val any) (any, error) {
 		return val, nil
 	}
 
-	name, inMap := unsupportedTypeToStringMap[vec.t]
+	name, inMap := unsupportedTypeToStringMap[vec.Type]
 	if inMap {
 		return nil, unsupportedTypeError(name)
 	}
 
-	switch vec.t {
+	switch vec.Type {
 	case TYPE_BOOLEAN:
 		return tryPrimitiveCast[bool](val, reflect.Bool.String())
 	case TYPE_TINYINT:
@@ -135,8 +135,8 @@ func (vec *vector) tryCastDecimal(val any) (Decimal, error) {
 		return v, castError(goType.String(), reflect.TypeOf(Decimal{}).String())
 	}
 
-	if v.Width != vec.width || v.Scale != vec.scale {
-		d := Decimal{Width: vec.width, Scale: vec.scale}
+	if v.Width != vec.decimalWidth || v.Scale != vec.decimalScale {
+		d := Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale}
 		return v, castError(d.toString(), v.toString())
 	}
 	return v, nil
@@ -204,23 +204,24 @@ func (vec *vector) tryCastStruct(val any) (map[string]any, error) {
 	}
 
 	// Catch mismatching field count.
-	if len(m) != len(vec.names) {
-		return nil, structFieldError(strconv.Itoa(len(m)), strconv.Itoa(len(vec.names)))
+	count := len(vec.structEntries)
+	if len(m) != count {
+		return nil, structFieldError(strconv.Itoa(len(m)), strconv.Itoa(count))
 	}
 
 	// Cast child entries and return the map.
-	for i := 0; i < len(vec.childVectors); i++ {
+	for i := 0; i < count; i++ {
 		childVector := vec.childVectors[i]
-		childName := vec.names[i]
-		v, ok := m[childName]
+		name := vec.structEntries[i].Name()
+		v, ok := m[name]
 
 		// Catch mismatching field names.
 		if !ok {
-			return nil, structFieldError("missing field", childName)
+			return nil, structFieldError("missing field", name)
 		}
 
 		var err error
-		m[childName], err = childVector.tryCast(v)
+		m[name], err = childVector.tryCast(v)
 		if err != nil {
 			return nil, err
 		}
@@ -300,7 +301,7 @@ func (vec *vector) initVectors(v C.duckdb_vector, writable bool) {
 }
 
 func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
-	switch vec.t {
+	switch vec.Type {
 
 	case TYPE_LIST, TYPE_MAP:
 		child := C.duckdb_list_vector_get_child(v)
@@ -328,7 +329,7 @@ func initPrimitive[T any](vec *vector, t Type) {
 		}
 		setPrimitive(vec, rowIdx, val.(T))
 	}
-	vec.t = t
+	vec.Type = t
 }
 
 func (vec *vector) initTS(t Type) {
@@ -345,7 +346,7 @@ func (vec *vector) initTS(t Type) {
 		}
 		vec.setTS(t, rowIdx, val)
 	}
-	vec.t = t
+	vec.Type = t
 }
 
 func (vec *vector) initDate() {
@@ -362,7 +363,7 @@ func (vec *vector) initDate() {
 		}
 		vec.setDate(rowIdx, val)
 	}
-	vec.t = TYPE_DATE
+	vec.Type = TYPE_DATE
 }
 
 func (vec *vector) initTime() {
@@ -379,7 +380,7 @@ func (vec *vector) initTime() {
 		}
 		vec.setTime(rowIdx, val)
 	}
-	vec.t = TYPE_TIME
+	vec.Type = TYPE_TIME
 }
 
 func (vec *vector) initInterval() {
@@ -396,7 +397,7 @@ func (vec *vector) initInterval() {
 		}
 		vec.setInterval(rowIdx, val)
 	}
-	vec.t = TYPE_INTERVAL
+	vec.Type = TYPE_INTERVAL
 }
 
 func (vec *vector) initHugeint() {
@@ -413,7 +414,7 @@ func (vec *vector) initHugeint() {
 		}
 		vec.setHugeint(rowIdx, val)
 	}
-	vec.t = TYPE_HUGEINT
+	vec.Type = TYPE_HUGEINT
 }
 
 func (vec *vector) initCString(t Type) {
@@ -430,12 +431,12 @@ func (vec *vector) initCString(t Type) {
 		}
 		vec.setCString(rowIdx, val)
 	}
-	vec.t = t
+	vec.Type = t
 }
 
 func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) error {
-	vec.width = uint8(C.duckdb_decimal_width(logicalType))
-	vec.scale = uint8(C.duckdb_decimal_scale(logicalType))
+	vec.decimalWidth = uint8(C.duckdb_decimal_width(logicalType))
+	vec.decimalScale = uint8(C.duckdb_decimal_scale(logicalType))
 
 	t := Type(C.duckdb_decimal_internal_type(logicalType))
 	switch t {
@@ -457,7 +458,7 @@ func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) er
 		return addIndexToError(unsupportedTypeError(typeToStringMap[t]), colIdx)
 	}
 
-	vec.t = TYPE_DECIMAL
+	vec.Type = TYPE_DECIMAL
 	return nil
 }
 
@@ -492,7 +493,7 @@ func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error
 		return addIndexToError(unsupportedTypeError(typeToStringMap[t]), colIdx)
 	}
 
-	vec.t = TYPE_ENUM
+	vec.Type = TYPE_ENUM
 	return nil
 }
 
@@ -521,21 +522,26 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 		}
 		vec.setList(rowIdx, val)
 	}
-	vec.t = TYPE_LIST
+	vec.Type = TYPE_LIST
 	return nil
 }
 
 func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) error {
 	childCount := int(C.duckdb_struct_type_child_count(logicalType))
-	var names []string
+	var structEntries []StructEntry
 	for i := 0; i < childCount; i++ {
 		childName := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
-		names = append(names, C.GoString(childName))
+		entry, err := NewStructEntry(nil, C.GoString(childName))
+		structEntries = append(structEntries, entry)
 		C.duckdb_free(unsafe.Pointer(childName))
+
+		if err != nil {
+			return err
+		}
 	}
 
 	vec.childVectors = make([]vector, childCount)
-	vec.names = names
+	vec.structEntries = structEntries
 
 	// Recurse into the children.
 	for i := 0; i < childCount; i++ {
@@ -561,7 +567,7 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 		}
 		vec.setStruct(rowIdx, val)
 	}
-	vec.t = TYPE_STRUCT
+	vec.Type = TYPE_STRUCT
 	return nil
 }
 
@@ -603,7 +609,7 @@ func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error 
 		}
 		vec.setMap(rowIdx, val)
 	}
-	vec.t = TYPE_MAP
+	vec.Type = TYPE_MAP
 	return nil
 }
 
@@ -622,5 +628,5 @@ func (vec *vector) initUUID() {
 		}
 		setPrimitive(vec, rowIdx, uuidToHugeInt(val.(UUID)))
 	}
-	vec.t = TYPE_UUID
+	vec.Type = TYPE_UUID
 }

@@ -86,11 +86,7 @@ var (
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
 
-	errEmptySlice       = errors.New("empty slice")
-	errInvalidChildType = errors.New("INVALID child type")
-	errEmptyName        = errors.New("empty name")
-	errInvalidKeyType   = errors.New("INVALID key type")
-	errInvalidValueType = errors.New("INVALID value type")
+	errEmptyName = errors.New("empty name")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")

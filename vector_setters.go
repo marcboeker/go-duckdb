@@ -20,7 +20,7 @@ type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 func (vec *vector) setNull(rowIdx C.idx_t) {
 	C.duckdb_validity_set_row_invalid(vec.mask, rowIdx)
 
-	if vec.t == TYPE_STRUCT {
+	if vec.Type == TYPE_STRUCT {
 		for i := 0; i < len(vec.childVectors); i++ {
 			vec.childVectors[i].setNull(rowIdx)
 		}
@@ -89,9 +89,9 @@ func (vec *vector) setHugeint(rowIdx C.idx_t, val any) {
 
 func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	var str string
-	if vec.t == TYPE_VARCHAR {
+	if vec.Type == TYPE_VARCHAR {
 		str = val.(string)
-	} else if vec.t == TYPE_BLOB {
+	} else if vec.Type == TYPE_BLOB {
 		str = string(val.([]byte)[:])
 	}
 
@@ -159,7 +159,7 @@ func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
 	m := val.(map[string]any)
 	for i := 0; i < len(vec.childVectors); i++ {
 		child := &vec.childVectors[i]
-		name := vec.names[i]
+		name := vec.structEntries[i].Name()
 		child.setFn(child, rowIdx, m[name])
 	}
 }

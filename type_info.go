@@ -11,174 +11,178 @@ import (
 	"unsafe"
 )
 
-type baseTypeInfo struct {
-	// The data type.
-	t Type
-	// This slice serves different purposes.
-	// - STRUCT child names.
-	// - ENUM dictionary names.
-	names []string
-	// The  width of DECIMAL types.
-	width uint8
-	// The scale of DECIMAL types.
-	scale uint8
+// StructEntry is an interface to provide STRUCT entry information.
+type StructEntry interface {
+	// Info returns a STRUCT entry's type information.
+	Info() TypeInfo
+	// Name returns a STRUCT entry's name.
+	Name() string
 }
 
-// TypeInfo contains all information to work with DuckDB types.
-type TypeInfo struct {
-	baseTypeInfo
-	// The child type information of nested types.
-	childTypes []TypeInfo
+type structEntry struct {
+	TypeInfo
+	name string
+}
+
+// Info returns a STRUCT entry's type information.
+func (entry *structEntry) Info() TypeInfo {
+	return entry.TypeInfo
+}
+
+// Name returns a STRUCT entry's name.
+func (entry *structEntry) Name() string {
+	return entry.name
+}
+
+// NewStructEntry returns a STRUCT entry.
+func NewStructEntry(info TypeInfo, name string) (StructEntry, error) {
+	if name == "" {
+		return nil, getError(errAPI, errEmptyName)
+	}
+
+	return &structEntry{
+		TypeInfo: info,
+		name:     name,
+	}, nil
+}
+
+type baseTypeInfo struct {
+	Type
+	structEntries []StructEntry
+	decimalWidth  uint8
+	decimalScale  uint8
 }
 
 type vectorTypeInfo struct {
 	baseTypeInfo
-	// The dictionary for ENUM types.
 	dict map[string]uint32
 }
 
-// PrimitiveTypeInfo returns primitive type information.
-func PrimitiveTypeInfo(t Type) (TypeInfo, error) {
+// TypeInfo is an interface to work with DuckDB types.
+type TypeInfo interface {
+	logicalType() C.duckdb_logical_type
+}
+
+type typeInfo struct {
+	baseTypeInfo
+	childTypes []TypeInfo
+	enumNames  []string
+}
+
+// NewTypeInfo returns type information for primitive types.
+func NewTypeInfo(t Type) (TypeInfo, error) {
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap {
-		return TypeInfo{baseTypeInfo: baseTypeInfo{t: t}}, getError(errAPI, unsupportedTypeError(name))
+		return nil, getError(errAPI, unsupportedTypeError(name))
 	}
 
 	switch t {
 	case TYPE_DECIMAL:
-		return TypeInfo{}, getError(errAPI, tryOtherFuncError(funcName(DecimalTypeInfo)))
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewDecimalInfo)))
 	case TYPE_ENUM:
-		return TypeInfo{}, getError(errAPI, tryOtherFuncError(funcName(EnumTypeInfo)))
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewEnumInfo)))
 	case TYPE_LIST:
-		return TypeInfo{}, getError(errAPI, tryOtherFuncError(funcName(ListTypeInfo)))
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewListInfo)))
 	case TYPE_STRUCT:
-		return TypeInfo{}, getError(errAPI, tryOtherFuncError(funcName(StructTypeInfo)))
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewStructInfo)))
 	case TYPE_MAP:
-		return TypeInfo{}, getError(errAPI, tryOtherFuncError(funcName(MapTypeInfo)))
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
 	}
 
-	return TypeInfo{baseTypeInfo: baseTypeInfo{t: t}}, nil
+	return &typeInfo{
+		baseTypeInfo: baseTypeInfo{Type: t},
+	}, nil
 }
 
-// DecimalTypeInfo returns DECIMAL type information.
-func DecimalTypeInfo(width uint8, scale uint8) TypeInfo {
-	return TypeInfo{
+// NewDecimalInfo returns DECIMAL type information.
+func NewDecimalInfo(width uint8, scale uint8) TypeInfo {
+	return &typeInfo{
 		baseTypeInfo: baseTypeInfo{
-			t:     TYPE_DECIMAL,
-			width: width,
-			scale: scale,
+			Type:         TYPE_DECIMAL,
+			decimalWidth: width,
+			decimalScale: scale,
 		},
 	}
 }
 
-// EnumTypeInfo returns ENUM type information.
-func EnumTypeInfo(dict []string) (TypeInfo, error) {
-	if len(dict) == 0 {
-		return TypeInfo{}, getError(errAPI, errEmptySlice)
+// NewEnumInfo returns ENUM type information.
+func NewEnumInfo(first string, others ...string) TypeInfo {
+	info := &typeInfo{
+		baseTypeInfo: baseTypeInfo{
+			Type: TYPE_ENUM,
+		},
+		enumNames: make([]string, 0),
 	}
-
-	typeInfo := TypeInfo{baseTypeInfo: baseTypeInfo{t: TYPE_ENUM}}
-	typeInfo.names = make([]string, len(dict))
-	copy(typeInfo.names, dict)
-	return typeInfo, nil
+	info.enumNames = append(info.enumNames, first)
+	info.enumNames = append(info.enumNames, others...)
+	return info
 }
 
-// ListTypeInfo returns LIST type information.
-func ListTypeInfo(childInfo TypeInfo) (TypeInfo, error) {
-	t := TypeInfo{
-		baseTypeInfo: baseTypeInfo{t: TYPE_LIST},
+// NewListInfo returns LIST type information.
+func NewListInfo(childInfo TypeInfo) TypeInfo {
+	info := &typeInfo{
+		baseTypeInfo: baseTypeInfo{Type: TYPE_LIST},
 		childTypes:   make([]TypeInfo, 1),
 	}
 
-	if childInfo.t == TYPE_INVALID {
-		return t, getError(errAPI, errInvalidChildType)
-	}
-	t.childTypes[0] = childInfo
-	return t, nil
+	info.childTypes[0] = childInfo
+	return info
 }
 
-// StructTypeInfo returns STRUCT type information.
-func StructTypeInfo(typeInfos []TypeInfo, names []string) (TypeInfo, error) {
-	t := TypeInfo{
+// NewStructInfo returns STRUCT type information.
+func NewStructInfo(firstEntry StructEntry, others ...StructEntry) TypeInfo {
+	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{
-			t:     TYPE_STRUCT,
-			names: make([]string, len(names)),
+			Type:          TYPE_STRUCT,
+			structEntries: make([]StructEntry, 0),
 		},
-		childTypes: make([]TypeInfo, len(typeInfos)),
 	}
 
-	if len(typeInfos) == 0 || len(names) == 0 {
-		return TypeInfo{}, getError(errAPI, errEmptySlice)
-	}
-	if len(typeInfos) != len(names) {
-		return t, getError(errAPI, structFieldCountError(len(names), len(typeInfos)))
-	}
-	for i, childType := range typeInfos {
-		if childType.t == TYPE_INVALID {
-			return t, getError(errAPI, addIndexToError(errInvalidChildType, i))
-		}
-	}
-	for i, name := range names {
-		if name == "" {
-			return t, getError(errAPI, addIndexToError(errEmptyName, i))
-		}
-	}
-
-	copy(t.childTypes, typeInfos)
-	copy(t.names, names)
-	return t, nil
+	info.structEntries = append(info.structEntries, firstEntry)
+	info.structEntries = append(info.structEntries, others...)
+	return info
 }
 
-// MapTypeInfo returns MAP type information.
-func MapTypeInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
-	t := TypeInfo{
-		baseTypeInfo: baseTypeInfo{t: TYPE_MAP},
+// NewMapInfo returns MAP type information.
+func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) TypeInfo {
+	info := &typeInfo{
+		baseTypeInfo: baseTypeInfo{Type: TYPE_MAP},
 		childTypes:   make([]TypeInfo, 2),
 	}
 
-	if keyInfo.t == TYPE_INVALID {
-		return t, getError(errAPI, errInvalidKeyType)
-	}
-	if valueInfo.t == TYPE_INVALID {
-		return t, getError(errAPI, errInvalidValueType)
-	}
-
-	t.childTypes[0] = keyInfo
-	t.childTypes[1] = valueInfo
-	return t, nil
+	info.childTypes[0] = keyInfo
+	info.childTypes[1] = valueInfo
+	return info
 }
 
-func (typeInfo *TypeInfo) logicalType() (C.duckdb_logical_type, error) {
-	switch typeInfo.t {
-	case TYPE_INVALID, TYPE_UHUGEINT, TYPE_ARRAY, TYPE_UNION, TYPE_BIT, TYPE_TIME_TZ:
-		return nil, unsupportedTypeError(unsupportedTypeToStringMap[typeInfo.t])
-
+func (info *typeInfo) logicalType() C.duckdb_logical_type {
+	switch info.Type {
 	case TYPE_BOOLEAN, TYPE_TINYINT, TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_UTINYINT, TYPE_USMALLINT,
 		TYPE_UINTEGER, TYPE_UBIGINT, TYPE_FLOAT, TYPE_DOUBLE, TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS,
 		TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ, TYPE_DATE, TYPE_TIME, TYPE_INTERVAL, TYPE_HUGEINT, TYPE_VARCHAR,
 		TYPE_BLOB, TYPE_UUID:
-		return C.duckdb_create_logical_type(C.duckdb_type(typeInfo.t)), nil
+		return C.duckdb_create_logical_type(C.duckdb_type(info.Type))
 
 	case TYPE_DECIMAL:
-		return C.duckdb_create_decimal_type(C.uint8_t(typeInfo.width), C.uint8_t(typeInfo.scale)), nil
+		return C.duckdb_create_decimal_type(C.uint8_t(info.decimalWidth), C.uint8_t(info.decimalScale))
 	case TYPE_ENUM:
-		return typeInfo.logicalEnumType(), nil
+		return info.logicalEnumType()
 	case TYPE_LIST:
-		return typeInfo.logicalListType(), nil
+		return info.logicalListType()
 	case TYPE_STRUCT:
-		return typeInfo.logicalStructType(), nil
+		return info.logicalStructType()
 	case TYPE_MAP:
-		return typeInfo.logicalMapType(), nil
+		return info.logicalMapType()
 	}
-	return nil, unsupportedTypeError(unknownTypeErrMsg)
+	return nil
 }
 
-func (typeInfo *TypeInfo) logicalEnumType() C.duckdb_logical_type {
-	count := len(typeInfo.names)
+func (info *typeInfo) logicalEnumType() C.duckdb_logical_type {
+	count := len(info.enumNames)
 	size := C.size_t(unsafe.Sizeof((*C.char)(nil)))
 	names := (*[1 << 31]*C.char)(C.malloc(C.size_t(count) * size))
 
-	for i, name := range typeInfo.names {
+	for i, name := range info.enumNames {
 		(*names)[i] = C.CString(name)
 	}
 	cNames := (**C.char)(unsafe.Pointer(names))
@@ -191,24 +195,24 @@ func (typeInfo *TypeInfo) logicalEnumType() C.duckdb_logical_type {
 	return logicalType
 }
 
-func (typeInfo *TypeInfo) logicalListType() C.duckdb_logical_type {
-	child, _ := typeInfo.childTypes[0].logicalType()
+func (info *typeInfo) logicalListType() C.duckdb_logical_type {
+	child := info.childTypes[0].logicalType()
 	logicalType := C.duckdb_create_list_type(child)
 	C.duckdb_destroy_logical_type(&child)
 	return logicalType
 }
 
-func (typeInfo *TypeInfo) logicalStructType() C.duckdb_logical_type {
-	count := len(typeInfo.childTypes)
+func (info *typeInfo) logicalStructType() C.duckdb_logical_type {
+	count := len(info.structEntries)
 	size := C.size_t(unsafe.Sizeof(C.duckdb_logical_type(nil)))
 	types := (*[1 << 31]C.duckdb_logical_type)(C.malloc(C.size_t(count) * size))
 
 	size = C.size_t(unsafe.Sizeof((*C.char)(nil)))
 	names := (*[1 << 31]*C.char)(C.malloc(C.size_t(count) * size))
 
-	for i, childType := range typeInfo.childTypes {
-		(*types)[i], _ = childType.logicalType()
-		(*names)[i] = C.CString(typeInfo.names[i])
+	for i, entry := range info.structEntries {
+		(*types)[i] = entry.Info().logicalType()
+		(*names)[i] = C.CString(entry.Name())
 	}
 
 	cTypes := (*C.duckdb_logical_type)(unsafe.Pointer(types))
@@ -225,9 +229,9 @@ func (typeInfo *TypeInfo) logicalStructType() C.duckdb_logical_type {
 	return logicalType
 }
 
-func (typeInfo *TypeInfo) logicalMapType() C.duckdb_logical_type {
-	key, _ := typeInfo.childTypes[0].logicalType()
-	value, _ := typeInfo.childTypes[1].logicalType()
+func (info *typeInfo) logicalMapType() C.duckdb_logical_type {
+	key := info.childTypes[0].logicalType()
+	value := info.childTypes[1].logicalType()
 	logicalType := C.duckdb_create_map_type(key, value)
 	C.duckdb_destroy_logical_type(&key)
 	C.duckdb_destroy_logical_type(&value)

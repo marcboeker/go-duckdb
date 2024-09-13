@@ -23,45 +23,36 @@ func TestTypeInterface(t *testing.T) {
 	// Create each primitive type information.
 	var typeInfos []TypeInfo
 	for _, primitive := range primitiveTypes {
-		typeInfo, err := PrimitiveTypeInfo(primitive)
+		info, err := NewTypeInfo(primitive)
 		require.NoError(t, err)
-		typeInfos = append(typeInfos, typeInfo)
+		typeInfos = append(typeInfos, info)
 	}
 
 	// Create nested types.
-	decimalInfo := DecimalTypeInfo(3, 2)
+	decimalInfo := NewDecimalInfo(3, 2)
+	enumInfo := NewEnumInfo("hello", "world")
+	listInfo := NewListInfo(decimalInfo)
+	nestedListInfo := NewListInfo(listInfo)
 
-	names := []string{"hello", "world"}
-	enumInfo, err := EnumTypeInfo(names)
+	firstEntry, err := NewStructEntry(enumInfo, "hello")
 	require.NoError(t, err)
+	secondEntry, err := NewStructEntry(nestedListInfo, "world")
+	require.NoError(t, err)
+	structInfo := NewStructInfo(firstEntry, secondEntry)
 
-	listInfo, err := ListTypeInfo(decimalInfo)
+	firstEntry, err = NewStructEntry(structInfo, "hello")
 	require.NoError(t, err)
-	nestedListInfo, err := ListTypeInfo(listInfo)
+	secondEntry, err = NewStructEntry(listInfo, "world")
 	require.NoError(t, err)
+	nestedStructInfo := NewStructInfo(firstEntry, secondEntry)
 
-	childTypeInfos := []TypeInfo{enumInfo, nestedListInfo}
-	structTypeInfo, err := StructTypeInfo(childTypeInfos, names)
-	require.NoError(t, err)
+	mapInfo := NewMapInfo(nestedStructInfo, nestedListInfo)
 
-	nestedChildTypeInfos := []TypeInfo{structTypeInfo, listInfo}
-	nestedStructTypeInfo, err := StructTypeInfo(nestedChildTypeInfos, names)
-	require.NoError(t, err)
-
-	mapTypeInfo, err := MapTypeInfo(nestedStructTypeInfo, nestedListInfo)
-	require.NoError(t, err)
-
-	typeInfos = append(typeInfos, decimalInfo, enumInfo, listInfo, nestedListInfo, structTypeInfo, nestedStructTypeInfo, mapTypeInfo)
+	typeInfos = append(typeInfos, decimalInfo, enumInfo, listInfo, nestedListInfo, structInfo, nestedStructInfo, mapInfo)
 
 	// Use each type as a child and to create the respective logical type.
 	for _, info := range typeInfos {
-		_, err = ListTypeInfo(info)
+		NewListInfo(info)
 		require.NoError(t, err)
-
-		// FIXME: Remove testing of private function once we add support for UDFs and can test it there.
-		logicalType, errLogicalType := info.logicalType()
-		require.NoError(t, errLogicalType)
-		require.NotEqual(t, nil, logicalType, "logical type must not be nil")
-		deleteLogicalType(logicalType)
 	}
 }

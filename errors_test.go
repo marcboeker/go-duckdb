@@ -304,14 +304,14 @@ func TestErrAPISetValue(t *testing.T) {
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
 }
 
-func TestErrPrimitiveTypeInfo(t *testing.T) {
+func TestErrTypeInfo(t *testing.T) {
 	t.Parallel()
 
 	var incorrectTypes []Type
 	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP)
 
 	for _, incorrect := range incorrectTypes {
-		_, err := PrimitiveTypeInfo(incorrect)
+		_, err := NewTypeInfo(incorrect)
 		testError(t, err, errAPI.Error(), tryOtherFuncErrMsg)
 	}
 
@@ -321,59 +321,13 @@ func TestErrPrimitiveTypeInfo(t *testing.T) {
 	}
 
 	for _, unsupported := range unsupportedTypes {
-		_, err := PrimitiveTypeInfo(unsupported)
+		_, err := NewTypeInfo(unsupported)
 		testError(t, err, errAPI.Error(), unsupportedTypeErrMsg)
 	}
 
-	// Invalid type information.
-	// FIXME: Remove this once we can test this code path with UDFs.
-	var invalidInfo TypeInfo
-	_, err := invalidInfo.logicalType()
-	require.ErrorContains(t, err, unsupportedTypeErrMsg)
-}
-
-func TestErrNestedTypeInfo(t *testing.T) {
-	t.Parallel()
-
-	// ENUM
-	var emptyNames []string
-	_, err := EnumTypeInfo(emptyNames)
-	testError(t, err, errAPI.Error(), errEmptySlice.Error())
-
-	// LIST
-	var invalidInfo TypeInfo
-	_, err = ListTypeInfo(invalidInfo)
-	testError(t, err, errAPI.Error(), errInvalidChildType.Error())
-
-	// STRUCT
-	validInfo, err := PrimitiveTypeInfo(TYPE_BIGINT)
-	require.NoError(t, err)
-
-	names := []string{"hello", "world"}
-	childInfos := []TypeInfo{validInfo}
-	var emptyInfos []TypeInfo
-
-	_, err = StructTypeInfo(emptyInfos, names)
-	testError(t, err, errAPI.Error(), errEmptySlice.Error())
-	_, err = StructTypeInfo(childInfos, emptyNames)
-	testError(t, err, errAPI.Error(), errEmptySlice.Error())
-
-	_, err = StructTypeInfo(childInfos, names)
-	testError(t, err, errAPI.Error(), structFieldCountErrMsg)
-
-	invalidNames := []string{""}
-	invalidInfos := []TypeInfo{invalidInfo, invalidInfo}
-
-	_, err = StructTypeInfo(invalidInfos, names)
-	testError(t, err, errAPI.Error(), errInvalidChildType.Error())
-	_, err = StructTypeInfo(childInfos, invalidNames)
+	// Invalid STRUCT entry.
+	_, err := NewStructEntry(nil, "")
 	testError(t, err, errAPI.Error(), errEmptyName.Error())
-
-	// MAP
-	_, err = MapTypeInfo(invalidInfo, validInfo)
-	testError(t, err, errAPI.Error(), errInvalidKeyType.Error())
-	_, err = MapTypeInfo(validInfo, invalidInfo)
-	testError(t, err, errAPI.Error(), errInvalidValueType.Error())
 }
 
 func TestDuckDBErrors(t *testing.T) {
