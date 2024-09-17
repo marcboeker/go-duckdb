@@ -279,15 +279,15 @@ func TestANYScalarUDF(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int
-	row := db.QueryRow(`SELECT my_null_count(10, 42, 2, 2, 2) AS msg`)
+	row := db.QueryRow(`SELECT my_null_count(10, 'hello', 2, [2], 2) AS msg`)
 	require.NoError(t, row.Scan(&count))
 	require.Equal(t, 0, count)
 
-	row = db.QueryRow(`SELECT my_null_count(10, NULL, NULL) AS msg`)
+	row = db.QueryRow(`SELECT my_null_count(10, NULL, NULL, [NULL], {'hello': NULL}) AS msg`)
 	require.NoError(t, row.Scan(&count))
 	require.Equal(t, 2, count)
 
-	row = db.QueryRow(`SELECT my_null_count(10) AS msg`)
+	row = db.QueryRow(`SELECT my_null_count(10, True) AS msg`)
 	require.NoError(t, row.Scan(&count))
 	require.Equal(t, 0, count)
 
