@@ -19,9 +19,10 @@ import (
 	"unsafe"
 )
 
-type ScalarFunctionConfig struct {
-	InputTypeInfos []TypeInfo
-	ResultTypeInfo TypeInfo
+type ScalarFunctionConfig interface {
+	InputTypeInfos() []TypeInfo
+	ResultTypeInfo() TypeInfo
+	VariadicTypeInfo() TypeInfo
 }
 
 type ScalarFunction interface {
@@ -93,6 +94,60 @@ func scalar_udf_delete_callback(extraInfo unsafe.Pointer) {
 	h.Delete()
 }
 
+func registerInputParameters(config ScalarFunctionConfig, scalarFunction C.duckdb_scalar_function) error {
+	// Set variadic input parameters.
+	if config.VariadicTypeInfo() != nil {
+		typeName, ok := unsupportedTypeToStringMap[config.VariadicTypeInfo().InternalType()]
+		if ok {
+			return unsupportedTypeError(typeName)
+		}
+
+		logicalType := config.VariadicTypeInfo().logicalType()
+		C.duckdb_scalar_function_set_varargs(scalarFunction, logicalType)
+		C.duckdb_destroy_logical_type(&logicalType)
+		return nil
+	}
+
+	// Set fixed input parameters.
+	if config.InputTypeInfos() == nil {
+		return errScalarUDFNilInputTypes
+	}
+	if len(config.InputTypeInfos()) == 0 {
+		return errScalarUDFEmptyInputTypes
+	}
+
+	for i, inputTypeInfo := range config.InputTypeInfos() {
+		if inputTypeInfo == nil {
+			return addIndexToError(errScalarUDFInputTypeIsNil, i)
+		}
+
+		typeName, ok := unsupportedTypeToStringMap[inputTypeInfo.InternalType()]
+		if ok {
+			return unsupportedTypeError(typeName)
+		}
+
+		logicalType := inputTypeInfo.logicalType()
+		C.duckdb_scalar_function_add_parameter(scalarFunction, logicalType)
+		C.duckdb_destroy_logical_type(&logicalType)
+	}
+	return nil
+}
+
+func registerResultParameters(config ScalarFunctionConfig, scalarFunction C.duckdb_scalar_function) error {
+	if config.ResultTypeInfo() == nil {
+		return errScalarUDFResultTypeIsNil
+	}
+	typeName, ok := unsupportedTypeToStringMap[config.ResultTypeInfo().InternalType()]
+	if ok {
+		return unsupportedTypeError(typeName)
+	}
+
+	logicalType := config.ResultTypeInfo().logicalType()
+	C.duckdb_scalar_function_set_return_type(scalarFunction, logicalType)
+	C.duckdb_destroy_logical_type(&logicalType)
+	return nil
+}
+
 // RegisterScalarUDF registers a scalar UDF.
 // This function takes ownership of f, so you must pass it as a pointer.
 func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
@@ -116,43 +171,17 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
 
 		// Get the configuration.
 		config := f.Config()
-		if config.InputTypeInfos == nil {
-			return getError(errAPI, errScalarUDFNilInputTypes)
+
+		// Register the input parameters.
+		if err := registerInputParameters(config, scalarFunction); err != nil {
+			return getError(errAPI, err)
 		}
-		if len(config.InputTypeInfos) == 0 {
-			return getError(errAPI, errScalarUDFEmptyInputTypes)
-		}
-
-		// Add input parameters.
-		for i, inputTypeInfo := range config.InputTypeInfos {
-			if inputTypeInfo == nil {
-				return getError(errAPI, addIndexToError(errScalarUDFInputTypeIsNil, i))
-			}
-
-			typeName, ok := unsupportedTypeToStringMap[inputTypeInfo.InternalType()]
-			if ok {
-				return getError(errAPI, unsupportedTypeError(typeName))
-			}
-
-			logicalType := inputTypeInfo.logicalType()
-			C.duckdb_scalar_function_add_parameter(scalarFunction, logicalType)
-			C.duckdb_destroy_logical_type(&logicalType)
+		// Register the result parameters.
+		if err := registerResultParameters(config, scalarFunction); err != nil {
+			return getError(errAPI, err)
 		}
 
-		// Add result parameter.
-		if config.ResultTypeInfo == nil {
-			return getError(errAPI, errScalarUDFResultTypeIsNil)
-		}
-		typeName, ok := unsupportedTypeToStringMap[config.ResultTypeInfo.InternalType()]
-		if ok {
-			return getError(errAPI, unsupportedTypeError(typeName))
-		}
-
-		logicalType := config.ResultTypeInfo.logicalType()
-		C.duckdb_scalar_function_set_return_type(scalarFunction, logicalType)
-		C.duckdb_destroy_logical_type(&logicalType)
-
-		// Set the actual function.
+		// Set the function callback.
 		C.duckdb_scalar_function_set_function(scalarFunction, C.scalar_udf_callback_t(C.scalar_udf_callback))
 
 		// Set data available during execution.

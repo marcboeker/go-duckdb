@@ -11,20 +11,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var currentInfo TypeInfo
+
 type simpleScalarUDF struct{}
 
-func (udf *simpleScalarUDF) Config() ScalarFunctionConfig {
-	info, err := NewTypeInfo(TYPE_INTEGER)
-	if err != nil {
-		panic(err)
-	}
-	return ScalarFunctionConfig{
-		InputTypeInfos: []TypeInfo{info, info},
-		ResultTypeInfo: info,
-	}
+type simpleScalarUDFConfig struct{}
+
+func (*simpleScalarUDFConfig) InputTypeInfos() []TypeInfo {
+	return []TypeInfo{currentInfo, currentInfo}
 }
 
-func (udf *simpleScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+func (*simpleScalarUDFConfig) ResultTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*simpleScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+	return nil
+}
+
+func (*simpleScalarUDF) Config() ScalarFunctionConfig {
+	return &simpleScalarUDFConfig{}
+}
+
+func (*simpleScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
 	val := args[0].(int32) + args[1].(int32)
 	return val, nil
 }
@@ -34,6 +43,9 @@ func TestSimpleScalarUDF(t *testing.T) {
 	require.NoError(t, err)
 
 	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
 
 	var udf *simpleScalarUDF
@@ -51,23 +63,32 @@ func TestSimpleScalarUDF(t *testing.T) {
 
 type allTypesScalarUDF struct{}
 
-var currentType TypeInfo
+type allTypesScalarUDFConfig struct{}
 
-func (udf *allTypesScalarUDF) Config() ScalarFunctionConfig {
-	return ScalarFunctionConfig{
-		InputTypeInfos: []TypeInfo{currentType},
-		ResultTypeInfo: currentType,
-	}
+func (*allTypesScalarUDFConfig) InputTypeInfos() []TypeInfo {
+	return []TypeInfo{currentInfo}
 }
 
-func (udf *allTypesScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+func (*allTypesScalarUDFConfig) ResultTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*allTypesScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+	return nil
+}
+
+func (*allTypesScalarUDF) Config() ScalarFunctionConfig {
+	return &allTypesScalarUDFConfig{}
+}
+
+func (*allTypesScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
 	return args[0], nil
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
 	typeInfos := getTypeInfos(t, false)
 	for _, info := range typeInfos {
-		currentType = info.TypeInfo
+		currentInfo = info.TypeInfo
 
 		db, err := sql.Open("duckdb", "")
 		require.NoError(t, err)
@@ -98,79 +119,109 @@ func TestAllTypesScalarUDF(t *testing.T) {
 
 type errNilInputScalarUDF struct{}
 
-func (udf *errNilInputScalarUDF) Config() ScalarFunctionConfig {
-	info, err := NewTypeInfo(TYPE_INTEGER)
-	if err != nil {
-		panic(err)
-	}
-	return ScalarFunctionConfig{
-		ResultTypeInfo: info,
-	}
+type errNilInputScalarUDFConfig struct{}
+
+func (*errNilInputScalarUDFConfig) InputTypeInfos() []TypeInfo {
+	return nil
 }
 
-func (udf *errNilInputScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
-	return args[0], nil
+func (*errNilInputScalarUDFConfig) ResultTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*errNilInputScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+	return nil
+}
+
+func (*errNilInputScalarUDF) Config() ScalarFunctionConfig {
+	return &errNilInputScalarUDFConfig{}
+}
+
+func (*errNilInputScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+	return nil, nil
 }
 
 type errEmptyInputScalarUDF struct{}
 
-func (udf *errEmptyInputScalarUDF) Config() ScalarFunctionConfig {
-	info, err := NewTypeInfo(TYPE_INTEGER)
-	if err != nil {
-		panic(err)
-	}
-	return ScalarFunctionConfig{
-		InputTypeInfos: []TypeInfo{},
-		ResultTypeInfo: info,
-	}
+type errEmptyInputScalarUDFConfig struct{}
+
+func (*errEmptyInputScalarUDFConfig) InputTypeInfos() []TypeInfo {
+	return []TypeInfo{}
 }
 
-func (udf *errEmptyInputScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
-	return args[0], nil
+func (*errEmptyInputScalarUDFConfig) ResultTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*errEmptyInputScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+	return nil
+}
+
+func (*errEmptyInputScalarUDF) Config() ScalarFunctionConfig {
+	return &errEmptyInputScalarUDFConfig{}
+}
+
+func (*errEmptyInputScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+	return nil, nil
 }
 
 type errInputIsNilScalarUDF struct{}
 
-func (udf *errInputIsNilScalarUDF) Config() ScalarFunctionConfig {
-	info, err := NewTypeInfo(TYPE_INTEGER)
-	if err != nil {
-		panic(err)
-	}
-	return ScalarFunctionConfig{
-		InputTypeInfos: []TypeInfo{nil},
-		ResultTypeInfo: info,
-	}
+type errInputIsNilScalarUDFConfig struct{}
+
+func (*errInputIsNilScalarUDFConfig) InputTypeInfos() []TypeInfo {
+	return []TypeInfo{nil}
 }
 
-func (udf *errInputIsNilScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
-	return args[0], nil
+func (*errInputIsNilScalarUDFConfig) ResultTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*errInputIsNilScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+	return nil
+}
+
+func (*errInputIsNilScalarUDF) Config() ScalarFunctionConfig {
+	return &errInputIsNilScalarUDFConfig{}
+}
+
+func (*errInputIsNilScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+	return nil, nil
 }
 
 type errResultIsNilScalarUDF struct{}
 
-func (udf *errResultIsNilScalarUDF) Config() ScalarFunctionConfig {
-	info, err := NewTypeInfo(TYPE_INTEGER)
-	if err != nil {
-		panic(err)
-	}
-	return ScalarFunctionConfig{
-		InputTypeInfos: []TypeInfo{info},
-	}
+type errResultIsNilScalarUDFConfig struct{}
+
+func (*errResultIsNilScalarUDFConfig) InputTypeInfos() []TypeInfo {
+	return []TypeInfo{currentInfo}
 }
 
-func (udf *errResultIsNilScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
-	return args[0], nil
+func (*errResultIsNilScalarUDFConfig) ResultTypeInfo() TypeInfo {
+	return nil
+}
+
+func (*errResultIsNilScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+	return nil
+}
+
+func (*errResultIsNilScalarUDF) Config() ScalarFunctionConfig {
+	return &errResultIsNilScalarUDFConfig{}
+}
+
+func (*errResultIsNilScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+	return nil, nil
 }
 
 type errExecScalarUDF struct{}
 
-func (udf *errExecScalarUDF) Config() ScalarFunctionConfig {
+func (*errExecScalarUDF) Config() ScalarFunctionConfig {
 	scalarUDF := simpleScalarUDF{}
 	return scalarUDF.Config()
 }
 
-func (udf *errExecScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
-	return args[0], errors.New("invalid execution")
+func (*errExecScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+	return nil, errors.New("test invalid execution")
 }
 
 func TestScalarUDFErrors(t *testing.T) {
@@ -180,6 +231,9 @@ func TestScalarUDFErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
 
 	// Empty name.
