@@ -91,9 +91,9 @@ var (
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
 
-	errEmptyName             = errors.New("empty name")
-	errInvalidDecimalWidth   = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
-	errScaleGreaterThanWidth = errors.New("the DECIMAL scale must not be greater than its width")
+	errEmptyName           = errors.New("empty name")
+	errInvalidDecimalWidth = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
+	errInvalidDecimalScale = errors.New("the DECIMAL scale must be less than or equal to the width")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")

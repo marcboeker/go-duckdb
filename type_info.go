@@ -108,7 +108,7 @@ func NewDecimalInfo(width uint8, scale uint8) (TypeInfo, error) {
 		return nil, getError(errAPI, errInvalidDecimalWidth)
 	}
 	if scale > width {
-		return nil, getError(errAPI, errScaleGreaterThanWidth)
+		return nil, getError(errAPI, errInvalidDecimalScale)
 	}
 
 	return &typeInfo{
