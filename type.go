@@ -5,6 +5,7 @@ package duckdb
 */
 import "C"
 
+// Type wraps the corresponding DuckDB type enum.
 type Type C.duckdb_type
 
 const (

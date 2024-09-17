@@ -25,6 +25,7 @@ type StructEntry interface {
 }
 
 // NewStructEntry returns a STRUCT entry.
+// info contains information about the entry's type, and name holds the entry's name.
 func NewStructEntry(info TypeInfo, name string) (StructEntry, error) {
 	if name == "" {
 		return nil, getError(errAPI, errEmptyName)
@@ -64,12 +65,18 @@ type typeInfo struct {
 	enumNames  []string
 }
 
-// TypeInfo is an interface for DuckDB types.
+// TypeInfo is an interface for a DuckDB type.
 type TypeInfo interface {
 	logicalType() C.duckdb_logical_type
 }
 
 // NewTypeInfo returns type information for DuckDB's primitive types.
+// It returns the TypeInfo, if the Type parameter is a valid primitive type.
+// Else, it returns nil, and an error.
+// Valid types are:
+// TYPE_[BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT, UTINYINT, USMALLINT, UINTEGER,
+// UBIGINT, FLOAT, DOUBLE, TIMESTAMP, DATE, TIME, INTERVAL, HUGEINT, VARCHAR, BLOB,
+// TIMESTAMP_S, TIMESTAMP_MS, TIMESTAMP_NS, UUID, TIMESTAMP_TZ, ANY].
 func NewTypeInfo(t Type) (TypeInfo, error) {
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap && t != TYPE_ANY {
@@ -95,30 +102,52 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 }
 
 // NewDecimalInfo returns DECIMAL type information.
-func NewDecimalInfo(width uint8, scale uint8) TypeInfo {
+// Its input parameters are the width and scale of the DECIMAL type.
+func NewDecimalInfo(width uint8, scale uint8) (TypeInfo, error) {
+	if width < 1 || width > MAX_DECIMAL_WIDTH {
+		return nil, getError(errAPI, errInvalidDecimalWidth)
+	}
+	if scale > width {
+		return nil, getError(errAPI, errScaleGreaterThanWidth)
+	}
+
 	return &typeInfo{
 		baseTypeInfo: baseTypeInfo{
 			Type:         TYPE_DECIMAL,
 			decimalWidth: width,
 			decimalScale: scale,
 		},
-	}
+	}, nil
 }
 
 // NewEnumInfo returns ENUM type information.
-func NewEnumInfo(first string, others ...string) TypeInfo {
+// Its input parameters are the dictionary values.
+func NewEnumInfo(first string, others ...string) (TypeInfo, error) {
+	// Check for duplicate names.
+	m := map[string]bool{}
+	m[first] = true
+	for _, name := range others {
+		_, inMap := m[name]
+		if inMap {
+			return nil, getError(errAPI, duplicateNameError(name))
+		}
+		m[name] = true
+	}
+
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{
 			Type: TYPE_ENUM,
 		},
 		enumNames: make([]string, 0),
 	}
+
 	info.enumNames = append(info.enumNames, first)
 	info.enumNames = append(info.enumNames, others...)
-	return info
+	return info, nil
 }
 
 // NewListInfo returns LIST type information.
+// childInfo contains the type information of the LIST's elements.
 func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
 	if childInfo == nil {
 		return nil, getError(errAPI, interfaceIsNilError("childInfo"))
@@ -133,6 +162,7 @@ func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
 }
 
 // NewStructInfo returns STRUCT type information.
+// Its input parameters are the STRUCT entries.
 func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, error) {
 	if firstEntry == nil {
 		return nil, getError(errAPI, interfaceIsNilError("firstEntry"))
@@ -149,6 +179,18 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, err
 		}
 	}
 
+	// Check for duplicate names.
+	m := map[string]bool{}
+	m[firstEntry.Name()] = true
+	for _, entry := range others {
+		name := entry.Name()
+		_, inMap := m[name]
+		if inMap {
+			return nil, getError(errAPI, duplicateNameError(name))
+		}
+		m[name] = true
+	}
+
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{
 			Type:          TYPE_STRUCT,
@@ -161,6 +203,8 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, err
 }
 
 // NewMapInfo returns MAP type information.
+// keyInfo contains the type information of the MAP keys.
+// valueInfo contains the type information of the MAP values.
 func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
 	if keyInfo == nil {
 		return nil, getError(errAPI, interfaceIsNilError("keyInfo"))
