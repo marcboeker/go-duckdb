@@ -105,6 +105,7 @@ var (
 	errScalarUDFEmptyInputTypes = fmt.Errorf("%w: empty input types", errScalarUDFCreate)
 	errScalarUDFInputTypeIsNil  = fmt.Errorf("%w: input type is nil", errScalarUDFCreate)
 	errScalarUDFResultTypeIsNil = fmt.Errorf("%w: result type is nil", errScalarUDFCreate)
+	errScalarUDFResultTypeIsANY = fmt.Errorf("%w: result type is ANY", errScalarUDFCreate)
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")

@@ -23,6 +23,8 @@ type ScalarFunctionConfig interface {
 	InputTypeInfos() []TypeInfo
 	ResultTypeInfo() TypeInfo
 	VariadicTypeInfo() TypeInfo
+	Volatile() bool
+	SpecialNullHandling() bool
 }
 
 type ScalarFunction interface {
@@ -126,6 +128,9 @@ func registerResultParameters(config ScalarFunctionConfig, scalarFunction C.duck
 	if config.ResultTypeInfo() == nil {
 		return errScalarUDFResultTypeIsNil
 	}
+	if config.ResultTypeInfo().InternalType() == TYPE_ANY {
+		return errScalarUDFResultTypeIsANY
+	}
 	logicalType := config.ResultTypeInfo().logicalType()
 	C.duckdb_scalar_function_set_return_type(scalarFunction, logicalType)
 	C.duckdb_destroy_logical_type(&logicalType)
@@ -153,16 +158,19 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
 		scalarFunction := C.duckdb_create_scalar_function()
 		C.duckdb_scalar_function_set_name(scalarFunction, functionName)
 
-		// Get the configuration.
+		// Configure the scalar function.
 		config := f.Config()
-
-		// Register the input parameters.
 		if err := registerInputParameters(config, scalarFunction); err != nil {
 			return getError(errAPI, err)
 		}
-		// Register the result parameters.
 		if err := registerResultParameters(config, scalarFunction); err != nil {
 			return getError(errAPI, err)
+		}
+		if config.SpecialNullHandling() {
+			C.duckdb_scalar_function_set_special_handling(scalarFunction)
+		}
+		if config.Volatile() {
+			C.duckdb_scalar_function_set_volatile(scalarFunction)
 		}
 
 		// Set the function callback.
