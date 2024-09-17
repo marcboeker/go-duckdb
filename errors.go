@@ -83,14 +83,14 @@ var (
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 
 	errAppenderCreation   = errors.New("could not create appender")
-	errAppenderInvalidCon = errors.New(errAppenderCreation.Error() + ": not a DuckDB driver connection")
-	errAppenderClosedCon  = errors.New(errAppenderCreation.Error() + ": appender creation on a closed connection")
+	errAppenderInvalidCon = fmt.Errorf("%w: not a DuckDB driver connection", errAppenderCreation)
+	errAppenderClosedCon  = fmt.Errorf("%w: appender creation on a closed connection", errAppenderCreation)
 
 	errAppenderClose       = errors.New("could not close appender")
-	errAppenderDoubleClose = errors.New(errAppenderClose.Error() + ": already closed")
+	errAppenderDoubleClose = fmt.Errorf("%w: already closed", errAppenderClose)
 
 	errAppenderAppendRow        = errors.New("could not append row")
-	errAppenderAppendAfterClose = errors.New(errAppenderAppendRow.Error() + ": appender already closed")
+	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
 
 	errAppenderFlush = errors.New("could not flush appender")
 
@@ -101,6 +101,8 @@ var (
 	errScalarUDFCreate          = errors.New("could not create scalar UDF")
 	errScalarUDFNoName          = fmt.Errorf("%w: missing name", errScalarUDFCreate)
 	errScalarUDFIsNil           = fmt.Errorf("%w: function is nil", errScalarUDFCreate)
+	errScalarUDFNilInputTypes   = fmt.Errorf("%w: input types are nil", errScalarUDFCreate)
+	errScalarUDFEmptyInputTypes = fmt.Errorf("%w: empty input types", errScalarUDFCreate)
 	errScalarUDFInputTypeIsNil  = fmt.Errorf("%w: input type is nil", errScalarUDFCreate)
 	errScalarUDFResultTypeIsNil = fmt.Errorf("%w: result type is nil", errScalarUDFCreate)
 

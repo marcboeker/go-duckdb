@@ -13,17 +13,15 @@ import (
 
 type simpleScalarUDF struct{}
 
-func (udf *simpleScalarUDF) Config() (ScalarFunctionConfig, error) {
-	var config ScalarFunctionConfig
-
-	intTypeInp, err := NewTypeInfo(TYPE_INTEGER)
+func (udf *simpleScalarUDF) Config() ScalarFunctionConfig {
+	info, err := NewTypeInfo(TYPE_INTEGER)
 	if err != nil {
-		return config, err
+		panic(err)
 	}
-
-	config.InputTypeInfos = []TypeInfo{intTypeInp, intTypeInp}
-	config.ResultTypeInfo = intTypeInp
-	return config, nil
+	return ScalarFunctionConfig{
+		InputTypeInfos: []TypeInfo{info, info},
+		ResultTypeInfo: info,
+	}
 }
 
 func (udf *simpleScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
@@ -55,12 +53,11 @@ type allTypesScalarUDF struct{}
 
 var currentType TypeInfo
 
-func (udf *allTypesScalarUDF) Config() (ScalarFunctionConfig, error) {
-	config := ScalarFunctionConfig{
+func (udf *allTypesScalarUDF) Config() ScalarFunctionConfig {
+	return ScalarFunctionConfig{
 		InputTypeInfos: []TypeInfo{currentType},
 		ResultTypeInfo: currentType,
 	}
-	return config, nil
 }
 
 func (udf *allTypesScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
@@ -99,20 +96,75 @@ func TestAllTypesScalarUDF(t *testing.T) {
 	}
 }
 
-type errConfigScalarUDF struct{}
+type errNilInputScalarUDF struct{}
 
-func (udf *errConfigScalarUDF) Config() (ScalarFunctionConfig, error) {
-	return ScalarFunctionConfig{}, errors.New("invalid configuration")
+func (udf *errNilInputScalarUDF) Config() ScalarFunctionConfig {
+	info, err := NewTypeInfo(TYPE_INTEGER)
+	if err != nil {
+		panic(err)
+	}
+	return ScalarFunctionConfig{
+		ResultTypeInfo: info,
+	}
 }
 
-func (udf *errConfigScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
-	scalarUDF := allTypesScalarUDF{}
-	return scalarUDF.ExecuteRow(args)
+func (udf *errNilInputScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+	return args[0], nil
+}
+
+type errEmptyInputScalarUDF struct{}
+
+func (udf *errEmptyInputScalarUDF) Config() ScalarFunctionConfig {
+	info, err := NewTypeInfo(TYPE_INTEGER)
+	if err != nil {
+		panic(err)
+	}
+	return ScalarFunctionConfig{
+		InputTypeInfos: []TypeInfo{},
+		ResultTypeInfo: info,
+	}
+}
+
+func (udf *errEmptyInputScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+	return args[0], nil
+}
+
+type errInputIsNilScalarUDF struct{}
+
+func (udf *errInputIsNilScalarUDF) Config() ScalarFunctionConfig {
+	info, err := NewTypeInfo(TYPE_INTEGER)
+	if err != nil {
+		panic(err)
+	}
+	return ScalarFunctionConfig{
+		InputTypeInfos: []TypeInfo{nil},
+		ResultTypeInfo: info,
+	}
+}
+
+func (udf *errInputIsNilScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+	return args[0], nil
+}
+
+type errResultIsNilScalarUDF struct{}
+
+func (udf *errResultIsNilScalarUDF) Config() ScalarFunctionConfig {
+	info, err := NewTypeInfo(TYPE_INTEGER)
+	if err != nil {
+		panic(err)
+	}
+	return ScalarFunctionConfig{
+		InputTypeInfos: []TypeInfo{info},
+	}
+}
+
+func (udf *errResultIsNilScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+	return args[0], nil
 }
 
 type errExecScalarUDF struct{}
 
-func (udf *errExecScalarUDF) Config() (ScalarFunctionConfig, error) {
+func (udf *errExecScalarUDF) Config() ScalarFunctionConfig {
 	scalarUDF := simpleScalarUDF{}
 	return scalarUDF.Config()
 }
@@ -122,22 +174,41 @@ func (udf *errExecScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
 }
 
 func TestScalarUDFErrors(t *testing.T) {
+	t.Parallel()
+
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
 
 	c, err := db.Conn(context.Background())
 	require.NoError(t, err)
 
-	// Invalid configuration.
-	var errConfigUDF *errConfigScalarUDF
-	err = RegisterScalarUDF(c, "err_config", errConfigUDF)
-	testError(t, err, errAPI.Error())
+	// Empty name.
+	var emptyNameUDF *simpleScalarUDF
+	err = RegisterScalarUDF(c, "", emptyNameUDF)
+	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoName.Error())
+
+	// Invalid input parameters.
+
+	var errNilInputUDF *errNilInputScalarUDF
+	err = RegisterScalarUDF(c, "err_nil_input", errNilInputUDF)
+	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNilInputTypes.Error())
+
+	var errEmptyInputUDF *errEmptyInputScalarUDF
+	err = RegisterScalarUDF(c, "err_empty_input", errEmptyInputUDF)
+	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFEmptyInputTypes.Error())
+
+	var errInputIsNilUDF *errInputIsNilScalarUDF
+	err = RegisterScalarUDF(c, "err_input_type_is_nil", errInputIsNilUDF)
+	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFInputTypeIsNil.Error())
+
+	var errResultIsNil *errResultIsNilScalarUDF
+	err = RegisterScalarUDF(c, "err_result_type_is_nil", errResultIsNil)
+	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFResultTypeIsNil.Error())
 
 	// Error during execution.
 	var errExecUDF *errExecScalarUDF
 	err = RegisterScalarUDF(c, "err_exec", errExecUDF)
 	require.NoError(t, err)
-
 	row := db.QueryRow(`SELECT err_exec(10, 10) AS msg`)
 	testError(t, row.Err(), errAPI.Error())
 
@@ -157,13 +228,11 @@ func TestScalarUDFErrors(t *testing.T) {
 	// Register a scalar function that is nil.
 	err = RegisterScalarUDF(c, "my_sum", nil)
 	testError(t, err, errAPI.Error(), errScalarUDFIsNil.Error())
-
 	require.NoError(t, c.Close())
 
 	// Test registering the scalar function on a closed connection.
 	var udfOnClosedCon *simpleScalarUDF
 	err = RegisterScalarUDF(c, "closed_con", udfOnClosedCon)
 	require.ErrorContains(t, err, sql.ErrConnDone.Error())
-
 	require.NoError(t, db.Close())
 }

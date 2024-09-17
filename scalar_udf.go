@@ -25,7 +25,7 @@ type ScalarFunctionConfig struct {
 }
 
 type ScalarFunction interface {
-	Config() (ScalarFunctionConfig, error)
+	Config() ScalarFunctionConfig
 	ExecuteRow(args []driver.Value) (any, error)
 }
 
@@ -115,38 +115,40 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
 		C.duckdb_scalar_function_set_name(scalarFunction, functionName)
 
 		// Get the configuration.
-		config, err := f.Config()
-		if err != nil {
-			return getError(errAPI, err)
+		config := f.Config()
+		if config.InputTypeInfos == nil {
+			return getError(errAPI, errScalarUDFNilInputTypes)
+		}
+		if len(config.InputTypeInfos) == 0 {
+			return getError(errAPI, errScalarUDFEmptyInputTypes)
 		}
 
 		// Add input parameters.
 		for i, inputTypeInfo := range config.InputTypeInfos {
+			if inputTypeInfo == nil {
+				return getError(errAPI, addIndexToError(errScalarUDFInputTypeIsNil, i))
+			}
+
 			typeName, ok := unsupportedTypeToStringMap[inputTypeInfo.InternalType()]
 			if ok {
 				return getError(errAPI, unsupportedTypeError(typeName))
 			}
 
 			logicalType := inputTypeInfo.logicalType()
-			if logicalType == nil {
-				return getError(errAPI, addIndexToError(errScalarUDFInputTypeIsNil, i))
-			}
-
 			C.duckdb_scalar_function_add_parameter(scalarFunction, logicalType)
 			C.duckdb_destroy_logical_type(&logicalType)
 		}
 
 		// Add result parameter.
+		if config.ResultTypeInfo == nil {
+			return getError(errAPI, errScalarUDFResultTypeIsNil)
+		}
 		typeName, ok := unsupportedTypeToStringMap[config.ResultTypeInfo.InternalType()]
 		if ok {
 			return getError(errAPI, unsupportedTypeError(typeName))
 		}
 
 		logicalType := config.ResultTypeInfo.logicalType()
-		if logicalType == nil {
-			return getError(errAPI, errScalarUDFResultTypeIsNil)
-		}
-
 		C.duckdb_scalar_function_set_return_type(scalarFunction, logicalType)
 		C.duckdb_destroy_logical_type(&logicalType)
 
