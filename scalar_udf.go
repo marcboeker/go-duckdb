@@ -97,11 +97,6 @@ func scalar_udf_delete_callback(extraInfo unsafe.Pointer) {
 func registerInputParameters(config ScalarFunctionConfig, scalarFunction C.duckdb_scalar_function) error {
 	// Set variadic input parameters.
 	if config.VariadicTypeInfo() != nil {
-		typeName, ok := unsupportedTypeToStringMap[config.VariadicTypeInfo().InternalType()]
-		if ok {
-			return unsupportedTypeError(typeName)
-		}
-
 		logicalType := config.VariadicTypeInfo().logicalType()
 		C.duckdb_scalar_function_set_varargs(scalarFunction, logicalType)
 		C.duckdb_destroy_logical_type(&logicalType)
@@ -120,12 +115,6 @@ func registerInputParameters(config ScalarFunctionConfig, scalarFunction C.duckd
 		if inputTypeInfo == nil {
 			return addIndexToError(errScalarUDFInputTypeIsNil, i)
 		}
-
-		typeName, ok := unsupportedTypeToStringMap[inputTypeInfo.InternalType()]
-		if ok {
-			return unsupportedTypeError(typeName)
-		}
-
 		logicalType := inputTypeInfo.logicalType()
 		C.duckdb_scalar_function_add_parameter(scalarFunction, logicalType)
 		C.duckdb_destroy_logical_type(&logicalType)
@@ -137,11 +126,6 @@ func registerResultParameters(config ScalarFunctionConfig, scalarFunction C.duck
 	if config.ResultTypeInfo() == nil {
 		return errScalarUDFResultTypeIsNil
 	}
-	typeName, ok := unsupportedTypeToStringMap[config.ResultTypeInfo().InternalType()]
-	if ok {
-		return unsupportedTypeError(typeName)
-	}
-
 	logicalType := config.ResultTypeInfo().logicalType()
 	C.duckdb_scalar_function_set_return_type(scalarFunction, logicalType)
 	C.duckdb_destroy_logical_type(&logicalType)

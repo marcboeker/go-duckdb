@@ -34,6 +34,9 @@ func (*simpleScalarUDF) Config() ScalarFunctionConfig {
 }
 
 func (*simpleScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+	if args[0] == nil || args[1] == nil {
+		return nil, nil
+	}
 	val := args[0].(int32) + args[1].(int32)
 	return val, nil
 }
@@ -52,10 +55,18 @@ func TestSimpleScalarUDF(t *testing.T) {
 	err = RegisterScalarUDF(c, "my_sum", udf)
 	require.NoError(t, err)
 
-	var msg int
+	var msg *int
 	row := db.QueryRow(`SELECT my_sum(10, 42) AS msg`)
 	require.NoError(t, row.Scan(&msg))
-	require.Equal(t, 52, msg)
+	require.Equal(t, 52, *msg)
+
+	row = db.QueryRow(`SELECT my_sum(NULL, 42) AS msg`)
+	require.NoError(t, row.Scan(&msg))
+	require.Equal(t, (*int)(nil), msg)
+
+	row = db.QueryRow(`SELECT my_sum(42, NULL) AS msg`)
+	require.NoError(t, row.Scan(&msg))
+	require.Equal(t, (*int)(nil), msg)
 
 	require.NoError(t, c.Close())
 	require.NoError(t, db.Close())
@@ -115,6 +126,76 @@ func TestAllTypesScalarUDF(t *testing.T) {
 		require.NoError(t, c.Close())
 		require.NoError(t, db.Close())
 	}
+}
+
+type variadicScalarUDF struct{}
+
+type variadicScalarUDFConfig struct{}
+
+func (*variadicScalarUDFConfig) InputTypeInfos() []TypeInfo {
+	return nil
+}
+
+func (*variadicScalarUDFConfig) ResultTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*variadicScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*variadicScalarUDF) Config() ScalarFunctionConfig {
+	return &variadicScalarUDFConfig{}
+}
+
+func (*variadicScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+	sum := int32(0)
+	for _, val := range args {
+		if val == nil {
+			return nil, nil
+		}
+		sum += val.(int32)
+	}
+	return sum, nil
+}
+
+func TestVariadicScalarUDF(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+
+	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
+	var udf *variadicScalarUDF
+	err = RegisterScalarUDF(c, "my_variadic_sum", udf)
+	require.NoError(t, err)
+
+	var sum *int
+	row := db.QueryRow(`SELECT my_variadic_sum(10, NULL, NULL) AS msg`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, (*int)(nil), sum)
+
+	row = db.QueryRow(`SELECT my_variadic_sum(10, 42, 2, 2, 2) AS msg`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, 58, *sum)
+
+	row = db.QueryRow(`SELECT my_variadic_sum(10) AS msg`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, 10, *sum)
+
+	row = db.QueryRow(`SELECT my_variadic_sum(NULL) AS msg`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, (*int)(nil), sum)
+
+	row = db.QueryRow(`SELECT my_variadic_sum() AS msg`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, 0, *sum)
+
+	require.NoError(t, c.Close())
+	require.NoError(t, db.Close())
 }
 
 type errNilInputScalarUDF struct{}
