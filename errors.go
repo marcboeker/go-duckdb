@@ -107,6 +107,8 @@ var (
 	errScalarUDFResultTypeIsNil = fmt.Errorf("%w: result type is nil", errScalarUDFCreate)
 	errScalarUDFResultTypeIsANY = fmt.Errorf("%w: result type is ANY", errScalarUDFCreate)
 
+	errSetSQLNULLValue = errors.New("cannot write to a NULL column")
+
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")
 	errCreateConfig = errors.New("could not create config for database")

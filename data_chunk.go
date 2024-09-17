@@ -47,6 +47,9 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 		return nil, getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
 	column := &chunk.columns[colIdx]
+	if column.isSQLNull {
+		return nil, nil
+	}
 	return column.getFn(column, C.idx_t(rowIdx)), nil
 }
 
@@ -57,6 +60,10 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
 	column := &chunk.columns[colIdx]
+
+	if column.isSQLNull {
+		return getError(errAPI, errSetSQLNULLValue)
+	}
 
 	// Ensure that the types match before attempting to set anything.
 	// This is done to prevent failures 'halfway through' writing column values,

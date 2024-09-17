@@ -265,9 +265,6 @@ func (*anyScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
 }
 
 func TestANYScalarUDF(t *testing.T) {
-	// TODO: once DuckDB has SQLNull type.
-	return
-
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
 
