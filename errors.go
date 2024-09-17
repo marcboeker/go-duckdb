@@ -98,9 +98,11 @@ var (
 	errInvalidDecimalWidth = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
 	errInvalidDecimalScale = errors.New("the DECIMAL scale must be less than or equal to the width")
 
-	errScalarUDFCreate = errors.New("could not create scalar UDF")
-	errScalarUDFNoName = errors.New(errScalarUDFCreate.Error() + ": missing name")
-	errScalarUDFIsNil  = errors.New(errScalarUDFCreate.Error() + ": function is nil")
+	errScalarUDFCreate          = errors.New("could not create scalar UDF")
+	errScalarUDFNoName          = fmt.Errorf("%w: missing name", errScalarUDFCreate)
+	errScalarUDFIsNil           = fmt.Errorf("%w: function is nil", errScalarUDFCreate)
+	errScalarUDFInputTypeIsNil  = fmt.Errorf("%w: input type is nil", errScalarUDFCreate)
+	errScalarUDFResultTypeIsNil = fmt.Errorf("%w: result type is nil", errScalarUDFCreate)
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")

@@ -6,14 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-package duckdb
-
-import (
-"testing"
-
-"github.com/stretchr/testify/require"
-)
-
 type testTypeValues struct {
 	input  string
 	output string
@@ -50,11 +42,14 @@ var testPrimitiveSQLValues = map[Type]testTypeValues{
 	TYPE_TIMESTAMP_TZ: {input: `TIMESTAMPTZ '1992-09-20 11:30:00.123456789'`, output: `1992-09-20 11:30:00.123456+00`},
 }
 
-func getTypeInfos(t *testing.T) []testTypeInfo {
+func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 	var primitiveTypes []Type
 	for k := range typeToStringMap {
 		_, inMap := unsupportedTypeToStringMap[k]
-		if inMap {
+		if inMap && k != TYPE_ANY {
+			continue
+		}
+		if k == TYPE_ANY && !useAny {
 			continue
 		}
 		switch k {
@@ -65,59 +60,65 @@ func getTypeInfos(t *testing.T) []testTypeInfo {
 	}
 
 	// Create each primitive type information.
-	var typeInfos []testTypeInfo
+	var testTypeInfos []testTypeInfo
 	for _, primitive := range primitiveTypes {
-		typeInfo, err := PrimitiveTypeInfo(primitive)
+		info, err := NewTypeInfo(primitive)
 		require.NoError(t, err)
-		info := testTypeInfo{
-			TypeInfo:       typeInfo,
-			testTypeValues: testPrimitiveSQLValues[typeInfo.t],
+		testInfo := testTypeInfo{
+			TypeInfo:       info,
+			testTypeValues: testPrimitiveSQLValues[primitive],
 		}
-		typeInfos = append(typeInfos, info)
+		testTypeInfos = append(testTypeInfos, testInfo)
 	}
 
-	// Create nested types.
-	decimalInfo := testTypeInfo{
-		TypeInfo: DecimalTypeInfo(3, 2),
+	// Create nested type information.
+
+	info, err := NewDecimalInfo(3, 2)
+	require.NoError(t, err)
+	decimalTypeInfo := testTypeInfo{
+		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `4::DECIMAL(3, 2)`,
 			output: `4.00`,
 		},
 	}
 
-	names := []string{"hello", "world"}
-	info, err := EnumTypeInfo(names)
-	enumInfo := testTypeInfo{
+	info, err = NewEnumInfo("hello", "world", "!")
+	require.NoError(t, err)
+	enumTypeInfo := testTypeInfo{
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `'hello'::greeting`,
 			output: `hello`,
 		},
 	}
-	require.NoError(t, err)
 
-	info, err = ListTypeInfo(decimalInfo.TypeInfo)
-	listInfo := testTypeInfo{
+	info, err = NewListInfo(decimalTypeInfo)
+	require.NoError(t, err)
+	listTypeInfo := testTypeInfo{
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `[4::DECIMAL(3, 2)]`,
 			output: `[4.00]`,
 		},
 	}
-	require.NoError(t, err)
 
-	info, err = ListTypeInfo(listInfo.TypeInfo)
-	nestedListInfo := testTypeInfo{
+	info, err = NewListInfo(listTypeInfo)
+	require.NoError(t, err)
+	nestedListTypeInfo := testTypeInfo{
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `[[4::DECIMAL(3, 2)]]`,
 			output: `[[4.00]]`,
 		},
 	}
-	require.NoError(t, err)
 
-	childTypeInfos := []TypeInfo{enumInfo.TypeInfo, nestedListInfo.TypeInfo}
-	info, err = StructTypeInfo(childTypeInfos, names)
+	firstEntry, err := NewStructEntry(enumTypeInfo, "hello")
+	require.NoError(t, err)
+	secondEntry, err := NewStructEntry(nestedListTypeInfo, "world")
+	require.NoError(t, err)
+	info, err = NewStructInfo(firstEntry, secondEntry)
+	require.NoError(t, err)
 	structTypeInfo := testTypeInfo{
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
@@ -125,10 +126,13 @@ func getTypeInfos(t *testing.T) []testTypeInfo {
 			output: `{'hello': hello, 'world': [[4.00]]}`,
 		},
 	}
-	require.NoError(t, err)
 
-	nestedChildTypeInfos := []TypeInfo{structTypeInfo.TypeInfo, listInfo.TypeInfo}
-	info, err = StructTypeInfo(nestedChildTypeInfos, names)
+	firstEntry, err = NewStructEntry(structTypeInfo, "hello")
+	require.NoError(t, err)
+	secondEntry, err = NewStructEntry(listTypeInfo, "world")
+	require.NoError(t, err)
+	info, err = NewStructInfo(firstEntry, secondEntry)
+	require.NoError(t, err)
 	nestedStructTypeInfo := testTypeInfo{
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
@@ -139,9 +143,9 @@ func getTypeInfos(t *testing.T) []testTypeInfo {
 			output: `{'hello': {'hello': hello, 'world': [[4.00]]}, 'world': [4.00]}`,
 		},
 	}
-	require.NoError(t, err)
 
-	info, err = MapTypeInfo(decimalInfo.TypeInfo, nestedStructTypeInfo.TypeInfo)
+	info, err = NewMapInfo(decimalTypeInfo, nestedStructTypeInfo)
+	require.NoError(t, err)
 	mapTypeInfo := testTypeInfo{
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
@@ -154,132 +158,17 @@ func getTypeInfos(t *testing.T) []testTypeInfo {
 			output: `{4.00={'hello': {'hello': hello, 'world': [[4.00]]}, 'world': [4.00]}}`,
 		},
 	}
-	require.NoError(t, err)
 
-	typeInfos = append(typeInfos, decimalInfo, enumInfo, listInfo, nestedListInfo, structTypeInfo, nestedStructTypeInfo, mapTypeInfo)
-	return typeInfos
+	testTypeInfos = append(testTypeInfos, decimalTypeInfo, enumTypeInfo, listTypeInfo, nestedListTypeInfo, structTypeInfo, nestedStructTypeInfo, mapTypeInfo)
+	return testTypeInfos
 }
 
 func TestTypeInterface(t *testing.T) {
-	typeInfos := getTypeInfos(t)
+	testTypeInfos := getTypeInfos(t, true)
 
 	// Use each type as a child.
-	for _, info := range typeInfos {
-		_, err := ListTypeInfo(info.TypeInfo)
-		require.NoError(t, err)
-	}
-}
-
-func TestTypeInfo(t *testing.T) {
-	var primitiveTypes []Type
-	for k := range typeToStringMap {
-		_, inMap := unsupportedTypeToStringMap[k]
-		if inMap && k != TYPE_ANY {
-			continue
-		}
-		switch k {
-		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP:
-			continue
-		}
-		primitiveTypes = append(primitiveTypes, k)
-	}
-
-	// Create each primitive type information.
-	var typeInfos []TypeInfo
-	for _, primitive := range primitiveTypes {
-		info, err := NewTypeInfo(primitive)
-		require.NoError(t, err)
-		typeInfos = append(typeInfos, info)
-	}
-
-	// Create nested types.
-	decimalInfo := NewDecimalInfo(3, 2)
-	enumInfo := NewEnumInfo("hello", "world")
-	listInfo, err := NewListInfo(decimalInfo)
-	require.NoError(t, err)
-	nestedListInfo, err := NewListInfo(listInfo)
-	require.NoError(t, err)
-
-	firstEntry, err := NewStructEntry(enumInfo, "hello")
-	require.NoError(t, err)
-	secondEntry, err := NewStructEntry(nestedListInfo, "world")
-	require.NoError(t, err)
-	structInfo, err := NewStructInfo(firstEntry, secondEntry)
-	require.NoError(t, err)
-
-	firstEntry, err = NewStructEntry(structInfo, "hello")
-	require.NoError(t, err)
-	secondEntry, err = NewStructEntry(listInfo, "world")
-	require.NoError(t, err)
-	nestedStructInfo, err := NewStructInfo(firstEntry, secondEntry)
-	require.NoError(t, err)
-
-	mapInfo, err := NewMapInfo(nestedStructInfo, nestedListInfo)
-	require.NoError(t, err)
-
-	typeInfos = append(typeInfos, decimalInfo, enumInfo, listInfo, nestedListInfo, structInfo, nestedStructInfo, mapInfo)
-
-	// Use each type as a child and to create the respective logical type.
-	for _, info := range typeInfos {
-		_, err = NewListInfo(info)
-		require.NoError(t, err)
-	}
-}
-
-func TestTypeInfo(t *testing.T) {
-	var primitiveTypes []Type
-	for k := range typeToStringMap {
-		_, inMap := unsupportedTypeToStringMap[k]
-		if inMap && k != TYPE_ANY {
-			continue
-		}
-		switch k {
-		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP:
-			continue
-		}
-		primitiveTypes = append(primitiveTypes, k)
-	}
-
-	// Create each primitive type information.
-	var typeInfos []TypeInfo
-	for _, primitive := range primitiveTypes {
-		info, err := NewTypeInfo(primitive)
-		require.NoError(t, err)
-		typeInfos = append(typeInfos, info)
-	}
-
-	// Create nested types.
-	decimalInfo, err := NewDecimalInfo(3, 2)
-	require.NoError(t, err)
-	enumInfo, err := NewEnumInfo("hello", "world", "!")
-	require.NoError(t, err)
-	listInfo, err := NewListInfo(decimalInfo)
-	require.NoError(t, err)
-	nestedListInfo, err := NewListInfo(listInfo)
-	require.NoError(t, err)
-
-	firstEntry, err := NewStructEntry(enumInfo, "hello")
-	require.NoError(t, err)
-	secondEntry, err := NewStructEntry(nestedListInfo, "world")
-	require.NoError(t, err)
-	structInfo, err := NewStructInfo(firstEntry, secondEntry)
-	require.NoError(t, err)
-
-	firstEntry, err = NewStructEntry(structInfo, "hello")
-	require.NoError(t, err)
-	secondEntry, err = NewStructEntry(listInfo, "world")
-	require.NoError(t, err)
-	nestedStructInfo, err := NewStructInfo(firstEntry, secondEntry)
-	require.NoError(t, err)
-
-	mapInfo, err := NewMapInfo(nestedStructInfo, nestedListInfo)
-	require.NoError(t, err)
-
-	typeInfos = append(typeInfos, decimalInfo, enumInfo, listInfo, nestedListInfo, structInfo, nestedStructInfo, mapInfo)
-
-	// Use each type as a child.
-	for _, info := range typeInfos {
-		_, err = NewListInfo(info)
+	for _, info := range testTypeInfos {
+		_, err := NewListInfo(info.TypeInfo)
 		require.NoError(t, err)
 	}
 }
@@ -357,4 +246,3 @@ func TestErrTypeInfo(t *testing.T) {
 	_, err = NewMapInfo(validInfo, nil)
 	testError(t, err, errAPI.Error(), interfaceIsNilErrMsg)
 }
-

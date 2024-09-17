@@ -16,7 +16,7 @@ type simpleScalarUDF struct{}
 func (udf *simpleScalarUDF) Config() (ScalarFunctionConfig, error) {
 	var config ScalarFunctionConfig
 
-	intTypeInp, err := PrimitiveTypeInfo(TYPE_INTEGER)
+	intTypeInp, err := NewTypeInfo(TYPE_INTEGER)
 	if err != nil {
 		return config, err
 	}
@@ -68,7 +68,7 @@ func (udf *allTypesScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
-	typeInfos := getTypeInfos(t)
+	typeInfos := getTypeInfos(t, false)
 	for _, info := range typeInfos {
 		currentType = info.TypeInfo
 
@@ -88,7 +88,7 @@ func TestAllTypesScalarUDF(t *testing.T) {
 		var msg string
 		row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s)::VARCHAR AS msg`, info.input))
 		require.NoError(t, row.Scan(&msg))
-		if info.TypeInfo.t != TYPE_UUID {
+		if info.TypeInfo.InternalType() != TYPE_UUID {
 			require.Equal(t, info.output, msg, fmt.Sprintf(`output does not match expected output, input: %s`, info.input))
 		} else {
 			require.NotEqual(t, "", msg, "uuid empty")

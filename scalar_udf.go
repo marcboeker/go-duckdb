@@ -121,16 +121,15 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
 		}
 
 		// Add input parameters.
-		for _, inputTypeInfo := range config.InputTypeInfos {
-			typeName, ok := unsupportedTypeToStringMap[inputTypeInfo.t]
+		for i, inputTypeInfo := range config.InputTypeInfos {
+			typeName, ok := unsupportedTypeToStringMap[inputTypeInfo.InternalType()]
 			if ok {
 				return getError(errAPI, unsupportedTypeError(typeName))
 			}
 
-			logicalType, errInputType := inputTypeInfo.logicalType()
-			if errInputType != nil {
-				C.duckdb_destroy_logical_type(&logicalType)
-				return getError(errAPI, errInputType)
+			logicalType := inputTypeInfo.logicalType()
+			if logicalType == nil {
+				return getError(errAPI, addIndexToError(errScalarUDFInputTypeIsNil, i))
 			}
 
 			C.duckdb_scalar_function_add_parameter(scalarFunction, logicalType)
@@ -138,15 +137,14 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
 		}
 
 		// Add result parameter.
-		typeName, ok := unsupportedTypeToStringMap[config.ResultTypeInfo.t]
+		typeName, ok := unsupportedTypeToStringMap[config.ResultTypeInfo.InternalType()]
 		if ok {
 			return getError(errAPI, unsupportedTypeError(typeName))
 		}
 
-		logicalType, err := config.ResultTypeInfo.logicalType()
-		if err != nil {
-			C.duckdb_destroy_logical_type(&logicalType)
-			return getError(errAPI, err)
+		logicalType := config.ResultTypeInfo.logicalType()
+		if logicalType == nil {
+			return getError(errAPI, errScalarUDFResultTypeIsNil)
 		}
 
 		C.duckdb_scalar_function_set_return_type(scalarFunction, logicalType)
