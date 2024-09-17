@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -256,7 +255,7 @@ func TestQuery(t *testing.T) {
 		for rows.Next() {
 			var i int
 			require.NoError(t, rows.Scan(&i))
-			assert.Equal(t, expected, i)
+			require.Equal(t, expected, i)
 			expected++
 		}
 	})
@@ -281,10 +280,8 @@ func TestQuery(t *testing.T) {
 func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	defer db.Close()
 
 	loadJSONExt(t, db)
-
 	var data string
 
 	t.Run("select empty JSON", func(t *testing.T) {
@@ -311,18 +308,20 @@ func TestJSON(t *testing.T) {
 		require.Equal(t, len(items), 2)
 		require.Equal(t, items, []string{"foo", "bar"})
 	})
+
+	require.NoError(t, db.Close())
 }
 
 func TestEmpty(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	defer db.Close()
 
 	rows, err := db.Query(`SELECT 1 WHERE 1 = 0`)
 	require.NoError(t, err)
 	defer rows.Close()
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Err())
+	require.NoError(t, db.Close())
 }
 
 func TestTypeNamesAndScanTypes(t *testing.T) {
@@ -519,12 +518,12 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			require.Equal(t, rows.Next(), false)
 		})
 	}
+	require.NoError(t, db.Close())
 }
 
 // Running multiple statements in a single query. All statements except the last one are executed and if no error then last statement is executed with args and result returned.
 func TestMultipleStatements(t *testing.T) {
 	db := openDB(t)
-	defer db.Close()
 
 	// test empty query
 	_, err := db.Exec("")
@@ -617,13 +616,12 @@ func TestMultipleStatements(t *testing.T) {
 	err = rows.Close()
 	require.NoError(t, err)
 
-	err = conn.Close()
-	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	require.NoError(t, db.Close())
 }
 
 func TestParquetExtension(t *testing.T) {
 	db := openDB(t)
-	defer db.Close()
 
 	_, err := db.Exec("CREATE TABLE users (id int, name varchar, age int);")
 	require.NoError(t, err)
@@ -647,11 +645,11 @@ func TestParquetExtension(t *testing.T) {
 
 	err = os.Remove("./users.parquet")
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 }
 
 func TestQueryTimeout(t *testing.T) {
 	db := openDB(t)
-	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*250)
 	defer cancel()
@@ -663,6 +661,7 @@ func TestQueryTimeout(t *testing.T) {
 	// a very defensive time check, but should be good enough
 	// the query takes much longer than 10 seconds
 	require.Less(t, time.Since(now), 10*time.Second)
+	require.NoError(t, db.Close())
 }
 
 func openDB(t *testing.T) *sql.DB {
