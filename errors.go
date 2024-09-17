@@ -53,6 +53,10 @@ func interfaceIsNilError(interfaceName string) error {
 	return fmt.Errorf("%s: %s", interfaceIsNilErrMsg, interfaceName)
 }
 
+func duplicateNameError(name string) error {
+	return fmt.Errorf("%s: %s", duplicateNameErrMsg, name)
+}
+
 const (
 	driverErrMsg           = "database/sql/driver"
 	duckdbErrMsg           = "duckdb error"
@@ -65,6 +69,7 @@ const (
 	indexErrMsg            = "index"
 	unknownTypeErrMsg      = "unknown type"
 	interfaceIsNilErrMsg   = "interface is nil"
+	duplicateNameErrMsg    = "duplicate name"
 )
 
 var (
@@ -89,7 +94,9 @@ var (
 
 	errAppenderFlush = errors.New("could not flush appender")
 
-	errEmptyName = errors.New("empty name")
+	errEmptyName           = errors.New("empty name")
+	errInvalidDecimalWidth = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
+	errInvalidDecimalScale = errors.New("the DECIMAL scale must be less than or equal to the width")
 
 	errScalarUDFCreate = errors.New("could not create scalar UDF")
 	errScalarUDFNoName = errors.New(errScalarUDFCreate.Error() + ": missing name")

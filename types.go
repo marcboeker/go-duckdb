@@ -117,6 +117,8 @@ func (s *Composite[T]) Scan(v any) error {
 	return mapstructure.Decode(v, &s.t)
 }
 
+const MAX_DECIMAL_WIDTH = 38
+
 type Decimal struct {
 	Width uint8
 	Scale uint8
