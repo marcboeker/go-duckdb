@@ -28,7 +28,8 @@ type vector struct {
 	// The child vectors of nested data types.
 	childVectors []vector
 
-	// FIXME: this is a workaround until the C API exposes SQLNULL.
+	// FIXME: This is a workaround until the C API exposes SQLNULL.
+	// FIXME: Then, SQLNULL becomes another Type value (C.DUCKDB_TYPE_SQLNULL).
 	isSQLNull bool
 
 	// The vector's type information.

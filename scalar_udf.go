@@ -19,20 +19,17 @@ import (
 	"unsafe"
 )
 
-type ScalarFuncConfig interface {
-	InputTypeInfos() []TypeInfo
-	ResultTypeInfo() TypeInfo
-}
+type ScalarFuncConfig struct {
+	InputTypeInfos []TypeInfo
+	ResultTypeInfo TypeInfo
 
-type ScalarFuncExtraInfo interface {
-	VariadicTypeInfo() TypeInfo
-	Volatile() bool
-	SpecialNullHandling() bool
+	VariadicTypeInfo    *TypeInfo
+	Volatile            bool
+	SpecialNullHandling bool
 }
 
 type ScalarFunc interface {
 	Config() ScalarFuncConfig
-	ExtraInfo() ScalarFuncExtraInfo
 	ExecuteRow(args []driver.Value) (any, error)
 }
 
@@ -100,24 +97,24 @@ func scalar_udf_delete_callback(extraInfo unsafe.Pointer) {
 	h.Delete()
 }
 
-func registerInputParams(config ScalarFuncConfig, extraInfo ScalarFuncExtraInfo, f C.duckdb_scalar_function) error {
+func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) error {
 	// Set variadic input parameters.
-	if extraInfo != nil && extraInfo.VariadicTypeInfo() != nil {
-		t := extraInfo.VariadicTypeInfo().logicalType()
+	if config.VariadicTypeInfo != nil {
+		t := (*config.VariadicTypeInfo).logicalType()
 		C.duckdb_scalar_function_set_varargs(f, t)
 		C.duckdb_destroy_logical_type(&t)
 		return nil
 	}
 
 	// Set normal input parameters.
-	if config.InputTypeInfos() == nil {
+	if config.InputTypeInfos == nil {
 		return errScalarUDFNilInputTypes
 	}
-	if len(config.InputTypeInfos()) == 0 {
+	if len(config.InputTypeInfos) == 0 {
 		return errScalarUDFEmptyInputTypes
 	}
 
-	for i, info := range config.InputTypeInfos() {
+	for i, info := range config.InputTypeInfos {
 		if info == nil {
 			return addIndexToError(errScalarUDFInputTypeIsNil, i)
 		}
@@ -129,13 +126,13 @@ func registerInputParams(config ScalarFuncConfig, extraInfo ScalarFuncExtraInfo,
 }
 
 func registerResultParams(config ScalarFuncConfig, f C.duckdb_scalar_function) error {
-	if config.ResultTypeInfo() == nil {
+	if config.ResultTypeInfo == nil {
 		return errScalarUDFResultTypeIsNil
 	}
-	if config.ResultTypeInfo().InternalType() == TYPE_ANY {
+	if config.ResultTypeInfo.InternalType() == TYPE_ANY {
 		return errScalarUDFResultTypeIsANY
 	}
-	t := config.ResultTypeInfo().logicalType()
+	t := config.ResultTypeInfo.logicalType()
 	C.duckdb_scalar_function_set_return_type(f, t)
 	C.duckdb_destroy_logical_type(&t)
 	return nil
@@ -157,17 +154,16 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 
 	// Configure the scalar function.
 	config := f.Config()
-	extraInfo := f.ExtraInfo()
-	if err := registerInputParams(config, extraInfo, function); err != nil {
+	if err := registerInputParams(config, function); err != nil {
 		return nil, err
 	}
 	if err := registerResultParams(config, function); err != nil {
 		return nil, err
 	}
-	if extraInfo != nil && extraInfo.SpecialNullHandling() {
+	if config.SpecialNullHandling {
 		C.duckdb_scalar_function_set_special_handling(function)
 	}
-	if extraInfo != nil && extraInfo.Volatile() {
+	if config.Volatile {
 		C.duckdb_scalar_function_set_volatile(function)
 	}
 

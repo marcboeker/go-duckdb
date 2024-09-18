@@ -15,22 +15,11 @@ var currentInfo TypeInfo
 
 type simpleSUDF struct{}
 
-type simpleSUDFConfig struct{}
-
-func (*simpleSUDFConfig) InputTypeInfos() []TypeInfo {
-	return []TypeInfo{currentInfo, currentInfo}
-}
-
-func (*simpleSUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
 func (*simpleSUDF) Config() ScalarFuncConfig {
-	return &simpleSUDFConfig{}
-}
-
-func (*simpleSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{currentInfo, currentInfo},
+		ResultTypeInfo: currentInfo,
+	}
 }
 
 func (*simpleSUDF) ExecuteRow(args []driver.Value) (any, error) {
@@ -74,22 +63,11 @@ func TestSimpleScalarUDF(t *testing.T) {
 
 type typesSUDF struct{}
 
-type typesSUDFConfig struct{}
-
-func (*typesSUDFConfig) InputTypeInfos() []TypeInfo {
-	return []TypeInfo{currentInfo}
-}
-
-func (*typesSUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
 func (*typesSUDF) Config() ScalarFuncConfig {
-	return &typesSUDFConfig{}
-}
-
-func (*typesSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{currentInfo},
+		ResultTypeInfo: currentInfo,
+	}
 }
 
 func (*typesSUDF) ExecuteRow(args []driver.Value) (any, error) {
@@ -158,36 +136,13 @@ func TestScalarUDFSet(t *testing.T) {
 
 type variadicSUDF struct{}
 
-type variadicSUDFConfig struct{}
-
-type variadicSUDFExtraInfo struct{}
-
-func (*variadicSUDFConfig) InputTypeInfos() []TypeInfo {
-	return nil
-}
-
-func (*variadicSUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
-func (*variadicSUDFExtraInfo) VariadicTypeInfo() TypeInfo {
-	return currentInfo
-}
-
-func (*variadicSUDFExtraInfo) Volatile() bool {
-	return true
-}
-
-func (*variadicSUDFExtraInfo) SpecialNullHandling() bool {
-	return true
-}
-
 func (*variadicSUDF) Config() ScalarFuncConfig {
-	return &variadicSUDFConfig{}
-}
-
-func (*variadicSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return &variadicSUDFExtraInfo{}
+	return ScalarFuncConfig{
+		ResultTypeInfo:      currentInfo,
+		VariadicTypeInfo:    &currentInfo,
+		Volatile:            true,
+		SpecialNullHandling: true,
+	}
 }
 
 func (*variadicSUDF) ExecuteRow(args []driver.Value) (any, error) {
@@ -242,30 +197,17 @@ func TestVariadicScalarUDF(t *testing.T) {
 
 type anyTypeSUDF struct{}
 
-type anyTypeSUDFExtraInfo struct{}
-
-func (*anyTypeSUDFExtraInfo) VariadicTypeInfo() TypeInfo {
+func (*anyTypeSUDF) Config() ScalarFuncConfig {
 	info, err := NewTypeInfo(TYPE_ANY)
 	if err != nil {
 		panic(err)
 	}
-	return info
-}
 
-func (*anyTypeSUDFExtraInfo) Volatile() bool {
-	return true
-}
-
-func (*anyTypeSUDFExtraInfo) SpecialNullHandling() bool {
-	return true
-}
-
-func (*anyTypeSUDF) Config() ScalarFuncConfig {
-	return &variadicSUDFConfig{}
-}
-
-func (*anyTypeSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return &anyTypeSUDFExtraInfo{}
+	return ScalarFuncConfig{
+		ResultTypeInfo:      currentInfo,
+		VariadicTypeInfo:    &info,
+		SpecialNullHandling: true,
+	}
 }
 
 func (*anyTypeSUDF) ExecuteRow(args []driver.Value) (any, error) {
@@ -320,11 +262,9 @@ func TestANYScalarUDF(t *testing.T) {
 type errInputSUDF struct{}
 
 func (*errInputSUDF) Config() ScalarFuncConfig {
-	return &variadicSUDFConfig{}
-}
-
-func (*errInputSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
+	return ScalarFuncConfig{
+		ResultTypeInfo: currentInfo,
+	}
 }
 
 func (*errInputSUDF) ExecuteRow([]driver.Value) (any, error) {
@@ -333,22 +273,11 @@ func (*errInputSUDF) ExecuteRow([]driver.Value) (any, error) {
 
 type errEmptyInputSUDF struct{}
 
-type errEmptyInputSUDFConfig struct{}
-
-func (*errEmptyInputSUDFConfig) InputTypeInfos() []TypeInfo {
-	return []TypeInfo{}
-}
-
-func (*errEmptyInputSUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
 func (*errEmptyInputSUDF) Config() ScalarFuncConfig {
-	return &errEmptyInputSUDFConfig{}
-}
-
-func (*errEmptyInputSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{},
+		ResultTypeInfo: currentInfo,
+	}
 }
 
 func (*errEmptyInputSUDF) ExecuteRow([]driver.Value) (any, error) {
@@ -357,22 +286,11 @@ func (*errEmptyInputSUDF) ExecuteRow([]driver.Value) (any, error) {
 
 type errInputNilSUDF struct{}
 
-type errInputNilSUDFConfig struct{}
-
-func (*errInputNilSUDFConfig) InputTypeInfos() []TypeInfo {
-	return []TypeInfo{nil}
-}
-
-func (*errInputNilSUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
 func (*errInputNilSUDF) Config() ScalarFuncConfig {
-	return &errInputNilSUDFConfig{}
-}
-
-func (*errInputNilSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{nil},
+		ResultTypeInfo: currentInfo,
+	}
 }
 
 func (*errInputNilSUDF) ExecuteRow([]driver.Value) (any, error) {
@@ -381,22 +299,11 @@ func (*errInputNilSUDF) ExecuteRow([]driver.Value) (any, error) {
 
 type errResultNilSUDF struct{}
 
-type errResultNilSUDFConfig struct{}
-
-func (*errResultNilSUDFConfig) InputTypeInfos() []TypeInfo {
-	return []TypeInfo{currentInfo}
-}
-
-func (*errResultNilSUDFConfig) ResultTypeInfo() TypeInfo {
-	return nil
-}
-
 func (*errResultNilSUDF) Config() ScalarFuncConfig {
-	return &errResultNilSUDFConfig{}
-}
-
-func (*errResultNilSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{currentInfo},
+		ResultTypeInfo: nil,
+	}
 }
 
 func (*errResultNilSUDF) ExecuteRow([]driver.Value) (any, error) {
@@ -405,26 +312,16 @@ func (*errResultNilSUDF) ExecuteRow([]driver.Value) (any, error) {
 
 type errResultAnySUDF struct{}
 
-type errResultAnySUDFConfig struct{}
-
-func (*errResultAnySUDFConfig) InputTypeInfos() []TypeInfo {
-	return []TypeInfo{currentInfo}
-}
-
-func (*errResultAnySUDFConfig) ResultTypeInfo() TypeInfo {
+func (*errResultAnySUDF) Config() ScalarFuncConfig {
 	info, err := NewTypeInfo(TYPE_ANY)
 	if err != nil {
 		panic(err)
 	}
-	return info
-}
 
-func (*errResultAnySUDF) Config() ScalarFuncConfig {
-	return &errResultAnySUDFConfig{}
-}
-
-func (*errResultAnySUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{currentInfo},
+		ResultTypeInfo: info,
+	}
 }
 
 func (*errResultAnySUDF) ExecuteRow([]driver.Value) (any, error) {
@@ -436,10 +333,6 @@ type errExecSUDF struct{}
 func (*errExecSUDF) Config() ScalarFuncConfig {
 	scalarUDF := simpleSUDF{}
 	return scalarUDF.Config()
-}
-
-func (*errExecSUDF) ExtraInfo() ScalarFuncExtraInfo {
-	return nil
 }
 
 func (*errExecSUDF) ExecuteRow([]driver.Value) (any, error) {
