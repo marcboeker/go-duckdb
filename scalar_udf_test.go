@@ -13,35 +13,27 @@ import (
 
 var currentInfo TypeInfo
 
-type simpleScalarUDF struct{}
+type simpleSUDF struct{}
 
-type simpleScalarUDFConfig struct{}
+type simpleSUDFConfig struct{}
 
-func (*simpleScalarUDFConfig) InputTypeInfos() []TypeInfo {
+func (*simpleSUDFConfig) InputTypeInfos() []TypeInfo {
 	return []TypeInfo{currentInfo, currentInfo}
 }
 
-func (*simpleScalarUDFConfig) ResultTypeInfo() TypeInfo {
+func (*simpleSUDFConfig) ResultTypeInfo() TypeInfo {
 	return currentInfo
 }
 
-func (*simpleScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+func (*simpleSUDF) Config() ScalarFuncConfig {
+	return &simpleSUDFConfig{}
+}
+
+func (*simpleSUDF) ExtraInfo() ScalarFuncExtraInfo {
 	return nil
 }
 
-func (*simpleScalarUDFConfig) Volatile() bool {
-	return false
-}
-
-func (*simpleScalarUDFConfig) SpecialNullHandling() bool {
-	return false
-}
-
-func (*simpleScalarUDF) Config() ScalarFunctionConfig {
-	return &simpleScalarUDFConfig{}
-}
-
-func (*simpleScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+func (*simpleSUDF) ExecuteRow(args []driver.Value) (any, error) {
 	if args[0] == nil || args[1] == nil {
 		return nil, nil
 	}
@@ -59,7 +51,7 @@ func TestSimpleScalarUDF(t *testing.T) {
 	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
 
-	var udf *simpleScalarUDF
+	var udf *simpleSUDF
 	err = RegisterScalarUDF(c, "my_sum", udf)
 	require.NoError(t, err)
 
@@ -80,35 +72,27 @@ func TestSimpleScalarUDF(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-type allTypesScalarUDF struct{}
+type typesSUDF struct{}
 
-type allTypesScalarUDFConfig struct{}
+type typesSUDFConfig struct{}
 
-func (*allTypesScalarUDFConfig) InputTypeInfos() []TypeInfo {
+func (*typesSUDFConfig) InputTypeInfos() []TypeInfo {
 	return []TypeInfo{currentInfo}
 }
 
-func (*allTypesScalarUDFConfig) ResultTypeInfo() TypeInfo {
+func (*typesSUDFConfig) ResultTypeInfo() TypeInfo {
 	return currentInfo
 }
 
-func (*allTypesScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+func (*typesSUDF) Config() ScalarFuncConfig {
+	return &typesSUDFConfig{}
+}
+
+func (*typesSUDF) ExtraInfo() ScalarFuncExtraInfo {
 	return nil
 }
 
-func (*allTypesScalarUDFConfig) Volatile() bool {
-	return false
-}
-
-func (*allTypesScalarUDFConfig) SpecialNullHandling() bool {
-	return false
-}
-
-func (*allTypesScalarUDF) Config() ScalarFunctionConfig {
-	return &allTypesScalarUDFConfig{}
-}
-
-func (*allTypesScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+func (*typesSUDF) ExecuteRow(args []driver.Value) (any, error) {
 	return args[0], nil
 }
 
@@ -126,7 +110,7 @@ func TestAllTypesScalarUDF(t *testing.T) {
 		_, err = c.ExecContext(context.Background(), `CREATE TYPE greeting AS ENUM ('hello', 'world')`)
 		require.NoError(t, err)
 
-		var udf *allTypesScalarUDF
+		var udf *typesSUDF
 		err = RegisterScalarUDF(c, "my_identity", udf)
 		require.NoError(t, err)
 
@@ -144,45 +128,6 @@ func TestAllTypesScalarUDF(t *testing.T) {
 	}
 }
 
-type variadicScalarUDF struct{}
-
-type variadicScalarUDFConfig struct{}
-
-func (*variadicScalarUDFConfig) InputTypeInfos() []TypeInfo {
-	return nil
-}
-
-func (*variadicScalarUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
-func (*variadicScalarUDFConfig) VariadicTypeInfo() TypeInfo {
-	return currentInfo
-}
-
-func (*variadicScalarUDFConfig) Volatile() bool {
-	return true
-}
-
-func (*variadicScalarUDFConfig) SpecialNullHandling() bool {
-	return true
-}
-
-func (*variadicScalarUDF) Config() ScalarFunctionConfig {
-	return &variadicScalarUDFConfig{}
-}
-
-func (*variadicScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
-	sum := int32(0)
-	for _, val := range args {
-		if val == nil {
-			return nil, nil
-		}
-		sum += val.(int32)
-	}
-	return sum, nil
-}
-
 func TestScalarUDFSet(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
@@ -193,8 +138,8 @@ func TestScalarUDFSet(t *testing.T) {
 	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
 
-	var udf1 *simpleScalarUDF
-	var udf2 *allTypesScalarUDF
+	var udf1 *simpleSUDF
+	var udf2 *typesSUDF
 	err = RegisterScalarUDFSet(c, "my_addition", udf1, udf2)
 	require.NoError(t, err)
 
@@ -211,6 +156,51 @@ func TestScalarUDFSet(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
+type variadicSUDF struct{}
+
+type variadicSUDFConfig struct{}
+
+type variadicSUDFExtraInfo struct{}
+
+func (*variadicSUDFConfig) InputTypeInfos() []TypeInfo {
+	return nil
+}
+
+func (*variadicSUDFConfig) ResultTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*variadicSUDFExtraInfo) VariadicTypeInfo() TypeInfo {
+	return currentInfo
+}
+
+func (*variadicSUDFExtraInfo) Volatile() bool {
+	return true
+}
+
+func (*variadicSUDFExtraInfo) SpecialNullHandling() bool {
+	return true
+}
+
+func (*variadicSUDF) Config() ScalarFuncConfig {
+	return &variadicSUDFConfig{}
+}
+
+func (*variadicSUDF) ExtraInfo() ScalarFuncExtraInfo {
+	return &variadicSUDFExtraInfo{}
+}
+
+func (*variadicSUDF) ExecuteRow(args []driver.Value) (any, error) {
+	sum := int32(0)
+	for _, val := range args {
+		if val == nil {
+			return nil, nil
+		}
+		sum += val.(int32)
+	}
+	return sum, nil
+}
+
 func TestVariadicScalarUDF(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
@@ -221,7 +211,7 @@ func TestVariadicScalarUDF(t *testing.T) {
 	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
 
-	var udf *variadicScalarUDF
+	var udf *variadicSUDF
 	err = RegisterScalarUDF(c, "my_variadic_sum", udf)
 	require.NoError(t, err)
 
@@ -250,19 +240,11 @@ func TestVariadicScalarUDF(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-type anyScalarUDF struct{}
+type anyTypeSUDF struct{}
 
-type anyScalarUDFConfig struct{}
+type anyTypeSUDFExtraInfo struct{}
 
-func (*anyScalarUDFConfig) InputTypeInfos() []TypeInfo {
-	return nil
-}
-
-func (*anyScalarUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
-func (*anyScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+func (*anyTypeSUDFExtraInfo) VariadicTypeInfo() TypeInfo {
 	info, err := NewTypeInfo(TYPE_ANY)
 	if err != nil {
 		panic(err)
@@ -270,19 +252,23 @@ func (*anyScalarUDFConfig) VariadicTypeInfo() TypeInfo {
 	return info
 }
 
-func (*anyScalarUDFConfig) Volatile() bool {
+func (*anyTypeSUDFExtraInfo) Volatile() bool {
 	return true
 }
 
-func (*anyScalarUDFConfig) SpecialNullHandling() bool {
+func (*anyTypeSUDFExtraInfo) SpecialNullHandling() bool {
 	return true
 }
 
-func (*anyScalarUDF) Config() ScalarFunctionConfig {
-	return &anyScalarUDFConfig{}
+func (*anyTypeSUDF) Config() ScalarFuncConfig {
+	return &variadicSUDFConfig{}
 }
 
-func (*anyScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
+func (*anyTypeSUDF) ExtraInfo() ScalarFuncExtraInfo {
+	return &anyTypeSUDFExtraInfo{}
+}
+
+func (*anyTypeSUDF) ExecuteRow(args []driver.Value) (any, error) {
 	count := int32(0)
 	for _, val := range args {
 		if val == nil {
@@ -302,7 +288,7 @@ func TestANYScalarUDF(t *testing.T) {
 	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
 
-	var udf *anyScalarUDF
+	var udf *anyTypeSUDF
 	err = RegisterScalarUDF(c, "my_null_count", udf)
 	require.NoError(t, err)
 
@@ -331,143 +317,101 @@ func TestANYScalarUDF(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-type errNilInputScalarUDF struct{}
+type errInputSUDF struct{}
 
-type errNilInputScalarUDFConfig struct{}
+func (*errInputSUDF) Config() ScalarFuncConfig {
+	return &variadicSUDFConfig{}
+}
 
-func (*errNilInputScalarUDFConfig) InputTypeInfos() []TypeInfo {
+func (*errInputSUDF) ExtraInfo() ScalarFuncExtraInfo {
 	return nil
 }
 
-func (*errNilInputScalarUDFConfig) ResultTypeInfo() TypeInfo {
-	return currentInfo
-}
-
-func (*errNilInputScalarUDFConfig) VariadicTypeInfo() TypeInfo {
-	return nil
-}
-
-func (*errNilInputScalarUDFConfig) Volatile() bool {
-	return false
-}
-
-func (*errNilInputScalarUDFConfig) SpecialNullHandling() bool {
-	return false
-}
-
-func (*errNilInputScalarUDF) Config() ScalarFunctionConfig {
-	return &errNilInputScalarUDFConfig{}
-}
-
-func (*errNilInputScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+func (*errInputSUDF) ExecuteRow([]driver.Value) (any, error) {
 	return nil, nil
 }
 
-type errEmptyInputScalarUDF struct{}
+type errEmptyInputSUDF struct{}
 
-type errEmptyInputScalarUDFConfig struct{}
+type errEmptyInputSUDFConfig struct{}
 
-func (*errEmptyInputScalarUDFConfig) InputTypeInfos() []TypeInfo {
+func (*errEmptyInputSUDFConfig) InputTypeInfos() []TypeInfo {
 	return []TypeInfo{}
 }
 
-func (*errEmptyInputScalarUDFConfig) ResultTypeInfo() TypeInfo {
+func (*errEmptyInputSUDFConfig) ResultTypeInfo() TypeInfo {
 	return currentInfo
 }
 
-func (*errEmptyInputScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+func (*errEmptyInputSUDF) Config() ScalarFuncConfig {
+	return &errEmptyInputSUDFConfig{}
+}
+
+func (*errEmptyInputSUDF) ExtraInfo() ScalarFuncExtraInfo {
 	return nil
 }
 
-func (*errEmptyInputScalarUDFConfig) Volatile() bool {
-	return false
-}
-
-func (*errEmptyInputScalarUDFConfig) SpecialNullHandling() bool {
-	return false
-}
-
-func (*errEmptyInputScalarUDF) Config() ScalarFunctionConfig {
-	return &errEmptyInputScalarUDFConfig{}
-}
-
-func (*errEmptyInputScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+func (*errEmptyInputSUDF) ExecuteRow([]driver.Value) (any, error) {
 	return nil, nil
 }
 
-type errInputIsNilScalarUDF struct{}
+type errInputNilSUDF struct{}
 
-type errInputIsNilScalarUDFConfig struct{}
+type errInputNilSUDFConfig struct{}
 
-func (*errInputIsNilScalarUDFConfig) InputTypeInfos() []TypeInfo {
+func (*errInputNilSUDFConfig) InputTypeInfos() []TypeInfo {
 	return []TypeInfo{nil}
 }
 
-func (*errInputIsNilScalarUDFConfig) ResultTypeInfo() TypeInfo {
+func (*errInputNilSUDFConfig) ResultTypeInfo() TypeInfo {
 	return currentInfo
 }
 
-func (*errInputIsNilScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+func (*errInputNilSUDF) Config() ScalarFuncConfig {
+	return &errInputNilSUDFConfig{}
+}
+
+func (*errInputNilSUDF) ExtraInfo() ScalarFuncExtraInfo {
 	return nil
 }
 
-func (*errInputIsNilScalarUDFConfig) Volatile() bool {
-	return false
-}
-
-func (*errInputIsNilScalarUDFConfig) SpecialNullHandling() bool {
-	return false
-}
-
-func (*errInputIsNilScalarUDF) Config() ScalarFunctionConfig {
-	return &errInputIsNilScalarUDFConfig{}
-}
-
-func (*errInputIsNilScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+func (*errInputNilSUDF) ExecuteRow([]driver.Value) (any, error) {
 	return nil, nil
 }
 
-type errResultIsNilScalarUDF struct{}
+type errResultNilSUDF struct{}
 
-type errResultIsNilScalarUDFConfig struct{}
+type errResultNilSUDFConfig struct{}
 
-func (*errResultIsNilScalarUDFConfig) InputTypeInfos() []TypeInfo {
+func (*errResultNilSUDFConfig) InputTypeInfos() []TypeInfo {
 	return []TypeInfo{currentInfo}
 }
 
-func (*errResultIsNilScalarUDFConfig) ResultTypeInfo() TypeInfo {
+func (*errResultNilSUDFConfig) ResultTypeInfo() TypeInfo {
 	return nil
 }
 
-func (*errResultIsNilScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+func (*errResultNilSUDF) Config() ScalarFuncConfig {
+	return &errResultNilSUDFConfig{}
+}
+
+func (*errResultNilSUDF) ExtraInfo() ScalarFuncExtraInfo {
 	return nil
 }
 
-func (*errResultIsNilScalarUDFConfig) Volatile() bool {
-	return false
-}
-
-func (*errResultIsNilScalarUDFConfig) SpecialNullHandling() bool {
-	return false
-}
-
-func (*errResultIsNilScalarUDF) Config() ScalarFunctionConfig {
-	return &errResultIsNilScalarUDFConfig{}
-}
-
-func (*errResultIsNilScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+func (*errResultNilSUDF) ExecuteRow([]driver.Value) (any, error) {
 	return nil, nil
 }
 
-type errResultIsANYScalarUDF struct{}
+type errResultAnySUDF struct{}
 
-type errResultIsANYScalarUDFConfig struct{}
+type errResultAnySUDFConfig struct{}
 
-func (*errResultIsANYScalarUDFConfig) InputTypeInfos() []TypeInfo {
+func (*errResultAnySUDFConfig) InputTypeInfos() []TypeInfo {
 	return []TypeInfo{currentInfo}
 }
 
-func (*errResultIsANYScalarUDFConfig) ResultTypeInfo() TypeInfo {
+func (*errResultAnySUDFConfig) ResultTypeInfo() TypeInfo {
 	info, err := NewTypeInfo(TYPE_ANY)
 	if err != nil {
 		panic(err)
@@ -475,34 +419,30 @@ func (*errResultIsANYScalarUDFConfig) ResultTypeInfo() TypeInfo {
 	return info
 }
 
-func (*errResultIsANYScalarUDFConfig) VariadicTypeInfo() TypeInfo {
+func (*errResultAnySUDF) Config() ScalarFuncConfig {
+	return &errResultAnySUDFConfig{}
+}
+
+func (*errResultAnySUDF) ExtraInfo() ScalarFuncExtraInfo {
 	return nil
 }
 
-func (*errResultIsANYScalarUDFConfig) Volatile() bool {
-	return false
-}
-
-func (*errResultIsANYScalarUDFConfig) SpecialNullHandling() bool {
-	return false
-}
-
-func (*errResultIsANYScalarUDF) Config() ScalarFunctionConfig {
-	return &errResultIsANYScalarUDFConfig{}
-}
-
-func (*errResultIsANYScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+func (*errResultAnySUDF) ExecuteRow([]driver.Value) (any, error) {
 	return nil, nil
 }
 
-type errExecScalarUDF struct{}
+type errExecSUDF struct{}
 
-func (*errExecScalarUDF) Config() ScalarFunctionConfig {
-	scalarUDF := simpleScalarUDF{}
+func (*errExecSUDF) Config() ScalarFuncConfig {
+	scalarUDF := simpleSUDF{}
 	return scalarUDF.Config()
 }
 
-func (*errExecScalarUDF) ExecuteRow([]driver.Value) (any, error) {
+func (*errExecSUDF) ExtraInfo() ScalarFuncExtraInfo {
+	return nil
+}
+
+func (*errExecSUDF) ExecuteRow([]driver.Value) (any, error) {
 	return nil, errors.New("test invalid execution")
 }
 
@@ -519,36 +459,36 @@ func TestScalarUDFErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	// Empty name.
-	var emptyNameUDF *simpleScalarUDF
+	var emptyNameUDF *simpleSUDF
 	err = RegisterScalarUDF(c, "", emptyNameUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoName.Error())
 
 	// Invalid input parameters.
 
-	var errNilInputUDF *errNilInputScalarUDF
-	err = RegisterScalarUDF(c, "err_nil_input", errNilInputUDF)
+	var errInputUDF *errInputSUDF
+	err = RegisterScalarUDF(c, "err_input", errInputUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNilInputTypes.Error())
 
-	var errEmptyInputUDF *errEmptyInputScalarUDF
+	var errEmptyInputUDF *errEmptyInputSUDF
 	err = RegisterScalarUDF(c, "err_empty_input", errEmptyInputUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFEmptyInputTypes.Error())
 
-	var errInputIsNilUDF *errInputIsNilScalarUDF
-	err = RegisterScalarUDF(c, "err_input_type_is_nil", errInputIsNilUDF)
+	var errInputNilUDF *errInputNilSUDF
+	err = RegisterScalarUDF(c, "err_input_type_is_nil", errInputNilUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFInputTypeIsNil.Error())
 
 	// Invalid result parameters.
 
-	var errResultIsNil *errResultIsNilScalarUDF
-	err = RegisterScalarUDF(c, "err_result_type_is_nil", errResultIsNil)
+	var errResultNil *errResultNilSUDF
+	err = RegisterScalarUDF(c, "err_result_type_is_nil", errResultNil)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFResultTypeIsNil.Error())
 
-	var errResultIsANY *errResultIsANYScalarUDF
-	err = RegisterScalarUDF(c, "err_result_type_is_any", errResultIsANY)
+	var errResultAny *errResultAnySUDF
+	err = RegisterScalarUDF(c, "err_result_type_is_any", errResultAny)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFResultTypeIsANY.Error())
 
 	// Error during execution.
-	var errExecUDF *errExecScalarUDF
+	var errExecUDF *errExecSUDF
 	err = RegisterScalarUDF(c, "err_exec", errExecUDF)
 	require.NoError(t, err)
 	row := db.QueryRow(`SELECT err_exec(10, 10) AS msg`)
@@ -556,15 +496,15 @@ func TestScalarUDFErrors(t *testing.T) {
 
 	// Register the same scalar function a second time.
 	// Since RegisterScalarUDF takes ownership of udf, we are now passing nil.
-	var udf *simpleScalarUDF
+	var udf *simpleSUDF
 	err = RegisterScalarUDF(c, "my_sum", udf)
 	require.NoError(t, err)
 	err = RegisterScalarUDF(c, "my_sum", udf)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error())
 
 	// Register a scalar function whose name already exists.
-	var udfDuplicateName *simpleScalarUDF
-	err = RegisterScalarUDF(c, "my_sum", udfDuplicateName)
+	var errDuplicateUDF *simpleSUDF
+	err = RegisterScalarUDF(c, "my_sum", errDuplicateUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error())
 
 	// Register a scalar function that is nil.
@@ -573,8 +513,8 @@ func TestScalarUDFErrors(t *testing.T) {
 	require.NoError(t, c.Close())
 
 	// Test registering the scalar function on a closed connection.
-	var udfOnClosedCon *simpleScalarUDF
-	err = RegisterScalarUDF(c, "closed_con", udfOnClosedCon)
+	var errClosedConUDF *simpleSUDF
+	err = RegisterScalarUDF(c, "closed_con", errClosedConUDF)
 	require.ErrorContains(t, err, sql.ErrConnDone.Error())
 	require.NoError(t, db.Close())
 }
