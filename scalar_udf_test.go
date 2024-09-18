@@ -183,6 +183,34 @@ func (*variadicScalarUDF) ExecuteRow(args []driver.Value) (any, error) {
 	return sum, nil
 }
 
+func TestScalarUDFSet(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+
+	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
+	var udf1 *simpleScalarUDF
+	var udf2 *allTypesScalarUDF
+	err = RegisterScalarUDFSet(c, "my_addition", udf1, udf2)
+	require.NoError(t, err)
+
+	var sum int
+	row := db.QueryRow(`SELECT my_addition(10, 42) AS sum`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, 52, sum)
+
+	row = db.QueryRow(`SELECT my_addition(42) AS sum`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, 42, sum)
+
+	require.NoError(t, c.Close())
+	require.NoError(t, db.Close())
+}
+
 func TestVariadicScalarUDF(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)

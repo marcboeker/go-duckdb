@@ -137,56 +137,98 @@ func registerResultParameters(config ScalarFunctionConfig, scalarFunction C.duck
 	return nil
 }
 
+func createScalarFunction(name string, f ScalarFunction) (C.duckdb_scalar_function, error) {
+	if name == "" {
+		return nil, errScalarUDFNoName
+	}
+	if f == nil {
+		return nil, errScalarUDFIsNil
+	}
+	scalarFunction := C.duckdb_create_scalar_function()
+
+	// Set the name.
+	functionName := C.CString(name)
+	C.duckdb_scalar_function_set_name(scalarFunction, functionName)
+	C.duckdb_free(unsafe.Pointer(functionName))
+
+	// Configure the scalar function.
+	config := f.Config()
+	if err := registerInputParameters(config, scalarFunction); err != nil {
+		return nil, err
+	}
+	if err := registerResultParameters(config, scalarFunction); err != nil {
+		return nil, err
+	}
+	if config.SpecialNullHandling() {
+		C.duckdb_scalar_function_set_special_handling(scalarFunction)
+	}
+	if config.Volatile() {
+		C.duckdb_scalar_function_set_volatile(scalarFunction)
+	}
+
+	// Set the function callback.
+	C.duckdb_scalar_function_set_function(scalarFunction, C.scalar_udf_callback_t(C.scalar_udf_callback))
+
+	// Set data available during execution.
+	extraInfoHandle := cgo.NewHandle(f)
+	C.duckdb_scalar_function_set_extra_info(
+		scalarFunction,
+		unsafe.Pointer(&extraInfoHandle),
+		C.duckdb_delete_callback_t(C.scalar_udf_delete_callback))
+
+	return scalarFunction, nil
+}
+
 // RegisterScalarUDF registers a scalar UDF.
 // This function takes ownership of f, so you must pass it as a pointer.
 func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunction) error {
-	if name == "" {
-		return getError(errAPI, errScalarUDFNoName)
-	}
-	if f == nil {
-		return getError(errAPI, errScalarUDFIsNil)
+	scalarFunction, err := createScalarFunction(name, f)
+	if err != nil {
+		return getError(errAPI, err)
 	}
 
-	// c.Raw exposes the underlying driver connection.
-	err := c.Raw(func(driverConn any) error {
+	// Register the function on the underlying driver connection exposed by c.Raw.
+	err = c.Raw(func(driverConn any) error {
 		con := driverConn.(*conn)
-		functionName := C.CString(name)
-		defer C.duckdb_free(unsafe.Pointer(functionName))
-
-		extraInfoHandle := cgo.NewHandle(f)
-
-		scalarFunction := C.duckdb_create_scalar_function()
-		C.duckdb_scalar_function_set_name(scalarFunction, functionName)
-
-		// Configure the scalar function.
-		config := f.Config()
-		if err := registerInputParameters(config, scalarFunction); err != nil {
-			return getError(errAPI, err)
-		}
-		if err := registerResultParameters(config, scalarFunction); err != nil {
-			return getError(errAPI, err)
-		}
-		if config.SpecialNullHandling() {
-			C.duckdb_scalar_function_set_special_handling(scalarFunction)
-		}
-		if config.Volatile() {
-			C.duckdb_scalar_function_set_volatile(scalarFunction)
-		}
-
-		// Set the function callback.
-		C.duckdb_scalar_function_set_function(scalarFunction, C.scalar_udf_callback_t(C.scalar_udf_callback))
-
-		// Set data available during execution.
-		C.duckdb_scalar_function_set_extra_info(
-			scalarFunction,
-			unsafe.Pointer(&extraInfoHandle),
-			C.duckdb_delete_callback_t(C.scalar_udf_delete_callback))
-
-		// Register the function.
 		state := C.duckdb_register_scalar_function(con.duckdbCon, scalarFunction)
 		C.duckdb_destroy_scalar_function(&scalarFunction)
 		if state == C.DuckDBError {
 			return getError(errAPI, errScalarUDFCreate)
+		}
+		return nil
+	})
+	return err
+}
+
+func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunction) error {
+	functionName := C.CString(name)
+	set := C.duckdb_create_scalar_function_set(functionName)
+	C.duckdb_free(unsafe.Pointer(functionName))
+
+	// Create each function and add it to the set.
+	for i, f := range functions {
+		scalarFunction, err := createScalarFunction(name, f)
+		if err != nil {
+			C.duckdb_destroy_scalar_function(&scalarFunction)
+			C.duckdb_destroy_scalar_function_set(&set)
+			return getError(errAPI, err)
+		}
+
+		state := C.duckdb_add_scalar_function_to_set(set, scalarFunction)
+		C.duckdb_destroy_scalar_function(&scalarFunction)
+		if state == C.DuckDBError {
+			C.duckdb_destroy_scalar_function_set(&set)
+			return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
+		}
+	}
+
+	// Register the function set on the underlying driver connection exposed by c.Raw.
+	err := c.Raw(func(driverConn any) error {
+		con := driverConn.(*conn)
+		state := C.duckdb_register_scalar_function_set(con.duckdbCon, set)
+		C.duckdb_destroy_scalar_function_set(&set)
+		if state == C.DuckDBError {
+			return getError(errAPI, errScalarUDFCreateSet)
 		}
 		return nil
 	})
