@@ -239,27 +239,27 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 
 	switch t {
 	case TYPE_BOOLEAN:
-		initPrimitive[bool](vec, t)
+		initBool(vec, TYPE_BOOLEAN)
 	case TYPE_TINYINT:
-		initPrimitive[int8](vec, t)
+		initNumeric[int8](vec, TYPE_TINYINT)
 	case TYPE_SMALLINT:
-		initPrimitive[int16](vec, t)
+		initNumeric[int16](vec, TYPE_SMALLINT)
 	case TYPE_INTEGER:
-		initPrimitive[int32](vec, t)
+		initNumeric[int32](vec, TYPE_INTEGER)
 	case TYPE_BIGINT:
-		initPrimitive[int64](vec, t)
+		initNumeric[int64](vec, TYPE_BIGINT)
 	case TYPE_UTINYINT:
-		initPrimitive[uint8](vec, t)
+		initNumeric[uint8](vec, TYPE_UTINYINT)
 	case TYPE_USMALLINT:
-		initPrimitive[uint16](vec, t)
+		initNumeric[uint16](vec, TYPE_USMALLINT)
 	case TYPE_UINTEGER:
-		initPrimitive[uint32](vec, t)
+		initNumeric[uint32](vec, TYPE_UINTEGER)
 	case TYPE_UBIGINT:
-		initPrimitive[uint64](vec, t)
+		initNumeric[uint64](vec, TYPE_UBIGINT)
 	case TYPE_FLOAT:
-		initPrimitive[float32](vec, t)
+		initNumeric[float32](vec, TYPE_FLOAT)
 	case TYPE_DOUBLE:
-		initPrimitive[float64](vec, t)
+		initNumeric[float64](vec, TYPE_DOUBLE)
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
 		vec.initTS(t)
 	case TYPE_DATE:
@@ -315,7 +315,24 @@ func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
 	}
 }
 
-func initPrimitive[T any](vec *vector, t Type) {
+func initBool(vec *vector, t Type) {
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return getPrimitive[bool](vec, rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return
+		}
+		setBool(vec, rowIdx, val)
+	}
+	vec.Type = t
+}
+
+func initNumeric[T numericType](vec *vector, t Type) {
 	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
 		if vec.getNull(rowIdx) {
 			return nil
@@ -327,7 +344,7 @@ func initPrimitive[T any](vec *vector, t Type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive(vec, rowIdx, val.(T))
+		setNumeric[any, T](vec, rowIdx, val)
 	}
 	vec.Type = t
 }
@@ -344,7 +361,7 @@ func (vec *vector) initTS(t Type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setTS(t, rowIdx, val)
+		setTS(vec, t, rowIdx, val)
 	}
 	vec.Type = t
 }
@@ -361,7 +378,7 @@ func (vec *vector) initDate() {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setDate(rowIdx, val)
+		setDate(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_DATE
 }
@@ -378,7 +395,7 @@ func (vec *vector) initTime() {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setTime(rowIdx, val)
+		setTime(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_TIME
 }
@@ -395,7 +412,7 @@ func (vec *vector) initInterval() {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setInterval(rowIdx, val)
+		setInterval(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_INTERVAL
 }
@@ -412,7 +429,7 @@ func (vec *vector) initHugeint() {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setHugeint(rowIdx, val)
+		setHugeint(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_HUGEINT
 }
@@ -429,7 +446,7 @@ func (vec *vector) initCString(t Type) {
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setCString(rowIdx, val)
+		setString(vec, rowIdx, val)
 	}
 	vec.Type = t
 }
@@ -445,20 +462,21 @@ func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) er
 			if vec.getNull(rowIdx) {
 				return nil
 			}
-			return vec.getDecimal(t, rowIdx)
+			return vec.getDecimal(rowIdx)
 		}
 		vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 			if val == nil {
 				vec.setNull(rowIdx)
 				return
 			}
-			vec.setDecimal(t, rowIdx, val)
+			setDecimal(vec, rowIdx, val)
 		}
 	default:
 		return addIndexToError(unsupportedTypeError(typeToStringMap[t]), colIdx)
 	}
 
 	vec.Type = TYPE_DECIMAL
+	vec.internalType = t
 	return nil
 }
 
@@ -480,20 +498,21 @@ func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error
 			if vec.getNull(rowIdx) {
 				return nil
 			}
-			return vec.getEnum(t, rowIdx)
+			return vec.getEnum(rowIdx)
 		}
 		vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) {
 			if val == nil {
 				vec.setNull(rowIdx)
 				return
 			}
-			vec.setEnum(t, rowIdx, val)
+			setEnum(vec, rowIdx, val)
 		}
 	default:
 		return addIndexToError(unsupportedTypeError(typeToStringMap[t]), colIdx)
 	}
 
 	vec.Type = TYPE_ENUM
+	vec.internalType = t
 	return nil
 }
 
@@ -520,7 +539,7 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setList(rowIdx, val)
+		setList(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_LIST
 	return nil
@@ -564,7 +583,7 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setStruct(rowIdx, val)
+		setStruct(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_STRUCT
 	return nil
@@ -606,7 +625,7 @@ func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error 
 			vec.setNull(rowIdx)
 			return
 		}
-		vec.setMap(rowIdx, val)
+		setMap(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_MAP
 	return nil
@@ -625,7 +644,7 @@ func (vec *vector) initUUID() {
 			vec.setNull(rowIdx)
 			return
 		}
-		setPrimitive(vec, rowIdx, uuidToHugeInt(val.(UUID)))
+		setUUID(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_UUID
 }
