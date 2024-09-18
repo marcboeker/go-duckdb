@@ -16,7 +16,7 @@ import (
 const secondsPerDay = 24 * 60 * 60
 
 // fnSetVectorValue is the setter callback function for any (nested) vector.
-type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
+type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any) error
 
 func (vec *vector) setNull(rowIdx C.idx_t) {
 	C.duckdb_validity_set_row_invalid(vec.mask, rowIdx)
@@ -68,12 +68,18 @@ func setNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S) error 
 			fv = 0
 		}
 	case *big.Int:
+		if v == nil {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
 		if v.IsUint64() {
 			fv = T(v.Uint64())
 		} else {
 			fv = T(v.Int64())
 		}
 	case Decimal:
+		if v.Value == nil {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
 		if v.Value.IsUint64() {
 			fv = T(v.Value.Uint64())
 		} else {
@@ -116,8 +122,14 @@ func setBool[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case bool:
 		fv = v
 	case *big.Int:
+		if v == nil {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
 		fv = v.Uint64() == 0
 	case Decimal:
+		if v.Value == nil {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
 		fv = v.Value.Uint64() == 0
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
@@ -232,8 +244,14 @@ func setHugeint[S any](vec *vector, rowIdx C.idx_t, val S) error {
 			fv = C.duckdb_hugeint{lower: C.uint64_t(0)}
 		}
 	case *big.Int:
+		if v == nil {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
 		fv, _ = hugeIntFromNative(v)
 	case Decimal:
+		if v.Value == nil {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
 		fv, _ = hugeIntFromNative(v.Value)
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
@@ -265,13 +283,13 @@ func setString[S any](vec *vector, rowIdx C.idx_t, val S) error {
 func setDecimal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	switch vec.internalType {
 	case TYPE_SMALLINT:
-		setNumeric[S, int16](vec, rowIdx, val)
+		return setNumeric[S, int16](vec, rowIdx, val)
 	case TYPE_INTEGER:
-		setNumeric[S, int32](vec, rowIdx, val)
+		return setNumeric[S, int32](vec, rowIdx, val)
 	case TYPE_BIGINT:
-		setNumeric[S, int64](vec, rowIdx, val)
+		return setNumeric[S, int64](vec, rowIdx, val)
 	case TYPE_HUGEINT:
-		setHugeint(vec, rowIdx, val)
+		return setHugeint(vec, rowIdx, val)
 	}
 	return nil
 }
@@ -285,17 +303,20 @@ func setEnum[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(str).String())
 	}
 
-	v := vec.dict[str]
+	if v, ok := vec.dict[str]; ok {
 
-	switch vec.internalType {
-	case TYPE_UTINYINT:
-		setNumeric[uint32, int8](vec, rowIdx, v)
-	case TYPE_SMALLINT:
-		setNumeric[uint32, int16](vec, rowIdx, v)
-	case TYPE_INTEGER:
-		setNumeric[uint32, int32](vec, rowIdx, v)
-	case TYPE_BIGINT:
-		setNumeric[uint32, int64](vec, rowIdx, v)
+		switch vec.internalType {
+		case TYPE_UTINYINT:
+			return setNumeric[uint32, int8](vec, rowIdx, v)
+		case TYPE_SMALLINT:
+			return setNumeric[uint32, int16](vec, rowIdx, v)
+		case TYPE_INTEGER:
+			return setNumeric[uint32, int32](vec, rowIdx, v)
+		case TYPE_BIGINT:
+			return setNumeric[uint32, int64](vec, rowIdx, v)
+		}
+	} else {
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(str).String())
 	}
 	return nil
 }
@@ -306,10 +327,14 @@ func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case []any:
 		list = v
 	default:
+		kind := reflect.TypeOf(val).Kind()
+		if kind != reflect.Array && kind != reflect.Slice {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(list).String())
+
+		}
 		// Insert the values into the child vector.
 		rv := reflect.ValueOf(val)
 		list = make([]any, rv.Len())
-		childVector := vec.childVectors[0]
 
 		for i := 0; i < rv.Len(); i++ {
 			idx := rv.Index(i)
@@ -318,11 +343,7 @@ func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 				continue
 			}
 
-			var err error
-			list[i], err = childVector.tryCast(idx.Interface())
-			if err != nil {
-				return err
-			}
+			list[i] = idx.Interface()
 		}
 	}
 	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
@@ -342,7 +363,10 @@ func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	childVector := &vec.childVectors[0]
 	for i, entry := range list {
 		offset := C.idx_t(i) + childVectorSize
-		childVector.setFn(childVector, offset, entry)
+		err := childVector.setFn(childVector, offset, entry)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -376,7 +400,14 @@ func setStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	for i := 0; i < len(vec.childVectors); i++ {
 		child := &vec.childVectors[i]
 		name := vec.structEntries[i].Name()
-		child.setFn(child, rowIdx, m[name])
+		v, ok := m[name]
+		if !ok {
+			return structFieldError("missing field", name)
+		}
+		err := child.setFn(child, rowIdx, v)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
