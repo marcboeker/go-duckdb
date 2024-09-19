@@ -22,12 +22,18 @@ func (*simpleSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*simpleSUDF) ExecuteRow(args []driver.Value) (any, error) {
+func simpleSum(args []driver.Value) (any, error) {
 	if args[0] == nil || args[1] == nil {
 		return nil, nil
 	}
 	val := args[0].(int32) + args[1].(int32)
 	return val, nil
+}
+
+func (*simpleSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: simpleSum,
+	}
 }
 
 func TestSimpleScalarUDF(t *testing.T) {
@@ -70,8 +76,14 @@ func (*typesSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*typesSUDF) ExecuteRow(args []driver.Value) (any, error) {
+func identity(args []driver.Value) (any, error) {
 	return args[0], nil
+}
+
+func (*typesSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: identity,
+	}
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
@@ -145,7 +157,7 @@ func (*variadicSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*variadicSUDF) ExecuteRow(args []driver.Value) (any, error) {
+func variadicSum(args []driver.Value) (any, error) {
 	sum := int32(0)
 	for _, val := range args {
 		if val == nil {
@@ -154,6 +166,12 @@ func (*variadicSUDF) ExecuteRow(args []driver.Value) (any, error) {
 		sum += val.(int32)
 	}
 	return sum, nil
+}
+
+func (*variadicSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: variadicSum,
+	}
 }
 
 func TestVariadicScalarUDF(t *testing.T) {
@@ -210,7 +228,7 @@ func (*anyTypeSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*anyTypeSUDF) ExecuteRow(args []driver.Value) (any, error) {
+func nilCount(args []driver.Value) (any, error) {
 	count := int32(0)
 	for _, val := range args {
 		if val == nil {
@@ -218,6 +236,12 @@ func (*anyTypeSUDF) ExecuteRow(args []driver.Value) (any, error) {
 		}
 	}
 	return count, nil
+}
+
+func (*anyTypeSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: nilCount,
+	}
 }
 
 func TestANYScalarUDF(t *testing.T) {
@@ -259,6 +283,19 @@ func TestANYScalarUDF(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
+type errExecutorSUDF struct{}
+
+func (*errExecutorSUDF) Config() ScalarFuncConfig {
+	scalarUDF := simpleSUDF{}
+	return scalarUDF.Config()
+}
+
+func (*errExecutorSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: nil,
+	}
+}
+
 type errInputSUDF struct{}
 
 func (*errInputSUDF) Config() ScalarFuncConfig {
@@ -267,8 +304,14 @@ func (*errInputSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*errInputSUDF) ExecuteRow([]driver.Value) (any, error) {
+func constantNil([]driver.Value) (any, error) {
 	return nil, nil
+}
+
+func (*errInputSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantNil,
+	}
 }
 
 type errEmptyInputSUDF struct{}
@@ -280,8 +323,10 @@ func (*errEmptyInputSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*errEmptyInputSUDF) ExecuteRow([]driver.Value) (any, error) {
-	return nil, nil
+func (*errEmptyInputSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantNil,
+	}
 }
 
 type errInputNilSUDF struct{}
@@ -293,8 +338,10 @@ func (*errInputNilSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*errInputNilSUDF) ExecuteRow([]driver.Value) (any, error) {
-	return nil, nil
+func (*errInputNilSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantNil,
+	}
 }
 
 type errResultNilSUDF struct{}
@@ -306,8 +353,10 @@ func (*errResultNilSUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*errResultNilSUDF) ExecuteRow([]driver.Value) (any, error) {
-	return nil, nil
+func (*errResultNilSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantNil,
+	}
 }
 
 type errResultAnySUDF struct{}
@@ -324,8 +373,10 @@ func (*errResultAnySUDF) Config() ScalarFuncConfig {
 	}
 }
 
-func (*errResultAnySUDF) ExecuteRow([]driver.Value) (any, error) {
-	return nil, nil
+func (*errResultAnySUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantNil,
+	}
 }
 
 type errExecSUDF struct{}
@@ -335,8 +386,14 @@ func (*errExecSUDF) Config() ScalarFuncConfig {
 	return scalarUDF.Config()
 }
 
-func (*errExecSUDF) ExecuteRow([]driver.Value) (any, error) {
+func constantError([]driver.Value) (any, error) {
 	return nil, errors.New("test invalid execution")
+}
+
+func (*errExecSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantError,
+	}
 }
 
 func TestScalarUDFErrors(t *testing.T) {
@@ -355,6 +412,11 @@ func TestScalarUDFErrors(t *testing.T) {
 	var emptyNameUDF *simpleSUDF
 	err = RegisterScalarUDF(c, "", emptyNameUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoName.Error())
+
+	// Invalid executor.
+	var errExecutorUDF *errExecutorSUDF
+	err = RegisterScalarUDF(c, "err_executor_is_nil", errExecutorUDF)
+	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoExecutor.Error())
 
 	// Invalid input parameters.
 

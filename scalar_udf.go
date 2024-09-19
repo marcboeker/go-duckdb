@@ -19,6 +19,8 @@ import (
 	"unsafe"
 )
 
+type rowFn func(args []driver.Value) (any, error)
+
 type ScalarFuncConfig struct {
 	InputTypeInfos []TypeInfo
 	ResultTypeInfo TypeInfo
@@ -28,9 +30,13 @@ type ScalarFuncConfig struct {
 	SpecialNullHandling bool
 }
 
+type ScalarFuncExecutor struct {
+	RowExecutor rowFn
+}
+
 type ScalarFunc interface {
 	Config() ScalarFuncConfig
-	ExecuteRow(args []driver.Value) (any, error)
+	Executor() ScalarFuncExecutor
 }
 
 func setFuncError(function_info C.duckdb_function_info, msg string) {
@@ -62,12 +68,12 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 	}
 
 	// Execute the user-defined scalar function for each row.
+	executor := function.Executor()
 	values := make([]driver.Value, len(inputChunk.columns))
-	rowCount := inputChunk.GetSize()
 	columnCount := len(values)
-	var err error
 
-	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
+	var err error
+	for rowIdx := 0; rowIdx < inputChunk.GetSize(); rowIdx++ {
 		// Set the values for each row.
 		for colIdx := 0; colIdx < columnCount; colIdx++ {
 			if values[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
@@ -78,7 +84,7 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 
 		// Execute the function and write the result to the output vector.
 		var val any
-		if val, err = function.ExecuteRow(values); err != nil {
+		if val, err = executor.RowExecutor(values); err != nil {
 			break
 		}
 		if err = outputChunk.SetValue(0, rowIdx, val); err != nil {
@@ -145,6 +151,10 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 	if f == nil {
 		return nil, errScalarUDFIsNil
 	}
+	if f.Executor().RowExecutor == nil {
+		return nil, errScalarUDFNoExecutor
+	}
+
 	function := C.duckdb_create_scalar_function()
 
 	// Set the name.
@@ -183,7 +193,7 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 // RegisterScalarUDF registers a scalar user-defined function.
 // The function takes ownership of f, so you must pass it as a pointer.
 func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
-	scalarFunc, err := createScalarFunc(name, f)
+	function, err := createScalarFunc(name, f)
 	if err != nil {
 		return getError(errAPI, err)
 	}
@@ -191,8 +201,8 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err = c.Raw(func(driverConn any) error {
 		con := driverConn.(*conn)
-		state := C.duckdb_register_scalar_function(con.duckdbCon, scalarFunc)
-		C.duckdb_destroy_scalar_function(&scalarFunc)
+		state := C.duckdb_register_scalar_function(con.duckdbCon, function)
+		C.duckdb_destroy_scalar_function(&function)
 		if state == C.DuckDBError {
 			return getError(errAPI, errScalarUDFCreate)
 		}
@@ -208,15 +218,15 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 	// Create each function and add it to the set.
 	for i, f := range functions {
-		scalarFunction, err := createScalarFunc(name, f)
+		function, err := createScalarFunc(name, f)
 		if err != nil {
-			C.duckdb_destroy_scalar_function(&scalarFunction)
+			C.duckdb_destroy_scalar_function(&function)
 			C.duckdb_destroy_scalar_function_set(&set)
 			return getError(errAPI, err)
 		}
 
-		state := C.duckdb_add_scalar_function_to_set(set, scalarFunction)
-		C.duckdb_destroy_scalar_function(&scalarFunction)
+		state := C.duckdb_add_scalar_function_to_set(set, function)
+		C.duckdb_destroy_scalar_function(&function)
 		if state == C.DuckDBError {
 			C.duckdb_destroy_scalar_function_set(&set)
 			return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
