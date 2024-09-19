@@ -50,18 +50,81 @@ func TestSimpleScalarUDF(t *testing.T) {
 	err = RegisterScalarUDF(c, "my_sum", udf)
 	require.NoError(t, err)
 
-	var msg *int
-	row := db.QueryRow(`SELECT my_sum(10, 42) AS msg`)
-	require.NoError(t, row.Scan(&msg))
-	require.Equal(t, 52, *msg)
+	var sum *int
+	row := db.QueryRow(`SELECT my_sum(10, 42) AS sum`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, 52, *sum)
 
-	row = db.QueryRow(`SELECT my_sum(NULL, 42) AS msg`)
-	require.NoError(t, row.Scan(&msg))
-	require.Equal(t, (*int)(nil), msg)
+	row = db.QueryRow(`SELECT my_sum(NULL, 42) AS sum`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, (*int)(nil), sum)
 
-	row = db.QueryRow(`SELECT my_sum(42, NULL) AS msg`)
-	require.NoError(t, row.Scan(&msg))
-	require.Equal(t, (*int)(nil), msg)
+	row = db.QueryRow(`SELECT my_sum(42, NULL) AS sum`)
+	require.NoError(t, row.Scan(&sum))
+	require.Equal(t, (*int)(nil), sum)
+
+	require.NoError(t, c.Close())
+	require.NoError(t, db.Close())
+}
+
+type constantSUDF struct{}
+type otherConstantSUDF struct{}
+
+func (*constantSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{
+		ResultTypeInfo: currentInfo,
+	}
+}
+
+func (*otherConstantSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{},
+		ResultTypeInfo: currentInfo,
+	}
+}
+
+func constantOne([]driver.Value) (any, error) {
+	return int32(1), nil
+}
+
+func (*constantSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantOne,
+	}
+}
+
+func (*otherConstantSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: constantOne,
+	}
+}
+
+func TestConstantScalarUDF(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+
+	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
+	var udf *constantSUDF
+	err = RegisterScalarUDF(c, "constant_one", udf)
+	require.NoError(t, err)
+
+	var otherUDF *otherConstantSUDF
+	err = RegisterScalarUDF(c, "other_constant_one", otherUDF)
+	require.NoError(t, err)
+
+	var one int
+	row := db.QueryRow(`SELECT constant_one() AS one`)
+	require.NoError(t, row.Scan(&one))
+	require.Equal(t, 1, one)
+
+	row = db.QueryRow(`SELECT other_constant_one() AS one`)
+	require.NoError(t, row.Scan(&one))
+	require.Equal(t, 1, one)
 
 	require.NoError(t, c.Close())
 	require.NoError(t, db.Close())
@@ -151,7 +214,7 @@ type variadicSUDF struct{}
 func (*variadicSUDF) Config() ScalarFuncConfig {
 	return ScalarFuncConfig{
 		ResultTypeInfo:      currentInfo,
-		VariadicTypeInfo:    &currentInfo,
+		VariadicTypeInfo:    currentInfo,
 		Volatile:            true,
 		SpecialNullHandling: true,
 	}
@@ -223,7 +286,7 @@ func (*anyTypeSUDF) Config() ScalarFuncConfig {
 
 	return ScalarFuncConfig{
 		ResultTypeInfo:      currentInfo,
-		VariadicTypeInfo:    &info,
+		VariadicTypeInfo:    info,
 		SpecialNullHandling: true,
 	}
 }
@@ -296,39 +359,6 @@ func (*errExecutorSUDF) Executor() ScalarFuncExecutor {
 	}
 }
 
-type errInputSUDF struct{}
-
-func (*errInputSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		ResultTypeInfo: currentInfo,
-	}
-}
-
-func constantNil([]driver.Value) (any, error) {
-	return nil, nil
-}
-
-func (*errInputSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantNil,
-	}
-}
-
-type errEmptyInputSUDF struct{}
-
-func (*errEmptyInputSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		InputTypeInfos: []TypeInfo{},
-		ResultTypeInfo: currentInfo,
-	}
-}
-
-func (*errEmptyInputSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantNil,
-	}
-}
-
 type errInputNilSUDF struct{}
 
 func (*errInputNilSUDF) Config() ScalarFuncConfig {
@@ -340,7 +370,7 @@ func (*errInputNilSUDF) Config() ScalarFuncConfig {
 
 func (*errInputNilSUDF) Executor() ScalarFuncExecutor {
 	return ScalarFuncExecutor{
-		RowExecutor: constantNil,
+		RowExecutor: constantOne,
 	}
 }
 
@@ -355,7 +385,7 @@ func (*errResultNilSUDF) Config() ScalarFuncConfig {
 
 func (*errResultNilSUDF) Executor() ScalarFuncExecutor {
 	return ScalarFuncExecutor{
-		RowExecutor: constantNil,
+		RowExecutor: constantOne,
 	}
 }
 
@@ -375,7 +405,7 @@ func (*errResultAnySUDF) Config() ScalarFuncConfig {
 
 func (*errResultAnySUDF) Executor() ScalarFuncExecutor {
 	return ScalarFuncExecutor{
-		RowExecutor: constantNil,
+		RowExecutor: constantOne,
 	}
 }
 
@@ -418,26 +448,15 @@ func TestScalarUDFErrors(t *testing.T) {
 	err = RegisterScalarUDF(c, "err_executor_is_nil", errExecutorUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoExecutor.Error())
 
-	// Invalid input parameters.
-
-	var errInputUDF *errInputSUDF
-	err = RegisterScalarUDF(c, "err_input", errInputUDF)
-	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNilInputTypes.Error())
-
-	var errEmptyInputUDF *errEmptyInputSUDF
-	err = RegisterScalarUDF(c, "err_empty_input", errEmptyInputUDF)
-	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFEmptyInputTypes.Error())
-
+	// Invalid input parameter.
 	var errInputNilUDF *errInputNilSUDF
 	err = RegisterScalarUDF(c, "err_input_type_is_nil", errInputNilUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFInputTypeIsNil.Error())
 
 	// Invalid result parameters.
-
 	var errResultNil *errResultNilSUDF
 	err = RegisterScalarUDF(c, "err_result_type_is_nil", errResultNil)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFResultTypeIsNil.Error())
-
 	var errResultAny *errResultAnySUDF
 	err = RegisterScalarUDF(c, "err_result_type_is_any", errResultAny)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFResultTypeIsANY.Error())
