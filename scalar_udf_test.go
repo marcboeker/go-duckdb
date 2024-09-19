@@ -27,11 +27,11 @@ type (
 	errExecSUDF       struct{}
 )
 
-func simpleSum(args []driver.Value) (any, error) {
-	if args[0] == nil || args[1] == nil {
+func simpleSum(values []driver.Value) (any, error) {
+	if values[0] == nil || values[1] == nil {
 		return nil, nil
 	}
-	val := args[0].(int32) + args[1].(int32)
+	val := values[0].(int32) + values[1].(int32)
 	return val, nil
 }
 
@@ -39,13 +39,13 @@ func constantOne([]driver.Value) (any, error) {
 	return int32(1), nil
 }
 
-func identity(args []driver.Value) (any, error) {
-	return args[0], nil
+func identity(values []driver.Value) (any, error) {
+	return values[0], nil
 }
 
-func variadicSum(args []driver.Value) (any, error) {
+func variadicSum(values []driver.Value) (any, error) {
 	sum := int32(0)
-	for _, val := range args {
+	for _, val := range values {
 		if val == nil {
 			return nil, nil
 		}
@@ -54,9 +54,9 @@ func variadicSum(args []driver.Value) (any, error) {
 	return sum, nil
 }
 
-func nilCount(args []driver.Value) (any, error) {
+func nilCount(values []driver.Value) (any, error) {
 	count := int32(0)
-	for _, val := range args {
+	for _, val := range values {
 		if val == nil {
 			count++
 		}
@@ -248,13 +248,13 @@ func TestAllTypesScalarUDF(t *testing.T) {
 		err = RegisterScalarUDF(c, "my_identity", udf)
 		require.NoError(t, err)
 
-		var msg string
-		row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s)::VARCHAR AS msg`, info.input))
-		require.NoError(t, row.Scan(&msg))
+		var res string
+		row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s)::VARCHAR AS res`, info.input))
+		require.NoError(t, row.Scan(&res))
 		if info.TypeInfo.InternalType() != TYPE_UUID {
-			require.Equal(t, info.output, msg, fmt.Sprintf(`output does not match expected output, input: %s`, info.input))
+			require.Equal(t, info.output, res, fmt.Sprintf(`output does not match expected output, input: %s`, info.input))
 		} else {
-			require.NotEqual(t, "", msg, "uuid empty")
+			require.NotEqual(t, "", res, "uuid empty")
 		}
 
 		require.NoError(t, c.Close())
@@ -407,7 +407,7 @@ func TestScalarUDFErrors(t *testing.T) {
 	var errExecUDF *errExecSUDF
 	err = RegisterScalarUDF(c, "err_exec", errExecUDF)
 	require.NoError(t, err)
-	row := db.QueryRow(`SELECT err_exec(10, 10) AS msg`)
+	row := db.QueryRow(`SELECT err_exec(10, 10) AS res`)
 	testError(t, row.Err(), errAPI.Error())
 
 	// Register the same scalar function a second time.

@@ -106,7 +106,7 @@ var (
 	errScalarUDFResultTypeIsNil = fmt.Errorf("%w: result type is nil", errScalarUDFCreate)
 	errScalarUDFResultTypeIsANY = fmt.Errorf("%w: result type is ANY, which is not supported", errScalarUDFCreate)
 	errScalarUDFCreateSet       = fmt.Errorf("could not create scalar UDF set")
-	errScalarUDFAddToSet        = fmt.Errorf("%w: cannot add to set", errScalarUDFCreateSet)
+	errScalarUDFAddToSet        = fmt.Errorf("%w: could not add the function to the set", errScalarUDFCreateSet)
 
 	errSetSQLNULLValue = errors.New("cannot write to a NULL column")
 

@@ -1,7 +1,5 @@
 package duckdb
 
-// Related issues: https://golang.org/issue/19835, https://golang.org/issue/19837.
-
 /*
 #include <duckdb.h>
 
@@ -31,15 +29,15 @@ type ScalarFuncConfig struct {
 	// If this field is nil, then the input parameters match InputTypeInfos.
 	// Otherwise, the scalar function's input parameters are set to variadic, allowing any number of input parameters.
 	// The Type of the first len(InputTypeInfos) parameters is configured by InputTypeInfos, and all
-	// remaining parameters must match the variadic Type. To configure different variadic parameter Type's,
+	// remaining parameters must match the variadic Type. To configure different variadic parameter types,
 	// you must set the VariadicTypeInfo's Type to TYPE_ANY.
 	VariadicTypeInfo TypeInfo
 	// Volatile sets the stability of the scalar function to volatile, if true.
 	// Volatile scalar functions might create a different result per row.
-	// E.g., RANDOM() is a volatile scalar function.
+	// E.g., random() is a volatile scalar function.
 	Volatile bool
 	// SpecialNullHandling disables the default NULL handling of scalar functions, if true.
-	// The default NULL handling is NULL in, NULL out. I.e., if any input parameter is NULL, then the result is NULL.
+	// The default NULL handling is: NULL in, NULL out. I.e., if any input parameter is NULL, then the result is NULL.
 	SpecialNullHandling bool
 }
 
@@ -47,8 +45,8 @@ type ScalarFuncConfig struct {
 // Currently, its only field is a row-based executor.
 type ScalarFuncExecutor struct {
 	// RowExecutor accepts a row-based execution function.
-	// args contains the input values, and it returns the row execution result, or error.
-	RowExecutor func(args []driver.Value) (any, error)
+	// []driver.Value contains the row values, and it returns the row execution result, or error.
+	RowExecutor func(values []driver.Value) (any, error)
 }
 
 // ScalarFunc is the user-defined scalar function interface.
@@ -61,8 +59,8 @@ type ScalarFunc interface {
 }
 
 // RegisterScalarUDF registers a user-defined scalar function.
-// c is the SQL connection on which to register the scalar function.
-// name is the function name, and f is the scalar function's interface.
+// *sql.Conn is the SQL connection on which to register the scalar function.
+// name is the function name, and f is the scalar function's interface ScalarFunc.
 // RegisterScalarUDF takes ownership of f, so you must pass it as a pointer.
 func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 	function, err := createScalarFunc(name, f)
@@ -84,12 +82,11 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 }
 
 // RegisterScalarUDFSet registers a set of user-defined scalar functions with the same name.
-// This allows overloading of scalar functions.
-// E.g., it allows overloading the function my_length() with different implementations
-// like my_length(LIST(ANY)) and my_length(VARCHAR).
-// c is the SQL connection on which to register the scalar function set.
+// This enables overloading of scalar functions.
+// E.g., the function my_length() can have implementations like my_length(LIST(ANY)) and my_length(VARCHAR).
+// *sql.Conn is the SQL connection on which to register the scalar function set.
 // name is the function name of each function in the set.
-// functions contains all functions of the scalar function set.
+// functions contains all ScalarFunc functions of the scalar function set.
 func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) error {
 	cName := C.CString(name)
 	set := C.duckdb_create_scalar_function_set(cName)
@@ -153,14 +150,13 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 		return
 	}
 
-	// Execute the user-defined scalar function for each row.
 	executor := function.Executor()
 	nullInNullOut := !function.Config().SpecialNullHandling
 	values := make([]driver.Value, len(inputChunk.columns))
 	columnCount := len(values)
 	rowCount := inputChunk.GetSize()
 
-	// Set the values for each row by invoking the callback function.
+	// Execute the user-defined scalar function for each row.
 	var err error
 	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
 		nullRow := false
@@ -216,7 +212,7 @@ func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) er
 		C.duckdb_destroy_logical_type(&t)
 	}
 
-	// Set normal input parameters.
+	// Early-out, if the function does not take any (non-variadic) parameters.
 	if config.InputTypeInfos == nil {
 		return nil
 	}
@@ -224,6 +220,7 @@ func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) er
 		return nil
 	}
 
+	// Set non-variadic input parameters.
 	for i, info := range config.InputTypeInfos {
 		if info == nil {
 			return addIndexToError(errScalarUDFInputTypeIsNil, i)
@@ -292,7 +289,7 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 	h := cgo.NewHandle(value)
 	value.pinner.Pin(&h)
 
-	// Set data available during execution.
+	// Set the execution data, which is the ScalarFunc f.
 	C.duckdb_scalar_function_set_extra_info(
 		function,
 		unsafe.Pointer(&h),
