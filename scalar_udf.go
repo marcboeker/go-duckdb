@@ -15,6 +15,7 @@ import "C"
 import (
 	"database/sql"
 	"database/sql/driver"
+	"runtime"
 	"runtime/cgo"
 	"unsafe"
 )
@@ -134,9 +135,9 @@ func setFuncError(function_info C.duckdb_function_info, msg string) {
 func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_data_chunk, output C.duckdb_vector) {
 	extraInfo := C.duckdb_scalar_function_get_extra_info(function_info)
 
-	// extraInfo is a void* pointer to our ScalarFunc.
+	// extraInfo is a void* pointer to our pinned ScalarFunc f.
 	h := *(*cgo.Handle)(unsafe.Pointer(extraInfo))
-	function := h.Value().(ScalarFunc)
+	function := h.Value().(pinnedValue[ScalarFunc]).value
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
@@ -203,6 +204,7 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 //export scalar_udf_delete_callback
 func scalar_udf_delete_callback(extraInfo unsafe.Pointer) {
 	h := (*cgo.Handle)(extraInfo)
+	h.Value().(unpinner).unpin()
 	h.Delete()
 }
 
@@ -282,8 +284,15 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 	// Set the function callback.
 	C.duckdb_scalar_function_set_function(function, C.scalar_udf_callback_t(C.scalar_udf_callback))
 
+	// Pin the ScalarFunc f.
+	value := pinnedValue[ScalarFunc]{
+		pinner: &runtime.Pinner{},
+		value:  f,
+	}
+	h := cgo.NewHandle(value)
+	value.pinner.Pin(&h)
+
 	// Set data available during execution.
-	h := cgo.NewHandle(f)
 	C.duckdb_scalar_function_set_extra_info(
 		function,
 		unsafe.Pointer(&h),

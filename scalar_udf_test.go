@@ -13,14 +13,19 @@ import (
 
 var currentInfo TypeInfo
 
-type simpleSUDF struct{}
-
-func (*simpleSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		InputTypeInfos: []TypeInfo{currentInfo, currentInfo},
-		ResultTypeInfo: currentInfo,
-	}
-}
+type (
+	simpleSUDF        struct{}
+	constantSUDF      struct{}
+	otherConstantSUDF struct{}
+	typesSUDF         struct{}
+	variadicSUDF      struct{}
+	anyTypeSUDF       struct{}
+	errExecutorSUDF   struct{}
+	errInputNilSUDF   struct{}
+	errResultNilSUDF  struct{}
+	errResultAnySUDF  struct{}
+	errExecSUDF       struct{}
+)
 
 func simpleSum(args []driver.Value) (any, error) {
 	if args[0] == nil || args[1] == nil {
@@ -30,10 +35,137 @@ func simpleSum(args []driver.Value) (any, error) {
 	return val, nil
 }
 
-func (*simpleSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: simpleSum,
+func constantOne([]driver.Value) (any, error) {
+	return int32(1), nil
+}
+
+func identity(args []driver.Value) (any, error) {
+	return args[0], nil
+}
+
+func variadicSum(args []driver.Value) (any, error) {
+	sum := int32(0)
+	for _, val := range args {
+		if val == nil {
+			return nil, nil
+		}
+		sum += val.(int32)
 	}
+	return sum, nil
+}
+
+func nilCount(args []driver.Value) (any, error) {
+	count := int32(0)
+	for _, val := range args {
+		if val == nil {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func constantError([]driver.Value) (any, error) {
+	return nil, errors.New("test invalid execution")
+}
+
+func (*simpleSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{[]TypeInfo{currentInfo, currentInfo}, currentInfo, nil, false, false}
+}
+
+func (*simpleSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{simpleSum}
+}
+
+func (*constantSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{ResultTypeInfo: currentInfo}
+}
+
+func (*constantSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{constantOne}
+}
+
+func (*otherConstantSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{[]TypeInfo{}, currentInfo, nil, false, false}
+}
+
+func (*otherConstantSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{constantOne}
+}
+
+func (*typesSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{[]TypeInfo{currentInfo}, currentInfo, nil, false, false}
+}
+
+func (*typesSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{identity}
+}
+
+func (*variadicSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{nil, currentInfo, currentInfo, true, true}
+}
+
+func (*variadicSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{variadicSum}
+}
+
+func (*anyTypeSUDF) Config() ScalarFuncConfig {
+	info, err := NewTypeInfo(TYPE_ANY)
+	if err != nil {
+		panic(err)
+	}
+
+	return ScalarFuncConfig{nil, currentInfo, info, false, true}
+}
+
+func (*anyTypeSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{nilCount}
+}
+
+func (*errExecutorSUDF) Config() ScalarFuncConfig {
+	scalarUDF := simpleSUDF{}
+	return scalarUDF.Config()
+}
+
+func (*errExecutorSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{nil}
+}
+
+func (*errInputNilSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{[]TypeInfo{nil}, currentInfo, nil, false, false}
+}
+
+func (*errInputNilSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{constantOne}
+}
+
+func (*errResultNilSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{[]TypeInfo{currentInfo}, nil, nil, false, false}
+}
+
+func (*errResultNilSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{constantOne}
+}
+
+func (*errResultAnySUDF) Config() ScalarFuncConfig {
+	info, err := NewTypeInfo(TYPE_ANY)
+	if err != nil {
+		panic(err)
+	}
+
+	return ScalarFuncConfig{[]TypeInfo{currentInfo}, info, nil, false, false}
+}
+
+func (*errResultAnySUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{constantOne}
+}
+
+func (*errExecSUDF) Config() ScalarFuncConfig {
+	scalarUDF := simpleSUDF{}
+	return scalarUDF.Config()
+}
+
+func (*errExecSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{constantError}
 }
 
 func TestSimpleScalarUDF(t *testing.T) {
@@ -67,38 +199,6 @@ func TestSimpleScalarUDF(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-type constantSUDF struct{}
-type otherConstantSUDF struct{}
-
-func (*constantSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		ResultTypeInfo: currentInfo,
-	}
-}
-
-func (*otherConstantSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		InputTypeInfos: []TypeInfo{},
-		ResultTypeInfo: currentInfo,
-	}
-}
-
-func constantOne([]driver.Value) (any, error) {
-	return int32(1), nil
-}
-
-func (*constantSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantOne,
-	}
-}
-
-func (*otherConstantSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantOne,
-	}
-}
-
 func TestConstantScalarUDF(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
@@ -128,25 +228,6 @@ func TestConstantScalarUDF(t *testing.T) {
 
 	require.NoError(t, c.Close())
 	require.NoError(t, db.Close())
-}
-
-type typesSUDF struct{}
-
-func (*typesSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		InputTypeInfos: []TypeInfo{currentInfo},
-		ResultTypeInfo: currentInfo,
-	}
-}
-
-func identity(args []driver.Value) (any, error) {
-	return args[0], nil
-}
-
-func (*typesSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: identity,
-	}
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
@@ -209,34 +290,6 @@ func TestScalarUDFSet(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-type variadicSUDF struct{}
-
-func (*variadicSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		ResultTypeInfo:      currentInfo,
-		VariadicTypeInfo:    currentInfo,
-		Volatile:            true,
-		SpecialNullHandling: true,
-	}
-}
-
-func variadicSum(args []driver.Value) (any, error) {
-	sum := int32(0)
-	for _, val := range args {
-		if val == nil {
-			return nil, nil
-		}
-		sum += val.(int32)
-	}
-	return sum, nil
-}
-
-func (*variadicSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: variadicSum,
-	}
-}
-
 func TestVariadicScalarUDF(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
@@ -276,37 +329,6 @@ func TestVariadicScalarUDF(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-type anyTypeSUDF struct{}
-
-func (*anyTypeSUDF) Config() ScalarFuncConfig {
-	info, err := NewTypeInfo(TYPE_ANY)
-	if err != nil {
-		panic(err)
-	}
-
-	return ScalarFuncConfig{
-		ResultTypeInfo:      currentInfo,
-		VariadicTypeInfo:    info,
-		SpecialNullHandling: true,
-	}
-}
-
-func nilCount(args []driver.Value) (any, error) {
-	count := int32(0)
-	for _, val := range args {
-		if val == nil {
-			count++
-		}
-	}
-	return count, nil
-}
-
-func (*anyTypeSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: nilCount,
-	}
-}
-
 func TestANYScalarUDF(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
@@ -344,86 +366,6 @@ func TestANYScalarUDF(t *testing.T) {
 
 	require.NoError(t, c.Close())
 	require.NoError(t, db.Close())
-}
-
-type errExecutorSUDF struct{}
-
-func (*errExecutorSUDF) Config() ScalarFuncConfig {
-	scalarUDF := simpleSUDF{}
-	return scalarUDF.Config()
-}
-
-func (*errExecutorSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: nil,
-	}
-}
-
-type errInputNilSUDF struct{}
-
-func (*errInputNilSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		InputTypeInfos: []TypeInfo{nil},
-		ResultTypeInfo: currentInfo,
-	}
-}
-
-func (*errInputNilSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantOne,
-	}
-}
-
-type errResultNilSUDF struct{}
-
-func (*errResultNilSUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{
-		InputTypeInfos: []TypeInfo{currentInfo},
-		ResultTypeInfo: nil,
-	}
-}
-
-func (*errResultNilSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantOne,
-	}
-}
-
-type errResultAnySUDF struct{}
-
-func (*errResultAnySUDF) Config() ScalarFuncConfig {
-	info, err := NewTypeInfo(TYPE_ANY)
-	if err != nil {
-		panic(err)
-	}
-
-	return ScalarFuncConfig{
-		InputTypeInfos: []TypeInfo{currentInfo},
-		ResultTypeInfo: info,
-	}
-}
-
-func (*errResultAnySUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantOne,
-	}
-}
-
-type errExecSUDF struct{}
-
-func (*errExecSUDF) Config() ScalarFuncConfig {
-	scalarUDF := simpleSUDF{}
-	return scalarUDF.Config()
-}
-
-func constantError([]driver.Value) (any, error) {
-	return nil, errors.New("test invalid execution")
-}
-
-func (*errExecSUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{
-		RowExecutor: constantError,
-	}
 }
 
 func TestScalarUDFErrors(t *testing.T) {
