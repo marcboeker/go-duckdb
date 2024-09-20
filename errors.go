@@ -26,10 +26,6 @@ func structFieldError(actual string, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
 }
 
-func columnError(err error, colIdx int) error {
-	return fmt.Errorf("%w: %s: %d", err, columnErrMsg, colIdx)
-}
-
 func columnCountError(actual int, expected int) error {
 	return fmt.Errorf("%s: expected %d, got %d", columnCountErrMsg, expected, actual)
 }
@@ -45,15 +41,35 @@ func invalidatedAppenderError(err error) error {
 	return fmt.Errorf("%w: %s", err, invalidatedAppenderMsg)
 }
 
+func tryOtherFuncError(hint string) error {
+	return fmt.Errorf("%s: %s", tryOtherFuncErrMsg, hint)
+}
+
+func addIndexToError(err error, idx int) error {
+	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
+}
+
+func interfaceIsNilError(interfaceName string) error {
+	return fmt.Errorf("%s: %s", interfaceIsNilErrMsg, interfaceName)
+}
+
+func duplicateNameError(name string) error {
+	return fmt.Errorf("%s: %s", duplicateNameErrMsg, name)
+}
+
 const (
 	driverErrMsg           = "database/sql/driver"
 	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
 	structFieldErrMsg      = "invalid STRUCT field"
-	columnErrMsg           = "column index"
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
+	tryOtherFuncErrMsg     = "please try this function instead"
+	indexErrMsg            = "index"
+	unknownTypeErrMsg      = "unknown type"
+	interfaceIsNilErrMsg   = "interface is nil"
+	duplicateNameErrMsg    = "duplicate name"
 )
 
 var (
@@ -74,6 +90,10 @@ var (
 	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderFlush            = errors.New("could not flush appender")
+
+	errEmptyName           = errors.New("empty name")
+	errInvalidDecimalWidth = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
+	errInvalidDecimalScale = errors.New("the DECIMAL scale must be less than or equal to the width")
 
 	errProfilingInfoEmpty = errors.New("no profiling information available for this connection")
 

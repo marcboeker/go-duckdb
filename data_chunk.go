@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -66,7 +65,7 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	// FIXME: Maybe we can make columnar insertions unsafe, i.e., we always assume a correct type.
 	v, err := column.tryCast(val)
 	if err != nil {
-		return columnError(err, colIdx)
+		return addIndexToError(err, colIdx)
 	}
 
 	// Set the value.
