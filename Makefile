@@ -16,8 +16,6 @@ test:
 .PHONY: deps.header
 deps.header:
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
-
-	cd duckdb && git apply --verbose ../0001-Add-static-flag-to-duckdb.patch
 	cp duckdb/src/include/duckdb.h duckdb.h
 
 .PHONY: duckdb
