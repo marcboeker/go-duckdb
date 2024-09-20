@@ -24,7 +24,7 @@ duckdb:
 	rm -rf duckdb
 	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
 
-DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any
+DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any ENABLE_EXTENSION_AUTOLOADING=1 ENABLE_EXTENSION_AUTOINSTALL=1 BUILD_EXTENSIONS="json"
 
 .PHONY: deps.darwin.amd64
 deps.darwin.amd64: duckdb
@@ -62,14 +62,14 @@ deps.linux.arm64: duckdb
 	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} make bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/linux_arm64/libduckdb.a
 
-.PHONY: deps.freebsd.amd64
+.PHONY: deps.windows.amd64
 deps.windows.amd64: duckdb
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "mingw64_nt-10.0-20348" ]; then echo "Error: must run build on windows"; false; fi
 	mkdir -p deps/windows_amd64
-	
-	# this is just code copied from duckdb and fixed for windows. Would like to not change this, and use `make bundle-library` once its fixed.
+
+	# Copied from the DuckDB repository and fixed for Windows. Ideally, `make bundle-library` should also work for Windows.
 	cd duckdb && \
-	${DUCKDB_COMMON_BUILD_FLAGS} GENERATOR="-G \"MinGW Makefiles\"" BUILD_JSON=1 gmake release -j 2
+	${DUCKDB_COMMON_BUILD_FLAGS} GENERATOR="-G \"MinGW Makefiles\"" gmake release -j 2
 	cd duckdb/build/release && \
 		mkdir -p bundle && \
 		cp src/libduckdb_static.a bundle/. && \
