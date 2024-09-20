@@ -48,27 +48,27 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 
 	switch t {
 	case TYPE_BOOLEAN:
-		initBool(vec, TYPE_BOOLEAN)
+		initBool(vec)
 	case TYPE_TINYINT:
-		initNumeric[int8](vec, TYPE_TINYINT)
+		initNumeric[int8](vec, t)
 	case TYPE_SMALLINT:
-		initNumeric[int16](vec, TYPE_SMALLINT)
+		initNumeric[int16](vec, t)
 	case TYPE_INTEGER:
-		initNumeric[int32](vec, TYPE_INTEGER)
+		initNumeric[int32](vec, t)
 	case TYPE_BIGINT:
-		initNumeric[int64](vec, TYPE_BIGINT)
+		initNumeric[int64](vec, t)
 	case TYPE_UTINYINT:
-		initNumeric[uint8](vec, TYPE_UTINYINT)
+		initNumeric[uint8](vec, t)
 	case TYPE_USMALLINT:
-		initNumeric[uint16](vec, TYPE_USMALLINT)
+		initNumeric[uint16](vec, t)
 	case TYPE_UINTEGER:
-		initNumeric[uint32](vec, TYPE_UINTEGER)
+		initNumeric[uint32](vec, t)
 	case TYPE_UBIGINT:
-		initNumeric[uint64](vec, TYPE_UBIGINT)
+		initNumeric[uint64](vec, t)
 	case TYPE_FLOAT:
-		initNumeric[float32](vec, TYPE_FLOAT)
+		initNumeric[float32](vec, t)
 	case TYPE_DOUBLE:
-		initNumeric[float64](vec, TYPE_DOUBLE)
+		initNumeric[float64](vec, t)
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
 		vec.initTS(t)
 	case TYPE_DATE:
@@ -80,7 +80,7 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	case TYPE_HUGEINT:
 		vec.initHugeint()
 	case TYPE_VARCHAR, TYPE_BLOB:
-		vec.initCString(t)
+		vec.initBytes(t)
 	case TYPE_DECIMAL:
 		return vec.initDecimal(logicalType, colIdx)
 	case TYPE_ENUM:
@@ -124,7 +124,7 @@ func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
 	}
 }
 
-func initBool(vec *vector, t Type) {
+func initBool(vec *vector) {
 	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
 		if vec.getNull(rowIdx) {
 			return nil
@@ -138,7 +138,7 @@ func initBool(vec *vector, t Type) {
 		}
 		return setBool(vec, rowIdx, val)
 	}
-	vec.Type = t
+	vec.Type = TYPE_BOOLEAN
 }
 
 func initNumeric[T numericType](vec *vector, t Type) {
@@ -243,7 +243,7 @@ func (vec *vector) initHugeint() {
 	vec.Type = TYPE_HUGEINT
 }
 
-func (vec *vector) initCString(t Type) {
+func (vec *vector) initBytes(t Type) {
 	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
 		if vec.getNull(rowIdx) {
 			return nil
@@ -255,7 +255,7 @@ func (vec *vector) initCString(t Type) {
 			vec.setNull(rowIdx)
 			return nil
 		}
-		return setString(vec, rowIdx, val)
+		return setBytes(vec, rowIdx, val)
 	}
 	vec.Type = t
 }
