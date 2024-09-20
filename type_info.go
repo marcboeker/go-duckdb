@@ -52,6 +52,8 @@ type baseTypeInfo struct {
 	structEntries []StructEntry
 	decimalWidth  uint8
 	decimalScale  uint8
+	// The internal type for ENUM and DECIMAL values.
+	internalType Type
 }
 
 type vectorTypeInfo struct {
