@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -104,10 +105,12 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	dateUTC := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
 	timeUTC := time.Date(1970, 1, 1, 11, 42, 7, 0, time.UTC)
 
-	varcharCol := ""
+	var buffer bytes.Buffer
 	for j := 0; j < i; j++ {
-		varcharCol += "hello!"
+		buffer.WriteString("hello!")
 	}
+	varcharCol := buffer.String()
+
 	listCol := Composite[[]int32]{
 		[]int32{int32(i)},
 	}

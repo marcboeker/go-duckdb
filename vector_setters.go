@@ -179,25 +179,49 @@ func setHugeint[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case uint64:
 		fv = C.duckdb_hugeint{lower: C.uint64_t(v)}
 	case int64:
-		fv, _ = hugeIntFromNative(big.NewInt(v))
+		var err error
+		fv, err = hugeIntFromNative(big.NewInt(v))
+		if err != nil {
+			return err
+		}
 	case uint:
 		fv = C.duckdb_hugeint{lower: C.uint64_t(v)}
 	case int:
-		fv, _ = hugeIntFromNative(big.NewInt(int64(v)))
+		var err error
+		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return err
+		}
 	case float32:
-		fv, _ = hugeIntFromNative(big.NewInt(int64(v)))
+		var err error
+		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return err
+		}
 	case float64:
-		fv, _ = hugeIntFromNative(big.NewInt(int64(v)))
+		var err error
+		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return err
+		}
 	case *big.Int:
 		if v == nil {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 		}
-		fv, _ = hugeIntFromNative(v)
+		var err error
+		fv, err = hugeIntFromNative(v)
+		if err != nil {
+			return err
+		}
 	case Decimal:
 		if v.Value == nil {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 		}
-		fv, _ = hugeIntFromNative(v.Value)
+		var err error
+		fv, err = hugeIntFromNative(v.Value)
+		if err != nil {
+			return err
+		}
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 	}
@@ -322,7 +346,7 @@ func setStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case map[string]any:
 		m = v
 	default:
-		//TODO type.Kind() == reflect.Map??
+		//FIXME: Add support for all map types
 		// Catch mismatching types.
 		goType := reflect.TypeOf(val)
 		if reflect.TypeOf(val).Kind() != reflect.Struct {
@@ -390,8 +414,11 @@ func setUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	return nil
 }
 
-// TODO: Support ARRAY UNION BIT ANY VARINT,
 func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	name, inMap := unsupportedTypeToStringMap[vec.Type]
+	if inMap {
+		return unsupportedTypeError(name)
+	}
 	switch vec.Type {
 	case TYPE_BOOLEAN:
 		return setBool[S](vec, rowIdx, val)
@@ -442,6 +469,6 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case TYPE_UUID:
 		return setUUID[S](vec, rowIdx, val)
 	default:
-		return unsupportedTypeError("Could not convert type " + reflect.TypeOf(val).Name() + " to a duckdb type")
+		return unsupportedTypeError(unknownTypeErrMsg)
 	}
 }
