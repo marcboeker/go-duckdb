@@ -33,7 +33,6 @@ func setPrimitive[T any](vec *vector, rowIdx C.idx_t, v T) {
 	xs[rowIdx] = v
 }
 
-// TODO: support Decimal here and bool and hugeint
 func setNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S) error {
 	var fv T
 	switch v := any(val).(type) {
@@ -61,21 +60,6 @@ func setNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S) error 
 		fv = T(v)
 	case float64:
 		fv = T(v)
-	case bool:
-		if v {
-			fv = 1
-		} else {
-			fv = 0
-		}
-	case *big.Int:
-		if v == nil {
-			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
-		}
-		if v.IsUint64() {
-			fv = T(v.Uint64())
-		} else {
-			fv = T(v.Int64())
-		}
 	case Decimal:
 		if v.Value == nil {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
@@ -95,48 +79,15 @@ func setNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S) error 
 func setBool[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	var fv bool
 	switch v := any(val).(type) {
-	case uint8:
-		fv = v == 0
-	case int8:
-		fv = v == 0
-	case uint16:
-		fv = v == 0
-	case int16:
-		fv = v == 0
-	case uint32:
-		fv = v == 0
-	case int32:
-		fv = v == 0
-	case uint64:
-		fv = v == 0
-	case int64:
-		fv = v == 0
-	case uint:
-		fv = v == 0
-	case int:
-		fv = v == 0
-	case float32:
-		fv = v == 0
-	case float64:
-		fv = v == 0
 	case bool:
 		fv = v
-	case *big.Int:
-		if v == nil {
-			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
-		}
-		fv = v.Uint64() == 0
-	case Decimal:
-		if v.Value == nil {
-			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
-		}
-		fv = v.Value.Uint64() == 0
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 	}
 	setPrimitive(vec, rowIdx, fv)
 	return nil
 }
+
 func setTS[S any](vec *vector, t Type, rowIdx C.idx_t, val S) error {
 	var ti time.Time
 	switch v := any(val).(type) {
@@ -237,12 +188,6 @@ func setHugeint[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		fv, _ = hugeIntFromNative(big.NewInt(int64(v)))
 	case float64:
 		fv, _ = hugeIntFromNative(big.NewInt(int64(v)))
-	case bool:
-		if v {
-			fv = C.duckdb_hugeint{lower: C.uint64_t(1)}
-		} else {
-			fv = C.duckdb_hugeint{lower: C.uint64_t(0)}
-		}
 	case *big.Int:
 		if v == nil {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
@@ -260,7 +205,7 @@ func setHugeint[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	return nil
 }
 
-func setString[S any](vec *vector, rowIdx C.idx_t, val S) error {
+func setBytes[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	var cStr *C.char
 	var length int
 	switch v := any(val).(type) {
@@ -429,8 +374,7 @@ func setMap[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		i++
 	}
 
-	setList(vec, rowIdx, list)
-	return nil
+	return setList(vec, rowIdx, list)
 }
 
 func setUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
@@ -484,9 +428,9 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return setHugeint[S](vec, rowIdx, val)
 		// UHUGEINT is not supported
 	case TYPE_VARCHAR:
-		return setString[S](vec, rowIdx, val)
+		return setBytes[S](vec, rowIdx, val)
 	case TYPE_BLOB:
-		return setString[S](vec, rowIdx, val)
+		return setBytes[S](vec, rowIdx, val)
 	case TYPE_DECIMAL:
 		return setDecimal[S](vec, rowIdx, val)
 	case TYPE_ENUM:
