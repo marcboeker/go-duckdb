@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -19,11 +18,9 @@ const secondsPerDay = 24 * 60 * 60
 type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any)
 
 func (vec *vector) setNull(rowIdx C.idx_t) {
-	C.duckdb_vector_ensure_validity_writable(vec.duckdbVector)
-	mask := C.duckdb_vector_get_validity(vec.duckdbVector)
-	C.duckdb_validity_set_row_invalid(mask, rowIdx)
+	C.duckdb_validity_set_row_invalid(vec.mask, rowIdx)
 
-	if vec.duckdbType == C.DUCKDB_TYPE_STRUCT {
+	if vec.Type == TYPE_STRUCT {
 		for i := 0; i < len(vec.childVectors); i++ {
 			vec.childVectors[i].setNull(rowIdx)
 		}
@@ -31,24 +28,23 @@ func (vec *vector) setNull(rowIdx C.idx_t) {
 }
 
 func setPrimitive[T any](vec *vector, rowIdx C.idx_t, v T) {
-	ptr := C.duckdb_vector_get_data(vec.duckdbVector)
-	xs := (*[1 << 31]T)(ptr)
+	xs := (*[1 << 31]T)(vec.ptr)
 	xs[rowIdx] = v
 }
 
-func (vec *vector) setTS(duckdbType C.duckdb_type, rowIdx C.idx_t, val any) {
+func (vec *vector) setTS(t Type, rowIdx C.idx_t, val any) {
 	v := val.(time.Time)
 	var ticks int64
-	switch duckdbType {
-	case C.DUCKDB_TYPE_TIMESTAMP:
+	switch t {
+	case TYPE_TIMESTAMP:
 		ticks = v.UTC().UnixMicro()
-	case C.DUCKDB_TYPE_TIMESTAMP_S:
+	case TYPE_TIMESTAMP_S:
 		ticks = v.UTC().Unix()
-	case C.DUCKDB_TYPE_TIMESTAMP_MS:
+	case TYPE_TIMESTAMP_MS:
 		ticks = v.UTC().UnixMilli()
-	case C.DUCKDB_TYPE_TIMESTAMP_NS:
+	case TYPE_TIMESTAMP_NS:
 		ticks = v.UTC().UnixNano()
-	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP_TZ:
 		ticks = v.UTC().UnixMicro()
 	}
 
@@ -93,45 +89,45 @@ func (vec *vector) setHugeint(rowIdx C.idx_t, val any) {
 
 func (vec *vector) setCString(rowIdx C.idx_t, val any) {
 	var str string
-	if vec.duckdbType == C.DUCKDB_TYPE_VARCHAR {
+	if vec.Type == TYPE_VARCHAR {
 		str = val.(string)
-	} else if vec.duckdbType == C.DUCKDB_TYPE_BLOB {
+	} else if vec.Type == TYPE_BLOB {
 		str = string(val.([]byte)[:])
 	}
 
 	// This setter also writes BLOBs.
 	cStr := C.CString(str)
 	C.duckdb_vector_assign_string_element_len(vec.duckdbVector, rowIdx, cStr, C.idx_t(len(str)))
-	C.free(unsafe.Pointer(cStr))
+	C.duckdb_free(unsafe.Pointer(cStr))
 }
 
-func (vec *vector) setDecimal(internalType C.duckdb_type, rowIdx C.idx_t, val any) {
+func (vec *vector) setDecimal(t Type, rowIdx C.idx_t, val any) {
 	v := val.(Decimal)
 
-	switch internalType {
-	case C.DUCKDB_TYPE_SMALLINT:
+	switch t {
+	case TYPE_SMALLINT:
 		setPrimitive(vec, rowIdx, int16(v.Value.Int64()))
-	case C.DUCKDB_TYPE_INTEGER:
+	case TYPE_INTEGER:
 		setPrimitive(vec, rowIdx, int32(v.Value.Int64()))
-	case C.DUCKDB_TYPE_BIGINT:
+	case TYPE_BIGINT:
 		setPrimitive(vec, rowIdx, v.Value.Int64())
-	case C.DUCKDB_TYPE_HUGEINT:
+	case TYPE_HUGEINT:
 		value, _ := hugeIntFromNative(v.Value)
 		setPrimitive(vec, rowIdx, value)
 	}
 }
 
-func (vec *vector) setEnum(internalType C.duckdb_type, rowIdx C.idx_t, val any) {
+func (vec *vector) setEnum(t Type, rowIdx C.idx_t, val any) {
 	v := vec.dict[val.(string)]
 
-	switch internalType {
-	case C.DUCKDB_TYPE_UTINYINT:
+	switch t {
+	case TYPE_UTINYINT:
 		setPrimitive(vec, rowIdx, uint8(v))
-	case C.DUCKDB_TYPE_USMALLINT:
+	case TYPE_USMALLINT:
 		setPrimitive(vec, rowIdx, uint16(v))
-	case C.DUCKDB_TYPE_UINTEGER:
+	case TYPE_UINTEGER:
 		setPrimitive(vec, rowIdx, v)
-	case C.DUCKDB_TYPE_UBIGINT:
+	case TYPE_UBIGINT:
 		setPrimitive(vec, rowIdx, uint64(v))
 	}
 }
@@ -162,9 +158,9 @@ func (vec *vector) setList(rowIdx C.idx_t, val any) {
 func (vec *vector) setStruct(rowIdx C.idx_t, val any) {
 	m := val.(map[string]any)
 	for i := 0; i < len(vec.childVectors); i++ {
-		childVector := &vec.childVectors[i]
-		childName := vec.childNames[i]
-		childVector.setFn(childVector, rowIdx, m[childName])
+		child := &vec.childVectors[i]
+		name := vec.structEntries[i].Name()
+		child.setFn(child, rowIdx, m[name])
 	}
 }
 

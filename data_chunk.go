@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -18,6 +17,8 @@ type DataChunk struct {
 	columns []vector
 	// columnNames holds the column names, if known.
 	columnNames []string
+	// size caches the size after initialization.
+	size int
 }
 
 // GetDataChunkCapacity returns the capacity of a data chunk.
@@ -27,7 +28,8 @@ func GetDataChunkCapacity() int {
 
 // GetSize returns the internal size of the data chunk.
 func (chunk *DataChunk) GetSize() int {
-	return int(C.duckdb_data_chunk_get_size(chunk.data))
+	chunk.size = int(C.duckdb_data_chunk_get_size(chunk.data))
+	return chunk.size
 }
 
 // SetSize sets the internal size of the data chunk. Cannot exceed GetCapacity().
@@ -63,7 +65,7 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	// FIXME: Maybe we can make columnar insertions unsafe, i.e., we always assume a correct type.
 	v, err := column.tryCast(val)
 	if err != nil {
-		return columnError(err, colIdx)
+		return addIndexToError(err, colIdx)
 	}
 
 	// Set the value.
@@ -71,7 +73,7 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	return nil
 }
 
-func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type) error {
+func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type, writable bool) error {
 	// NOTE: initFromTypes does not initialize the column names.
 	columnCount := len(types)
 
@@ -93,14 +95,13 @@ func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logic
 
 	// Initialize the vectors and their child vectors.
 	for i := 0; i < columnCount; i++ {
-		duckdbVector := C.duckdb_data_chunk_get_vector(chunk.data, C.idx_t(i))
-		chunk.columns[i].duckdbVector = duckdbVector
-		chunk.columns[i].getChildVectors(duckdbVector)
+		v := C.duckdb_data_chunk_get_vector(chunk.data, C.idx_t(i))
+		chunk.columns[i].initVectors(v, writable)
 	}
 	return nil
 }
 
-func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk) error {
+func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk, writable bool) error {
 	columnCount := int(C.duckdb_data_chunk_get_column_count(data))
 	chunk.columns = make([]vector, columnCount)
 	chunk.data = data
@@ -117,10 +118,11 @@ func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk) error {
 			break
 		}
 
-		// Initialize the vectors and their child vectors.
-		chunk.columns[i].duckdbVector = duckdbVector
-		chunk.columns[i].getChildVectors(duckdbVector)
+		// Initialize the vector and its child vectors.
+		chunk.columns[i].initVectors(duckdbVector, writable)
 	}
+
+	chunk.GetSize()
 	return err
 }
 
