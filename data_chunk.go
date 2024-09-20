@@ -62,6 +62,16 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	return column.setFn(column, C.idx_t(rowIdx), val)
 }
 
+// SetValue writes a single value to a column in a data chunk.
+// Note that this requires casting the type for each invocation.
+// NOTE: Custom ENUM types must be passed as string.
+func SetChunkValue[T any](chunk DataChunk, colIdx int, rowIdx int, val T) error {
+	if colIdx >= len(chunk.columns) {
+		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
+	}
+	return setVectorVal(&chunk.columns[colIdx], C.idx_t(rowIdx), val)
+}
+
 func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type, writable bool) error {
 	// NOTE: initFromTypes does not initialize the column names.
 	columnCount := len(types)
