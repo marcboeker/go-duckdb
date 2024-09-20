@@ -267,8 +267,8 @@ func TestAppenderNested(t *testing.T) {
 			L Map
 		}{L: Map{"foo": int32(1), "bar": int32(2)}},
 	}
-	rowsToAppend := make([]nestedDataRow, 10)
-	for i := 0; i < 10; i++ {
+	rowsToAppend := make([]nestedDataRow, 1000)
+	for i := 0; i < 1000; i++ {
 		rowsToAppend[i].ID = int64(i)
 		rowsToAppend[i].stringList = []string{"a", "b", "c"}
 		rowsToAppend[i].intList = []int32{1, 2, 3}
@@ -352,7 +352,7 @@ func TestAppenderNested(t *testing.T) {
 		i++
 	}
 
-	require.Equal(t, 10, i)
+	require.Equal(t, 1000, i)
 	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }
@@ -834,4 +834,103 @@ func TestAppenderWithJSON(t *testing.T) {
 
 	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
+}
+
+func BenchmarkAppenderNested(b *testing.B) {
+	c, con, a := prepareAppender(b, `
+		CREATE TABLE test (
+			id BIGINT,
+			string_list VARCHAR[],
+			int_list INT[],
+			nested_int_list INT[][],
+			triple_nested_int_list INT[][][],
+			simple_struct STRUCT(A INT, B VARCHAR),
+			wrapped_struct STRUCT(N VARCHAR, M STRUCT(A INT, B VARCHAR)),
+			double_wrapped_struct STRUCT(
+				X VARCHAR,
+				Y STRUCT(
+					N VARCHAR,
+					M STRUCT(
+						A INT,
+						B VARCHAR
+					)
+				)
+			),
+			struct_list STRUCT(A INT, B VARCHAR)[],
+			struct_with_list STRUCT(L INT[]),
+			mix STRUCT(
+				A STRUCT(L VARCHAR[]),
+				B STRUCT(L INT[])[],
+			    C STRUCT(L MAP(VARCHAR, INT))
+			),
+			mix_list STRUCT(
+				A STRUCT(L VARCHAR[]),
+				B STRUCT(L INT[])[],
+			    C STRUCT(L MAP(VARCHAR, INT))
+			)[]
+		)
+	`)
+
+	ms := mixedStruct{
+		A: struct {
+			L []string
+		}{
+			[]string{"a", "b", "c"},
+		},
+		B: []struct {
+			L []int32
+		}{
+			{[]int32{1, 2, 3}},
+		},
+		C: struct {
+			L Map
+		}{L: Map{"foo": int32(1), "bar": int32(2)}},
+	}
+	// TODO: This crashes when set to 600?
+	const rows = 1000
+	rowsToAppend := make([]nestedDataRow, rows)
+	for i := 0; i < rows; i++ {
+		rowsToAppend[i].ID = int64(i)
+		rowsToAppend[i].stringList = []string{"a", "b", "c"}
+		rowsToAppend[i].intList = []int32{1, 2, 3}
+		rowsToAppend[i].nestedIntList = [][]int32{{1, 2, 3}, {4, 5, 6}}
+		rowsToAppend[i].tripleNestedIntList = [][][]int32{
+			{{1, 2, 3}, {4, 5, 6}},
+			{{7, 8, 9}, {10, 11, 12}},
+		}
+		rowsToAppend[i].simpleStruct = simpleStruct{A: 1, B: "foo"}
+		rowsToAppend[i].wrappedStruct = wrappedStruct{"wrapped", simpleStruct{1, "foo"}}
+		rowsToAppend[i].doubleWrappedStruct = doubleWrappedStruct{
+			"so much nesting",
+			wrappedStruct{
+				"wrapped",
+				simpleStruct{1, "foo"},
+			},
+		}
+		rowsToAppend[i].structList = []simpleStruct{{1, "a"}, {2, "b"}, {3, "c"}}
+		rowsToAppend[i].structWithList.L = []int32{6, 7, 8}
+		rowsToAppend[i].mix = ms
+		rowsToAppend[i].mixList = []mixedStruct{ms, ms}
+	}
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		for _, row := range rowsToAppend {
+			require.NoError(b, a.AppendRow(
+				row.ID,
+				row.stringList,
+				row.intList,
+				row.nestedIntList,
+				row.tripleNestedIntList,
+				row.simpleStruct,
+				row.wrappedStruct,
+				row.doubleWrappedStruct,
+				row.structList,
+				row.structWithList,
+				row.mix,
+				row.mixList))
+		}
+		require.NoError(b, a.Flush())
+	}
+	b.StopTimer()
+	cleanupAppender(b, c, con, a)
 }

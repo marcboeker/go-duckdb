@@ -99,6 +99,19 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	return nil
 }
 
+func (vec *vector) resizeListVector(newLength C.idx_t) {
+	C.duckdb_list_vector_reserve(vec.duckdbVector, newLength)
+	C.duckdb_list_vector_set_size(vec.duckdbVector, newLength)
+	vec.resetData()
+}
+
+func (vec *vector) resetData() {
+	vec.ptr = C.duckdb_vector_get_data(vec.duckdbVector)
+	for i := range vec.childVectors {
+		vec.childVectors[i].resetData()
+	}
+}
+
 func (vec *vector) initVectors(v C.duckdb_vector, writable bool) {
 	vec.duckdbVector = v
 	vec.ptr = C.duckdb_vector_get_data(v)
@@ -111,11 +124,9 @@ func (vec *vector) initVectors(v C.duckdb_vector, writable bool) {
 
 func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
 	switch vec.Type {
-
 	case TYPE_LIST, TYPE_MAP:
 		child := C.duckdb_list_vector_get_child(v)
 		vec.childVectors[0].initVectors(child, writable)
-
 	case TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
 			child := C.duckdb_struct_vector_get_child(v, C.idx_t(i))

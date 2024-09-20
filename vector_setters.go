@@ -325,8 +325,7 @@ func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	setPrimitive(vec, rowIdx, listEntry)
 
 	newLength := C.idx_t(len(list)) + childVectorSize
-	C.duckdb_list_vector_set_size(vec.duckdbVector, newLength)
-	C.duckdb_list_vector_reserve(vec.duckdbVector, newLength)
+	vec.resizeListVector(newLength)
 
 	// Insert the values into the child vector.
 	childVector := &vec.childVectors[0]
