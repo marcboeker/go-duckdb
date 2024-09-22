@@ -102,13 +102,13 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 func (vec *vector) resizeListVector(newLength C.idx_t) {
 	C.duckdb_list_vector_reserve(vec.duckdbVector, newLength)
 	C.duckdb_list_vector_set_size(vec.duckdbVector, newLength)
-	vec.resetData()
+	vec.resetChildData()
 }
 
-func (vec *vector) resetData() {
-	vec.ptr = C.duckdb_vector_get_data(vec.duckdbVector)
+func (vec *vector) resetChildData() {
 	for i := range vec.childVectors {
-		vec.childVectors[i].resetData()
+		vec.childVectors[i].ptr = C.duckdb_vector_get_data(vec.childVectors[i].duckdbVector)
+		vec.childVectors[i].resetChildData()
 	}
 }
 
