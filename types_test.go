@@ -272,6 +272,7 @@ func BenchmarkTypes(b *testing.B) {
 		r = testTypes(b, c, a, expectedRows)
 		testTypesReset(b, c)
 	}
+	b.StopTimer()
 
 	// Ensure that the compiler does not eliminate the line by storing the result.
 	benchmarkTypesResult = r
