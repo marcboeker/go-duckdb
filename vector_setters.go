@@ -163,6 +163,7 @@ func setInterval[S any](vec *vector, rowIdx C.idx_t, val S) error {
 }
 
 func setHugeint[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	var err error
 	var fv C.duckdb_hugeint
 	switch v := any(val).(type) {
 	case uint8:
@@ -180,47 +181,35 @@ func setHugeint[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case uint64:
 		fv = C.duckdb_hugeint{lower: C.uint64_t(v)}
 	case int64:
-		var err error
-		fv, err = hugeIntFromNative(big.NewInt(v))
-		if err != nil {
+		if fv, err = hugeIntFromNative(big.NewInt(v)); err != nil {
 			return err
 		}
 	case uint:
 		fv = C.duckdb_hugeint{lower: C.uint64_t(v)}
 	case int:
-		var err error
-		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
-		if err != nil {
+		if fv, err = hugeIntFromNative(big.NewInt(int64(v))); err != nil {
 			return err
 		}
 	case float32:
-		var err error
-		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
-		if err != nil {
+		if fv, err = hugeIntFromNative(big.NewInt(int64(v))); err != nil {
 			return err
 		}
 	case float64:
-		var err error
-		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
-		if err != nil {
+		if fv, err = hugeIntFromNative(big.NewInt(int64(v))); err != nil {
 			return err
 		}
 	case *big.Int:
 		if v == nil {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 		}
-		var err error
-		fv, err = hugeIntFromNative(v)
-		if err != nil {
+		if fv, err = hugeIntFromNative(v); err != nil {
 			return err
 		}
 	case Decimal:
 		if v.Value == nil {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 		}
-		var err error
-		fv, err = hugeIntFromNative(v.Value)
-		if err != nil {
+		if fv, err = hugeIntFromNative(v.Value); err != nil {
 			return err
 		}
 	default:
@@ -344,7 +333,8 @@ func setStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case map[string]any:
 		m = v
 	default:
-		// FIXME: Add support for all map types
+		// FIXME: Add support for all map types.
+
 		// Catch mismatching types.
 		goType := reflect.TypeOf(val)
 		if reflect.TypeOf(val).Kind() != reflect.Struct {
@@ -417,6 +407,7 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	if inMap {
 		return unsupportedTypeError(name)
 	}
+
 	switch vec.Type {
 	case TYPE_BOOLEAN:
 		return setBool[S](vec, rowIdx, val)
@@ -451,7 +442,6 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return setInterval[S](vec, rowIdx, val)
 	case TYPE_HUGEINT:
 		return setHugeint[S](vec, rowIdx, val)
-		// UHUGEINT is not supported
 	case TYPE_VARCHAR:
 		return setBytes[S](vec, rowIdx, val)
 	case TYPE_BLOB:
