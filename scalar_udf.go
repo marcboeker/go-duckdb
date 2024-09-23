@@ -122,12 +122,6 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 	return err
 }
 
-func setFuncError(function_info C.duckdb_function_info, msg string) {
-	err := C.CString(msg)
-	C.duckdb_scalar_function_set_error(function_info, err)
-	C.duckdb_free(unsafe.Pointer(err))
-}
-
 //export scalar_udf_callback
 func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_data_chunk, output C.duckdb_vector) {
 	extraInfo := C.duckdb_scalar_function_get_extra_info(function_info)
@@ -198,10 +192,8 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 }
 
 //export scalar_udf_delete_callback
-func scalar_udf_delete_callback(extraInfo unsafe.Pointer) {
-	h := (*cgo.Handle)(extraInfo)
-	h.Value().(unpinner).unpin()
-	h.Delete()
+func scalar_udf_delete_callback(info unsafe.Pointer) {
+	udf_delete_callback(info)
 }
 
 func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) error {
