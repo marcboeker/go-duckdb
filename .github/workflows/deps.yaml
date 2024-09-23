@@ -132,8 +132,8 @@ jobs:
           rm -f deps/darwin_arm64/libduckdb.a
           rm -f deps/linux_amd64/libduckdb.a
           rm -f deps/linux_arm64/libduckdb.a
-          rm -f deps/windows_amd64/libduckdb.a
           rm -f deps/freebsd_amd64/libduckdb.a
+          rm -f deps/windows_amd64/libduckdb.a
           rm -f duckdb.h
       - uses: actions/download-artifact@v4
         with:
