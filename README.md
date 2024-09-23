@@ -48,6 +48,8 @@ defer db.Close()
 Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/refs/tags/go1.23.0:src/database/sql/sql.go;l=824). That way, you can perform initialization steps in a callback function before opening the database.
 Here's an example that installs and loads the JSON extension when opening a database with `sql.OpenDB(connector)`.
 
+Note that on windows, the `json` extension is pre-installed. Explicitly installing it will return an error
+
 ```go
 connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
     bootQueries := []string{

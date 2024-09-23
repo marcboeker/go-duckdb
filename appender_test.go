@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	_ "time/tzdata"
+
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
