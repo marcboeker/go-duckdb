@@ -568,7 +568,7 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	// test json extension
-	rows, err = conn.QueryContext(context.Background(), `INSTALL 'json'; LOAD 'json'; CREATE TABLE example (id int, j JSON);
+	rows, err = conn.QueryContext(context.Background(), `CREATE TABLE example (id int, j JSON);
 		INSERT INTO example VALUES(123, ' { "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }');
 		SELECT j->'$.family' FROM example WHERE id=$1`, 123)
 	require.NoError(t, err)
