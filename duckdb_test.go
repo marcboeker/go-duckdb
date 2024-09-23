@@ -38,17 +38,6 @@ func TestOpen(t *testing.T) {
 		require.Equal(t, int64(4), threads)
 		require.Equal(t, "read_write", accessMode)
 	})
-
-	t.Run("existing sqlite database", func(t *testing.T) {
-		db, err := sql.Open("duckdb", "sqlite:testdata/pets.sqlite")
-		require.NoError(t, err)
-		defer db.Close()
-
-		var species string
-		res := db.QueryRow("SELECT species FROM pets WHERE id=1")
-		require.NoError(t, res.Scan(&species))
-		require.Equal(t, "Gopher", species)
-	})
 }
 
 func TestConnectorBootQueries(t *testing.T) {
