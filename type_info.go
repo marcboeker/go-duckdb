@@ -69,7 +69,13 @@ type typeInfo struct {
 
 // TypeInfo is an interface for a DuckDB type.
 type TypeInfo interface {
+	// InternalType returns the Type.
+	InternalType() Type
 	logicalType() C.duckdb_logical_type
+}
+
+func (info *typeInfo) InternalType() Type {
+	return info.Type
 }
 
 // NewTypeInfo returns type information for DuckDB's primitive types.

@@ -394,6 +394,13 @@ func setUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	switch v := any(val).(type) {
 	case UUID:
 		uuid = v
+	case []uint8:
+		if len(v) != UUIDLength {
+			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(uuid).String())
+		}
+		for i := 0; i < UUIDLength; i++ {
+			uuid[i] = v[i]
+		}
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(uuid).String())
 	}

@@ -47,6 +47,9 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 		return nil, getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
 	column := &chunk.columns[colIdx]
+	if column.isSQLNull {
+		return nil, nil
+	}
 	return column.getFn(column, C.idx_t(rowIdx)), nil
 }
 
@@ -57,7 +60,11 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
+
 	column := &chunk.columns[colIdx]
+	if column.isSQLNull {
+		return getError(errAPI, errSetSQLNULLValue)
+	}
 
 	// Set the value.
 	return column.setFn(column, C.idx_t(rowIdx), val)
@@ -125,6 +132,23 @@ func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk, writable
 
 	chunk.GetSize()
 	return err
+}
+
+func (chunk *DataChunk) initFromDuckVector(duckdbVector C.duckdb_vector, writable bool) error {
+	columnCount := 1
+	chunk.columns = make([]vector, columnCount)
+
+	// Initialize the callback functions to read and write values.
+	logicalType := C.duckdb_vector_get_column_type(duckdbVector)
+	err := chunk.columns[0].init(logicalType, 0)
+	C.duckdb_destroy_logical_type(&logicalType)
+	if err != nil {
+		return err
+	}
+
+	// Initialize the vector and its child vectors.
+	chunk.columns[0].initVectors(duckdbVector, writable)
+	return nil
 }
 
 func (chunk *DataChunk) close() {
