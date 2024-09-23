@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -217,96 +218,11 @@ func TestAppenderList(t *testing.T) {
 
 func TestAppenderNested(t *testing.T) {
 	t.Parallel()
-	c, con, a := prepareAppender(t, `
-		CREATE TABLE test (
-			id BIGINT,
-			string_list VARCHAR[],
-			int_list INT[],
-			nested_int_list INT[][],
-			triple_nested_int_list INT[][][],
-			simple_struct STRUCT(A INT, B VARCHAR),
-			wrapped_struct STRUCT(N VARCHAR, M STRUCT(A INT, B VARCHAR)),
-			double_wrapped_struct STRUCT(
-				X VARCHAR,
-				Y STRUCT(
-					N VARCHAR,
-					M STRUCT(
-						A INT,
-						B VARCHAR
-					)
-				)
-			),
-			struct_list STRUCT(A INT, B VARCHAR)[],
-			struct_with_list STRUCT(L INT[]),
-			mix STRUCT(
-				A STRUCT(L VARCHAR[]),
-				B STRUCT(L INT[])[],
-			    C STRUCT(L MAP(VARCHAR, INT))
-			),
-			mix_list STRUCT(
-				A STRUCT(L VARCHAR[]),
-				B STRUCT(L INT[])[],
-			    C STRUCT(L MAP(VARCHAR, INT))
-			)[]
-		)
-	`)
+	c, con, a := prepareAppender(t, createNestedDataTableSQL)
 
-	ms := mixedStruct{
-		A: struct {
-			L []string
-		}{
-			[]string{"a", "b", "c"},
-		},
-		B: []struct {
-			L []int32
-		}{
-			{[]int32{1, 2, 3}},
-		},
-		C: struct {
-			L Map
-		}{L: Map{"foo": int32(1), "bar": int32(2)}},
-	}
-	rowsToAppend := make([]nestedDataRow, 10)
-	for i := 0; i < 10; i++ {
-		rowsToAppend[i].ID = int64(i)
-		rowsToAppend[i].stringList = []string{"a", "b", "c"}
-		rowsToAppend[i].intList = []int32{1, 2, 3}
-		rowsToAppend[i].nestedIntList = [][]int32{{1, 2, 3}, {4, 5, 6}}
-		rowsToAppend[i].tripleNestedIntList = [][][]int32{
-			{{1, 2, 3}, {4, 5, 6}},
-			{{7, 8, 9}, {10, 11, 12}},
-		}
-		rowsToAppend[i].simpleStruct = simpleStruct{A: 1, B: "foo"}
-		rowsToAppend[i].wrappedStruct = wrappedStruct{"wrapped", simpleStruct{1, "foo"}}
-		rowsToAppend[i].doubleWrappedStruct = doubleWrappedStruct{
-			"so much nesting",
-			wrappedStruct{
-				"wrapped",
-				simpleStruct{1, "foo"},
-			},
-		}
-		rowsToAppend[i].structList = []simpleStruct{{1, "a"}, {2, "b"}, {3, "c"}}
-		rowsToAppend[i].structWithList.L = []int32{6, 7, 8}
-		rowsToAppend[i].mix = ms
-		rowsToAppend[i].mixList = []mixedStruct{ms, ms}
-	}
-
-	for _, row := range rowsToAppend {
-		require.NoError(t, a.AppendRow(
-			row.ID,
-			row.stringList,
-			row.intList,
-			row.nestedIntList,
-			row.tripleNestedIntList,
-			row.simpleStruct,
-			row.wrappedStruct,
-			row.doubleWrappedStruct,
-			row.structList,
-			row.structWithList,
-			row.mix,
-			row.mixList))
-	}
-	require.NoError(t, a.Flush())
+	const rowCount = 1000
+	rowsToAppend := prepareNestedData(rowCount)
+	appendNestedData(t, a, rowsToAppend)
 
 	// Verify results.
 	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test ORDER BY id`)
@@ -351,7 +267,7 @@ func TestAppenderNested(t *testing.T) {
 		i++
 	}
 
-	require.Equal(t, 10, i)
+	require.Equal(t, rowCount, i)
 	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
 }
@@ -539,6 +455,42 @@ func TestAppenderUUID(t *testing.T) {
 	var res UUID
 	require.NoError(t, row.Scan(&res))
 	require.Equal(t, id, res)
+	cleanupAppender(t, c, con, a)
+}
+
+func newAppenderHugeIntTest[T numericType](val T, c *Connector, a *Appender) func(t *testing.T) {
+	return func(t *testing.T) {
+		typeName := reflect.TypeOf(val).String()
+		require.NoError(t, a.AppendRow(val, typeName))
+		require.NoError(t, a.Flush())
+
+		// Verify results.
+		row := sql.OpenDB(c).QueryRowContext(context.Background(), fmt.Sprintf("SELECT val FROM test WHERE id=='%s'", typeName))
+
+		var res *big.Int
+		require.NoError(t, row.Scan(&res))
+		require.Equal(t, big.NewInt(int64(val)), res)
+	}
+}
+
+func TestAppenderHugeInt(t *testing.T) {
+	t.Parallel()
+	c, con, a := prepareAppender(t, `CREATE TABLE test (val HUGEINT, id VARCHAR)`)
+	tests := map[string]func(t *testing.T){
+		"int8":    newAppenderHugeIntTest[int8](1, c, a),
+		"int16":   newAppenderHugeIntTest[int16](2, c, a),
+		"int32":   newAppenderHugeIntTest[int32](3, c, a),
+		"int64":   newAppenderHugeIntTest[int64](4, c, a),
+		"uint8":   newAppenderHugeIntTest[uint8](5, c, a),
+		"uint16":  newAppenderHugeIntTest[uint16](6, c, a),
+		"uint32":  newAppenderHugeIntTest[uint32](7, c, a),
+		"uint64":  newAppenderHugeIntTest[uint64](8, c, a),
+		"float32": newAppenderHugeIntTest[float32](9, c, a),
+		"float64": newAppenderHugeIntTest[float64](10, c, a),
+	}
+	for name, test := range tests {
+		t.Run(name, test)
+	}
 	cleanupAppender(t, c, con, a)
 }
 
@@ -797,4 +749,115 @@ func TestAppenderWithJSON(t *testing.T) {
 
 	require.NoError(t, res.Close())
 	cleanupAppender(t, c, con, a)
+}
+
+func BenchmarkAppenderNested(b *testing.B) {
+	c, con, a := prepareAppender(b, createNestedDataTableSQL)
+	const rowCount = 600
+	rowsToAppend := prepareNestedData(rowCount)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		appendNestedData(b, a, rowsToAppend)
+	}
+	b.StopTimer()
+	cleanupAppender(b, c, con, a)
+}
+
+const createNestedDataTableSQL = `
+	CREATE TABLE test (
+		id BIGINT,
+		string_list VARCHAR[],
+		int_list INT[],
+		nested_int_list INT[][],
+		triple_nested_int_list INT[][][],
+		simple_struct STRUCT(A INT, B VARCHAR),
+		wrapped_struct STRUCT(N VARCHAR, M STRUCT(A INT, B VARCHAR)),
+		double_wrapped_struct STRUCT(
+			X VARCHAR,
+			Y STRUCT(
+				N VARCHAR,
+				M STRUCT(
+					A INT,
+					B VARCHAR
+				)
+			)
+		),
+		struct_list STRUCT(A INT, B VARCHAR)[],
+		struct_with_list STRUCT(L INT[]),
+		mix STRUCT(
+			A STRUCT(L VARCHAR[]),
+			B STRUCT(L INT[])[],
+			C STRUCT(L MAP(VARCHAR, INT))
+		),
+		mix_list STRUCT(
+			A STRUCT(L VARCHAR[]),
+			B STRUCT(L INT[])[],
+			C STRUCT(L MAP(VARCHAR, INT))
+		)[]
+	)
+`
+
+func prepareNestedData(rowCount int) []nestedDataRow {
+	ms := mixedStruct{
+		A: struct {
+			L []string
+		}{
+			[]string{"a", "b", "c"},
+		},
+		B: []struct {
+			L []int32
+		}{
+			{[]int32{1, 2, 3}},
+		},
+		C: struct {
+			L Map
+		}{L: Map{"foo": int32(1), "bar": int32(2)}},
+	}
+
+	rowsToAppend := make([]nestedDataRow, rowCount)
+	for i := 0; i < rowCount; i++ {
+		rowsToAppend[i].ID = int64(i)
+		rowsToAppend[i].stringList = []string{"a", "b", "c"}
+		rowsToAppend[i].intList = []int32{1, 2, 3}
+		rowsToAppend[i].nestedIntList = [][]int32{{1, 2, 3}, {4, 5, 6}}
+		rowsToAppend[i].tripleNestedIntList = [][][]int32{
+			{{1, 2, 3}, {4, 5, 6}},
+			{{7, 8, 9}, {10, 11, 12}},
+		}
+		rowsToAppend[i].simpleStruct = simpleStruct{A: 1, B: "foo"}
+		rowsToAppend[i].wrappedStruct = wrappedStruct{"wrapped", simpleStruct{1, "foo"}}
+		rowsToAppend[i].doubleWrappedStruct = doubleWrappedStruct{
+			"so much nesting",
+			wrappedStruct{
+				"wrapped",
+				simpleStruct{1, "foo"},
+			},
+		}
+		rowsToAppend[i].structList = []simpleStruct{{1, "a"}, {2, "b"}, {3, "c"}}
+		rowsToAppend[i].structWithList.L = []int32{6, 7, 8}
+		rowsToAppend[i].mix = ms
+		rowsToAppend[i].mixList = []mixedStruct{ms, ms}
+	}
+
+	return rowsToAppend
+}
+
+func appendNestedData[T require.TestingT](t T, a *Appender, rowsToAppend []nestedDataRow) {
+	for _, row := range rowsToAppend {
+		require.NoError(t, a.AppendRow(
+			row.ID,
+			row.stringList,
+			row.intList,
+			row.nestedIntList,
+			row.tripleNestedIntList,
+			row.simpleStruct,
+			row.wrappedStruct,
+			row.doubleWrappedStruct,
+			row.structList,
+			row.structWithList,
+			row.mix,
+			row.mixList))
+	}
+	require.NoError(t, a.Flush())
 }
