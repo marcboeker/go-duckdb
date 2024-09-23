@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -541,6 +542,42 @@ func TestAppenderUUID(t *testing.T) {
 	var res UUID
 	require.NoError(t, row.Scan(&res))
 	require.Equal(t, id, res)
+	cleanupAppender(t, c, con, a)
+}
+
+func newAppenderHugeIntTest[T numericType](val T, c *Connector, a *Appender) func(t *testing.T) {
+	return func(t *testing.T) {
+		typeName := reflect.TypeOf(val).String()
+		require.NoError(t, a.AppendRow(val, typeName))
+		require.NoError(t, a.Flush())
+
+		// Verify results.
+		row := sql.OpenDB(c).QueryRowContext(context.Background(), fmt.Sprintf("SELECT val FROM test WHERE id=='%s'", typeName))
+
+		var res *big.Int
+		require.NoError(t, row.Scan(&res))
+		require.Equal(t, big.NewInt(int64(val)), res)
+	}
+}
+
+func TestAppenderHugeInt(t *testing.T) {
+	t.Parallel()
+	c, con, a := prepareAppender(t, `CREATE TABLE test (val HUGEINT, id VARCHAR)`)
+	tests := map[string]func(t *testing.T){
+		"int8":    newAppenderHugeIntTest[int8](1, c, a),
+		"int16":   newAppenderHugeIntTest[int16](2, c, a),
+		"int32":   newAppenderHugeIntTest[int32](3, c, a),
+		"int64":   newAppenderHugeIntTest[int64](4, c, a),
+		"uint8":   newAppenderHugeIntTest[uint8](5, c, a),
+		"uint16":  newAppenderHugeIntTest[uint16](6, c, a),
+		"uint32":  newAppenderHugeIntTest[uint32](7, c, a),
+		"uint64":  newAppenderHugeIntTest[uint64](8, c, a),
+		"float32": newAppenderHugeIntTest[float32](9, c, a),
+		"float64": newAppenderHugeIntTest[float64](10, c, a),
+	}
+	for name, test := range tests {
+		t.Run(name, test)
+	}
 	cleanupAppender(t, c, con, a)
 }
 

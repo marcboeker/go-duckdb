@@ -50,7 +50,8 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 	return column.getFn(column, C.idx_t(rowIdx)), nil
 }
 
-// SetValue writes a single value to a column in a data chunk. Note that this requires casting the type for each invocation.
+// SetValue writes a single value to a column in a data chunk.
+// Note that this requires casting the type for each invocation.
 // NOTE: Custom ENUM types must be passed as string.
 func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
@@ -58,19 +59,19 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	}
 	column := &chunk.columns[colIdx]
 
-	// Ensure that the types match before attempting to set anything.
-	// This is done to prevent failures 'halfway through' writing column values,
-	// potentially corrupting data in that column.
-	// FIXME: Can we improve efficiency here? We are casting back-and-forth to any A LOT.
-	// FIXME: Maybe we can make columnar insertions unsafe, i.e., we always assume a correct type.
-	v, err := column.tryCast(val)
-	if err != nil {
-		return addIndexToError(err, colIdx)
-	}
-
 	// Set the value.
-	column.setFn(column, C.idx_t(rowIdx), v)
-	return nil
+	return column.setFn(column, C.idx_t(rowIdx), val)
+}
+
+// SetChunkValue writes a single value to a column in a data chunk.
+// The difference with `chunk.SetValue` is that `SetChunkValue` does not
+// require casting the value to `any` (implicitly).
+// NOTE: Custom ENUM types must be passed as string.
+func SetChunkValue[T any](chunk DataChunk, colIdx int, rowIdx int, val T) error {
+	if colIdx >= len(chunk.columns) {
+		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
+	}
+	return setVectorVal(&chunk.columns[colIdx], C.idx_t(rowIdx), val)
 }
 
 func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type, writable bool) error {
