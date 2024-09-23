@@ -97,9 +97,9 @@ func (vec *vector) getCString(rowIdx C.idx_t) any {
 	return blob
 }
 
-func (vec *vector) getDecimal(t Type, rowIdx C.idx_t) Decimal {
+func (vec *vector) getDecimal(rowIdx C.idx_t) Decimal {
 	var val *big.Int
-	switch t {
+	switch vec.internalType {
 	case TYPE_SMALLINT:
 		v := getPrimitive[int16](vec, rowIdx)
 		val = big.NewInt(int64(v))
@@ -120,9 +120,9 @@ func (vec *vector) getDecimal(t Type, rowIdx C.idx_t) Decimal {
 	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
 
-func (vec *vector) getEnum(t Type, rowIdx C.idx_t) string {
+func (vec *vector) getEnum(rowIdx C.idx_t) string {
 	var idx uint64
-	switch t {
+	switch vec.internalType {
 	case TYPE_UTINYINT:
 		idx = uint64(getPrimitive[uint8](vec, rowIdx))
 	case TYPE_USMALLINT:
