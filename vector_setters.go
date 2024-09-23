@@ -114,6 +114,7 @@ func setTS[S any](vec *vector, t Type, rowIdx C.idx_t, val S) error {
 	setPrimitive(vec, rowIdx, ts)
 	return nil
 }
+
 func setDate[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	var date time.Time
 	switch v := any(val).(type) {
@@ -273,7 +274,6 @@ func setEnum[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	}
 
 	if v, ok := vec.dict[str]; ok {
-
 		switch vec.internalType {
 		case TYPE_UTINYINT:
 			return setNumeric[uint32, int8](vec, rowIdx, v)
@@ -299,7 +299,6 @@ func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		kind := reflect.TypeOf(val).Kind()
 		if kind != reflect.Array && kind != reflect.Slice {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(list).String())
-
 		}
 		// Insert the values into the child vector.
 		rv := reflect.ValueOf(val)
@@ -345,7 +344,7 @@ func setStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case map[string]any:
 		m = v
 	default:
-		//FIXME: Add support for all map types
+		// FIXME: Add support for all map types
 		// Catch mismatching types.
 		goType := reflect.TypeOf(val)
 		if reflect.TypeOf(val).Kind() != reflect.Struct {

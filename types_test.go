@@ -273,6 +273,7 @@ func BenchmarkTypes(b *testing.B) {
 		testTypesReset(b, c)
 	}
 	b.StopTimer()
+
 	// Ensure that the compiler does not eliminate the line by storing the result.
 	benchmarkTypesResult = r
 	cleanupAppender(b, c, con, a)
