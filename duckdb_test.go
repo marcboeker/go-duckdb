@@ -51,27 +51,6 @@ func TestOpen(t *testing.T) {
 }
 
 func TestConnectorBootQueries(t *testing.T) {
-	t.Run("many boot queries", func(t *testing.T) {
-		connector, err := NewConnector("", func(execer driver.ExecerContext) error {
-			bootQueries := []string{
-				"INSTALL 'json'",
-				"LOAD 'json'",
-				"SET schema=main",
-				"SET search_path=main",
-			}
-
-			for _, query := range bootQueries {
-				_, err := execer.ExecContext(context.Background(), query, nil)
-				require.NoError(t, err)
-			}
-			return nil
-		})
-		require.NoError(t, err)
-
-		db := sql.OpenDB(connector)
-		defer db.Close()
-	})
-
 	t.Run("readme example", func(t *testing.T) {
 		db, err := sql.Open("duckdb", "foo.db")
 		require.NoError(t, err)
@@ -79,12 +58,11 @@ func TestConnectorBootQueries(t *testing.T) {
 
 		connector, err := NewConnector("foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
 			bootQueries := []string{
-				"INSTALL 'json'",
-				"LOAD 'json'",
+				"SET schema=main",
+				"SET search_path=main",
 			}
-
 			for _, query := range bootQueries {
-				_, err := execer.ExecContext(context.Background(), query, nil)
+				_, err = execer.ExecContext(context.Background(), query, nil)
 				require.NoError(t, err)
 			}
 			return nil
@@ -148,17 +126,6 @@ func TestConnPool(t *testing.T) {
 
 func TestConnInit(t *testing.T) {
 	connector, err := NewConnector("", func(execer driver.ExecerContext) error {
-		bootQueries := []string{
-			"INSTALL 'json'",
-			"LOAD 'json'",
-		}
-
-		for _, qry := range bootQueries {
-			_, err := execer.ExecContext(context.Background(), qry, nil)
-			if err != nil {
-				return err
-			}
-		}
 		return nil
 	})
 	require.NoError(t, err)
@@ -280,8 +247,6 @@ func TestQuery(t *testing.T) {
 func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-
-	loadJSONExt(t, db)
 	var data string
 
 	t.Run("select empty JSON", func(t *testing.T) {
@@ -603,7 +568,7 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	// test json extension
-	rows, err = conn.QueryContext(context.Background(), `INSTALL 'json'; LOAD 'json'; CREATE TABLE example (id int, j JSON);
+	rows, err = conn.QueryContext(context.Background(), `CREATE TABLE example (id int, j JSON);
 		INSERT INTO example VALUES(123, ' { "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }');
 		SELECT j->'$.family' FROM example WHERE id=$1`, 123)
 	require.NoError(t, err)
@@ -669,13 +634,6 @@ func openDB(t *testing.T) *sql.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.Ping())
 	return db
-}
-
-func loadJSONExt(t *testing.T, db *sql.DB) {
-	_, err := db.Exec("INSTALL 'json'")
-	require.NoError(t, err)
-	_, err = db.Exec("LOAD 'json'")
-	require.NoError(t, err)
 }
 
 func createTable(db *sql.DB, t *testing.T, sql string) *sql.Result {
