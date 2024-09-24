@@ -1,10 +1,9 @@
 name: Build static library dependencies
 on:
   workflow_dispatch:
-
   push:
     branches-ignore:
-      - master
+      - main
     paths:
       - ".github/workflows/**"
       - "Makefile"

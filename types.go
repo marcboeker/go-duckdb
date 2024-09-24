@@ -21,10 +21,12 @@ func convertNumericType[srcT numericType, destT numericType](val srcT) destT {
 	return destT(val)
 }
 
-type UUID [16]byte
+const UUIDLength = 16
+
+type UUID [UUIDLength]byte
 
 func (u *UUID) Scan(v any) error {
-	if n := copy(u[:], v.([]byte)); n != 16 {
+	if n := copy(u[:], v.([]byte)); n != UUIDLength {
 		return fmt.Errorf("invalid UUID length: %d", n)
 	}
 	return nil
@@ -34,7 +36,7 @@ func (u *UUID) Scan(v any) error {
 // The value is computed as: upper * 2^64 + lower
 
 func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
-	var uuid [16]byte
+	var uuid [UUIDLength]byte
 	// We need to flip the sign bit of the signed hugeint to transform it to UUID bytes
 	binary.BigEndian.PutUint64(uuid[:8], uint64(hi.upper)^1<<63)
 	binary.BigEndian.PutUint64(uuid[8:], uint64(hi.lower))

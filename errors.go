@@ -84,16 +84,33 @@ var (
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 
-	errAppenderCreation         = errors.New("could not create appender")
-	errAppenderDoubleClose      = errors.New("could not close appender: already closed")
+	errAppenderCreation   = errors.New("could not create appender")
+	errAppenderInvalidCon = fmt.Errorf("%w: not a DuckDB driver connection", errAppenderCreation)
+	errAppenderClosedCon  = fmt.Errorf("%w: appender creation on a closed connection", errAppenderCreation)
+
+	errAppenderClose       = errors.New("could not close appender")
+	errAppenderDoubleClose = fmt.Errorf("%w: already closed", errAppenderClose)
+
 	errAppenderAppendRow        = errors.New("could not append row")
-	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
-	errAppenderClose            = errors.New("could not close appender")
-	errAppenderFlush            = errors.New("could not flush appender")
+	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
+
+	errAppenderFlush = errors.New("could not flush appender")
 
 	errEmptyName           = errors.New("empty name")
 	errInvalidDecimalWidth = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
 	errInvalidDecimalScale = errors.New("the DECIMAL scale must be less than or equal to the width")
+
+	errScalarUDFCreate          = errors.New("could not create scalar UDF")
+	errScalarUDFNoName          = fmt.Errorf("%w: missing name", errScalarUDFCreate)
+	errScalarUDFIsNil           = fmt.Errorf("%w: function is nil", errScalarUDFCreate)
+	errScalarUDFNoExecutor      = fmt.Errorf("%w: executor is nil", errScalarUDFCreate)
+	errScalarUDFInputTypeIsNil  = fmt.Errorf("%w: input type is nil", errScalarUDFCreate)
+	errScalarUDFResultTypeIsNil = fmt.Errorf("%w: result type is nil", errScalarUDFCreate)
+	errScalarUDFResultTypeIsANY = fmt.Errorf("%w: result type is ANY, which is not supported", errScalarUDFCreate)
+	errScalarUDFCreateSet       = fmt.Errorf("could not create scalar UDF set")
+	errScalarUDFAddToSet        = fmt.Errorf("%w: could not add the function to the set", errScalarUDFCreateSet)
+
+	errSetSQLNULLValue = errors.New("cannot write to a NULL column")
 
 	errProfilingInfoEmpty = errors.New("no profiling information available for this connection")
 
