@@ -148,12 +148,8 @@ func (vec *vector) getList(rowIdx C.idx_t) []any {
 
 	// Fill the slice with all child values.
 	for i := C.idx_t(0); i < entry.length; i++ {
-		if child.isSQLNull {
-			slice = append(slice, nil)
-		} else {
-			val := child.getFn(child, i+entry.offset)
-			slice = append(slice, val)
-		}
+		val := child.getFn(child, i+entry.offset)
+		slice = append(slice, val)
 	}
 	return slice
 }
@@ -162,12 +158,8 @@ func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
 	m := map[string]any{}
 	for i := 0; i < len(vec.childVectors); i++ {
 		child := &vec.childVectors[i]
-		if child.isSQLNull {
-			m[vec.structEntries[i].Name()] = nil
-		} else {
-			val := child.getFn(child, rowIdx)
-			m[vec.structEntries[i].Name()] = val
-		}
+		val := child.getFn(child, rowIdx)
+		m[vec.structEntries[i].Name()] = val
 	}
 	return m
 }

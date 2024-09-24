@@ -46,10 +46,8 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 	if colIdx >= len(chunk.columns) {
 		return nil, getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
+
 	column := &chunk.columns[colIdx]
-	if column.isSQLNull {
-		return nil, nil
-	}
 	return column.getFn(column, C.idx_t(rowIdx)), nil
 }
 
@@ -62,11 +60,6 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	}
 
 	column := &chunk.columns[colIdx]
-	if column.isSQLNull {
-		return getError(errAPI, errSetSQLNULLValue)
-	}
-
-	// Set the value.
 	return column.setFn(column, C.idx_t(rowIdx), val)
 }
 

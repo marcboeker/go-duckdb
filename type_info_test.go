@@ -53,7 +53,7 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 			continue
 		}
 		switch k {
-		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP:
+		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_SQLNULL:
 			continue
 		}
 		primitiveTypes = append(primitiveTypes, k)
@@ -190,6 +190,7 @@ func TestErrTypeInfo(t *testing.T) {
 			unsupportedTypes = append(unsupportedTypes, k)
 		}
 	}
+	unsupportedTypes = append(unsupportedTypes, TYPE_SQLNULL)
 
 	for _, unsupported := range unsupportedTypes {
 		_, err := NewTypeInfo(unsupported)

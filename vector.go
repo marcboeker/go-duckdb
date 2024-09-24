@@ -25,10 +25,6 @@ type vector struct {
 	// The child vectors of nested data types.
 	childVectors []vector
 
-	// FIXME: This is a workaround until the C API exposes SQLNULL.
-	// FIXME: Then, SQLNULL becomes another Type value (C.DUCKDB_TYPE_SQLNULL).
-	isSQLNull bool
-
 	// The vector's type information.
 	vectorTypeInfo
 }
@@ -45,12 +41,6 @@ func (*vector) canNil(val reflect.Value) bool {
 
 func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	t := Type(C.duckdb_get_type_id(logicalType))
-
-	if t == TYPE_INVALID {
-		vec.isSQLNull = true
-		return nil
-	}
-
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap {
 		return addIndexToError(unsupportedTypeError(name), colIdx)
@@ -103,6 +93,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		return vec.initMap(logicalType, colIdx)
 	case TYPE_UUID:
 		vec.initUUID()
+	case TYPE_SQLNULL:
+		vec.initSQLNull()
 	default:
 		return addIndexToError(unsupportedTypeError(unknownTypeErrMsg), colIdx)
 	}
@@ -123,10 +115,6 @@ func (vec *vector) resetChildData() {
 }
 
 func (vec *vector) initVectors(v C.duckdb_vector, writable bool) {
-	if vec.isSQLNull {
-		return
-	}
-
 	vec.duckdbVector = v
 	vec.ptr = C.duckdb_vector_get_data(v)
 	if writable {
@@ -481,4 +469,14 @@ func (vec *vector) initUUID() {
 		return setUUID(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_UUID
+}
+
+func (vec *vector) initSQLNull() {
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		return nil
+	}
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) error {
+		return errSetSQLNULLValue
+	}
+	vec.Type = TYPE_SQLNULL
 }
