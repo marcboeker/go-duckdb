@@ -111,8 +111,12 @@ var (
 	errSetSQLNULLValue = errors.New("cannot write to a NULL column")
 
 	// Errors not covered in tests.
-	errConnect      = errors.New("could not connect to database")
-	errCreateConfig = errors.New("could not create config for database")
+	errConnect                = errors.New("could not connect to database")
+	errCreateConfig           = errors.New("could not create config for database")
+	errTableUDFCreate         = errors.New("could not create table UDF")
+	errTableUDFMissingBindags = errors.New("could not create table UDF, missing bind arguments")
+	errTableUDFNoName         = errors.New("could not create table UDF, name cannot be empty")
+	errTableUDFNillFunction   = errors.New("could not create table UDF, no function provided")
 )
 
 type ErrorType int

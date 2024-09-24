@@ -97,3 +97,4 @@ var typeToStringMap = map[Type]string{
 	TYPE_ANY:          "ANY",
 	TYPE_VARINT:       "VARINT",
 }
+
