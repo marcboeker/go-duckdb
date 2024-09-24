@@ -82,8 +82,6 @@ var (
 	errInvalidCon = errors.New("not a DuckDB driver connection")
 	errClosedCon  = errors.New("closed connection")
 
-	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
-
 	errAppenderCreation         = errors.New("could not create appender")
 	errAppenderClose            = errors.New("could not close appender")
 	errAppenderDoubleClose      = fmt.Errorf("%w: already closed", errAppenderClose)
@@ -91,10 +89,11 @@ var (
 	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
 	errAppenderFlush            = errors.New("could not flush appender")
 
-	errEmptyName           = errors.New("empty name")
-	errInvalidDecimalWidth = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
-	errInvalidDecimalScale = errors.New("the DECIMAL scale must be less than or equal to the width")
-	errSetSQLNULLValue     = errors.New("cannot write to a NULL column")
+	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
+	errEmptyName             = errors.New("empty name")
+	errInvalidDecimalWidth   = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
+	errInvalidDecimalScale   = errors.New("the DECIMAL scale must be less than or equal to the width")
+	errSetSQLNULLValue       = errors.New("cannot write to a NULL column")
 
 	errScalarUDFCreate          = errors.New("could not create scalar UDF")
 	errScalarUDFNoName          = fmt.Errorf("%w: missing name", errScalarUDFCreate)
