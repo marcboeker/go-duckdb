@@ -50,7 +50,6 @@ func (info *ProfilingInfo) getMetrics(duckdbInfo C.duckdb_profiling_info) {
 
 		cKey := C.duckdb_get_varchar(key)
 		cValue := C.duckdb_get_varchar(value)
-
 		keyStr := C.GoString(cKey)
 		valueStr := C.GoString(cValue)
 
