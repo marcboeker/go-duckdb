@@ -102,6 +102,8 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewStructInfo)))
 	case TYPE_MAP:
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
+	case TYPE_SQLNULL:
+		return nil, getError(errAPI, unsupportedTypeError(typeToStringMap[t]))
 	}
 
 	return &typeInfo{

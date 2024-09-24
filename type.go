@@ -45,6 +45,7 @@ const (
 	TYPE_TIMESTAMP_TZ Type = C.DUCKDB_TYPE_TIMESTAMP_TZ
 	TYPE_ANY          Type = C.DUCKDB_TYPE_ANY
 	TYPE_VARINT       Type = C.DUCKDB_TYPE_VARINT
+	TYPE_SQLNULL      Type = C.DUCKDB_TYPE_SQLNULL
 )
 
 // FIXME: Implement support for these types.
@@ -96,4 +97,5 @@ var typeToStringMap = map[Type]string{
 	TYPE_TIMESTAMP_TZ: "TIMESTAMPTZ",
 	TYPE_ANY:          "ANY",
 	TYPE_VARINT:       "VARINT",
+	TYPE_SQLNULL:      "SQLNULL",
 }
