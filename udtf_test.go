@@ -167,9 +167,9 @@ func (d *incTableUDF) Cardinality() *CardinalityInfo {
 
 func BindParallelIncTableUDF(namedArgs map[string]any, args ...interface{}) (ThreadedRowTableSource, error) {
 	return &parallelIncTableUDF{
-		lock:  &sync.Mutex{},
+		lock:    &sync.Mutex{},
 		claimed: 0,
-		n:     args[0].(int64),
+		n:       args[0].(int64),
 	}, nil
 }
 
@@ -237,7 +237,6 @@ func (d *parallelIncTableUDF) GetFunction() RowTableFunction {
 		BindArguments: BindIncTableUDF,
 	}
 }
-
 
 func (d *structTableUDF) GetFunction() RowTableFunction {
 	return RowTableFunction{
@@ -423,7 +422,7 @@ func (d *chunkIncTableUDF) Init() {}
 func (d *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
 	size := chunk.GetSize()
 	i := 0
-	defer chunk.SetSize(i)
+	defer func() { _ = chunk.SetSize(i) }()
 	for ; i < size; i++ {
 		if d.count > d.n {
 			return nil
