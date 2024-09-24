@@ -4,7 +4,7 @@ package duckdb
 #include <duckdb.h>
 
 void scalar_udf_callback(duckdb_function_info, duckdb_data_chunk, duckdb_vector);
-void scalar_udf_delete_callback(void *);
+void udf_delete_callback(void *);
 
 typedef void (*scalar_udf_callback_t)(duckdb_function_info, duckdb_data_chunk, duckdb_vector);
 */
@@ -125,10 +125,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 //export scalar_udf_callback
 func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_data_chunk, output C.duckdb_vector) {
 	extraInfo := C.duckdb_scalar_function_get_extra_info(function_info)
-
-	// extraInfo is a void* pointer to our pinned ScalarFunc f.
-	h := *(*cgo.Handle)(unsafe.Pointer(extraInfo))
-	function := h.Value().(pinnedValue[ScalarFunc]).value
+	function := getPinnedValueValue[ScalarFunc](extraInfo)
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
@@ -189,11 +186,6 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 			return
 		}
 	}
-}
-
-//export scalar_udf_delete_callback
-func scalar_udf_delete_callback(info unsafe.Pointer) {
-	udf_delete_callback(info)
 }
 
 func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) error {
@@ -285,7 +277,7 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 	C.duckdb_scalar_function_set_extra_info(
 		function,
 		unsafe.Pointer(&h),
-		C.duckdb_delete_callback_t(C.scalar_udf_delete_callback))
+		C.duckdb_delete_callback_t(C.udf_delete_callback))
 
 	return function, nil
 }
