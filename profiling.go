@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"database/sql"
 	"unsafe"
 )
 
@@ -22,30 +23,26 @@ type ProfilingInfo struct {
 }
 
 // GetProfilingInfo obtains all available metrics set by the current connection.
-func GetProfilingInfo(driverConn any) (ProfilingInfo, error) {
+func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
+	err := c.Raw(func(driverConn any) error {
+		con := driverConn.(*conn)
+		duckdbInfo := C.duckdb_get_profiling_info(con.duckdbCon)
+		if duckdbInfo == nil {
+			return getError(errProfilingInfoEmpty, nil)
+		}
 
-	con, ok := driverConn.(*conn)
-	if !ok {
-		return info, getError(errInvalidCon, nil)
-	}
-	if con.closed {
-		return info, getError(errClosedCon, nil)
-	}
-
-	duckdbInfo := C.duckdb_get_profiling_info(con.duckdbCon)
-	if duckdbInfo == nil {
-		return info, getError(errProfilingInfoEmpty, nil)
-	}
-
-	// Recursive tree traversal.
-	info.getMetrics(duckdbInfo)
-	return info, nil
+		// Recursive tree traversal.
+		info.getMetrics(duckdbInfo)
+		return nil
+	})
+	return info, err
 }
 
 func (info *ProfilingInfo) getMetrics(duckdbInfo C.duckdb_profiling_info) {
 	m := C.duckdb_profiling_info_get_metrics(duckdbInfo)
 	count := C.duckdb_get_map_size(m)
+	info.Metrics = make(map[string]string, count)
 
 	for i := C.idx_t(0); i < count; i++ {
 		key := C.duckdb_get_map_key(m, i)
