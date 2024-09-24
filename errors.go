@@ -76,27 +76,24 @@ var (
 	errAPI        = errors.New("API error")
 	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
 
-	errParseDSN  = errors.New("could not parse DSN for database")
-	errOpen      = errors.New("could not open database")
-	errSetConfig = errors.New("could not set invalid or local option for global database config")
+	errParseDSN   = errors.New("could not parse DSN for database")
+	errOpen       = errors.New("could not open database")
+	errSetConfig  = errors.New("could not set invalid or local option for global database config")
+	errInvalidCon = errors.New("not a DuckDB driver connection")
+	errClosedCon  = errors.New("closed connection")
 
-	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
-
-	errAppenderCreation   = errors.New("could not create appender")
-	errAppenderInvalidCon = fmt.Errorf("%w: not a DuckDB driver connection", errAppenderCreation)
-	errAppenderClosedCon  = fmt.Errorf("%w: appender creation on a closed connection", errAppenderCreation)
-
-	errAppenderClose       = errors.New("could not close appender")
-	errAppenderDoubleClose = fmt.Errorf("%w: already closed", errAppenderClose)
-
+	errAppenderCreation         = errors.New("could not create appender")
+	errAppenderClose            = errors.New("could not close appender")
+	errAppenderDoubleClose      = fmt.Errorf("%w: already closed", errAppenderClose)
 	errAppenderAppendRow        = errors.New("could not append row")
 	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
+	errAppenderFlush            = errors.New("could not flush appender")
 
-	errAppenderFlush = errors.New("could not flush appender")
-
-	errEmptyName           = errors.New("empty name")
-	errInvalidDecimalWidth = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
-	errInvalidDecimalScale = errors.New("the DECIMAL scale must be less than or equal to the width")
+	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
+	errEmptyName             = errors.New("empty name")
+	errInvalidDecimalWidth   = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
+	errInvalidDecimalScale   = errors.New("the DECIMAL scale must be less than or equal to the width")
+	errSetSQLNULLValue       = errors.New("cannot write to a NULL column")
 
 	errScalarUDFCreate          = errors.New("could not create scalar UDF")
 	errScalarUDFNoName          = fmt.Errorf("%w: missing name", errScalarUDFCreate)
@@ -108,7 +105,7 @@ var (
 	errScalarUDFCreateSet       = fmt.Errorf("could not create scalar UDF set")
 	errScalarUDFAddToSet        = fmt.Errorf("%w: could not add the function to the set", errScalarUDFCreateSet)
 
-	errSetSQLNULLValue = errors.New("cannot write to a NULL column")
+	errProfilingInfoEmpty = errors.New("no profiling information available for this connection")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")

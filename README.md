@@ -115,6 +115,42 @@ err = appender.AppendRow(...)
 check(err)
 ```
 
+## DuckDB Profiling API
+
+This section describes using the [DuckDB Profiling API](https://duckdb.org/docs/dev/profiling.html).
+DuckDB's profiling information is connection-local.
+The following example walks you through the necessary steps to obtain the `ProfilingInformation` type, which contains all available metrics.
+Please refer to the [DuckDB documentation](https://duckdb.org/docs/dev/profiling.html) on configuring and collecting specific metrics.
+
+- First, you need to obtain a connection.
+- Then, you enable profiling for the connection.
+- Now, for each subsequent query on this connection, DuckDB will collect profiling information.
+    - Optionally, you can turn off profiling at any point.
+- Next, you execute the query for which you want to obtain profiling information.
+- Finally, directly after executing the query, you use the underlying DuckDB connection to retrieve any available profiling information.
+
+For readability, we omit error handling in this example.
+```Go
+db, err := sql.Open("duckdb", "")
+con, err := db.Conn(context.Background())
+
+_, err = con.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
+_, err = con.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
+
+res, err := con.QueryContext(context.Background(), `SELECT 42`)
+
+var info ProfilingInfo
+err = con.Raw(func(driverCon any) error {
+    info, err = GetProfilingInfo(driverCon)
+    return err
+})
+err = res.Close()
+
+_, err = con.ExecContext(context.Background(), `PRAGMA disable_profiling`)
+err = con.Close()
+err = db.Close()
+```
+
 ## DuckDB Apache Arrow Interface
 
 If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.

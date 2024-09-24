@@ -33,10 +33,10 @@ type Appender struct {
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
 	con, ok := driverConn.(*conn)
 	if !ok {
-		return nil, getError(errAppenderInvalidCon, nil)
+		return nil, getError(errInvalidCon, nil)
 	}
 	if con.closed {
-		return nil, getError(errAppenderClosedCon, nil)
+		return nil, getError(errClosedCon, nil)
 	}
 
 	var cSchema *C.char
