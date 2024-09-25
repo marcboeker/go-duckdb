@@ -252,8 +252,9 @@ func (a *Arrow) anyArgsToNamedArgs(args []any) []driver.NamedValue {
 // The returned release function must be called to release the memory once the view is no longer needed.
 func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release func(), err error) {
 	if a.c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: RegisterArrowStream after Close")
+		panic("database/sql/driver: misuse of duckdb driver: RegisterView after Close")
 	}
+
 	// duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow);
 
 	stream := C.calloc(1, C.sizeof_struct_ArrowArrayStream)
