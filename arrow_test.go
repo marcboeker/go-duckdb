@@ -193,6 +193,7 @@ func TestArrow(t *testing.T) {
 				require.Equal(t, string(rune('a'+i-1)), f3)
 			}
 			require.NoError(t, rows.Err())
+			require.Equal(t, 20, i)
 
 			return nil
 		})
