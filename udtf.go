@@ -161,7 +161,7 @@ func table_udf_bind_chunk(info C.duckdb_bind_info) {
 }
 
 func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
-	tfunc := getPinnedValueValue[tableFunction[T]](C.duckdb_bind_get_extra_info(info))
+	tfunc := getPinned[tableFunction[T]](C.duckdb_bind_get_extra_info(info))
 	config := tfunc.Config
 
 	argCount := len(config.Arguments)
@@ -230,14 +230,14 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 //export table_udf_init
 func table_udf_init(info C.duckdb_init_info) {
-	instance := getPinnedValueValue[tableFunctionData](C.duckdb_init_get_bind_data(info))
+	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
 	instance.setColumnCount(info)
 	instance.fun.(tableSource).Init()
 }
 
 //export table_udf_init_threaded
 func table_udf_init_threaded(info C.duckdb_init_info) {
-	instance := getPinnedValueValue[tableFunctionData](C.duckdb_init_get_bind_data(info))
+	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
 	instance.setColumnCount(info)
 	initData := instance.fun.(threadedTableSource).Init()
 	C.duckdb_init_set_max_threads(info, C.idx_t(initData.MaxThreads))
@@ -245,7 +245,7 @@ func table_udf_init_threaded(info C.duckdb_init_info) {
 
 //export table_udf_local_init
 func table_udf_local_init(info C.duckdb_init_info) {
-	instance := getPinnedValueValue[tableFunctionData](C.duckdb_init_get_bind_data(info))
+	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
 	localState := pinnedValue[any]{
 		pinner: &runtime.Pinner{},
 		value:  instance.fun.(threadedTableSource).NewLocalState(),
@@ -257,7 +257,7 @@ func table_udf_local_init(info C.duckdb_init_info) {
 
 //export table_udf_row_callback
 func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
-	instance := getPinnedValueValue[tableFunctionData](C.duckdb_function_get_bind_data(info))
+	instance := getPinned[tableFunctionData](C.duckdb_function_get_bind_data(info))
 
 	var chunk DataChunk
 	err := chunk.initFromDuckDataChunk(output, true)
@@ -286,7 +286,7 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 			}
 		}
 	case ThreadedRowTableSource:
-		localState := getPinnedValueValue[any](C.duckdb_function_get_local_init_data(info))
+		localState := getPinned[any](C.duckdb_function_get_local_init_data(info))
 
 		// At the end of the loop row.r must be the index one past the last added row
 		for row.r = 0; row.r < maxSize; row.r++ {
@@ -306,7 +306,7 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 
 //export table_udf_chunk_callback
 func table_udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
-	instance := getPinnedValueValue[tableFunctionData](C.duckdb_function_get_bind_data(info))
+	instance := getPinned[tableFunctionData](C.duckdb_function_get_bind_data(info))
 
 	var chunk DataChunk
 	// false, maybe this needs to be true but I don't think we need to read the validity mask
@@ -324,7 +324,7 @@ func table_udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_
 			setFuncError(info, err.Error())
 		}
 	case ThreadedChunkTableSource:
-		localState := getPinnedValueValue[any](C.duckdb_function_get_local_init_data(info))
+		localState := getPinned[any](C.duckdb_function_get_local_init_data(info))
 		err := fun.FillChunk(localState, chunk)
 		if err != nil {
 			setFuncError(info, err.Error())

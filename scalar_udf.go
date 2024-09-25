@@ -125,7 +125,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 //export scalar_udf_callback
 func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_data_chunk, output C.duckdb_vector) {
 	extraInfo := C.duckdb_scalar_function_get_extra_info(function_info)
-	function := getPinnedValueValue[ScalarFunc](extraInfo)
+	function := getPinned[ScalarFunc](extraInfo)
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk

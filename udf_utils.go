@@ -2,10 +2,9 @@ package duckdb
 
 /*
 #include <duckdb.h>
-
-void udf_delete_callback(void *);
 */
 import "C"
+
 
 import (
 	"runtime"
@@ -28,7 +27,7 @@ func (v pinnedValue[T]) unpin() {
 	v.pinner.Unpin()
 }
 
-func getPinnedValueValue[T any](handle unsafe.Pointer) T {
+func getPinned[T any](handle unsafe.Pointer) T {
 	h := *(*cgo.Handle)(handle)
 	return h.Value().(pinnedValue[T]).value
 }
