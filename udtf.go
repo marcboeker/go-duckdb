@@ -5,8 +5,11 @@ package duckdb
 
 void table_udf_bind_row(duckdb_bind_info info);
 void table_udf_bind_chunk(duckdb_bind_info info);
+void table_udf_bind_par_row(duckdb_bind_info info);
+void table_udf_bind_par_chunk(duckdb_bind_info info);
 
 void table_udf_init(duckdb_init_info info);
+void table_udf_init_threaded(duckdb_init_info info);
 void table_udf_local_init(duckdb_init_info info);
 
 void table_udf_row_callback(duckdb_function_info, duckdb_data_chunk);  // https://golang.org/issue/19837
@@ -57,17 +60,24 @@ type (
 		projection []int
 	}
 
-	threadedTableSource interface {
+	tableSource interface {
 		Columns() []ColumnInfo
-		Init() ThreadedTableSourceInitData
 		Cardinality() *CardinalityInfo
+	}
+
+	threadedTableSource interface {
+		tableSource
+		Init() ThreadedTableSourceInitData
+		// NewLocalState must return a pointer, or reference type.
+		// If this is not the case, the state cannot be updated
+		// by FillRow or FillChunk. go-duckdb does not prevent
+		// non-reference values.
 		NewLocalState() any
 	}
 
-	tableSource interface {
-		Columns() []ColumnInfo
+	unthreadedTableSource interface {
+		tableSource
 		Init()
-		Cardinality() *CardinalityInfo
 	}
 
 	// A RowTableSource represents anything that produces rows in a non-vectorised way.
@@ -75,7 +85,7 @@ type (
 	// After the RowTableSource is initialised, the rows will be requested. The `FillRow` method
 	// can be called by multiple threads at the same time.
 	RowTableSource interface {
-		tableSource
+		unthreadedTableSource
 		FillRow(Row) (bool, error)
 	}
 
@@ -94,7 +104,7 @@ type (
 	// After the ChunkTableSource is initialised, the rows will be requested. The `FillRow` method
 	// can be called by multiple threads at the same time.
 	ChunkTableSource interface {
-		tableSource
+		unthreadedTableSource
 		FillChunk(DataChunk) error
 	}
 
@@ -158,6 +168,16 @@ func table_udf_bind_row(info C.duckdb_bind_info) {
 //export table_udf_bind_chunk
 func table_udf_bind_chunk(info C.duckdb_bind_info) {
 	udfBindTyped[ChunkTableSource](info)
+}
+
+//export table_udf_bind_par_row
+func table_udf_bind_par_row(info C.duckdb_bind_info) {
+	udfBindTyped[ThreadedRowTableSource](info)
+}
+
+//export table_udf_bind_par_chunk
+func table_udf_bind_par_chunk(info C.duckdb_bind_info) {
+	udfBindTyped[ThreadedChunkTableSource](info)
 }
 
 func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
@@ -232,7 +252,7 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 func table_udf_init(info C.duckdb_init_info) {
 	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
 	instance.setColumnCount(info)
-	instance.fun.(tableSource).Init()
+	instance.fun.(unthreadedTableSource).Init()
 }
 
 //export table_udf_init_threaded
@@ -248,7 +268,7 @@ func table_udf_local_init(info C.duckdb_init_info) {
 	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
 	localState := pinnedValue[any]{
 		pinner: &runtime.Pinner{},
-		value:  instance.fun.(threadedTableSource).NewLocalState(),
+		value: instance.fun.(threadedTableSource).NewLocalState(), 
 	}
 	handle := cgo.NewHandle(localState)
 	localState.pinner.Pin(&handle)
@@ -324,7 +344,7 @@ func table_udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_
 			setFuncError(info, err.Error())
 		}
 	case ThreadedChunkTableSource:
-		localState := getPinned[any](C.duckdb_function_get_local_init_data(info))
+		localState := getPinned[*any](C.duckdb_function_get_local_init_data(info))
 		err := fun.FillChunk(localState, chunk)
 		if err != nil {
 			setFuncError(info, err.Error())
@@ -352,7 +372,6 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 		cfunction.pinner.Pin(&handle)
 		tableFunction := C.duckdb_create_table_function()
 		C.duckdb_table_function_set_name(tableFunction, name)
-		C.duckdb_table_function_set_init(tableFunction, C.init(C.table_udf_init))
 		C.duckdb_table_function_set_extra_info(tableFunction, unsafe.Pointer(&handle), C.duckdb_delete_callback_t(C.udf_delete_callback))
 		C.duckdb_table_function_supports_projection_pushdown(tableFunction, C.bool(true))
 
@@ -360,6 +379,7 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 		var x any = function
 		switch tfunc := x.(type) {
 		case RowTableFunction:
+			C.duckdb_table_function_set_init(tableFunction, C.init(C.table_udf_init))
 			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.table_udf_bind_row))
 			C.duckdb_table_function_set_function(tableFunction, C.callback(C.table_udf_row_callback))
 
@@ -368,6 +388,7 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 				return errTableUDFMissingBindags
 			}
 		case ChunkTableFunction:
+			C.duckdb_table_function_set_init(tableFunction, C.init(C.table_udf_init))
 			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.table_udf_bind_chunk))
 			C.duckdb_table_function_set_function(tableFunction, C.callback(C.table_udf_chunk_callback))
 			config = tfunc.Config
@@ -375,7 +396,8 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 				return errTableUDFMissingBindags
 			}
 		case ThreadedRowTableFunction:
-			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.table_udf_bind_row))
+			C.duckdb_table_function_set_init(tableFunction, C.init(C.table_udf_init_threaded))
+			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.table_udf_bind_par_row))
 			C.duckdb_table_function_set_function(tableFunction, C.callback(C.table_udf_row_callback))
 			C.duckdb_table_function_set_local_init(tableFunction, C.init(C.table_udf_local_init))
 			config = tfunc.Config
@@ -383,7 +405,8 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, function TFT)
 				return errTableUDFMissingBindags
 			}
 		case ThreadedChunkTableFunction:
-			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.table_udf_bind_chunk))
+			C.duckdb_table_function_set_init(tableFunction, C.init(C.table_udf_init_threaded))
+			C.duckdb_table_function_set_bind(tableFunction, C.bind(C.table_udf_bind_par_chunk))
 			C.duckdb_table_function_set_function(tableFunction, C.callback(C.table_udf_chunk_callback))
 			C.duckdb_table_function_set_local_init(tableFunction, C.init(C.table_udf_local_init))
 			config = tfunc.Config

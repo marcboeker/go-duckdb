@@ -10,7 +10,8 @@ examples:
 	go run examples/simple/main.go
 	go run examples/appender/main.go
 	go run examples/scalar_udf/main.go
-	go run examples/table_udf/main.go
+	go run examples/table_udf/basic.go
+	go run examples/table_udf/parallel.go
 
 .PHONY: test
 test:

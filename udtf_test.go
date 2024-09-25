@@ -41,6 +41,11 @@ type (
 		n       int64
 	}
 
+	parallelIncTableLocal struct {
+		start int64
+		end   int64
+	}
+
 	structTableUDF struct {
 		n     int64
 		count int64
@@ -48,11 +53,6 @@ type (
 
 	structTableUDFT struct {
 		I int64
-	}
-
-	parallelIncTableLocal struct {
-		start int64
-		end   int64
 	}
 
 	pushdownTableUDF struct {
@@ -79,10 +79,6 @@ var (
 			query: "SELECT * FROM %s(2048)",
 		},
 		{
-			udf:   &parallelIncTableUDF{},
-			name:  "incTableUDTF",
-			query: "SELECT * FROM %s(2048) ORDER BY result",
-		}, {
 			udf:   &structTableUDF{},
 			name:  "structTableUDTF",
 			query: "SELECT * FROM %s(2048)",
@@ -96,6 +92,13 @@ var (
 			udf:   &incTableNamedUDF{},
 			name:  "incTableNamedUDTF",
 			query: "SELECT * FROM %s(ARG=2048)",
+		},
+	}
+	parallelRowUdtfs = []rowUDFTest[ThreadedRowTableFunction]{
+		{
+			udf:   &parallelIncTableUDF{},
+			name:  "parallelIncTableUDTF",
+			query: "SELECT * FROM %s(2048) ORDER BY result",
 		},
 	}
 	chunkUdtfs = []rowUDFTest[ChunkTableFunction]{
@@ -186,18 +189,18 @@ func (d *parallelIncTableUDF) Init() ThreadedTableSourceInitData {
 }
 
 func (d *parallelIncTableUDF) NewLocalState() any {
-	return parallelIncTableLocal{
+	return &parallelIncTableLocal{
 		start: 0,
-		end:   0,
+		end:   -1,
 	}
 }
 
 func (d *parallelIncTableUDF) FillRow(localState any, row Row) (bool, error) {
-	state := localState.(parallelIncTableLocal)
-	if state.start > state.end {
+	state := localState.(*parallelIncTableLocal)
+	if state.start >= state.end {
 		// claim a new "work" unit
 		d.lock.Lock()
-		remaining := d.claimed - d.n
+		remaining := d.n - d.claimed
 		if remaining <= 0 {
 			// no more work to be done :(
 			d.lock.Unlock()
@@ -229,12 +232,12 @@ func (d *parallelIncTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
-func (d *parallelIncTableUDF) GetFunction() RowTableFunction {
-	return RowTableFunction{
+func (d *parallelIncTableUDF) GetFunction() ThreadedRowTableFunction {
+	return ThreadedRowTableFunction{
 		Config: TableFunctionConfig{
 			Arguments: []TypeInfo{Ti64},
 		},
-		BindArguments: BindIncTableUDF,
+		BindArguments: BindParallelIncTableUDF,
 	}
 }
 
@@ -452,6 +455,12 @@ func (d *chunkIncTableUDF) Cardinality() *CardinalityInfo {
 
 func TestTableUDF(t *testing.T) {
 	for _, fun := range rowUdtfs {
+		_fun := fun
+		t.Run(_fun.name, func(t *testing.T) {
+			singleTableUDF(t, _fun)
+		})
+	}
+	for _, fun := range parallelRowUdtfs {
 		_fun := fun
 		t.Run(_fun.name, func(t *testing.T) {
 			singleTableUDF(t, _fun)
