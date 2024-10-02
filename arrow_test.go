@@ -162,17 +162,21 @@ func TestArrow(t *testing.T) {
 			tr := array.NewTableReader(tbl, 5)
 			defer tr.Release()
 
-			_, err = db.ExecContext(context.Background(), "CREATE TABLE dst AS SELECT * FROM arrow_table")
+			ctx := context.Background()
+			_, err = db.ExecContext(ctx, "CREATE TABLE conflicting (i int, f double, s varchar)")
 			require.NoError(t, err)
 
-			release, err := ar.RegisterView(tr, "dst")
-			require.Error(t, err) // table already exists
+			release, err := ar.RegisterView(tr, "conflicting")
 			require.Nil(t, release)
+			require.Error(t, err)
 
 			release, err = ar.RegisterView(tr, "arrow_table")
 			require.NoError(t, err)
 			require.NotNil(t, release)
 			defer release()
+
+			_, err = db.ExecContext(context.Background(), "CREATE TABLE dst AS SELECT * FROM arrow_table")
+			require.NoError(t, err)
 
 			// Query the table to verify the data
 			rows, err := db.QueryContext(context.Background(), "SELECT * FROM dst")
