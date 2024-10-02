@@ -162,12 +162,17 @@ func TestArrow(t *testing.T) {
 			tr := array.NewTableReader(tbl, 5)
 			defer tr.Release()
 
-			release, err := ar.RegisterView(tr, "arrow_table")
-			require.NoError(t, err)
-			defer release()
-
 			_, err = db.ExecContext(context.Background(), "CREATE TABLE dst AS SELECT * FROM arrow_table")
 			require.NoError(t, err)
+
+			release, err := ar.RegisterView(tr, "dst")
+			require.Error(t, err) // table already exists
+			require.Nil(t, release)
+
+			release, err = ar.RegisterView(tr, "arrow_table")
+			require.NoError(t, err)
+			require.NotNil(t, release)
+			defer release()
 
 			// Query the table to verify the data
 			rows, err := db.QueryContext(context.Background(), "SELECT * FROM dst")
@@ -199,4 +204,55 @@ func TestArrow(t *testing.T) {
 		})
 		require.NoError(t, err)
 	})
+}
+
+func TestArrowClosedConn(t *testing.T) {
+	db := openDB(t)
+	defer db.Close()
+
+	conn, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	err = conn.Raw(func(driverConn any) error {
+		conn, ok := driverConn.(driver.Conn)
+		require.True(t, ok)
+
+		ar, err := NewArrowFromConn(conn)
+		require.NoError(t, err)
+
+		pool := memory.NewGoAllocator()
+
+		schema := arrow.NewSchema(
+			[]arrow.Field{
+				{Name: "f1", Type: arrow.PrimitiveTypes.Int64},
+				{Name: "f2", Type: arrow.BinaryTypes.String},
+			},
+			nil,
+		)
+
+		b := array.NewRecordBuilder(pool, schema)
+		defer b.Release()
+
+		b.Field(0).(*array.Int64Builder).AppendValues([]int64{1, 2, 3, 4, 5}, nil)
+		b.Field(1).(*array.StringBuilder).AppendValues([]string{"a", "b", "c", "d", "e"}, nil)
+
+		rec := b.NewRecord()
+		defer rec.Release()
+
+		tbl := array.NewTableFromRecords(schema, []arrow.Record{rec})
+		defer tbl.Release()
+
+		tr := array.NewTableReader(tbl, 5)
+		defer tr.Release()
+
+		err = conn.Close()
+		require.NoError(t, err)
+
+		release, err := ar.RegisterView(tr, "arrow_table")
+		require.ErrorIs(t, err, errClosedCon)
+		require.Nil(t, release)
+
+		return driver.ErrBadConn
+	})
+	require.Error(t, err)
 }

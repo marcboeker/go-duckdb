@@ -85,7 +85,7 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	}
 
 	if dbConn.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Arrow after Close")
+		return nil, errClosedCon
 	}
 
 	return &Arrow{c: dbConn}, nil
@@ -95,7 +95,7 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 // executed statement. Arguments are bound to the last statement.
 func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
 	if a.c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Arrow.Query after Close")
+		return nil, errClosedCon
 	}
 
 	stmts, size, err := a.c.extractStmts(query)
@@ -218,7 +218,7 @@ func (a *Arrow) queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Re
 
 func (a *Arrow) execute(s *stmt, args []driver.NamedValue) (*C.duckdb_arrow, error) {
 	if s.closed {
-		panic("database/sql/driver: misuse of duckdb driver: executeArrow after Close")
+		return nil, errClosedCon
 	}
 
 	if err := s.bind(args); err != nil {
@@ -252,7 +252,7 @@ func (a *Arrow) anyArgsToNamedArgs(args []any) []driver.NamedValue {
 // The returned release function must be called to release the memory once the view is no longer needed.
 func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release func(), err error) {
 	if a.c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: RegisterView after Close")
+		return nil, errClosedCon
 	}
 
 	// duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow);
