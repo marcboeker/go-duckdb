@@ -66,6 +66,25 @@ defer db.Close()
 
 Please refer to the [database/sql](https://godoc.org/database/sql) documentation for further usage instructions.
 
+## Notes and FAQs
+
+**`undefined: conn`**
+
+When building this package, some people run into an `undefined: conn` error.
+The [comment here](https://github.com/marcboeker/go-duckdb/issues/275#issuecomment-2355712997) fixes this issue.
+```
+sudo apt-get update && sudo apt-get install build-essential
+```
+
+
+**`TIMESTAMP vs. TIMESTAMP_TZ`**
+
+In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of
+microseconds elapsed since January 1, 1970 UTC (i.e., an instant without offset information).
+When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`,
+even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model
+time zone information for individual values.
+
 ## Memory Allocation
 
 DuckDB lives in-process. Therefore, all its memory lives in the driver. All allocations live in the host process, which
@@ -220,13 +239,3 @@ DYLD_LIBRARY_PATH=/path/to/libs ./main
 Additionally, automatic extension loading is enabled.
 The extensions available differ between the pre-compiled libraries.
 Thus, if you fail to install and load an extension, you might have to link a custom DuckDB.
-
-## Notes
-
-**`TIMESTAMP vs. TIMESTAMP_TZ`**
-
-In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of
-microseconds elapsed since January 1, 1970 UTC (i.e., an instant without offset information).
-When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`,
-even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model
-time zone information for individual values.
