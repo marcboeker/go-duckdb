@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"log"
 	"math/big"
 	"os"
 	"reflect"
@@ -86,6 +88,38 @@ func TestConnector_Close(t *testing.T) {
 	// check that multiple close calls don't cause panics or errors
 	require.NoError(t, connector.Close())
 	require.NoError(t, connector.Close())
+}
+
+func ExampleNewConnector() {
+	c, err := NewConnector("duckdb?access_mode=READ_WRITE", func(execer driver.ExecerContext) error {
+		initQueries := []string{
+			`SET memory_limit = '10GB';`,
+			`SET threads TO 1;`,
+		}
+
+		ctx := context.Background()
+		for _, query := range initQueries {
+			_, err := execer.ExecContext(ctx, query, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	checkErr(err, "failed to create new duckdb connector: %s")
+	defer c.Close()
+
+	db := sql.OpenDB(c)
+	defer db.Close()
+
+	var value string
+	row := db.QueryRow(`SELECT value FROM duckdb_settings() WHERE name = 'memory_limit';`)
+	if row.Scan(&value) != nil {
+		log.Fatalf("failed to scan row: %s", err)
+	}
+
+	fmt.Printf("Setting memory_limit is %s", value)
+	// Output: Setting memory_limit is 9.3 GiB
 }
 
 func TestConnPool(t *testing.T) {
@@ -629,6 +663,28 @@ func TestQueryTimeout(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
+func Example_simpleConnection() {
+	// Connect to DuckDB using '[database/sql.Open]'.
+	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
+	checkErr(err, "failed to open connection to duckdb: %s")
+	defer db.Close()
+
+	ctx := context.Background()
+
+	createStmt := `CREATE table users(name VARCHAR, age INTEGER)`
+	_, err = db.ExecContext(ctx, createStmt)
+	checkErr(err, "failed to create table: %s")
+
+	insertStmt := `INSERT INTO users(name, age) VALUES (?, ?);`
+	res, err := db.ExecContext(ctx, insertStmt, "Marc", 30)
+	checkErr(err, "failed to insert users: %s")
+
+	rowsAffected, err := res.RowsAffected()
+	checkErr(err, "failed to get number of rows affected")
+	fmt.Printf("Inserted %d row(s) into users table", rowsAffected)
+	// Output: Inserted 1 row(s) into users table
+}
+
 func openDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
@@ -644,4 +700,10 @@ func createTable(db *sql.DB, t *testing.T, sql string) *sql.Result {
 
 func createFooTable(db *sql.DB, t *testing.T) *sql.Result {
 	return createTable(db, t, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
+}
+
+func checkErr(err error, msg string) {
+	if err != nil {
+		log.Fatalf(msg, err)
+	}
 }
