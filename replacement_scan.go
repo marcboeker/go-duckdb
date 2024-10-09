@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-   	#include <stdlib.h>
    	#include <duckdb.h>
    	void replacement_scan_cb(duckdb_replacement_scan_info info, const char *table_name, void *data);
    	typedef const char cchar_t;
@@ -33,15 +32,15 @@ func replacement_scan_cb(info C.duckdb_replacement_scan_info, table_name *C.ccha
 	scanner := h.Value().(ReplacementScanCallback)
 	tFunc, params, err := scanner(C.GoString(table_name))
 	if err != nil {
-		errstr := C.CString(err.Error())
-		C.duckdb_replacement_scan_set_error(info, errstr)
-		C.free(unsafe.Pointer(errstr))
+		errStr := C.CString(err.Error())
+		C.duckdb_replacement_scan_set_error(info, errStr)
+		C.duckdb_free(unsafe.Pointer(errStr))
 		return
 	}
 
 	fNameStr := C.CString(tFunc)
 	C.duckdb_replacement_scan_set_function_name(info, fNameStr)
-	defer C.free(unsafe.Pointer(fNameStr))
+	defer C.duckdb_free(unsafe.Pointer(fNameStr))
 
 	for _, v := range params {
 		switch x := v.(type) {
@@ -49,16 +48,16 @@ func replacement_scan_cb(info C.duckdb_replacement_scan_info, table_name *C.ccha
 			str := C.CString(x)
 			val := C.duckdb_create_varchar(str)
 			C.duckdb_replacement_scan_add_parameter(info, val)
-			C.free(unsafe.Pointer(str))
+			C.duckdb_free(unsafe.Pointer(str))
 			C.duckdb_destroy_value(&val)
 		case int64:
 			val := C.duckdb_create_int64(C.int64_t(x))
 			C.duckdb_replacement_scan_add_parameter(info, val)
 			C.duckdb_destroy_value(&val)
 		default:
-			errstr := C.CString("invalid type")
-			C.duckdb_replacement_scan_set_error(info, errstr)
-			C.free(unsafe.Pointer(errstr))
+			errStr := C.CString("invalid type")
+			C.duckdb_replacement_scan_set_error(info, errStr)
+			C.duckdb_free(unsafe.Pointer(errStr))
 			return
 		}
 	}

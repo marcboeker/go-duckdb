@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,27 +51,6 @@ func TestOpen(t *testing.T) {
 }
 
 func TestConnectorBootQueries(t *testing.T) {
-	t.Run("many boot queries", func(t *testing.T) {
-		connector, err := NewConnector("", func(execer driver.ExecerContext) error {
-			bootQueries := []string{
-				"INSTALL 'json'",
-				"LOAD 'json'",
-				"SET schema=main",
-				"SET search_path=main",
-			}
-
-			for _, query := range bootQueries {
-				_, err := execer.ExecContext(context.Background(), query, nil)
-				require.NoError(t, err)
-			}
-			return nil
-		})
-		require.NoError(t, err)
-
-		db := sql.OpenDB(connector)
-		defer db.Close()
-	})
-
 	t.Run("readme example", func(t *testing.T) {
 		db, err := sql.Open("duckdb", "foo.db")
 		require.NoError(t, err)
@@ -80,12 +58,11 @@ func TestConnectorBootQueries(t *testing.T) {
 
 		connector, err := NewConnector("foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
 			bootQueries := []string{
-				"INSTALL 'json'",
-				"LOAD 'json'",
+				"SET schema=main",
+				"SET search_path=main",
 			}
-
 			for _, query := range bootQueries {
-				_, err := execer.ExecContext(context.Background(), query, nil)
+				_, err = execer.ExecContext(context.Background(), query, nil)
 				require.NoError(t, err)
 			}
 			return nil
@@ -149,17 +126,6 @@ func TestConnPool(t *testing.T) {
 
 func TestConnInit(t *testing.T) {
 	connector, err := NewConnector("", func(execer driver.ExecerContext) error {
-		bootQueries := []string{
-			"INSTALL 'json'",
-			"LOAD 'json'",
-		}
-
-		for _, qry := range bootQueries {
-			_, err := execer.ExecContext(context.Background(), qry, nil)
-			if err != nil {
-				return err
-			}
-		}
 		return nil
 	})
 	require.NoError(t, err)
@@ -256,7 +222,7 @@ func TestQuery(t *testing.T) {
 		for rows.Next() {
 			var i int
 			require.NoError(t, rows.Scan(&i))
-			assert.Equal(t, expected, i)
+			require.Equal(t, expected, i)
 			expected++
 		}
 	})
@@ -281,10 +247,6 @@ func TestQuery(t *testing.T) {
 func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	defer db.Close()
-
-	loadJSONExt(t, db)
-
 	var data string
 
 	t.Run("select empty JSON", func(t *testing.T) {
@@ -311,18 +273,20 @@ func TestJSON(t *testing.T) {
 		require.Equal(t, len(items), 2)
 		require.Equal(t, items, []string{"foo", "bar"})
 	})
+
+	require.NoError(t, db.Close())
 }
 
 func TestEmpty(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	defer db.Close()
 
 	rows, err := db.Query(`SELECT 1 WHERE 1 = 0`)
 	require.NoError(t, err)
 	defer rows.Close()
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Err())
+	require.NoError(t, db.Close())
 }
 
 func TestTypeNamesAndScanTypes(t *testing.T) {
@@ -519,12 +483,12 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			require.Equal(t, rows.Next(), false)
 		})
 	}
+	require.NoError(t, db.Close())
 }
 
 // Running multiple statements in a single query. All statements except the last one are executed and if no error then last statement is executed with args and result returned.
 func TestMultipleStatements(t *testing.T) {
 	db := openDB(t)
-	defer db.Close()
 
 	// test empty query
 	_, err := db.Exec("")
@@ -604,7 +568,7 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 
 	// test json extension
-	rows, err = conn.QueryContext(context.Background(), `INSTALL 'json'; LOAD 'json'; CREATE TABLE example (id int, j JSON);
+	rows, err = conn.QueryContext(context.Background(), `CREATE TABLE example (id int, j JSON);
 		INSERT INTO example VALUES(123, ' { "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }');
 		SELECT j->'$.family' FROM example WHERE id=$1`, 123)
 	require.NoError(t, err)
@@ -617,13 +581,12 @@ func TestMultipleStatements(t *testing.T) {
 	err = rows.Close()
 	require.NoError(t, err)
 
-	err = conn.Close()
-	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	require.NoError(t, db.Close())
 }
 
 func TestParquetExtension(t *testing.T) {
 	db := openDB(t)
-	defer db.Close()
 
 	_, err := db.Exec("CREATE TABLE users (id int, name varchar, age int);")
 	require.NoError(t, err)
@@ -647,11 +610,11 @@ func TestParquetExtension(t *testing.T) {
 
 	err = os.Remove("./users.parquet")
 	require.NoError(t, err)
+	require.NoError(t, db.Close())
 }
 
 func TestQueryTimeout(t *testing.T) {
 	db := openDB(t)
-	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*250)
 	defer cancel()
@@ -663,6 +626,7 @@ func TestQueryTimeout(t *testing.T) {
 	// a very defensive time check, but should be good enough
 	// the query takes much longer than 10 seconds
 	require.Less(t, time.Since(now), 10*time.Second)
+	require.NoError(t, db.Close())
 }
 
 func openDB(t *testing.T) *sql.DB {
@@ -670,13 +634,6 @@ func openDB(t *testing.T) *sql.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.Ping())
 	return db
-}
-
-func loadJSONExt(t *testing.T, db *sql.DB) {
-	_, err := db.Exec("INSTALL 'json'")
-	require.NoError(t, err)
-	_, err = db.Exec("LOAD 'json'")
-	require.NoError(t, err)
 }
 
 func createTable(db *sql.DB, t *testing.T, sql string) *sql.Result {

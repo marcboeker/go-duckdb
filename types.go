@@ -13,53 +13,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-// FIXME: Implement support for these types.
-var unsupportedTypeMap = map[C.duckdb_type]string{
-	C.DUCKDB_TYPE_INVALID:  "INVALID",
-	C.DUCKDB_TYPE_UHUGEINT: "UHUGEINT",
-	C.DUCKDB_TYPE_ARRAY:    "ARRAY",
-	C.DUCKDB_TYPE_UNION:    "UNION",
-	C.DUCKDB_TYPE_BIT:      "BIT",
-	C.DUCKDB_TYPE_TIME_TZ:  "TIME_TZ",
-}
-
-var duckdbTypeMap = map[C.duckdb_type]string{
-	C.DUCKDB_TYPE_INVALID:      "INVALID",
-	C.DUCKDB_TYPE_BOOLEAN:      "BOOLEAN",
-	C.DUCKDB_TYPE_TINYINT:      "TINYINT",
-	C.DUCKDB_TYPE_SMALLINT:     "SMALLINT",
-	C.DUCKDB_TYPE_INTEGER:      "INTEGER",
-	C.DUCKDB_TYPE_BIGINT:       "BIGINT",
-	C.DUCKDB_TYPE_UTINYINT:     "UTINYINT",
-	C.DUCKDB_TYPE_USMALLINT:    "USMALLINT",
-	C.DUCKDB_TYPE_UINTEGER:     "UINTEGER",
-	C.DUCKDB_TYPE_UBIGINT:      "UBIGINT",
-	C.DUCKDB_TYPE_FLOAT:        "FLOAT",
-	C.DUCKDB_TYPE_DOUBLE:       "DOUBLE",
-	C.DUCKDB_TYPE_TIMESTAMP:    "TIMESTAMP",
-	C.DUCKDB_TYPE_DATE:         "DATE",
-	C.DUCKDB_TYPE_TIME:         "TIME",
-	C.DUCKDB_TYPE_INTERVAL:     "INTERVAL",
-	C.DUCKDB_TYPE_HUGEINT:      "HUGEINT",
-	C.DUCKDB_TYPE_UHUGEINT:     "UHUGEINT",
-	C.DUCKDB_TYPE_VARCHAR:      "VARCHAR",
-	C.DUCKDB_TYPE_BLOB:         "BLOB",
-	C.DUCKDB_TYPE_DECIMAL:      "DECIMAL",
-	C.DUCKDB_TYPE_TIMESTAMP_S:  "TIMESTAMP_S",
-	C.DUCKDB_TYPE_TIMESTAMP_MS: "TIMESTAMP_MS",
-	C.DUCKDB_TYPE_TIMESTAMP_NS: "TIMESTAMP_NS",
-	C.DUCKDB_TYPE_ENUM:         "ENUM",
-	C.DUCKDB_TYPE_LIST:         "LIST",
-	C.DUCKDB_TYPE_STRUCT:       "STRUCT",
-	C.DUCKDB_TYPE_MAP:          "MAP",
-	C.DUCKDB_TYPE_ARRAY:        "ARRAY",
-	C.DUCKDB_TYPE_UUID:         "UUID",
-	C.DUCKDB_TYPE_UNION:        "UNION",
-	C.DUCKDB_TYPE_BIT:          "BIT",
-	C.DUCKDB_TYPE_TIME_TZ:      "TIMETZ",
-	C.DUCKDB_TYPE_TIMESTAMP_TZ: "TIMESTAMPTZ",
-}
-
 type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }
@@ -68,10 +21,12 @@ func convertNumericType[srcT numericType, destT numericType](val srcT) destT {
 	return destT(val)
 }
 
-type UUID [16]byte
+const UUIDLength = 16
+
+type UUID [UUIDLength]byte
 
 func (u *UUID) Scan(v any) error {
-	if n := copy(u[:], v.([]byte)); n != 16 {
+	if n := copy(u[:], v.([]byte)); n != UUIDLength {
 		return fmt.Errorf("invalid UUID length: %d", n)
 	}
 	return nil
@@ -81,7 +36,7 @@ func (u *UUID) Scan(v any) error {
 // The value is computed as: upper * 2^64 + lower
 
 func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
-	var uuid [16]byte
+	var uuid [UUIDLength]byte
 	// We need to flip the sign bit of the signed hugeint to transform it to UUID bytes
 	binary.BigEndian.PutUint64(uuid[:8], uint64(hi.upper)^1<<63)
 	binary.BigEndian.PutUint64(uuid[8:], uint64(hi.lower))
@@ -161,6 +116,8 @@ func (s Composite[T]) Get() T {
 func (s *Composite[T]) Scan(v any) error {
 	return mapstructure.Decode(v, &s.t)
 }
+
+const MAX_DECIMAL_WIDTH = 38
 
 type Decimal struct {
 	Width uint8

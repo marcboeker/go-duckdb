@@ -1,7 +1,6 @@
 package duckdb
 
 /*
-#include <stdlib.h>
 #include <duckdb.h>
 */
 import "C"
@@ -142,7 +141,7 @@ func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 
 func (c *conn) Close() error {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Close of already closed connection")
+		return errClosedCon
 	}
 	c.closed = true
 
@@ -152,11 +151,11 @@ func (c *conn) Close() error {
 }
 
 func (c *conn) prepareStmt(cmd string) (*stmt, error) {
-	cmdstr := C.CString(cmd)
-	defer C.free(unsafe.Pointer(cmdstr))
+	cmdStr := C.CString(cmd)
+	defer C.duckdb_free(unsafe.Pointer(cmdStr))
 
 	var s C.duckdb_prepared_statement
-	if state := C.duckdb_prepare(c.duckdbCon, cmdstr, &s); state == C.DuckDBError {
+	if state := C.duckdb_prepare(c.duckdbCon, cmdStr, &s); state == C.DuckDBError {
 		dbErr := getDuckDBError(C.GoString(C.duckdb_prepare_error(s)))
 		C.duckdb_destroy_prepare(&s)
 		return nil, dbErr
@@ -166,11 +165,11 @@ func (c *conn) prepareStmt(cmd string) (*stmt, error) {
 }
 
 func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
-	cquery := C.CString(query)
-	defer C.free(unsafe.Pointer(cquery))
+	cQuery := C.CString(query)
+	defer C.duckdb_free(unsafe.Pointer(cQuery))
 
 	var stmts C.duckdb_extracted_statements
-	stmtsCount := C.duckdb_extract_statements(c.duckdbCon, cquery, &stmts)
+	stmtsCount := C.duckdb_extract_statements(c.duckdbCon, cQuery, &stmts)
 	if stmtsCount == 0 {
 		err := C.GoString(C.duckdb_extract_statements_error(stmts))
 		C.duckdb_destroy_extracted(&stmts)

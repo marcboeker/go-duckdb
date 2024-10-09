@@ -55,13 +55,13 @@ func (r *rows) Columns() []string {
 }
 
 func (r *rows) Next(dst []driver.Value) error {
-	for r.rowCount == r.chunk.GetSize() {
+	for r.rowCount == r.chunk.size {
 		r.chunk.close()
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
 		data := C.duckdb_result_get_chunk(r.res, r.chunkIdx)
-		if err := r.chunk.initFromDuckDataChunk(data); err != nil {
+		if err := r.chunk.initFromDuckDataChunk(data, false); err != nil {
 			return getError(err, nil)
 		}
 
@@ -81,93 +81,70 @@ func (r *rows) Next(dst []driver.Value) error {
 	return nil
 }
 
-// Implements driver.RowsColumnTypeScanType
+// ColumnTypeScanType implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	colType := C.duckdb_column_type(&r.res, C.idx_t(index))
-	switch colType {
-	case C.DUCKDB_TYPE_INVALID:
+	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
+	switch t {
+	case TYPE_INVALID:
 		return nil
-	case C.DUCKDB_TYPE_BOOLEAN:
+	case TYPE_BOOLEAN:
 		return reflect.TypeOf(true)
-	case C.DUCKDB_TYPE_TINYINT:
+	case TYPE_TINYINT:
 		return reflect.TypeOf(int8(0))
-	case C.DUCKDB_TYPE_SMALLINT:
+	case TYPE_SMALLINT:
 		return reflect.TypeOf(int16(0))
-	case C.DUCKDB_TYPE_INTEGER:
+	case TYPE_INTEGER:
 		return reflect.TypeOf(int32(0))
-	case C.DUCKDB_TYPE_BIGINT:
+	case TYPE_BIGINT:
 		return reflect.TypeOf(int64(0))
-	case C.DUCKDB_TYPE_UTINYINT:
+	case TYPE_UTINYINT:
 		return reflect.TypeOf(uint8(0))
-	case C.DUCKDB_TYPE_USMALLINT:
+	case TYPE_USMALLINT:
 		return reflect.TypeOf(uint16(0))
-	case C.DUCKDB_TYPE_UINTEGER:
+	case TYPE_UINTEGER:
 		return reflect.TypeOf(uint32(0))
-	case C.DUCKDB_TYPE_UBIGINT:
+	case TYPE_UBIGINT:
 		return reflect.TypeOf(uint64(0))
-	case C.DUCKDB_TYPE_FLOAT:
+	case TYPE_FLOAT:
 		return reflect.TypeOf(float32(0))
-	case C.DUCKDB_TYPE_DOUBLE:
+	case TYPE_DOUBLE:
 		return reflect.TypeOf(float64(0))
-	case C.DUCKDB_TYPE_TIMESTAMP:
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP_TZ:
 		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_DATE:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_TIME:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_INTERVAL:
+	case TYPE_INTERVAL:
 		return reflect.TypeOf(Interval{})
-	case C.DUCKDB_TYPE_HUGEINT:
+	case TYPE_HUGEINT:
 		return reflect.TypeOf(big.NewInt(0))
-	case C.DUCKDB_TYPE_VARCHAR:
+	case TYPE_VARCHAR, TYPE_ENUM:
 		return reflect.TypeOf("")
-	case C.DUCKDB_TYPE_ENUM:
-		return reflect.TypeOf("")
-	case C.DUCKDB_TYPE_BLOB:
+	case TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
-	case C.DUCKDB_TYPE_DECIMAL:
+	case TYPE_DECIMAL:
 		return reflect.TypeOf(Decimal{})
-	case C.DUCKDB_TYPE_TIMESTAMP_S:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_TIMESTAMP_MS:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_TIMESTAMP_NS:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_LIST:
+	case TYPE_LIST:
 		return reflect.TypeOf([]any{})
-	case C.DUCKDB_TYPE_STRUCT:
+	case TYPE_STRUCT:
 		return reflect.TypeOf(map[string]any{})
-	case C.DUCKDB_TYPE_MAP:
+	case TYPE_MAP:
 		return reflect.TypeOf(Map{})
-	case C.DUCKDB_TYPE_UUID:
+	case TYPE_UUID:
 		return reflect.TypeOf([]byte{})
-	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
-		return reflect.TypeOf(time.Time{})
 	default:
 		return nil
 	}
 }
 
-// Implements driver.RowsColumnTypeScanType
+// ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	// Only allocate logical type if necessary
-	colType := C.duckdb_column_type(&r.res, C.idx_t(index))
-	switch colType {
-	case C.DUCKDB_TYPE_DECIMAL:
-		fallthrough
-	case C.DUCKDB_TYPE_ENUM:
-		fallthrough
-	case C.DUCKDB_TYPE_LIST:
-		fallthrough
-	case C.DUCKDB_TYPE_STRUCT:
-		fallthrough
-	case C.DUCKDB_TYPE_MAP:
-		logColType := C.duckdb_column_logical_type(&r.res, C.idx_t(index))
-		defer C.duckdb_destroy_logical_type(&logColType)
-		return logicalTypeName(logColType)
+	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
+	switch t {
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP:
+		// Only allocate the logical type if necessary.
+		logicalType := C.duckdb_column_logical_type(&r.res, C.idx_t(index))
+		defer C.duckdb_destroy_logical_type(&logicalType)
+		return logicalTypeName(logicalType)
 	default:
-		// Handle as primitive type
-		return duckdbTypeMap[colType]
+		return typeToStringMap[t]
 	}
 }
 
@@ -186,62 +163,61 @@ func (r *rows) Close() error {
 	return err
 }
 
-func logicalTypeName(lt C.duckdb_logical_type) string {
-	t := C.duckdb_get_type_id(lt)
+func logicalTypeName(logicalType C.duckdb_logical_type) string {
+	t := Type(C.duckdb_get_type_id(logicalType))
 	switch t {
-	case C.DUCKDB_TYPE_DECIMAL:
-		width := C.duckdb_decimal_width(lt)
-		scale := C.duckdb_decimal_scale(lt)
+	case TYPE_DECIMAL:
+		width := C.duckdb_decimal_width(logicalType)
+		scale := C.duckdb_decimal_scale(logicalType)
 		return fmt.Sprintf("DECIMAL(%d,%d)", width, scale)
-	case C.DUCKDB_TYPE_ENUM:
-		// C API does not currently expose enum name
+	case TYPE_ENUM:
+		// The C API does not expose ENUM names.
 		return "ENUM"
-	case C.DUCKDB_TYPE_LIST:
-		clt := C.duckdb_list_type_child_type(lt)
-		defer C.duckdb_destroy_logical_type(&clt)
-		return logicalTypeName(clt) + "[]"
-	case C.DUCKDB_TYPE_STRUCT:
-		return logicalTypeNameStruct(lt)
-	case C.DUCKDB_TYPE_MAP:
-		return logicalTypeNameMap(lt)
+	case TYPE_LIST:
+		childType := C.duckdb_list_type_child_type(logicalType)
+		defer C.duckdb_destroy_logical_type(&childType)
+		return logicalTypeName(childType) + "[]"
+	case TYPE_STRUCT:
+		return logicalTypeNameStruct(logicalType)
+	case TYPE_MAP:
+		return logicalTypeNameMap(logicalType)
 	default:
-		return duckdbTypeMap[t]
+		return typeToStringMap[t]
 	}
 }
 
-func logicalTypeNameStruct(lt C.duckdb_logical_type) string {
-	count := int(C.duckdb_struct_type_child_count(lt))
+func logicalTypeNameStruct(logicalType C.duckdb_logical_type) string {
+	count := int(C.duckdb_struct_type_child_count(logicalType))
 	name := "STRUCT("
-	for i := 0; i < count; i++ {
-		ptrToChildName := C.duckdb_struct_type_child_name(lt, C.idx_t(i))
-		childName := C.GoString(ptrToChildName)
-		childLogicalType := C.duckdb_struct_type_child_type(lt, C.idx_t(i))
 
-		// Add comma if not at end of list
-		name += escapeStructFieldName(childName) + " " + logicalTypeName(childLogicalType)
+	for i := 0; i < count; i++ {
+		ptrToChildName := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
+		childName := C.GoString(ptrToChildName)
+		childType := C.duckdb_struct_type_child_type(logicalType, C.idx_t(i))
+
+		// Add comma if not at the end of the list.
+		name += escapeStructFieldName(childName) + " " + logicalTypeName(childType)
 		if i != count-1 {
 			name += ", "
 		}
 
 		C.duckdb_free(unsafe.Pointer(ptrToChildName))
-		C.duckdb_destroy_logical_type(&childLogicalType)
+		C.duckdb_destroy_logical_type(&childType)
 	}
 	return name + ")"
 }
 
-func logicalTypeNameMap(lt C.duckdb_logical_type) string {
-	// Key logical type
-	klt := C.duckdb_map_type_key_type(lt)
-	defer C.duckdb_destroy_logical_type(&klt)
+func logicalTypeNameMap(logicalType C.duckdb_logical_type) string {
+	keyType := C.duckdb_map_type_key_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&keyType)
 
-	// Value logical type
-	vlt := C.duckdb_map_type_value_type(lt)
-	defer C.duckdb_destroy_logical_type(&vlt)
+	valueType := C.duckdb_map_type_value_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&valueType)
 
-	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(klt), logicalTypeName(vlt))
+	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(keyType), logicalTypeName(valueType))
 }
 
-// DuckDB escapes struct field names by doubling double quotes, then wrapping in double quotes.
 func escapeStructFieldName(s string) string {
+	// DuckDB escapes STRUCT field names by doubling double quotes, then wrapping in double quotes.
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }

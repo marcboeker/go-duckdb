@@ -26,10 +26,6 @@ func structFieldError(actual string, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
 }
 
-func columnError(err error, colIdx int) error {
-	return fmt.Errorf("%w: %s: %d", err, columnErrMsg, colIdx)
-}
-
 func columnCountError(actual int, expected int) error {
 	return fmt.Errorf("%s: expected %d, got %d", columnCountErrMsg, expected, actual)
 }
@@ -40,9 +36,25 @@ func unsupportedTypeError(name string) error {
 
 func invalidatedAppenderError(err error) error {
 	if err == nil {
-		return fmt.Errorf(invalidatedAppenderMsg)
+		return errors.New(invalidatedAppenderMsg)
 	}
 	return fmt.Errorf("%w: %s", err, invalidatedAppenderMsg)
+}
+
+func tryOtherFuncError(hint string) error {
+	return fmt.Errorf("%s: %s", tryOtherFuncErrMsg, hint)
+}
+
+func addIndexToError(err error, idx int) error {
+	return fmt.Errorf("%w: %s: %d", err, indexErrMsg, idx)
+}
+
+func interfaceIsNilError(interfaceName string) error {
+	return fmt.Errorf("%s: %s", interfaceIsNilErrMsg, interfaceName)
+}
+
+func duplicateNameError(name string) error {
+	return fmt.Errorf("%s: %s", duplicateNameErrMsg, name)
 }
 
 const (
@@ -50,30 +62,50 @@ const (
 	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
 	structFieldErrMsg      = "invalid STRUCT field"
-	columnErrMsg           = "column index"
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"
 	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
+	tryOtherFuncErrMsg     = "please try this function instead"
+	indexErrMsg            = "index"
+	unknownTypeErrMsg      = "unknown type"
+	interfaceIsNilErrMsg   = "interface is nil"
+	duplicateNameErrMsg    = "duplicate name"
 )
 
 var (
 	errAPI        = errors.New("API error")
 	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
 
-	errParseDSN  = errors.New("could not parse DSN for database")
-	errOpen      = errors.New("could not open database")
-	errSetConfig = errors.New("could not set invalid or local option for global database config")
+	errParseDSN   = errors.New("could not parse DSN for database")
+	errOpen       = errors.New("could not open database")
+	errSetConfig  = errors.New("could not set invalid or local option for global database config")
+	errInvalidCon = errors.New("not a DuckDB driver connection")
+	errClosedCon  = errors.New("closed connection")
+
+	errAppenderCreation         = errors.New("could not create appender")
+	errAppenderClose            = errors.New("could not close appender")
+	errAppenderDoubleClose      = fmt.Errorf("%w: already closed", errAppenderClose)
+	errAppenderAppendRow        = errors.New("could not append row")
+	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
+	errAppenderFlush            = errors.New("could not flush appender")
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
+	errEmptyName             = errors.New("empty name")
+	errInvalidDecimalWidth   = fmt.Errorf("the DECIMAL with must be between 1 and %d", MAX_DECIMAL_WIDTH)
+	errInvalidDecimalScale   = errors.New("the DECIMAL scale must be less than or equal to the width")
+	errSetSQLNULLValue       = errors.New("cannot write to a NULL column")
 
-	errAppenderInvalidCon       = errors.New("could not create appender: not a DuckDB driver connection")
-	errAppenderClosedCon        = errors.New("could not create appender: appender creation on a closed connection")
-	errAppenderCreation         = errors.New("could not create appender")
-	errAppenderDoubleClose      = errors.New("could not close appender: already closed")
-	errAppenderAppendRow        = errors.New("could not append row")
-	errAppenderAppendAfterClose = errors.New("could not append row: appender already closed")
-	errAppenderClose            = errors.New("could not close appender")
-	errAppenderFlush            = errors.New("could not flush appender")
+	errScalarUDFCreate          = errors.New("could not create scalar UDF")
+	errScalarUDFNoName          = fmt.Errorf("%w: missing name", errScalarUDFCreate)
+	errScalarUDFIsNil           = fmt.Errorf("%w: function is nil", errScalarUDFCreate)
+	errScalarUDFNoExecutor      = fmt.Errorf("%w: executor is nil", errScalarUDFCreate)
+	errScalarUDFInputTypeIsNil  = fmt.Errorf("%w: input type is nil", errScalarUDFCreate)
+	errScalarUDFResultTypeIsNil = fmt.Errorf("%w: result type is nil", errScalarUDFCreate)
+	errScalarUDFResultTypeIsANY = fmt.Errorf("%w: result type is ANY, which is not supported", errScalarUDFCreate)
+	errScalarUDFCreateSet       = fmt.Errorf("could not create scalar UDF set")
+	errScalarUDFAddToSet        = fmt.Errorf("%w: could not add the function to the set", errScalarUDFCreateSet)
+
+	errProfilingInfoEmpty = errors.New("no profiling information available for this connection")
 
 	// Errors not covered in tests.
 	errConnect      = errors.New("could not connect to database")
@@ -125,6 +157,7 @@ const (
 	ErrorTypeMissingExtension // Thrown when an extension is used but not loaded
 	ErrorTypeAutoLoad         // Thrown when an extension is used but not loaded
 	ErrorTypeSequence
+	ErrorTypeInvalidConfiguration // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
 )
 
 var errorPrefixMap = map[string]ErrorType{
@@ -170,6 +203,7 @@ var errorPrefixMap = map[string]ErrorType{
 	"Missing Extension Error":      ErrorTypeMissingExtension,
 	"Extension Autoloading Error":  ErrorTypeAutoLoad,
 	"Sequence Error":               ErrorTypeSequence,
+	"Invalid Configuration Error":  ErrorTypeInvalidConfiguration,
 }
 
 type Error struct {
