@@ -104,9 +104,23 @@ jobs:
           name: freebsd_amd64
           path: deps/freebsd_amd64/libduckdb.a
           retention-days: 1
+  windows_amd64:
+    needs: prepare
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - shell: bash
+        run: make deps.windows.amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows_amd64
+          path: deps/windows_amd64/libduckdb.a
+          retention-days: 1
   commit:
     runs-on: ubuntu-latest
-    needs: [darwin_amd64, darwin_arm64, linux_amd64, linux_arm64, freebsd_amd64]
+    needs: [darwin_amd64, darwin_arm64, linux_amd64, linux_arm64, freebsd_amd64, windows_amd64]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -118,6 +132,7 @@ jobs:
           rm -f deps/linux_amd64/libduckdb.a
           rm -f deps/linux_arm64/libduckdb.a
           rm -f deps/freebsd_amd64/libduckdb.a
+          rm -f deps/windows_amd64/libduckdb.a
           rm -f duckdb.h
       - uses: actions/download-artifact@v4
         with:
@@ -143,6 +158,10 @@ jobs:
         with:
           name: freebsd_amd64
           path: deps/freebsd_amd64
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows_amd64
+          path: deps/windows_amd64
       - name: Push static libraries
         uses: stefanzweifel/git-auto-commit-action@v5
         with:

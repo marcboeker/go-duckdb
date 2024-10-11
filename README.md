@@ -77,7 +77,6 @@ The [comment here](https://github.com/marcboeker/go-duckdb/issues/275#issuecomme
 sudo apt-get update && sudo apt-get install build-essential
 ```
 
-
 **`TIMESTAMP vs. TIMESTAMP_TZ`**
 
 In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of
@@ -215,10 +214,12 @@ Now you can build your module as usual.
 
 By default, `go-duckdb` statically links DuckDB into your binary.
 Statically linking DuckDB increases your binary size.
+
 `go-duckdb` bundles pre-compiled static libraries for some OS and architecture combinations.
 - MacOS: amd64, arm64.
 - Linux: amd64, arm64.
 - FreeBSD: amd64.
+- Windows: amd64.
 
 Alternatively, you can dynamically link DuckDB by passing `-tags=duckdb_use_lib` to `go build`.
 You must have a copy of `libduckdb` available on your system (`.so` on Linux or `.dylib` on macOS), which you can download from the DuckDB [releases page](https://github.com/duckdb/duckdb/releases).
