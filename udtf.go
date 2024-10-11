@@ -331,7 +331,7 @@ func table_udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_
 	var chunk DataChunk
 	// false, maybe this needs to be true but I don't think we need to read the validity mask
 	// It should be set after executing the function, but never read.
-	err := chunk.initFromDuckDataChunk(output, false)
+	err := chunk.initFromDuckDataChunk(output, true)
 	if err != nil {
 		setFuncError(info, err.Error())
 		return

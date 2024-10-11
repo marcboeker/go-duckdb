@@ -24,10 +24,11 @@ type (
 		GetTypes() []any
 	}
 
-	rowUDFTest[T TableFunction] struct {
-		udf   testTableFunction[T]
-		name  string
-		query string
+	UdtfTest[T TableFunction] struct {
+		udf         testTableFunction[T]
+		name        string
+		query       string
+		resultCount int
 	}
 
 	incTableUDF struct {
@@ -72,40 +73,52 @@ type (
 )
 
 var (
-	rowUdtfs = []rowUDFTest[RowTableFunction]{
+	rowUdtfs = []UdtfTest[RowTableFunction]{
+		{
+			udf:   &incTableUDF{},
+			name:  "incTableUDTF__non_full_vector",
+			query: "SELECT * FROM %s(2047)",
+			resultCount: 2047,
+		},
 		{
 			udf:   &incTableUDF{},
 			name:  "incTableUDTF",
 			query: "SELECT * FROM %s(2048)",
+			resultCount: 2048,
 		},
 		{
 			udf:   &structTableUDF{},
 			name:  "structTableUDTF",
 			query: "SELECT * FROM %s(2048)",
+			resultCount: 2048,
 		},
 		{
 			udf:   &pushdownTableUDF{},
 			name:  "pushdownTableUDTF",
 			query: "SELECT result2 FROM %s(2048)",
+			resultCount: 2048,
 		},
 		{
 			udf:   &incTableNamedUDF{},
 			name:  "incTableNamedUDTF",
 			query: "SELECT * FROM %s(ARG=2048)",
+			resultCount: 2048,
 		},
 	}
-	parallelRowUdtfs = []rowUDFTest[ThreadedRowTableFunction]{
+	parallelRowUdtfs = []UdtfTest[ThreadedRowTableFunction]{
 		{
 			udf:   &parallelIncTableUDF{},
 			name:  "parallelIncTableUDTF",
 			query: "SELECT * FROM %s(2048) ORDER BY result",
+			resultCount: 2048,
 		},
 	}
-	chunkUdtfs = []rowUDFTest[ChunkTableFunction]{
+	chunkUdtfs = []UdtfTest[ChunkTableFunction]{
 		{
 			udf:   &chunkIncTableUDF{},
-			name:  "incTableUDTF",
+			name:  "chunkIncTableUDTF",
 			query: "SELECT * FROM %s(2048)",
+			resultCount: 2048,
 		},
 	}
 )
@@ -146,7 +159,7 @@ func (d *incTableUDF) Columns() []ColumnInfo {
 func (d *incTableUDF) Init() {}
 
 func (d *incTableUDF) FillRow(row Row) (bool, error) {
-	if d.count > d.n {
+	if d.count >= d.n {
 		return false, nil
 	}
 	d.count++
@@ -266,7 +279,7 @@ func (d *structTableUDF) Columns() []ColumnInfo {
 func (d *structTableUDF) Init() {}
 
 func (d *structTableUDF) FillRow(row Row) (bool, error) {
-	if d.count > d.n {
+	if d.count >= d.n {
 		return false, nil
 	}
 	d.count++
@@ -316,7 +329,7 @@ func (d *pushdownTableUDF) Columns() []ColumnInfo {
 func (d *pushdownTableUDF) Init() {}
 
 func (d *pushdownTableUDF) FillRow(row Row) (bool, error) {
-	if d.count > d.n {
+	if d.count >= d.n {
 		return false, nil
 	}
 
@@ -376,7 +389,7 @@ func (d *incTableNamedUDF) Columns() []ColumnInfo {
 func (d *incTableNamedUDF) Init() {}
 
 func (d *incTableNamedUDF) FillRow(row Row) (bool, error) {
-	if d.count > d.n {
+	if d.count >= d.n {
 		return false, nil
 	}
 	d.count++
@@ -423,15 +436,15 @@ func (d *chunkIncTableUDF) Columns() []ColumnInfo {
 func (d *chunkIncTableUDF) Init() {}
 
 func (d *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
-	size := chunk.GetSize()
+	size := 2048
 	i := 0
 	defer func() { _ = chunk.SetSize(i) }()
 	for ; i < size; i++ {
-		if d.count > d.n {
+		if d.count >= d.n {
 			return nil
 		}
 		d.count++
-		err := chunk.SetValue(i, 0, d.count)
+		err := chunk.SetValue(0, i, d.count)
 		if err != nil {
 			return err
 		}
@@ -474,7 +487,7 @@ func TestTableUDF(t *testing.T) {
 	}
 }
 
-func singleTableUDF[T TableFunction](t *testing.T, fun rowUDFTest[T]) {
+func singleTableUDF[T TableFunction](t *testing.T, fun UdtfTest[T]) {
 	var err error
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
 	if err != nil {
@@ -504,6 +517,8 @@ func singleTableUDF[T TableFunction](t *testing.T, fun rowUDFTest[T]) {
 		scanArgs[i] = &values[i]
 	}
 
+	results := 0
+
 	// Fetch rows
 	for r := int(0); rows.Next(); r++ {
 		err = rows.Scan(scanArgs...)
@@ -524,6 +539,11 @@ func singleTableUDF[T TableFunction](t *testing.T, fun rowUDFTest[T]) {
 				t.Fail()
 			}
 		}
+		results++
+	}
+	if results != fun.resultCount {
+		t.Logf("Resultcount did not match up with the expected number of results. Expected %v, got %v", fun.resultCount, results)
+		t.Fail()
 	}
 }
 
