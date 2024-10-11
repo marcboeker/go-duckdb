@@ -241,3 +241,6 @@ DYLD_LIBRARY_PATH=/path/to/libs ./main
 Additionally, automatic extension loading is enabled.
 The extensions available differ between the pre-compiled libraries.
 Thus, if you fail to install and load an extension, you might have to link a custom DuckDB.
+
+Specifically, for MingW (Windows), there are no distributed extensions (yet).
+You can statically include them by extending the `BUILD_EXTENSIONS="json"` variable in the `Makefile`.
