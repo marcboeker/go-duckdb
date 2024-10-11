@@ -13,7 +13,7 @@ examples:
 
 .PHONY: test
 test:
-	go test -v -count=1 .
+	go test -v -race -count=1 .
 
 .PHONY: deps.header
 deps.header:
