@@ -1,5 +1,5 @@
 DUCKDB_REPO=https://github.com/duckdb/duckdb.git
-DUCKDB_BRANCH=v1.1.0
+DUCKDB_BRANCH=v1.1.1
 
 .PHONY: install
 install:
@@ -9,10 +9,11 @@ install:
 examples:
 	go run examples/simple/main.go
 	go run examples/appender/main.go
+	go run examples/scalar_udf/main.go
 
 .PHONY: test
 test:
-	go test -v -count=1 .
+	go test -v -race -count=1 .
 
 .PHONY: deps.header
 deps.header:
@@ -62,6 +63,15 @@ deps.linux.arm64: duckdb
 	CC="aarch64-linux-gnu-gcc" CXX="aarch64-linux-gnu-g++" CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} make bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/linux_arm64/libduckdb.a
 
+.PHONY: deps.freebsd.amd64
+deps.freebsd.amd64: duckdb
+	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "freebsd" ]; then echo "Error: must run build on freebsd"; false; fi
+	mkdir -p deps/freebsd_amd64
+
+	cd duckdb && \
+	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
+	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a
+
 .PHONY: deps.windows.amd64
 deps.windows.amd64: duckdb
 	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "mingw64_nt-10.0-20348" ]; then echo "Error: must run build on windows"; false; fi
@@ -81,12 +91,3 @@ deps.windows.amd64: duckdb
 		${AR} cr ../libduckdb_bundle.a *.obj
 
 	cp duckdb/build/release/libduckdb_bundle.a deps/windows_amd64/libduckdb.a
-
-.PHONY: deps.freebsd.amd64
-deps.freebsd.amd64: duckdb
-	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "freebsd" ]; then echo "Error: must run build on freebsd"; false; fi
-	mkdir -p deps/freebsd_amd64
-
-	cd duckdb && \
-	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
-	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a

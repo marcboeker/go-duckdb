@@ -46,31 +46,32 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 	if colIdx >= len(chunk.columns) {
 		return nil, getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
+
 	column := &chunk.columns[colIdx]
 	return column.getFn(column, C.idx_t(rowIdx)), nil
 }
 
-// SetValue writes a single value to a column in a data chunk. Note that this requires casting the type for each invocation.
+// SetValue writes a single value to a column in a data chunk.
+// Note that this requires casting the type for each invocation.
 // NOTE: Custom ENUM types must be passed as string.
 func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
+
 	column := &chunk.columns[colIdx]
+	return column.setFn(column, C.idx_t(rowIdx), val)
+}
 
-	// Ensure that the types match before attempting to set anything.
-	// This is done to prevent failures 'halfway through' writing column values,
-	// potentially corrupting data in that column.
-	// FIXME: Can we improve efficiency here? We are casting back-and-forth to any A LOT.
-	// FIXME: Maybe we can make columnar insertions unsafe, i.e., we always assume a correct type.
-	v, err := column.tryCast(val)
-	if err != nil {
-		return addIndexToError(err, colIdx)
+// SetChunkValue writes a single value to a column in a data chunk.
+// The difference with `chunk.SetValue` is that `SetChunkValue` does not
+// require casting the value to `any` (implicitly).
+// NOTE: Custom ENUM types must be passed as string.
+func SetChunkValue[T any](chunk DataChunk, colIdx int, rowIdx int, val T) error {
+	if colIdx >= len(chunk.columns) {
+		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
-
-	// Set the value.
-	column.setFn(column, C.idx_t(rowIdx), v)
-	return nil
+	return setVectorVal(&chunk.columns[colIdx], C.idx_t(rowIdx), val)
 }
 
 func (chunk *DataChunk) initFromTypes(ptr unsafe.Pointer, types []C.duckdb_logical_type, writable bool) error {
@@ -124,6 +125,23 @@ func (chunk *DataChunk) initFromDuckDataChunk(data C.duckdb_data_chunk, writable
 
 	chunk.GetSize()
 	return err
+}
+
+func (chunk *DataChunk) initFromDuckVector(duckdbVector C.duckdb_vector, writable bool) error {
+	columnCount := 1
+	chunk.columns = make([]vector, columnCount)
+
+	// Initialize the callback functions to read and write values.
+	logicalType := C.duckdb_vector_get_column_type(duckdbVector)
+	err := chunk.columns[0].init(logicalType, 0)
+	C.duckdb_destroy_logical_type(&logicalType)
+	if err != nil {
+		return err
+	}
+
+	// Initialize the vector and its child vectors.
+	chunk.columns[0].initVectors(duckdbVector, writable)
+	return nil
 }
 
 func (chunk *DataChunk) close() {

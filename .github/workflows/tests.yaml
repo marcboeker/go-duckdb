@@ -1,34 +1,47 @@
 name: Tests
-
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  test:
+  go_test:
     name: Test
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
-
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go: ["1.23"]
       fail-fast: false
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-
-      - name: "Run Tests"
+      - name: "Run tests"
         run: make test
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: test
           path: go-duckdb.test.exe
           retention-days: 1
+
+  test_examples:
+    name: Test examples
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: "Test examples"
+        run: make examples
 
   freebsd_amd64:
     runs-on: ubuntu-latest
@@ -42,5 +55,4 @@ jobs:
               gmake \
               git \
               go
-
           run: gmake test

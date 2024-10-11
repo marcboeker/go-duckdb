@@ -52,6 +52,8 @@ type baseTypeInfo struct {
 	structEntries []StructEntry
 	decimalWidth  uint8
 	decimalScale  uint8
+	// The internal type for ENUM and DECIMAL values.
+	internalType Type
 }
 
 type vectorTypeInfo struct {
@@ -67,7 +69,13 @@ type typeInfo struct {
 
 // TypeInfo is an interface for a DuckDB type.
 type TypeInfo interface {
+	// InternalType returns the Type.
+	InternalType() Type
 	logicalType() C.duckdb_logical_type
+}
+
+func (info *typeInfo) InternalType() Type {
+	return info.Type
 }
 
 // NewTypeInfo returns type information for DuckDB's primitive types.
@@ -94,6 +102,8 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewStructInfo)))
 	case TYPE_MAP:
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
+	case TYPE_SQLNULL:
+		return nil, getError(errAPI, unsupportedTypeError(typeToStringMap[t]))
 	}
 
 	return &typeInfo{
@@ -104,7 +114,7 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 // NewDecimalInfo returns DECIMAL type information.
 // Its input parameters are the width and scale of the DECIMAL type.
 func NewDecimalInfo(width uint8, scale uint8) (TypeInfo, error) {
-	if width < 1 || width > MAX_DECIMAL_WIDTH {
+	if width < 1 || width > max_decimal_width {
 		return nil, getError(errAPI, errInvalidDecimalWidth)
 	}
 	if scale > width {
