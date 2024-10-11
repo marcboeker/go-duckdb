@@ -141,7 +141,7 @@ func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 
 func (c *conn) Close() error {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Close of already closed connection")
+		return errClosedCon
 	}
 	c.closed = true
 

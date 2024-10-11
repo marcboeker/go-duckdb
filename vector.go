@@ -34,13 +34,13 @@ func (*vector) canNil(val reflect.Value) bool {
 	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer,
 		reflect.UnsafePointer, reflect.Interface, reflect.Slice:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 	t := Type(C.duckdb_get_type_id(logicalType))
-
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap {
 		return addIndexToError(unsupportedTypeError(name), colIdx)
@@ -93,6 +93,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		return vec.initMap(logicalType, colIdx)
 	case TYPE_UUID:
 		vec.initUUID()
+	case TYPE_SQLNULL:
+		vec.initSQLNull()
 	default:
 		return addIndexToError(unsupportedTypeError(unknownTypeErrMsg), colIdx)
 	}
@@ -467,4 +469,14 @@ func (vec *vector) initUUID() {
 		return setUUID(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_UUID
+}
+
+func (vec *vector) initSQLNull() {
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		return nil
+	}
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) error {
+		return errSetSQLNULLValue
+	}
+	vec.Type = TYPE_SQLNULL
 }
