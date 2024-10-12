@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/big"
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 type (
@@ -31,20 +33,10 @@ type (
 		resultCount int
 	}
 
+	// Row UDTF tests
 	incTableUDF struct {
 		n     int64
 		count int64
-	}
-
-	parallelIncTableUDF struct {
-		lock    *sync.Mutex
-		claimed int64
-		n       int64
-	}
-
-	parallelIncTableLocal struct {
-		start int64
-		end   int64
 	}
 
 	structTableUDF struct {
@@ -66,6 +58,25 @@ type (
 		count int64
 	}
 
+	constTableUDF[T any] struct {
+		count      int64
+		value      T
+		duckdbType Type
+	}
+
+	// Parallel row UDTF tests
+	parallelIncTableUDF struct {
+		lock    *sync.Mutex
+		claimed int64
+		n       int64
+	}
+
+	parallelIncTableLocal struct {
+		start int64
+		end   int64
+	}
+
+	// Chunk UDTF tests
 	chunkIncTableUDF struct {
 		n     int64
 		count int64
@@ -75,49 +86,175 @@ type (
 var (
 	rowUdtfs = []UdtfTest[RowTableFunction]{
 		{
-			udf:   &incTableUDF{},
-			name:  "incTableUDTF__non_full_vector",
-			query: "SELECT * FROM %s(2047)",
+			udf:         &incTableUDF{},
+			name:        "incTableUDTF__non_full_vector",
+			query:       "SELECT * FROM %s(2047)",
 			resultCount: 2047,
 		},
 		{
-			udf:   &incTableUDF{},
-			name:  "incTableUDTF",
-			query: "SELECT * FROM %s(2048)",
+			udf:         &incTableUDF{},
+			name:        "incTableUDTF",
+			query:       "SELECT * FROM %s(2048)",
 			resultCount: 2048,
 		},
 		{
-			udf:   &structTableUDF{},
-			name:  "structTableUDTF",
-			query: "SELECT * FROM %s(2048)",
+			udf:         &structTableUDF{},
+			name:        "structTableUDTF",
+			query:       "SELECT * FROM %s(2048)",
 			resultCount: 2048,
 		},
 		{
-			udf:   &pushdownTableUDF{},
-			name:  "pushdownTableUDTF",
-			query: "SELECT result2 FROM %s(2048)",
+			udf:         &pushdownTableUDF{},
+			name:        "pushdownTableUDTF",
+			query:       "SELECT result2 FROM %s(2048)",
 			resultCount: 2048,
 		},
 		{
-			udf:   &incTableNamedUDF{},
-			name:  "incTableNamedUDTF",
-			query: "SELECT * FROM %s(ARG=2048)",
+			udf:         &incTableNamedUDF{},
+			name:        "incTableNamedUDTF",
+			query:       "SELECT * FROM %s(ARG=2048)",
 			resultCount: 2048,
+		},
+		{
+			udf:         &constTableUDF[bool]{value: false, duckdbType: TYPE_BOOLEAN},
+			name:        "constTableNamedUDTF_bool",
+			query:       "SELECT * FROM %s(false)",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int8]{value: -8, duckdbType: TYPE_TINYINT},
+			name:        "constTableNamedUDTF_int8",
+			query:       "SELECT * FROM %s(CAST(-8 AS TINYINT))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int16]{value: -16, duckdbType: TYPE_SMALLINT},
+			name:        "constTableNamedUDTF_int16",
+			query:       "SELECT * FROM %s(CAST(-16 AS SMALLINT))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int32]{value: -32, duckdbType: TYPE_INTEGER},
+			name:        "constTableNamedUDTF_int32",
+			query:       "SELECT * FROM %s(-32)",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int64]{value: -64, duckdbType: TYPE_BIGINT},
+			name:        "constTableNamedUDTF_int64",
+			query:       "SELECT * FROM %s(-64)",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint8]{value: 8, duckdbType: TYPE_UTINYINT},
+			name:        "constTableNamedUDTF_uint8",
+			query:       "SELECT * FROM %s(CAST(8 AS UTINYINT))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint16]{value: 16, duckdbType: TYPE_USMALLINT},
+			name:        "constTableNamedUDTF_uint16",
+			query:       "SELECT * FROM %s(CAST(16 AS USMALLINT))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint32]{value: 32, duckdbType: TYPE_UINTEGER},
+			name:        "constTableNamedUDTF_uint32",
+			query:       "SELECT * FROM %s(CAST(32 AS UINTEGER))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint64]{value: 64, duckdbType: TYPE_UBIGINT},
+			name:        "constTableNamedUDTF_uint64",
+			query:       "SELECT * FROM %s(CAST(64 AS UBIGINT))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[float32]{value: 32, duckdbType: TYPE_FLOAT},
+			name:        "constTableNamedUDTF_float32",
+			query:       "SELECT * FROM %s(32)",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[float64]{value: 64, duckdbType: TYPE_DOUBLE},
+			name:        "constTableNamedUDTF_float64",
+			query:       "SELECT * FROM %s(64)",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIMESTAMP},
+			name:        "constTableNamedUDTF_TIMESTAMP",
+			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 0,0, 0, 0, time.UTC), duckdbType: TYPE_DATE},
+			name:        "constTableNamedUDTF_DATE",
+			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS DATE))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(1970, 1, 1, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIME},
+			name:        "constTableNamedUDTF_TIME",
+			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIME))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[Interval]{value: Interval{Months: 16, Days: 10, Micros: 172800000000}, duckdbType: TYPE_INTERVAL},
+			name:        "constTableNamedUDTF_INTERVAL",
+			query:       "SELECT * FROM %s('16 months 10 days 48:00:00'::INTERVAL)",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[*big.Int]{value: big.NewInt(10000000000000000), duckdbType: TYPE_HUGEINT},
+			name:        "constTableNamedUDTF_bigint",
+			query:       "SELECT * FROM %s(10000000000000000)",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[string]{value: "sjbfsd", duckdbType: TYPE_VARCHAR},
+			name:        "constTableNamedUDTF_string",
+			query:       "SELECT * FROM %s('sjbfsd')",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 0, time.UTC), duckdbType: TYPE_TIMESTAMP_S},
+			name:        "constTableNamedUDTF_TIMESTAMPS",
+			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123000000, time.UTC), duckdbType: TYPE_TIMESTAMP_MS},
+			name:        "constTableNamedUDTF_TIMESTAMPMS",
+			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIMESTAMP_NS},
+			name:        "constTableNamedUDTF_TIMESTAMPNS",
+			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))",
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIMESTAMP_TZ},
+			name:        "constTableNamedUDTF_TIMESTAMPTZ",
+			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))",
+			resultCount: 1,
 		},
 	}
 	parallelRowUdtfs = []UdtfTest[ThreadedRowTableFunction]{
 		{
-			udf:   &parallelIncTableUDF{},
-			name:  "parallelIncTableUDTF",
-			query: "SELECT * FROM %s(2048) ORDER BY result",
+			udf:         &parallelIncTableUDF{},
+			name:        "parallelIncTableUDTF",
+			query:       "SELECT * FROM %s(2048) ORDER BY result",
 			resultCount: 2048,
 		},
 	}
 	chunkUdtfs = []UdtfTest[ChunkTableFunction]{
 		{
-			udf:   &chunkIncTableUDF{},
-			name:  "chunkIncTableUDTF",
-			query: "SELECT * FROM %s(2048)",
+			udf:         &chunkIncTableUDF{},
+			name:        "chunkIncTableUDTF",
+			query:       "SELECT * FROM %s(2048)",
 			resultCount: 2048,
 		},
 	}
@@ -408,6 +545,58 @@ func (d *incTableNamedUDF) GetTypes() []any {
 }
 
 func (d *incTableNamedUDF) Cardinality() *CardinalityInfo {
+	return nil
+}
+
+func (d *constTableUDF[T]) GetFunction() RowTableFunction {
+	typeinfo, _ := NewTypeInfo(d.duckdbType)
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []TypeInfo{typeinfo},
+		},
+		BindArguments: BindConstTableUDF(d.value, d.duckdbType),
+	}
+}
+
+func BindConstTableUDF[T any](val T, duckdbType Type) func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+		return &constTableUDF[T]{
+			count: 0,
+			value: args[0].(T),
+			duckdbType: duckdbType,
+		}, nil
+	}
+}
+
+func (d *constTableUDF[T]) Columns() []ColumnInfo {
+	typeinfo, _ := NewTypeInfo(d.duckdbType)
+	return []ColumnInfo{
+		{Name: "result", T: typeinfo},
+	}
+}
+
+func (d *constTableUDF[T]) Init() {}
+
+func (d *constTableUDF[T]) FillRow(row Row) (bool, error) {
+	if d.count >= 1 {
+		return false, nil
+	}
+	d.count++
+	err := SetRowValue(row, 0, d.value)
+	return true, err
+}
+
+func (d *constTableUDF[T]) GetValue(r, c int) any {
+	return d.value
+}
+
+func (d *constTableUDF[T]) GetTypes() []any {
+	return []any{
+		d.value,
+	}
+}
+
+func (d *constTableUDF[T]) Cardinality() *CardinalityInfo {
 	return nil
 }
 

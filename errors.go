@@ -79,6 +79,7 @@ var (
 	errParseDSN  = errors.New("could not parse DSN for database")
 	errOpen      = errors.New("could not open database")
 	errSetConfig = errors.New("could not set invalid or local option for global database config")
+	errMalformedType   = errors.New("Used a malformed TypeInfo to indicate a type")
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 
