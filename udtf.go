@@ -25,7 +25,6 @@ import "C"
 
 import (
 	"database/sql"
-	"fmt"
 	"runtime"
 	"runtime/cgo"
 	"time"
