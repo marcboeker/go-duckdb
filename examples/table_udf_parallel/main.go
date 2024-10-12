@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"reflect"
 	"sync"
 
@@ -107,10 +106,8 @@ func main() {
 	var err error
 	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
 	check(err)
-	if err != nil {
-		log.Fatal(err)
-	}
 	defer db.Close()
+
 	conn, err := db.Conn(context.Background())
 	check(err)
 
