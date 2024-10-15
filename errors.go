@@ -73,13 +73,13 @@ const (
 )
 
 var (
+	errInternal   = errors.New("internal error: please file a bug report at go-duckdb")
 	errAPI        = errors.New("API error")
 	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
 
 	errParseDSN  = errors.New("could not parse DSN for database")
 	errOpen      = errors.New("could not open database")
 	errSetConfig = errors.New("could not set invalid or local option for global database config")
-	errMalformedType   = errors.New("Used a malformed TypeInfo to indicate a type")
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 
@@ -109,15 +109,17 @@ var (
 	errScalarUDFCreateSet       = fmt.Errorf("could not create scalar UDF set")
 	errScalarUDFAddToSet        = fmt.Errorf("%w: could not add the function to the set", errScalarUDFCreateSet)
 
+	errTableUDFCreate          = errors.New("could not create table UDF")
+	errTableUDFNoName          = fmt.Errorf("%w: missing name", errTableUDFCreate)
+	errTableUDFMissingBindArgs = fmt.Errorf("%w: missing bind arguments", errTableUDFCreate)
+	errTableUDFArgumentIsNil   = fmt.Errorf("%w: argument is nil", errTableUDFCreate)
+	errTableUDFColumnTypeIsNil = fmt.Errorf("%w: column type is nil", errTableUDFCreate)
+
 	errSetSQLNULLValue = errors.New("cannot write to a NULL column")
 
 	// Errors not covered in tests.
-	errConnect                = errors.New("could not connect to database")
-	errCreateConfig           = errors.New("could not create config for database")
-	errTableUDFCreate         = errors.New("could not create table UDF")
-	errTableUDFMissingBindags = errors.New("could not create table UDF, missing bind arguments")
-	errTableUDFNoName         = errors.New("could not create table UDF, name cannot be empty")
-	errTableUDFNillFunction   = errors.New("could not create table UDF, no function provided")
+	errConnect      = errors.New("could not connect to database")
+	errCreateConfig = errors.New("could not create config for database")
 )
 
 type ErrorType int
@@ -154,7 +156,7 @@ const (
 	ErrorTypeIO                                    // IO exception
 	ErrorTypeInterrupt                             // interrupt
 	ErrorTypeFatal                                 // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
-	ErrorTypeInternal                              // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
+	ErrorTypeInternal                              // Internal exceptions indicate something went wrong internally (I.e. bug in the code base)
 	ErrorTypeInvalidInput                          // Input or arguments error
 	ErrorTypeOutOfMemory                           // out of memory
 	ErrorTypePermission                            // insufficient permissions

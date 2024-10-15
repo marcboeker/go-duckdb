@@ -4,150 +4,149 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"reflect"
 	"sync"
 
 	"github.com/marcboeker/go-duckdb"
 )
 
-var db *sql.DB
-
 type (
-	parallelIncTableUDF struct {
+	parallelIncrementTableUDF struct {
 		lock    *sync.Mutex
 		claimed int64
 		n       int64
 	}
 
-	parallelIncTableLocal struct {
+	localTableState struct {
 		start int64
 		end   int64
 	}
 )
 
-func BindParallelIncTableUDF(namedArgs map[string]any, args ...interface{}) (duckdb.ThreadedRowTableSource, error) {
-	return &parallelIncTableUDF{
+func bindParallelTableUDF(namedArgs map[string]any, args ...interface{}) (duckdb.ParallelRowTableSource, error) {
+	return &parallelIncrementTableUDF{
 		lock:    &sync.Mutex{},
 		claimed: 0,
 		n:       args[0].(int64),
 	}, nil
 }
 
-func (d *parallelIncTableUDF) Columns() []duckdb.ColumnInfo {
+func (udf *parallelIncrementTableUDF) ColumnInfos() []duckdb.ColumnInfo {
 	t, err := duckdb.NewTypeInfo(duckdb.TYPE_BIGINT)
 	check(err)
-	return []duckdb.ColumnInfo{
-		{Name: "result", T: t},
-	}
+	return []duckdb.ColumnInfo{{Name: "result", T: t}}
 }
 
-func (d *parallelIncTableUDF) Init() duckdb.ThreadedTableSourceInitData {
-	return duckdb.ThreadedTableSourceInitData{
+func (udf *parallelIncrementTableUDF) Init() duckdb.ParallelTableSourceInfo {
+	return duckdb.ParallelTableSourceInfo{
 		MaxThreads: 8,
 	}
 }
 
-func (d *parallelIncTableUDF) NewLocalState() any {
-	return &parallelIncTableLocal{
+func (udf *parallelIncrementTableUDF) NewLocalState() any {
+	return &localTableState{
 		start: 0,
 		end:   -1,
 	}
 }
 
-func (d *parallelIncTableUDF) FillRow(localState any, row duckdb.Row) (bool, error) {
-	state := localState.(*parallelIncTableLocal)
+func (udf *parallelIncrementTableUDF) FillRow(localState any, row duckdb.Row) (bool, error) {
+	state := localState.(*localTableState)
+
 	if state.start >= state.end {
-		// claim a new "work" unit
-		d.lock.Lock()
-		remaining := d.n - d.claimed
+		// Claim a new work unit.
+		udf.lock.Lock()
+		remaining := udf.n - udf.claimed
+
 		if remaining <= 0 {
-			// no more work to be done :(
-			d.lock.Unlock()
+			// No more work.
+			udf.lock.Unlock()
 			return false, nil
 		} else if remaining >= 2024 {
 			remaining = 2024
 		}
-		state.start = d.claimed
-		d.claimed += remaining
-		state.end = d.claimed
-		d.lock.Unlock()
+
+		state.start = udf.claimed
+		udf.claimed += remaining
+		state.end = udf.claimed
+		udf.lock.Unlock()
 	}
+
 	state.start++
 	err := duckdb.SetRowValue(row, 0, state.start)
 	return true, err
 }
 
-func (d *parallelIncTableUDF) GetValue(r, c int) any {
+func (udf *parallelIncrementTableUDF) GetValue(r, c int) any {
 	return int64(r + 1)
 }
 
-func (d *parallelIncTableUDF) GetTypes() []any {
-	return []any{
-		int(0),
-	}
+func (udf *parallelIncrementTableUDF) GetTypes() []any {
+	return []any{0}
 }
 
-func (d *parallelIncTableUDF) Cardinality() *duckdb.CardinalityInfo {
+func (udf *parallelIncrementTableUDF) Cardinality() *duckdb.CardinalityInfo {
 	return nil
 }
 
-func (d *parallelIncTableUDF) GetFunction() duckdb.ThreadedRowTableFunction {
+func (udf *parallelIncrementTableUDF) GetFunction() duckdb.ParallelRowTableFunction {
 	t, err := duckdb.NewTypeInfo(duckdb.TYPE_BIGINT)
 	check(err)
-	return duckdb.ThreadedRowTableFunction{
+
+	return duckdb.ParallelRowTableFunction{
 		Config: duckdb.TableFunctionConfig{
 			Arguments: []duckdb.TypeInfo{t},
 		},
-		BindArguments: BindParallelIncTableUDF,
+		BindArguments: bindParallelTableUDF,
 	}
 }
 
 func main() {
-	var err error
-	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
+	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
 	check(err)
-	defer db.Close()
 
 	conn, err := db.Conn(context.Background())
 	check(err)
 
 	t, err := duckdb.NewTypeInfo(duckdb.TYPE_BIGINT)
 	check(err)
-	fun := duckdb.ThreadedRowTableFunction{
+	udf := duckdb.ParallelRowTableFunction{
 		Config: duckdb.TableFunctionConfig{
 			Arguments: []duckdb.TypeInfo{t},
 		},
-		BindArguments: BindParallelIncTableUDF,
+		BindArguments: bindParallelTableUDF,
 	}
 
-	duckdb.RegisterTableUDF(conn, "inc", fun)
-
-	rows, err := db.QueryContext(context.Background(), "SELECT * FROM inc(2048)")
+	err = duckdb.RegisterTableUDF(conn, "increment", udf)
 	check(err)
-	defer rows.Close()
 
-	// Get column names
+	rows, err := db.QueryContext(context.Background(), `SELECT * FROM increment(10000)`)
+	check(err)
+
+	// Get the column names.
 	columns, err := rows.Columns()
 	check(err)
 
 	values := make([]interface{}, len(columns))
-	scanArgs := make([]interface{}, len(values))
+	args := make([]interface{}, len(values))
 	for i := range values {
-		scanArgs[i] = &values[i]
+		args[i] = &values[i]
 	}
 
-	// Fetch rows
+	rowSum := int64(0)
 	for rows.Next() {
-		err = rows.Scan(scanArgs...)
+		err = rows.Scan(args...)
 		check(err)
-		for i, value := range values {
+		for _, value := range values {
 			// Keep in mind that the value could be nil for NULL values.
 			// This never happens in our case, so we don't check for it.
-			fmt.Printf("%s: %v\n", columns[i], value)
-			fmt.Printf("Type: %s\n", reflect.TypeOf(value))
+			rowSum += value.(int64)
 		}
-		fmt.Println("-----------------------------------")
 	}
+	fmt.Printf("row sum: %d", rowSum)
+
+	check(rows.Close())
+	check(conn.Close())
+	check(db.Close())
 }
 
 func check(err interface{}) {

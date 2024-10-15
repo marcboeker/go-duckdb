@@ -95,7 +95,7 @@ func TestErrAppender(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
 
-		_, err = sql.OpenDB(c).Exec(`CREATE TABLE tbl (i INTEGER)`)
+		_, err = sql.OpenDB(c).Exec(`CREATE TABLE tbl (I INTEGER)`)
 		require.NoError(t, err)
 
 		con, err := c.Connect(context.Background())

@@ -5,14 +5,13 @@ package duckdb
 */
 import "C"
 
-
 import (
 	"runtime"
 	"runtime/cgo"
 	"unsafe"
 )
 
-// Helpers for passing values to C and back
+// Helpers for passing values to C and back.
 
 type pinnedValue[T any] struct {
 	pinner *runtime.Pinner
@@ -32,12 +31,12 @@ func getPinned[T any](handle unsafe.Pointer) T {
 	return h.Value().(pinnedValue[T]).value
 }
 
-// Set error helpers
+// Set error helpers.
 
 func setBindError(info C.duckdb_bind_info, msg string) {
 	err := C.CString(msg)
-	defer C.duckdb_free(unsafe.Pointer(err))
 	C.duckdb_bind_set_error(info, err)
+	C.duckdb_free(unsafe.Pointer(err))
 }
 
 func setFuncError(function_info C.duckdb_function_info, msg string) {
@@ -46,7 +45,7 @@ func setFuncError(function_info C.duckdb_function_info, msg string) {
 	C.duckdb_free(unsafe.Pointer(err))
 }
 
-// Data deletion handlers
+// Data deletion handlers.
 
 //export udf_delete_callback
 func udf_delete_callback(info unsafe.Pointer) {

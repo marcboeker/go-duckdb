@@ -5,35 +5,29 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type (
-	wrongValueError struct {
-		rowIdx   int
-		colIdx   int
-		colName  string
-		expected any
-		got      any
-	}
-
 	testTableFunction[T TableFunction] interface {
 		GetFunction() T
 		GetValue(r, c int) any
 		GetTypes() []any
 	}
 
-	UdtfTest[T TableFunction] struct {
+	tableUDFTest[T TableFunction] struct {
 		udf         testTableFunction[T]
 		name        string
 		query       string
 		resultCount int
 	}
 
-	// Row UDTF tests
+	// Row-based table UDF tests.
+
 	incTableUDF struct {
 		n     int64
 		count int64
@@ -44,7 +38,7 @@ type (
 		count int64
 	}
 
-	structTableUDFT struct {
+	otherStructTableUDF struct {
 		I int64
 	}
 
@@ -59,24 +53,26 @@ type (
 	}
 
 	constTableUDF[T any] struct {
-		count      int64
-		value      T
-		duckdbType Type
+		count int64
+		value T
+		t     Type
 	}
 
-	// Parallel row UDTF tests
+	// Parallel row-based table UDF tests.
+
 	parallelIncTableUDF struct {
 		lock    *sync.Mutex
 		claimed int64
 		n       int64
 	}
 
-	parallelIncTableLocal struct {
+	parallelIncTableLocalState struct {
 		start int64
 		end   int64
 	}
 
-	// Chunk UDTF tests
+	// Chunk-based table UDF tests.
+
 	chunkIncTableUDF struct {
 		n     int64
 		count int64
@@ -84,241 +80,237 @@ type (
 )
 
 var (
-	rowUdtfs = []UdtfTest[RowTableFunction]{
+	rowTableUDFs = []tableUDFTest[RowTableFunction]{
 		{
 			udf:         &incTableUDF{},
-			name:        "incTableUDTF__non_full_vector",
-			query:       "SELECT * FROM %s(2047)",
+			name:        "incTableUDF_non_full_vector",
+			query:       `SELECT * FROM %s(2047)`,
 			resultCount: 2047,
 		},
 		{
 			udf:         &incTableUDF{},
-			name:        "incTableUDTF",
-			query:       "SELECT * FROM %s(2048)",
-			resultCount: 2048,
+			name:        "incTableUDF",
+			query:       `SELECT * FROM %s(10000)`,
+			resultCount: 10000,
 		},
 		{
 			udf:         &structTableUDF{},
-			name:        "structTableUDTF",
-			query:       "SELECT * FROM %s(2048)",
+			name:        "structTableUDF",
+			query:       `SELECT * FROM %s(2048)`,
 			resultCount: 2048,
 		},
 		{
 			udf:         &pushdownTableUDF{},
-			name:        "pushdownTableUDTF",
-			query:       "SELECT result2 FROM %s(2048)",
+			name:        "pushdownTableUDF",
+			query:       `SELECT result2 FROM %s(2048)`,
 			resultCount: 2048,
 		},
 		{
 			udf:         &incTableNamedUDF{},
-			name:        "incTableNamedUDTF",
-			query:       "SELECT * FROM %s(ARG=2048)",
+			name:        "incTableNamedUDF",
+			query:       `SELECT * FROM %s(ARG=2048)`,
 			resultCount: 2048,
 		},
 		{
-			udf:         &constTableUDF[bool]{value: false, duckdbType: TYPE_BOOLEAN},
-			name:        "constTableNamedUDTF_bool",
-			query:       "SELECT * FROM %s(false)",
+			udf:         &constTableUDF[bool]{value: false, t: TYPE_BOOLEAN},
+			name:        "constTableUDF_bool",
+			query:       `SELECT * FROM %s(false)`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[int8]{value: -8, duckdbType: TYPE_TINYINT},
-			name:        "constTableNamedUDTF_int8",
-			query:       "SELECT * FROM %s(CAST(-8 AS TINYINT))",
+			udf:         &constTableUDF[int8]{value: -8, t: TYPE_TINYINT},
+			name:        "constTableUDF_int8",
+			query:       `SELECT * FROM %s(CAST(-8 AS TINYINT))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[int16]{value: -16, duckdbType: TYPE_SMALLINT},
-			name:        "constTableNamedUDTF_int16",
-			query:       "SELECT * FROM %s(CAST(-16 AS SMALLINT))",
+			udf:         &constTableUDF[int16]{value: -16, t: TYPE_SMALLINT},
+			name:        "constTableUDF_int16",
+			query:       `SELECT * FROM %s(CAST(-16 AS SMALLINT))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[int32]{value: -32, duckdbType: TYPE_INTEGER},
-			name:        "constTableNamedUDTF_int32",
-			query:       "SELECT * FROM %s(-32)",
+			udf:         &constTableUDF[int32]{value: -32, t: TYPE_INTEGER},
+			name:        "constTableUDF_int32",
+			query:       `SELECT * FROM %s(-32)`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[int64]{value: -64, duckdbType: TYPE_BIGINT},
-			name:        "constTableNamedUDTF_int64",
-			query:       "SELECT * FROM %s(-64)",
+			udf:         &constTableUDF[int64]{value: -64, t: TYPE_BIGINT},
+			name:        "constTableUDF_int64",
+			query:       `SELECT * FROM %s(-64)`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[uint8]{value: 8, duckdbType: TYPE_UTINYINT},
-			name:        "constTableNamedUDTF_uint8",
-			query:       "SELECT * FROM %s(CAST(8 AS UTINYINT))",
+			udf:         &constTableUDF[uint8]{value: 8, t: TYPE_UTINYINT},
+			name:        "constTableUDF_uint8",
+			query:       `SELECT * FROM %s(CAST(8 AS UTINYINT))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[uint16]{value: 16, duckdbType: TYPE_USMALLINT},
-			name:        "constTableNamedUDTF_uint16",
-			query:       "SELECT * FROM %s(CAST(16 AS USMALLINT))",
+			udf:         &constTableUDF[uint16]{value: 16, t: TYPE_USMALLINT},
+			name:        "constTableUDF_uint16",
+			query:       `SELECT * FROM %s(CAST(16 AS USMALLINT))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[uint32]{value: 32, duckdbType: TYPE_UINTEGER},
-			name:        "constTableNamedUDTF_uint32",
-			query:       "SELECT * FROM %s(CAST(32 AS UINTEGER))",
+			udf:         &constTableUDF[uint32]{value: 32, t: TYPE_UINTEGER},
+			name:        "constTableUDF_uint32",
+			query:       `SELECT * FROM %s(CAST(32 AS UINTEGER))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[uint64]{value: 64, duckdbType: TYPE_UBIGINT},
-			name:        "constTableNamedUDTF_uint64",
-			query:       "SELECT * FROM %s(CAST(64 AS UBIGINT))",
+			udf:         &constTableUDF[uint64]{value: 64, t: TYPE_UBIGINT},
+			name:        "constTableUDF_uint64",
+			query:       `SELECT * FROM %s(CAST(64 AS UBIGINT))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[float32]{value: 32, duckdbType: TYPE_FLOAT},
-			name:        "constTableNamedUDTF_float32",
-			query:       "SELECT * FROM %s(32)",
+			udf:         &constTableUDF[float32]{value: 32, t: TYPE_FLOAT},
+			name:        "constTableUDF_float32",
+			query:       `SELECT * FROM %s(32)`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[float64]{value: 64, duckdbType: TYPE_DOUBLE},
-			name:        "constTableNamedUDTF_float64",
-			query:       "SELECT * FROM %s(64)",
+			udf:         &constTableUDF[float64]{value: 64, t: TYPE_DOUBLE},
+			name:        "constTableUDF_float64",
+			query:       `SELECT * FROM %s(64)`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIMESTAMP},
-			name:        "constTableNamedUDTF_TIMESTAMP",
-			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP))",
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP},
+			name:        "constTableUDF_timestamp",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 0,0, 0, 0, time.UTC), duckdbType: TYPE_DATE},
-			name:        "constTableNamedUDTF_DATE",
-			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS DATE))",
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 0, 0, 0, 0, time.UTC), t: TYPE_DATE},
+			name:        "constTableUDF_date",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS DATE))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(1970, 1, 1, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIME},
-			name:        "constTableNamedUDTF_TIME",
-			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIME))",
+			udf:         &constTableUDF[time.Time]{value: time.Date(1970, 1, 1, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIME},
+			name:        "constTableUDF_time",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIME))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[Interval]{value: Interval{Months: 16, Days: 10, Micros: 172800000000}, duckdbType: TYPE_INTERVAL},
-			name:        "constTableNamedUDTF_INTERVAL",
-			query:       "SELECT * FROM %s('16 months 10 days 48:00:00'::INTERVAL)",
+			udf:         &constTableUDF[Interval]{value: Interval{Months: 16, Days: 10, Micros: 172800000000}, t: TYPE_INTERVAL},
+			name:        "constTableUDF_interval",
+			query:       `SELECT * FROM %s('16 months 10 days 48:00:00'::INTERVAL)`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[*big.Int]{value: big.NewInt(10000000000000000), duckdbType: TYPE_HUGEINT},
-			name:        "constTableNamedUDTF_bigint",
-			query:       "SELECT * FROM %s(10000000000000000)",
+			udf:         &constTableUDF[*big.Int]{value: big.NewInt(10000000000000000), t: TYPE_HUGEINT},
+			name:        "constTableUDF_bigint",
+			query:       `SELECT * FROM %s(10000000000000000)`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[string]{value: "sjbfsd", duckdbType: TYPE_VARCHAR},
-			name:        "constTableNamedUDTF_string",
-			query:       "SELECT * FROM %s('sjbfsd')",
+			udf:         &constTableUDF[string]{value: "my_lovely_string", t: TYPE_VARCHAR},
+			name:        "constTableUDF_string",
+			query:       `SELECT * FROM %s('my_lovely_string')`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 0, time.UTC), duckdbType: TYPE_TIMESTAMP_S},
-			name:        "constTableNamedUDTF_TIMESTAMPS",
-			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))",
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
+			name:        "constTableUDF_timestamp_s",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123000000, time.UTC), duckdbType: TYPE_TIMESTAMP_MS},
-			name:        "constTableNamedUDTF_TIMESTAMPMS",
-			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))",
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
+			name:        "constTableUDF_timestamp_ms",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIMESTAMP_NS},
-			name:        "constTableNamedUDTF_TIMESTAMPNS",
-			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))",
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_NS},
+			name:        "constTableUDF_timestamp_ns",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), duckdbType: TYPE_TIMESTAMP_TZ},
-			name:        "constTableNamedUDTF_TIMESTAMPTZ",
-			query:       "SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))",
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_TZ},
+			name:        "constTableUDF_timestamp_tz",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))`,
 			resultCount: 1,
 		},
 	}
-	parallelRowUdtfs = []UdtfTest[ThreadedRowTableFunction]{
+	parallelTableUDFs = []tableUDFTest[ParallelRowTableFunction]{
 		{
 			udf:         &parallelIncTableUDF{},
-			name:        "parallelIncTableUDTF",
-			query:       "SELECT * FROM %s(2048) ORDER BY result",
+			name:        "parallelIncTableUDF",
+			query:       `SELECT * FROM %s(2048) ORDER BY result`,
 			resultCount: 2048,
 		},
 	}
-	chunkUdtfs = []UdtfTest[ChunkTableFunction]{
+	chunkTableUDFs = []tableUDFTest[ChunkTableFunction]{
 		{
 			udf:         &chunkIncTableUDF{},
-			name:        "chunkIncTableUDTF",
-			query:       "SELECT * FROM %s(2048)",
+			name:        "chunkIncTableUDF",
+			query:       `SELECT * FROM %s(2048)`,
 			resultCount: 2048,
 		},
 	}
 )
 
 var (
-	Ti64, _          = NewTypeInfo(TYPE_BIGINT)
-	TStructTableUDFT = makeStructTableUDFT()
+	typeBigintTableUDF, _ = NewTypeInfo(TYPE_BIGINT)
+	typeStructTableUDF    = makeStructTableUDF()
 )
 
-func makeStructTableUDFT() TypeInfo {
-	entry, _ := NewStructEntry(Ti64, "I")
-	ret, _ := NewStructInfo(entry)
-	return ret
+func makeStructTableUDF() TypeInfo {
+	entry, _ := NewStructEntry(typeBigintTableUDF, "I")
+	info, _ := NewStructInfo(entry)
+	return info
 }
 
-func (d *incTableUDF) GetFunction() RowTableFunction {
+func (udf *incTableUDF) GetFunction() RowTableFunction {
 	return RowTableFunction{
 		Config: TableFunctionConfig{
-			Arguments: []TypeInfo{Ti64},
+			Arguments: []TypeInfo{typeBigintTableUDF},
 		},
-		BindArguments: BindIncTableUDF,
+		BindArguments: bindIncTableUDF,
 	}
 }
 
-func BindIncTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+func bindIncTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 	return &incTableUDF{
 		count: 0,
 		n:     args[0].(int64),
 	}, nil
 }
 
-func (d *incTableUDF) Columns() []ColumnInfo {
-	return []ColumnInfo{
-		{Name: "result", T: Ti64},
-	}
+func (udf *incTableUDF) ColumnInfos() []ColumnInfo {
+	return []ColumnInfo{{Name: "result", T: typeBigintTableUDF}}
 }
 
-func (d *incTableUDF) Init() {}
+func (udf *incTableUDF) Init() {}
 
-func (d *incTableUDF) FillRow(row Row) (bool, error) {
-	if d.count >= d.n {
+func (udf *incTableUDF) FillRow(row Row) (bool, error) {
+	if udf.count >= udf.n {
 		return false, nil
 	}
-	d.count++
-	err := SetRowValue(row, 0, d.count)
+	udf.count++
+	err := SetRowValue(row, 0, udf.count)
 	return true, err
 }
 
-func (d *incTableUDF) GetValue(r, c int) any {
+func (udf *incTableUDF) GetValue(r, c int) any {
 	return int64(r + 1)
 }
 
-func (d *incTableUDF) GetTypes() []any {
-	return []any{
-		int(0),
-	}
+func (udf *incTableUDF) GetTypes() []any {
+	return []any{0}
 }
 
-func (d *incTableUDF) Cardinality() *CardinalityInfo {
+func (udf *incTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
-func BindParallelIncTableUDF(namedArgs map[string]any, args ...interface{}) (ThreadedRowTableSource, error) {
+func bindParallelIncTableUDF(namedArgs map[string]any, args ...interface{}) (ParallelRowTableSource, error) {
 	return &parallelIncTableUDF{
 		lock:    &sync.Mutex{},
 		claimed: 0,
@@ -326,464 +318,416 @@ func BindParallelIncTableUDF(namedArgs map[string]any, args ...interface{}) (Thr
 	}, nil
 }
 
-func (d *parallelIncTableUDF) Columns() []ColumnInfo {
-	return []ColumnInfo{
-		{Name: "result", T: Ti64},
-	}
+func (udf *parallelIncTableUDF) ColumnInfos() []ColumnInfo {
+	return []ColumnInfo{{Name: "result", T: typeBigintTableUDF}}
 }
 
-func (d *parallelIncTableUDF) Init() ThreadedTableSourceInitData {
-	return ThreadedTableSourceInitData{
-		MaxThreads: 8,
-	}
+func (udf *parallelIncTableUDF) Init() ParallelTableSourceInfo {
+	return ParallelTableSourceInfo{MaxThreads: 8}
 }
 
-func (d *parallelIncTableUDF) NewLocalState() any {
-	return &parallelIncTableLocal{
+func (udf *parallelIncTableUDF) NewLocalState() any {
+	return &parallelIncTableLocalState{
 		start: 0,
 		end:   -1,
 	}
 }
 
-func (d *parallelIncTableUDF) FillRow(localState any, row Row) (bool, error) {
-	state := localState.(*parallelIncTableLocal)
+func (udf *parallelIncTableUDF) FillRow(localState any, row Row) (bool, error) {
+	state := localState.(*parallelIncTableLocalState)
+
 	if state.start >= state.end {
-		// claim a new "work" unit
-		d.lock.Lock()
-		remaining := d.n - d.claimed
+		// Claim a new work unit.
+		udf.lock.Lock()
+		remaining := udf.n - udf.claimed
+
 		if remaining <= 0 {
-			// no more work to be done :(
-			d.lock.Unlock()
+			// No more work.
+			udf.lock.Unlock()
 			return false, nil
 		} else if remaining >= 2024 {
 			remaining = 2024
 		}
-		state.start = d.claimed
-		d.claimed += remaining
-		state.end = d.claimed
-		d.lock.Unlock()
+
+		state.start = udf.claimed
+		udf.claimed += remaining
+		state.end = udf.claimed
+		udf.lock.Unlock()
 	}
+
 	state.start++
 	err := SetRowValue(row, 0, state.start)
 	return true, err
 }
 
-func (d *parallelIncTableUDF) GetValue(r, c int) any {
+func (udf *parallelIncTableUDF) GetValue(r, c int) any {
 	return int64(r + 1)
 }
 
-func (d *parallelIncTableUDF) GetTypes() []any {
-	return []any{
-		int(0),
-	}
+func (udf *parallelIncTableUDF) GetTypes() []any {
+	return []any{0}
 }
 
-func (d *parallelIncTableUDF) Cardinality() *CardinalityInfo {
+func (udf *parallelIncTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
-func (d *parallelIncTableUDF) GetFunction() ThreadedRowTableFunction {
-	return ThreadedRowTableFunction{
+func (udf *parallelIncTableUDF) GetFunction() ParallelRowTableFunction {
+	return ParallelRowTableFunction{
 		Config: TableFunctionConfig{
-			Arguments: []TypeInfo{Ti64},
+			Arguments: []TypeInfo{typeBigintTableUDF},
 		},
-		BindArguments: BindParallelIncTableUDF,
+		BindArguments: bindParallelIncTableUDF,
 	}
 }
 
-func (d *structTableUDF) GetFunction() RowTableFunction {
+func (udf *structTableUDF) GetFunction() RowTableFunction {
 	return RowTableFunction{
 		Config: TableFunctionConfig{
-			Arguments: []TypeInfo{Ti64},
+			Arguments: []TypeInfo{typeBigintTableUDF},
 		},
-		BindArguments: BindStructTableUDF,
+		BindArguments: bindStructTableUDF,
 	}
 }
 
-func BindStructTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+func bindStructTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 	return &structTableUDF{
 		count: 0,
 		n:     args[0].(int64),
 	}, nil
 }
 
-func (d *structTableUDF) Columns() []ColumnInfo {
-	return []ColumnInfo{
-		{Name: "result", T: TStructTableUDFT},
-	}
+func (udf *structTableUDF) ColumnInfos() []ColumnInfo {
+	return []ColumnInfo{{Name: "result", T: typeStructTableUDF}}
 }
 
-func (d *structTableUDF) Init() {}
+func (udf *structTableUDF) Init() {}
 
-func (d *structTableUDF) FillRow(row Row) (bool, error) {
-	if d.count >= d.n {
+func (udf *structTableUDF) FillRow(row Row) (bool, error) {
+	if udf.count >= udf.n {
 		return false, nil
 	}
-	d.count++
-	err := SetRowValue(row, 0, structTableUDFT{I: d.count})
+	udf.count++
+	err := SetRowValue(row, 0, otherStructTableUDF{I: udf.count})
 	return true, err
 }
 
-func (d *structTableUDF) GetTypes() []any {
-	return []any{
-		int(0),
-	}
+func (udf *structTableUDF) GetTypes() []any {
+	return []any{0}
 }
 
-func (d *structTableUDF) GetValue(r, c int) any {
-	return map[string]any{
-		"I": int64(r + 1),
-	}
+func (udf *structTableUDF) GetValue(r, c int) any {
+	return map[string]any{"I": int64(r + 1)}
 }
 
-func (d *structTableUDF) Cardinality() *CardinalityInfo {
+func (udf *structTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
-func (d *pushdownTableUDF) GetFunction() RowTableFunction {
+func (udf *pushdownTableUDF) GetFunction() RowTableFunction {
 	return RowTableFunction{
 		Config: TableFunctionConfig{
-			Arguments: []TypeInfo{Ti64},
+			Arguments: []TypeInfo{typeBigintTableUDF},
 		},
-		BindArguments: BindPushdownTableUDF,
+		BindArguments: bindPushdownTableUDF,
 	}
 }
 
-func BindPushdownTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+func bindPushdownTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 	return &pushdownTableUDF{
 		count: 0,
 		n:     args[0].(int64),
 	}, nil
 }
 
-func (d *pushdownTableUDF) Columns() []ColumnInfo {
+func (udf *pushdownTableUDF) ColumnInfos() []ColumnInfo {
 	return []ColumnInfo{
-		{Name: "result", T: Ti64},
-		{Name: "result2", T: Ti64},
+		{Name: "result", T: typeBigintTableUDF},
+		{Name: "result2", T: typeBigintTableUDF},
 	}
 }
 
-func (d *pushdownTableUDF) Init() {}
+func (udf *pushdownTableUDF) Init() {}
 
-func (d *pushdownTableUDF) FillRow(row Row) (bool, error) {
-	if d.count >= d.n {
+func (udf *pushdownTableUDF) FillRow(row Row) (bool, error) {
+	if udf.count >= udf.n {
 		return false, nil
 	}
 
-	var err error
 	if row.IsProjected(0) {
-		err = fmt.Errorf("Column 0 is projected while it should not be")
+		err := fmt.Errorf("column 0 is projected while it should not be")
+		return false, err
 	}
-	d.count++
-	if _err := SetRowValue(row, 0, d.count); _err != nil {
-		err = _err
+
+	udf.count++
+	if err := SetRowValue(row, 0, udf.count); err != nil {
+		return false, err
 	}
-	if _err := SetRowValue(row, 1, d.count); _err != nil {
-		err = _err
+	if err := SetRowValue(row, 1, udf.count); err != nil {
+		return false, err
 	}
-	return true, err
+	return true, nil
 }
 
-func (d *pushdownTableUDF) GetName() string {
+func (udf *pushdownTableUDF) GetName() string {
 	return "pushdownTableUDF"
 }
 
-func (d *pushdownTableUDF) GetTypes() []any {
-	return []any{
-		int64(0),
-	}
+func (udf *pushdownTableUDF) GetTypes() []any {
+	return []any{int64(0)}
 }
-func (d *pushdownTableUDF) GetValue(r, c int) any {
+
+func (udf *pushdownTableUDF) GetValue(r, c int) any {
 	return int64(r + 1)
 }
 
-func (d *pushdownTableUDF) Cardinality() *CardinalityInfo {
+func (udf *pushdownTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
-func (d *incTableNamedUDF) GetFunction() RowTableFunction {
+func (udf *incTableNamedUDF) GetFunction() RowTableFunction {
 	return RowTableFunction{
 		Config: TableFunctionConfig{
-			NamedArguments: map[string]TypeInfo{"ARG": Ti64},
+			NamedArguments: map[string]TypeInfo{"ARG": typeBigintTableUDF},
 		},
-		BindArguments: BindIncTableNamedUDF,
+		BindArguments: bindIncTableNamedUDF,
 	}
 }
 
-func BindIncTableNamedUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+func bindIncTableNamedUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 	return &incTableNamedUDF{
 		count: 0,
 		n:     namedArgs["ARG"].(int64),
 	}, nil
 }
 
-func (d *incTableNamedUDF) Columns() []ColumnInfo {
-	return []ColumnInfo{
-		{Name: "result", T: Ti64},
-	}
+func (udf *incTableNamedUDF) ColumnInfos() []ColumnInfo {
+	return []ColumnInfo{{Name: "result", T: typeBigintTableUDF}}
 }
 
-func (d *incTableNamedUDF) Init() {}
+func (udf *incTableNamedUDF) Init() {}
 
-func (d *incTableNamedUDF) FillRow(row Row) (bool, error) {
-	if d.count >= d.n {
+func (udf *incTableNamedUDF) FillRow(row Row) (bool, error) {
+	if udf.count >= udf.n {
 		return false, nil
 	}
-	d.count++
-	err := SetRowValue(row, 0, d.count)
+	udf.count++
+	err := SetRowValue(row, 0, udf.count)
 	return true, err
 }
 
-func (d *incTableNamedUDF) GetValue(r, c int) any {
+func (udf *incTableNamedUDF) GetValue(r, c int) any {
 	return int64(r + 1)
 }
 
-func (d *incTableNamedUDF) GetTypes() []any {
-	return []any{
-		int(0),
-	}
+func (udf *incTableNamedUDF) GetTypes() []any {
+	return []any{0}
 }
 
-func (d *incTableNamedUDF) Cardinality() *CardinalityInfo {
+func (udf *incTableNamedUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
-func (d *constTableUDF[T]) GetFunction() RowTableFunction {
-	typeinfo, _ := NewTypeInfo(d.duckdbType)
+func (udf *constTableUDF[T]) GetFunction() RowTableFunction {
+	info, _ := NewTypeInfo(udf.t)
 	return RowTableFunction{
 		Config: TableFunctionConfig{
-			Arguments: []TypeInfo{typeinfo},
+			Arguments: []TypeInfo{info},
 		},
-		BindArguments: BindConstTableUDF(d.value, d.duckdbType),
+		BindArguments: bindConstTableUDF(udf.value, udf.t),
 	}
 }
 
-func BindConstTableUDF[T any](val T, duckdbType Type) func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+func bindConstTableUDF[T any](val T, t Type) func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 	return func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 		return &constTableUDF[T]{
 			count: 0,
 			value: args[0].(T),
-			duckdbType: duckdbType,
+			t:     t,
 		}, nil
 	}
 }
 
-func (d *constTableUDF[T]) Columns() []ColumnInfo {
-	typeinfo, _ := NewTypeInfo(d.duckdbType)
-	return []ColumnInfo{
-		{Name: "result", T: typeinfo},
-	}
+func (udf *constTableUDF[T]) ColumnInfos() []ColumnInfo {
+	info, _ := NewTypeInfo(udf.t)
+	return []ColumnInfo{{Name: "result", T: info}}
 }
 
-func (d *constTableUDF[T]) Init() {}
+func (udf *constTableUDF[T]) Init() {}
 
-func (d *constTableUDF[T]) FillRow(row Row) (bool, error) {
-	if d.count >= 1 {
+func (udf *constTableUDF[T]) FillRow(row Row) (bool, error) {
+	if udf.count >= 1 {
 		return false, nil
 	}
-	d.count++
-	err := SetRowValue(row, 0, d.value)
+	udf.count++
+	err := SetRowValue(row, 0, udf.value)
 	return true, err
 }
 
-func (d *constTableUDF[T]) GetValue(r, c int) any {
-	return d.value
+func (udf *constTableUDF[T]) GetValue(r, c int) any {
+	return udf.value
 }
 
-func (d *constTableUDF[T]) GetTypes() []any {
-	return []any{
-		d.value,
-	}
+func (udf *constTableUDF[T]) GetTypes() []any {
+	return []any{udf.value}
 }
 
-func (d *constTableUDF[T]) Cardinality() *CardinalityInfo {
+func (udf *constTableUDF[T]) Cardinality() *CardinalityInfo {
 	return nil
 }
 
-func (d *chunkIncTableUDF) GetFunction() ChunkTableFunction {
+func (udf *chunkIncTableUDF) GetFunction() ChunkTableFunction {
 	return ChunkTableFunction{
 		Config: TableFunctionConfig{
-			Arguments: []TypeInfo{Ti64},
+			Arguments: []TypeInfo{typeBigintTableUDF},
 		},
-		BindArguments: BindChunkIncTableUDF,
+		BindArguments: bindChunkIncTableUDF,
 	}
 }
 
-func BindChunkIncTableUDF(namedArgs map[string]any, args ...interface{}) (ChunkTableSource, error) {
+func bindChunkIncTableUDF(namedArgs map[string]any, args ...interface{}) (ChunkTableSource, error) {
 	return &chunkIncTableUDF{
 		count: 0,
 		n:     args[0].(int64),
 	}, nil
 }
 
-func (d *chunkIncTableUDF) Columns() []ColumnInfo {
-	return []ColumnInfo{
-		{Name: "result", T: Ti64},
-	}
+func (udf *chunkIncTableUDF) ColumnInfos() []ColumnInfo {
+	return []ColumnInfo{{Name: "result", T: typeBigintTableUDF}}
 }
 
-func (d *chunkIncTableUDF) Init() {}
+func (udf *chunkIncTableUDF) Init() {}
 
-func (d *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
+func (udf *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
 	size := 2048
 	i := 0
-	defer func() { _ = chunk.SetSize(i) }()
+
 	for ; i < size; i++ {
-		if d.count >= d.n {
-			return nil
+		if udf.count >= udf.n {
+			err := chunk.SetSize(i)
+			return err
 		}
-		d.count++
-		err := chunk.SetValue(0, i, d.count)
+		udf.count++
+		err := chunk.SetValue(0, i, udf.count)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+
+	err := chunk.SetSize(i)
+	return err
 }
 
-func (d *chunkIncTableUDF) GetValue(r, c int) any {
+func (udf *chunkIncTableUDF) GetValue(r, c int) any {
 	return int64(r + 1)
 }
 
-func (d *chunkIncTableUDF) GetTypes() []any {
-	return []any{
-		int(0),
-	}
+func (udf *chunkIncTableUDF) GetTypes() []any {
+	return []any{0}
 }
 
-func (d *chunkIncTableUDF) Cardinality() *CardinalityInfo {
+func (udf *chunkIncTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 
 func TestTableUDF(t *testing.T) {
-	for _, fun := range rowUdtfs {
-		_fun := fun
-		t.Run(_fun.name, func(t *testing.T) {
-			singleTableUDF(t, _fun)
+	for _, udf := range rowTableUDFs {
+		t.Run(udf.name, func(t *testing.T) {
+			singleTableUDF(t, udf)
 		})
 	}
-	for _, fun := range parallelRowUdtfs {
-		_fun := fun
-		t.Run(_fun.name, func(t *testing.T) {
-			singleTableUDF(t, _fun)
+
+	for _, udf := range parallelTableUDFs {
+		t.Run(udf.name, func(t *testing.T) {
+			singleTableUDF(t, udf)
 		})
 	}
-	for _, fun := range chunkUdtfs {
-		_fun := fun
-		t.Run(_fun.name, func(t *testing.T) {
-			singleTableUDF(t, _fun)
+
+	for _, udf := range chunkTableUDFs {
+		t.Run(udf.name, func(t *testing.T) {
+			singleTableUDF(t, udf)
 		})
 	}
 }
 
-func singleTableUDF[T TableFunction](t *testing.T, fun UdtfTest[T]) {
-	var err error
+func singleTableUDF[T TableFunction](t *testing.T, fun tableUDFTest[T]) {
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	conn, _ := db.Conn(context.Background())
-	err = RegisterTableUDF(conn, fun.name, fun.udf.GetFunction())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	rows, err := db.QueryContext(context.Background(), fmt.Sprintf(fun.query, fun.name))
-	if err != nil {
-		t.Fatal(err)
-	}
+	con, err := db.Conn(context.Background())
+	require.NoError(t, err)
 
-	//TODO: check column names
-	columns, err := rows.Columns()
-	if err != nil {
-		t.Fatal(err)
-	}
+	err = RegisterTableUDF(con, fun.name, fun.udf.GetFunction())
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(context.Background(), fmt.Sprintf(fun.query, fun.name))
+	require.NoError(t, err)
 
 	values := fun.udf.GetTypes()
-	scanArgs := make([]interface{}, len(values))
+	args := make([]interface{}, len(values))
 	for i := range values {
-		scanArgs[i] = &values[i]
+		args[i] = &values[i]
 	}
 
-	results := 0
+	count := 0
+	for r := 0; res.Next(); r++ {
+		require.NoError(t, res.Scan(args...))
 
-	// Fetch rows
-	for r := int(0); rows.Next(); r++ {
-		err = rows.Scan(scanArgs...)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
 		for i, value := range values {
 			expected := fun.udf.GetValue(r, i)
-			if !reflect.DeepEqual(expected, value) {
-				err := wrongValueError{
-					rowIdx:   r,
-					colIdx:   i,
-					colName:  columns[i],
-					expected: expected,
-					got:      value,
-				}
-				t.Log(err)
-				t.Fail()
-			}
+			require.Equal(t, expected, value, "incorrect value")
 		}
-		results++
+		count++
 	}
-	if results != fun.resultCount {
-		t.Logf("Resultcount did not match up with the expected number of results. Expected %v, got %v", fun.resultCount, results)
-		t.Fail()
-	}
+
+	require.Equal(t, count, fun.resultCount, "result count did not match the expected count")
+	require.NoError(t, res.Close())
+	require.NoError(t, con.Close())
+	require.NoError(t, db.Close())
 }
 
 func BenchmarkRowTableUDF(b *testing.B) {
 	b.StopTimer()
-	var err error
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer db.Close()
-	conn, _ := db.Conn(context.Background())
+	require.NoError(b, err)
+
+	con, err := db.Conn(context.Background())
+	require.NoError(b, err)
+
 	var fun incTableUDF
-	err = RegisterTableUDF(conn, "whoo", fun.GetFunction())
-	if err != nil {
-		b.Fatal(err)
-	}
+	err = RegisterTableUDF(con, "whoo", fun.GetFunction())
+	require.NoError(b, err)
+
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
-		rows, err := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
-		if err != nil {
-			b.Fatal(err)
-		}
-		defer rows.Close()
+		res, errQuery := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
+		require.NoError(b, errQuery)
+		require.NoError(b, res.Close())
 	}
+
+	require.NoError(b, con.Close())
+	require.NoError(b, db.Close())
 }
 
 func BenchmarkChunkTableUDF(b *testing.B) {
 	b.StopTimer()
-	var err error
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer db.Close()
-	conn, _ := db.Conn(context.Background())
+	require.NoError(b, err)
+
+	con, err := db.Conn(context.Background())
+	require.NoError(b, err)
+
 	var fun chunkIncTableUDF
-	err = RegisterTableUDF(conn, "whoo", fun.GetFunction())
-	if err != nil {
-		b.Fatal(err)
-	}
+	err = RegisterTableUDF(con, "whoo", fun.GetFunction())
+	require.NoError(b, err)
+
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
-		rows, err := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
-		if err != nil {
-			b.Fatal(err)
-		}
-		defer rows.Close()
+		res, errQuery := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
+		require.NoError(b, errQuery)
+		require.NoError(b, res.Close())
 	}
-}
 
-func (wve wrongValueError) Error() string {
-	return fmt.Sprintf("Wrong value at row %d, column %d(%s): Expected %v of type %[4]T, found %v of type %[5]T", wve.rowIdx, wve.colIdx, wve.colName, wve.expected, wve.got)
+	require.NoError(b, con.Close())
+	require.NoError(b, db.Close())
 }
