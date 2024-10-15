@@ -368,7 +368,7 @@ func TestANYScalarUDF(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-func TestScalarUDFErrors(t *testing.T) {
+func TestErrScalarUDF(t *testing.T) {
 	t.Parallel()
 
 	db, err := sql.Open("duckdb", "")

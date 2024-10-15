@@ -21,12 +21,12 @@ func convertNumericType[srcT numericType, destT numericType](val srcT) destT {
 	return destT(val)
 }
 
-const UUIDLength = 16
+const uuid_length = 16
 
-type UUID [UUIDLength]byte
+type UUID [uuid_length]byte
 
 func (u *UUID) Scan(v any) error {
-	if n := copy(u[:], v.([]byte)); n != UUIDLength {
+	if n := copy(u[:], v.([]byte)); n != uuid_length {
 		return fmt.Errorf("invalid UUID length: %d", n)
 	}
 	return nil
@@ -36,7 +36,7 @@ func (u *UUID) Scan(v any) error {
 // The value is computed as: upper * 2^64 + lower
 
 func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
-	var uuid [UUIDLength]byte
+	var uuid [uuid_length]byte
 	// We need to flip the sign bit of the signed hugeint to transform it to UUID bytes
 	binary.BigEndian.PutUint64(uuid[:8], uint64(hi.upper)^1<<63)
 	binary.BigEndian.PutUint64(uuid[8:], uint64(hi.lower))
@@ -117,7 +117,7 @@ func (s *Composite[T]) Scan(v any) error {
 	return mapstructure.Decode(v, &s.t)
 }
 
-const MAX_DECIMAL_WIDTH = 38
+const max_decimal_width = 38
 
 type Decimal struct {
 	Width uint8

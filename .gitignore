@@ -3,3 +3,5 @@
 run.sh
 duckdb/
 .idea
+./duckdb
+duckdb

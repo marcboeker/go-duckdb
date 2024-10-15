@@ -395,10 +395,10 @@ func setUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case UUID:
 		uuid = v
 	case []uint8:
-		if len(v) != UUIDLength {
+		if len(v) != uuid_length {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(uuid).String())
 		}
-		for i := 0; i < UUIDLength; i++ {
+		for i := 0; i < uuid_length; i++ {
 			uuid[i] = v[i]
 		}
 	default:

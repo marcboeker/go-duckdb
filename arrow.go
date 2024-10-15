@@ -47,6 +47,14 @@ struct ArrowArray {
   void* private_data;
 };
 
+struct ArrowArrayStream {
+	void (*get_schema)(struct ArrowArrayStream*);
+	void (*get_next)(struct ArrowArrayStream*);
+	void (*get_last_error)(struct ArrowArrayStream*);
+	void (*release)(struct ArrowArrayStream*);
+	void* private_data;
+};
+
 #endif  // ARROW_C_DATA_INTERFACE
 */
 import "C"
@@ -77,7 +85,7 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	}
 
 	if dbConn.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Arrow after Close")
+		return nil, errClosedCon
 	}
 
 	return &Arrow{c: dbConn}, nil
@@ -87,7 +95,7 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 // executed statement. Arguments are bound to the last statement.
 func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (array.RecordReader, error) {
 	if a.c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Arrow.Query after Close")
+		return nil, errClosedCon
 	}
 
 	stmts, size, err := a.c.extractStmts(query)
@@ -210,7 +218,7 @@ func (a *Arrow) queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Re
 
 func (a *Arrow) execute(s *stmt, args []driver.NamedValue) (*C.duckdb_arrow, error) {
 	if s.closed {
-		panic("database/sql/driver: misuse of duckdb driver: executeArrow after Close")
+		return nil, errClosedCon
 	}
 
 	if err := s.bind(args); err != nil {
@@ -238,4 +246,34 @@ func (a *Arrow) anyArgsToNamedArgs(args []any) []driver.NamedValue {
 	}
 
 	return argsToNamedArgs(values)
+}
+
+// RegisterView registers an Arrow record reader as a view with the given name in DuckDB.
+// The returned release function must be called to release the memory once the view is no longer needed.
+func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release func(), err error) {
+	if a.c.closed {
+		return nil, errClosedCon
+	}
+
+	// duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow);
+
+	stream := C.calloc(1, C.sizeof_struct_ArrowArrayStream)
+	release = func() {
+		C.free(stream)
+	}
+	cdata.ExportRecordReader(reader, (*cdata.CArrowArrayStream)(stream))
+
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	if state := C.duckdb_arrow_scan(
+		a.c.duckdbCon,
+		cName,
+		(C.duckdb_arrow_stream)(stream),
+	); state == C.DuckDBError {
+		release()
+		return nil, errors.New("duckdb_arrow_scan")
+	}
+
+	return release, nil
 }
