@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	_ "time/tzdata"
+
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
@@ -135,7 +137,7 @@ func prepareAppender[T require.TestingT](t T, createTbl string) (*Connector, dri
 
 func TestAppenderClose(t *testing.T) {
 	t.Parallel()
-	c, con, a := prepareAppender(t, `CREATE TABLE test (i INTEGER)`)
+	c, con, a := prepareAppender(t, `CREATE TABLE test (I INTEGER)`)
 	require.NoError(t, a.AppendRow(int32(42)))
 	cleanupAppender(t, c, con, a)
 }

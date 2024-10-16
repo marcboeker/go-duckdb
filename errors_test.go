@@ -59,13 +59,13 @@ func TestErrNestedMap(t *testing.T) {
 func TestErrAppender(t *testing.T) {
 	t.Parallel()
 
-	t.Run(errAppenderInvalidCon.Error(), func(t *testing.T) {
+	t.Run(errInvalidCon.Error(), func(t *testing.T) {
 		var con driver.Conn
 		_, err := NewAppenderFromConn(con, "", "test")
-		testError(t, err, errAppenderInvalidCon.Error())
+		testError(t, err, errInvalidCon.Error())
 	})
 
-	t.Run(errAppenderClosedCon.Error(), func(t *testing.T) {
+	t.Run(errClosedCon.Error(), func(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
 
@@ -74,7 +74,7 @@ func TestErrAppender(t *testing.T) {
 		require.NoError(t, con.Close())
 
 		_, err = NewAppenderFromConn(con, "", "test")
-		testError(t, err, errAppenderClosedCon.Error())
+		testError(t, err, errClosedCon.Error())
 		require.NoError(t, c.Close())
 	})
 
@@ -95,7 +95,7 @@ func TestErrAppender(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
 
-		_, err = sql.OpenDB(c).Exec(`CREATE TABLE tbl (i INTEGER)`)
+		_, err = sql.OpenDB(c).Exec(`CREATE TABLE tbl (I INTEGER)`)
 		require.NoError(t, err)
 
 		con, err := c.Connect(context.Background())

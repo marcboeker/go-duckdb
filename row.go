@@ -5,41 +5,34 @@ package duckdb
 */
 import "C"
 
-type (
-	// Row represents one row in duckdb. It references the vectors underneeth.
-	Row struct {
-		chunk      *DataChunk
-		r          C.idx_t
-		projection []int
-	}
-)
+// Row represents one row in duckdb. It references the internal vectors.
+type Row struct {
+	chunk      *DataChunk
+	r          C.idx_t
+	projection []int
+}
 
-// Returns whether or now the column is projected
+// IsProjected returns whether the column is projected.
 func (r Row) IsProjected(colIdx int) bool {
 	return r.projection[colIdx] != -1
 }
 
-// SetRowValue sets the value at column c to value val.
-// Returns an error when the setting the value failled.
-// If the row is not projected, nil will be returned, no matter the type.
+// SetRowValue sets the value at colIdx to val.
+// Returns an error on failure, and nil for non-projected columns.
 func SetRowValue[T any](row Row, colIdx int, val T) error {
-	projectedRowIdx := row.projection[colIdx]
-	if projectedRowIdx < 0 || projectedRowIdx >= len(row.chunk.columns) {
-		// we want to allow setting to columns that are not projected,
-		// it should just be a nop.
+	projectedIdx := row.projection[colIdx]
+	if projectedIdx < 0 || projectedIdx >= len(row.chunk.columns) {
 		return nil
 	}
-	vec := row.chunk.columns[projectedRowIdx]
+	vec := row.chunk.columns[projectedIdx]
 	return setVectorVal(&vec, row.r, val)
 }
 
-// SetRowValue sets the column c to value val, if possible. If this operation
-// fails an error is returned.
-func (row Row) SetRowValue(colIdx int, val any) error {
-	if !row.IsProjected(colIdx) {
-		// we want to allow setting to columns that are not projected,
-		// it should just be a nop.
+// SetRowValue sets the value at colIdx to val.
+// Returns an error on failure.
+func (r Row) SetRowValue(colIdx int, val any) error {
+	if !r.IsProjected(colIdx) {
 		return nil
 	}
-	return row.chunk.SetValue(colIdx, int(row.r), val)
+	return r.chunk.SetValue(colIdx, int(r.r), val)
 }

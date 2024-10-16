@@ -92,7 +92,7 @@ func myLengthScalarUDFSet() {
 	check(db.Close())
 }
 
-// appendSum takes a VARCHAR prefix, a VARCHAR suffix, and a variadic number of integer values.
+// wrapSum takes a VARCHAR prefix, a VARCHAR suffix, and a variadic number of integer values.
 // It computes the sum of the integer values. Then, it emits a VARCHAR by concatenating prefix || sum || suffix.
 
 type wrapSum struct{}
