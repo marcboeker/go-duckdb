@@ -35,14 +35,14 @@ func getPinned[T any](handle unsafe.Pointer) T {
 
 func setBindError(info C.duckdb_bind_info, msg string) {
 	err := C.CString(msg)
+	defer C.duckdb_free(unsafe.Pointer(err))
 	C.duckdb_bind_set_error(info, err)
-	C.duckdb_free(unsafe.Pointer(err))
 }
 
 func setFuncError(function_info C.duckdb_function_info, msg string) {
 	err := C.CString(msg)
+	defer C.duckdb_free(unsafe.Pointer(err))
 	C.duckdb_scalar_function_set_error(function_info, err)
-	C.duckdb_free(unsafe.Pointer(err))
 }
 
 // Data deletion handlers.

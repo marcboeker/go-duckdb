@@ -89,8 +89,8 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 // functions contains all ScalarFunc functions of the scalar function set.
 func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) error {
 	cName := C.CString(name)
+	defer C.duckdb_free(unsafe.Pointer(cName))
 	set := C.duckdb_create_scalar_function_set(cName)
-	C.duckdb_free(unsafe.Pointer(cName))
 
 	// Create each function and add it to the set.
 	for i, f := range functions {
@@ -244,8 +244,8 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 
 	// Set the name.
 	cName := C.CString(name)
+	defer C.duckdb_free(unsafe.Pointer(cName))
 	C.duckdb_scalar_function_set_name(function, cName)
-	C.duckdb_free(unsafe.Pointer(cName))
 
 	// Configure the scalar function.
 	config := f.Config()

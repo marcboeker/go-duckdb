@@ -375,8 +375,8 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 
 	// Set the name.
 	cName := C.CString(name)
+	defer C.duckdb_free(unsafe.Pointer(cName))
 	C.duckdb_table_function_set_name(function, cName)
-	C.duckdb_free(unsafe.Pointer(cName))
 
 	var config TableFunctionConfig
 
