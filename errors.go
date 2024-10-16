@@ -153,7 +153,7 @@ const (
 	ErrorTypeIO                                    // IO exception
 	ErrorTypeInterrupt                             // interrupt
 	ErrorTypeFatal                                 // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
-	ErrorTypeInternal                              // Internal exceptions indicate something went wrong internally (I.e. bug in the code base)
+	ErrorTypeInternal                              // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
 	ErrorTypeInvalidInput                          // Input or arguments error
 	ErrorTypeOutOfMemory                           // out of memory
 	ErrorTypePermission                            // insufficient permissions

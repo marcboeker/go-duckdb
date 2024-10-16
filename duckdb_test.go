@@ -234,10 +234,10 @@ func TestQuery(t *testing.T) {
 	})
 
 	t.Run("large number of rows", func(t *testing.T) {
-		_, err := db.Exec("CREATE TABLE integers AS SELECT * FROM range(0, 100000, 1) t(I);")
+		_, err := db.Exec("CREATE TABLE integers AS SELECT * FROM range(0, 100000, 1) t(i);")
 		require.NoError(t, err)
 
-		rows, err := db.Query("SELECT I FROM integers ORDER BY I ASC")
+		rows, err := db.Query("SELECT i FROM integers ORDER BY i ASC")
 		require.NoError(t, err)
 		defer rows.Close()
 
