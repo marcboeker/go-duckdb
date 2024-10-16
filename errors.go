@@ -73,6 +73,7 @@ const (
 )
 
 var (
+	errInternal   = errors.New("internal error: please file a bug report at go-duckdb")
 	errAPI        = errors.New("API error")
 	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
 
@@ -104,6 +105,12 @@ var (
 	errScalarUDFResultTypeIsANY = fmt.Errorf("%w: result type is ANY, which is not supported", errScalarUDFCreate)
 	errScalarUDFCreateSet       = fmt.Errorf("could not create scalar UDF set")
 	errScalarUDFAddToSet        = fmt.Errorf("%w: could not add the function to the set", errScalarUDFCreateSet)
+
+	errTableUDFCreate          = errors.New("could not create table UDF")
+	errTableUDFNoName          = fmt.Errorf("%w: missing name", errTableUDFCreate)
+	errTableUDFMissingBindArgs = fmt.Errorf("%w: missing bind arguments", errTableUDFCreate)
+	errTableUDFArgumentIsNil   = fmt.Errorf("%w: argument is nil", errTableUDFCreate)
+	errTableUDFColumnTypeIsNil = fmt.Errorf("%w: column type is nil", errTableUDFCreate)
 
 	errProfilingInfoEmpty = errors.New("no profiling information available for this connection")
 

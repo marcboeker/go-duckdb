@@ -33,8 +33,8 @@ func replacement_scan_cb(info C.duckdb_replacement_scan_info, table_name *C.ccha
 	tFunc, params, err := scanner(C.GoString(table_name))
 	if err != nil {
 		errStr := C.CString(err.Error())
+		defer C.duckdb_free(unsafe.Pointer(errStr))
 		C.duckdb_replacement_scan_set_error(info, errStr)
-		C.duckdb_free(unsafe.Pointer(errStr))
 		return
 	}
 

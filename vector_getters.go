@@ -36,6 +36,7 @@ func (vec *vector) getTS(t Type, rowIdx C.idx_t) time.Time {
 	val := getPrimitive[C.duckdb_timestamp](vec, rowIdx)
 	micros := val.micros
 
+	// FIXME: Unify this code path with the value.go code path.
 	switch t {
 	case TYPE_TIMESTAMP:
 		return time.UnixMicro(int64(micros)).UTC()
