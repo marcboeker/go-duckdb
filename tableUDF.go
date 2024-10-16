@@ -206,6 +206,8 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 		value := C.duckdb_bind_get_parameter(info, C.idx_t(i))
 		var err error
 		args[i], err = getValue(t, value)
+		C.duckdb_destroy_value(&value)
+
 		if err != nil {
 			setBindError(info, err.Error())
 			return
@@ -219,6 +221,8 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 		var err error
 		namedArgs[name], err = getValue(t, value)
+		C.duckdb_destroy_value(&value)
+
 		if err != nil {
 			setBindError(info, err.Error())
 			return
