@@ -76,12 +76,14 @@ deps.freebsd.amd64: duckdb
 
 .PHONY: deps.windows.amd64
 deps.windows.amd64: duckdb
-	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "mingw64_nt-10.0-20348" ]; then echo "Error: must run build on windows"; false; fi
+	# if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "mingw64_nt-10.0-20348" ]; then echo "Error: must run build on windows"; false; fi
 	mkdir -p deps/windows_amd64
+	
+	gcc --version
 
 	# Copied from the DuckDB repository and fixed for Windows. Ideally, `make bundle-library` should also work for Windows.
 	cd duckdb && \
-	${DUCKDB_COMMON_BUILD_FLAGS} GENERATOR="-G \"MinGW Makefiles\"" gmake release -j 2
+	${DUCKDB_COMMON_BUILD_FLAGS} GENERATOR="-G \"Unix Makefiles\"" make release -j 2
 	cd duckdb/build/release && \
 		mkdir -p bundle && \
 		cp src/libduckdb_static.a bundle/. && \
