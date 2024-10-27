@@ -11,7 +11,16 @@ The DuckDB driver conforms to the built-in `database/sql` interface.
 go get github.com/marcboeker/go-duckdb
 ```
 
-`go-duckdb` uses `CGO` to make calls to DuckDB. You must build your binaries with `CGO_ENABLED=1`.
+### Windows
+
+On windows, the correct version of gcc and the neccesary runtime libraries needs to be installed.
+One method to do this is using msys64. To begin, install msys64 using their installer. Once this is done, open a msys64 shell and run
+
+```
+pacman -S mingw264-ucrt-x86_64-gcc
+```
+
+select yes when neccesary, its ok if the shell closes. Then add gcc to the path using whatever method you prefer. In powershell this is `$env:PATH = "C:\msys64\ucrt64\bin:$env:PATH"`. Once this is done, you can compile this package on windows.
 
 ## Usage
 
@@ -72,10 +81,16 @@ Please refer to the [database/sql](https://godoc.org/database/sql) documentation
 **`undefined: conn`**
 
 When building this package, some people run into an `undefined: conn` error.
-The [comment here](https://github.com/marcboeker/go-duckdb/issues/275#issuecomment-2355712997) fixes this issue.
+This is due to the go compiler determining that CGO is not available. This can happen due to a few issues.
+
+The first noted in the [comment here](https://github.com/marcboeker/go-duckdb/issues/275#issuecomment-2355712997) is that the buildtools are not installed.
+To fix this for ubuntu, you can install them using:
 ```
 sudo apt-get update && sudo apt-get install build-essential
 ```
+
+Another issue is when you are cross-compiling, since the go compiler automatically disables CGO when cross-compiling.
+To enable cgo when cross-compiling use `CC={C cross compiler} CGO_ENABLED=1 {command}` to force-enable CGO and set the right cross-compiler. 
 
 **`TIMESTAMP vs. TIMESTAMP_TZ`**
 
