@@ -238,6 +238,17 @@ func TestErrAppendSimpleStruct(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
+func TestErrAppendDuplicateStruct(t *testing.T) {
+	c, con, a := prepareAppender(t, `
+		CREATE TABLE test (
+			duplicate_struct STRUCT(Duplicate INT)
+		)`)
+
+	err := a.AppendRow(duplicateKeyStruct{1, 2})
+	testError(t, err, errAppenderAppendRow.Error(), duplicateNameErrMsg)
+	cleanupAppender(t, c, con, a)
+}
+
 func TestErrAppendStruct(t *testing.T) {
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (

@@ -24,6 +24,11 @@ type simpleStruct struct {
 	B string
 }
 
+type duplicateKeyStruct struct {
+	A         int64 `db:"Duplicate"`
+	Duplicate int64
+}
+
 type wrappedSimpleStruct struct {
 	A string
 	B simpleStruct
