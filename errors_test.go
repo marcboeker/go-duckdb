@@ -241,7 +241,7 @@ func TestErrAppendSimpleStruct(t *testing.T) {
 func TestErrAppendStruct(t *testing.T) {
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (
-			mix STRUCT(A STRUCT(L VARCHAR[]), B STRUCT(L INT[])[])
+			mix STRUCT(a STRUCT(L VARCHAR[]), B STRUCT(L INT[])[])
 		)`)
 
 	err := a.AppendRow(simpleStruct{1, "hello"})
@@ -274,7 +274,7 @@ func TestErrAppendStructWithList(t *testing.T) {
 func TestErrAppendNestedStruct(t *testing.T) {
 	c, con, a := prepareAppender(t, `
 		CREATE TABLE test (
-			wrapped_simple_struct STRUCT(A VARCHAR, B STRUCT(A INT, B VARCHAR)),
+			wrapped_simple_struct STRUCT(a VARCHAR, B STRUCT(A INT, B VARCHAR)),
 		)`)
 
 	err := a.AppendRow(simpleStruct{1, "hello"})

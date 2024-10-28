@@ -20,7 +20,7 @@ import (
 )
 
 type simpleStruct struct {
-	A int32
+	A int32 `db:"a"`
 	B string
 }
 
@@ -321,7 +321,7 @@ func TestAppenderNullStruct(t *testing.T) {
 	t.Parallel()
 	c, con, a := prepareAppender(t, `
 	CREATE TABLE test (
-		simple_struct STRUCT(A INT, B VARCHAR)
+		simple_struct STRUCT(a INT, B VARCHAR)
 	)`)
 
 	require.NoError(t, a.AppendRow(simpleStruct{1, "hello"}))
@@ -358,7 +358,7 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 				Y STRUCT(
 					N VARCHAR,
 					M STRUCT(
-						A INT,
+						a INT,
 						B VARCHAR
 					)
 				)
@@ -773,19 +773,19 @@ const createNestedDataTableSQL = `
 		int_list INT[],
 		nested_int_list INT[][],
 		triple_nested_int_list INT[][][],
-		simple_struct STRUCT(A INT, B VARCHAR),
-		wrapped_struct STRUCT(N VARCHAR, M STRUCT(A INT, B VARCHAR)),
+		simple_struct STRUCT(a INT, B VARCHAR),
+		wrapped_struct STRUCT(N VARCHAR, M STRUCT(a INT, B VARCHAR)),
 		double_wrapped_struct STRUCT(
 			X VARCHAR,
 			Y STRUCT(
 				N VARCHAR,
 				M STRUCT(
-					A INT,
+					a INT,
 					B VARCHAR
 				)
 			)
 		),
-		struct_list STRUCT(A INT, B VARCHAR)[],
+		struct_list STRUCT(a INT, B VARCHAR)[],
 		struct_with_list STRUCT(L INT[]),
 		mix STRUCT(
 			A STRUCT(L VARCHAR[]),

@@ -350,6 +350,9 @@ func setStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
 				continue
 			}
 			fieldName := structType.Field(i).Name
+			if name, ok := structType.Field(i).Tag.Lookup("db"); ok {
+				fieldName = name
+			}
 			m[fieldName] = rv.Field(i).Interface()
 		}
 	}
