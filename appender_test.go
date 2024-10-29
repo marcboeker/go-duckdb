@@ -453,7 +453,9 @@ func TestAppenderUUID(t *testing.T) {
 	c, con, a := prepareAppender(t, `CREATE TABLE test (id UUID)`)
 
 	id := UUID(uuid.New())
+	otherId := UUID(uuid.New())
 	require.NoError(t, a.AppendRow(id))
+	require.NoError(t, a.AppendRow(otherId))
 	require.NoError(t, a.AppendRow((*UUID)(nil)))
 	require.NoError(t, a.AppendRow(nil))
 	require.NoError(t, a.Flush())
@@ -464,12 +466,18 @@ func TestAppenderUUID(t *testing.T) {
 
 	i := 0
 	for res.Next() {
-		var r *UUID
-		require.NoError(t, res.Scan(&r))
 		if i == 0 {
-			require.Equal(t, id, *r)
+			var r UUID
+			require.NoError(t, res.Scan(&r))
+			require.Equal(t, id, r)
 		} else {
-			require.Nil(t, r)
+			var r *UUID
+			require.NoError(t, res.Scan(&r))
+			if i == 1 {
+				require.Equal(t, otherId, *r)
+			} else {
+				require.Nil(t, r)
+			}
 		}
 		i++
 	}
