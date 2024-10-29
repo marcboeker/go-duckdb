@@ -454,14 +454,25 @@ func TestAppenderUUID(t *testing.T) {
 
 	id := UUID(uuid.New())
 	require.NoError(t, a.AppendRow(id))
+	require.NoError(t, a.AppendRow((*UUID)(nil)))
+	require.NoError(t, a.AppendRow(nil))
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	row := sql.OpenDB(c).QueryRowContext(context.Background(), `SELECT id FROM test`)
+	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT id FROM test`)
+	require.NoError(t, err)
 
-	var res UUID
-	require.NoError(t, row.Scan(&res))
-	require.Equal(t, id, res)
+	i := 0
+	for res.Next() {
+		var r *UUID
+		require.NoError(t, res.Scan(&r))
+		if i == 0 {
+			require.Equal(t, id, *r)
+		} else {
+			require.Nil(t, r)
+		}
+		i++
+	}
 	cleanupAppender(t, c, con, a)
 }
 
