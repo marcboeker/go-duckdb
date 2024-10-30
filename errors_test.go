@@ -51,7 +51,7 @@ func TestErrNestedMap(t *testing.T) {
 	db := openDB(t)
 
 	var m Map
-	err := db.QueryRow("SELECT MAP([MAP([1], [1]), MAP([2], [2])], ['a', 'e'])").Scan(&m)
+	err := db.QueryRow(`SELECT MAP([MAP([1], [1]), MAP([2], [2])], ['a', 'e'])`).Scan(&m)
 	testError(t, err, errUnsupportedMapKeyType.Error())
 	require.NoError(t, db.Close())
 }
