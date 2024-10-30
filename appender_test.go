@@ -455,7 +455,7 @@ func TestAppenderUUID(t *testing.T) {
 	id := UUID(uuid.New())
 	otherId := UUID(uuid.New())
 	require.NoError(t, a.AppendRow(id))
-	require.NoError(t, a.AppendRow(otherId))
+	require.NoError(t, a.AppendRow(&otherId))
 	require.NoError(t, a.AppendRow((*UUID)(nil)))
 	require.NoError(t, a.AppendRow(nil))
 	require.NoError(t, a.Flush())
