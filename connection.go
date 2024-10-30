@@ -28,87 +28,77 @@ func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	return driver.ErrSkip
 }
 
-func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+func (c *conn) prepareStmts(ctx context.Context, query string) (*stmt, error) {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
+		return nil, getError(errClosedCon, nil)
 	}
 
-	stmts, size, err := c.extractStmts(query)
-	if err != nil {
-		return nil, err
-	}
+	stmts, count, errExtract := c.extractStmts(query)
 	defer C.duckdb_destroy_extracted(&stmts)
+	if errExtract != nil {
+		return nil, errExtract
+	}
 
-	// execute all statements without args, except the last one
-	for i := C.idx_t(0); i < size-1; i++ {
-		stmt, err := c.prepareExtractedStmt(stmts, i)
+	for i := C.idx_t(0); i < count-1; i++ {
+		prepared, err := c.prepareExtractedStmt(stmts, i)
 		if err != nil {
 			return nil, err
 		}
-		// send nil args to execute statement and ignore result
-		_, err = stmt.ExecContext(ctx, nil)
-		stmt.Close()
-		if err != nil {
+
+		// Execute the statement without any arguments and ignore the result.
+		if _, err = prepared.ExecContext(ctx, nil); err != nil {
+			return nil, err
+		}
+		if err = prepared.Close(); err != nil {
 			return nil, err
 		}
 	}
 
-	// prepare and execute last statement with args and return result
-	stmt, err := c.prepareExtractedStmt(stmts, size-1)
+	prepared, err := c.prepareExtractedStmt(stmts, count-1)
 	if err != nil {
 		return nil, err
 	}
-	defer stmt.Close()
-	return stmt.ExecContext(ctx, args)
+	return prepared, nil
+}
+
+func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	prepared, err := c.prepareStmts(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := prepared.ExecContext(ctx, args)
+	errClose := prepared.Close()
+	if err != nil {
+		err = errors.Join(err, errClose)
+		return nil, err
+	}
+	return res, errClose
 }
 
 func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
-	}
-
-	stmts, size, err := c.extractStmts(query)
-	if err != nil {
-		return nil, err
-	}
-	defer C.duckdb_destroy_extracted(&stmts)
-
-	// execute all statements without args, except the last one
-	for i := C.idx_t(0); i < size-1; i++ {
-		stmt, err := c.prepareExtractedStmt(stmts, i)
-		if err != nil {
-			return nil, err
-		}
-		// send nil args to execute statement and ignore result (using ExecContext since we're ignoring the result anyway)
-		_, err = stmt.ExecContext(ctx, nil)
-		stmt.Close()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// prepare and execute last statement with args and return result
-	stmt, err := c.prepareExtractedStmt(stmts, size-1)
+	prepared, err := c.prepareStmts(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := stmt.QueryContext(ctx, args)
+	r, err := prepared.QueryContext(ctx, args)
 	if err != nil {
-		stmt.Close()
+		errClose := prepared.Close()
+		err = errors.Join(err, errClose)
 		return nil, err
 	}
 
-	// we can't close the statement before the query result rows are closed
-	stmt.closeOnRowsClose = true
-	return rows, err
+	// We must close the prepared statement after closing the rows r.
+	prepared.closeOnRowsClose = true
+	return r, err
 }
 
-func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
+func (c *conn) Prepare(query string) (driver.Stmt, error) {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Prepare after Close")
+		return nil, getError(errClosedCon, nil)
 	}
-	return c.prepareStmt(cmd)
+	return c.prepareStmt(query)
 }
 
 // Deprecated: Use BeginTx instead.
