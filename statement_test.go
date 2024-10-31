@@ -66,8 +66,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 	var foo, bar, foo2 int
 	var baz string
 	row := prepared.QueryRow(sql.Named("baz", "x"), sql.Named("foo", 1), sql.Named("bar", 2))
-	err = row.Scan(&foo, &bar, &baz, &foo2)
-	require.NoError(t, err)
+	require.NoError(t, row.Scan(&foo, &bar, &baz, &foo2))
 	require.Equal(t, 1, foo)
 	require.Equal(t, 2, bar)
 	require.Equal(t, "x", baz)
@@ -110,5 +109,52 @@ func TestPrepareWithError(t *testing.T) {
 		}
 		require.NoError(t, prepared.Close())
 	}
+	require.NoError(t, db.Close())
+}
+
+func TestPreparePivot(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	createTable(db, t, `CREATE OR REPLACE TABLE cities(country VARCHAR, name VARCHAR, year INT, population INT)`)
+	_, err := db.ExecContext(ctx, `INSERT INTO cities VALUES ('NL', 'Netherlands', '2020', '42')`)
+	require.NoError(t, err)
+
+	prepared, err := db.Prepare(`PIVOT cities ON year USING SUM(population)`)
+	require.NoError(t, err)
+
+	var country, name string
+	var population int
+	row := prepared.QueryRow()
+	require.NoError(t, row.Scan(&country, &name, &population))
+	require.Equal(t, "NL", country)
+	require.Equal(t, "Netherlands", name)
+	require.Equal(t, 42, population)
+	require.NoError(t, prepared.Close())
+
+	prepared, err = db.PrepareContext(ctx, `PIVOT cities ON year USING SUM(population)`)
+	require.NoError(t, err)
+
+	row = prepared.QueryRow()
+	require.NoError(t, row.Scan(&country, &name, &population))
+	require.Equal(t, "NL", country)
+	require.Equal(t, "Netherlands", name)
+	require.Equal(t, 42, population)
+	require.NoError(t, prepared.Close())
+
+	// Prepare on a connection.
+	c, err := db.Conn(ctx)
+	require.NoError(t, err)
+
+	prepared, err = c.PrepareContext(ctx, `PIVOT cities ON year USING SUM(population)`)
+	require.NoError(t, err)
+
+	row = prepared.QueryRow()
+	require.NoError(t, row.Scan(&country, &name, &population))
+	require.Equal(t, "NL", country)
+	require.Equal(t, "Netherlands", name)
+	require.Equal(t, 42, population)
+	require.NoError(t, prepared.Close())
+
+	require.NoError(t, c.Close())
 	require.NoError(t, db.Close())
 }
