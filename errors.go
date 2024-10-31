@@ -77,11 +77,21 @@ var (
 	errAPI        = errors.New("API error")
 	errVectorSize = errors.New("data chunks cannot exceed duckdb's internal vector size")
 
-	errParseDSN   = errors.New("could not parse DSN for database")
-	errOpen       = errors.New("could not open database")
-	errSetConfig  = errors.New("could not set invalid or local option for global database config")
+	errConnect      = errors.New("could not connect to database")
+	errParseDSN     = errors.New("could not parse DSN for database")
+	errSetConfig    = errors.New("could not set invalid or local option for global database config")
+	errCreateConfig = errors.New("could not create config for database")
+
 	errInvalidCon = errors.New("not a DuckDB driver connection")
 	errClosedCon  = errors.New("closed connection")
+
+	errPrepare                    = errors.New("could not prepare query")
+	errMissingPrepareContext      = errors.New("missing context for multi-statement query: try using PrepareContext")
+	errEmptyQuery                 = errors.New("empty query")
+	errBeginTx                    = errors.New("could not begin transaction")
+	errMultipleTx                 = errors.New("multiple transactions")
+	errReadOnlyTxNotSupported     = errors.New("read-only transactions are not supported")
+	errIsolationLevelNotSupported = errors.New("isolation level not supported: go-duckdb only supports the default isolation level")
 
 	errAppenderCreation         = errors.New("could not create appender")
 	errAppenderClose            = errors.New("could not close appender")
@@ -113,10 +123,6 @@ var (
 	errTableUDFColumnTypeIsNil = fmt.Errorf("%w: column type is nil", errTableUDFCreate)
 
 	errProfilingInfoEmpty = errors.New("no profiling information available for this connection")
-
-	// Errors not covered in tests.
-	errConnect      = errors.New("could not connect to database")
-	errCreateConfig = errors.New("could not create config for database")
 )
 
 type ErrorType int
@@ -231,12 +237,14 @@ func (e *Error) Is(err error) bool {
 
 func getDuckDBError(errMsg string) error {
 	errType := ErrorTypeInvalid
-	// find the end of the prefix ("<error-type> Error: ")
+
+	// Find the end of the prefix ("<error-type> Error: ").
 	if idx := strings.Index(errMsg, ": "); idx != -1 {
 		if typ, ok := errorPrefixMap[errMsg[:idx]]; ok {
 			errType = typ
 		}
 	}
+
 	return &Error{
 		Type: errType,
 		Msg:  errMsg,

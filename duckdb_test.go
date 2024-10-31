@@ -516,7 +516,7 @@ func TestMultipleStatements(t *testing.T) {
 	// test empty query
 	_, err := db.Exec("")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "no statements found")
+	require.Contains(t, err.Error(), errEmptyQuery.Error())
 
 	// test invalid query
 	_, err = db.Exec("abc;")

@@ -24,15 +24,15 @@ func testError(t *testing.T, actual error, contains ...string) {
 	testErrorInternal(t, actual, contains)
 }
 
-func TestErrOpen(t *testing.T) {
+func TestErrConnect(t *testing.T) {
 	t.Run(errParseDSN.Error(), func(t *testing.T) {
 		_, err := sql.Open("duckdb", ":mem ory:")
 		testError(t, err, errParseDSN.Error())
 	})
 
-	t.Run(errOpen.Error(), func(t *testing.T) {
+	t.Run(errConnect.Error(), func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?readonly")
-		testError(t, err, errOpen.Error(), duckdbErrMsg)
+		testError(t, err, errConnect.Error(), duckdbErrMsg)
 	})
 
 	t.Run(errSetConfig.Error(), func(t *testing.T) {
