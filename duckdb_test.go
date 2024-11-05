@@ -386,20 +386,20 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		},
 		// DUCKDB_TYPE_TIMESTAMP
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP",
 		},
 		// DUCKDB_TYPE_DATE
 		{
-			sql:      "SELECT '1992-09-20'::DATE AS col",
-			value:    time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20'::DATE AS col`,
+			value:    time.Date(1992, time.September, 20, 0, 0, 0, 0, time.UTC),
 			typeName: "DATE",
 		},
 		// DUCKDB_TYPE_TIME
 		{
-			sql:      "SELECT '11:30:00'::TIME AS col",
-			value:    time.Date(1970, 1, 1, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '11:30:00'::TIME AS col`,
+			value:    time.Date(1, time.January, 1, 11, 30, 0, 0, time.UTC),
 			typeName: "TIME",
 		},
 		// DUCKDB_TYPE_INTERVAL
@@ -434,20 +434,20 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		},
 		// DUCKDB_TYPE_TIMESTAMP_S
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP_S AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP_S AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP_S",
 		},
 		// DUCKDB_TYPE_TIMESTAMP_MS
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP_MS AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP_MS AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP_MS",
 		},
 		// DUCKDB_TYPE_TIMESTAMP_NS
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP_NS AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP_NS AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP_NS",
 		},
 		// DUCKDB_TYPE_LIST
@@ -479,10 +479,16 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			value:    []byte{0x53, 0xb4, 0xe9, 0x83, 0xb2, 0x87, 0x48, 0x1a, 0x94, 0xad, 0x6e, 0x3c, 0x90, 0x48, 0x99, 0x13},
 			typeName: "UUID",
 		},
+		// DUCKDB_TYPE_TIME_TZ
+		{
+			sql:      `SELECT '11:30:00+03'::TIMETZ AS col`,
+			value:    time.Date(1, time.January, 1, 8, 30, 0, 0, time.UTC),
+			typeName: "TIMETZ",
+		},
 		// DUCKDB_TYPE_TIMESTAMP_TZ
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMPTZ AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00+03'::TIMESTAMPTZ AS col`,
+			value:    time.Date(1992, time.September, 20, 8, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMPTZ",
 		},
 	}
@@ -490,20 +496,20 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 	db := openDB(t)
 	for _, test := range tests {
 		t.Run(test.typeName, func(t *testing.T) {
-			rows, err := db.Query(test.sql)
+			r, err := db.Query(test.sql)
 			require.NoError(t, err)
 
-			cols, err := rows.ColumnTypes()
+			cols, err := r.ColumnTypes()
 			require.NoError(t, err)
 			require.Equal(t, reflect.TypeOf(test.value), cols[0].ScanType())
 			require.Equal(t, test.typeName, cols[0].DatabaseTypeName())
 
 			var val any
-			require.True(t, rows.Next())
-			err = rows.Scan(&val)
+			require.True(t, r.Next())
+			err = r.Scan(&val)
 			require.NoError(t, err)
 			require.Equal(t, test.value, val)
-			require.Equal(t, rows.Next(), false)
+			require.Equal(t, r.Next(), false)
 		})
 	}
 	require.NoError(t, db.Close())

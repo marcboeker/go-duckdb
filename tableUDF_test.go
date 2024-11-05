@@ -178,19 +178,19 @@ var (
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP},
+			udf:         &constTableUDF[time.Time]{value: time.Date(2008, time.July, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP},
 			name:        "constTableUDF_timestamp",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP))`,
+			query:       `SELECT * FROM %s(CAST('2008-07-08 12:34:59.123456789' AS TIMESTAMP))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 0, 0, 0, 0, time.UTC), t: TYPE_DATE},
+			udf:         &constTableUDF[time.Time]{value: time.Date(2007, time.July, 8, 0, 0, 0, 0, time.UTC), t: TYPE_DATE},
 			name:        "constTableUDF_date",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS DATE))`,
+			query:       `SELECT * FROM %s(CAST('2007-07-08 12:34:59.123456789' AS DATE))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(1970, 1, 1, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIME},
+			udf:         &constTableUDF[time.Time]{value: time.Date(1, time.January, 1, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIME},
 			name:        "constTableUDF_time",
 			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIME))`,
 			resultCount: 1,
@@ -214,24 +214,6 @@ var (
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
-			name:        "constTableUDF_timestamp_s",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
-			resultCount: 1,
-		},
-		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
-			name:        "constTableUDF_timestamp_ms",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
-			resultCount: 1,
-		},
-		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_NS},
-			name:        "constTableUDF_timestamp_ns",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
-			resultCount: 1,
-		},
-		{
 			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_TZ},
 			name:        "constTableUDF_timestamp_tz",
 			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))`,
@@ -252,6 +234,26 @@ var (
 			name:        "chunkIncTableUDF",
 			query:       `SELECT * FROM %s(2048)`,
 			resultCount: 2048,
+		},
+	}
+	unsupportedTypeUDFs = []tableUDFTest[RowTableFunction]{
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
+			name:        "constTableUDF_timestamp_s",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
+			name:        "constTableUDF_timestamp_ms",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_NS},
+			name:        "constTableUDF_timestamp_ns",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
+			resultCount: 1,
 		},
 	}
 )
@@ -631,6 +633,8 @@ func (udf *chunkIncTableUDF) Cardinality() *CardinalityInfo {
 }
 
 func TestTableUDF(t *testing.T) {
+	t.Parallel()
+
 	for _, udf := range rowTableUDFs {
 		t.Run(udf.name, func(t *testing.T) {
 			singleTableUDF(t, udf)
@@ -684,6 +688,49 @@ func singleTableUDF[T TableFunction](t *testing.T, fun tableUDFTest[T]) {
 	require.NoError(t, res.Close())
 	require.NoError(t, con.Close())
 	require.NoError(t, db.Close())
+}
+
+func TestErrTableUDF(t *testing.T) {
+	t.Parallel()
+
+	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
+	require.NoError(t, err)
+
+	con, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	// Empty name.
+	var emptyNameUDF incTableUDF
+	err = RegisterTableUDF(con, "", emptyNameUDF.GetFunction())
+	testError(t, err, errAPI.Error(), errTableUDFCreate.Error(), errTableUDFNoName.Error())
+
+	// FIXME: add more error tests.
+
+	require.NoError(t, con.Close())
+	require.NoError(t, db.Close())
+}
+
+func TestErrTableUDFUnsupportedType(t *testing.T) {
+	t.Parallel()
+
+	for _, udf := range unsupportedTypeUDFs {
+		t.Run(udf.name, func(t *testing.T) {
+			db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
+			require.NoError(t, err)
+
+			con, err := db.Conn(context.Background())
+			require.NoError(t, err)
+
+			err = RegisterTableUDF(con, udf.name, udf.udf.GetFunction())
+			require.NoError(t, err)
+
+			_, err = db.QueryContext(context.Background(), fmt.Sprintf(udf.query, udf.name))
+			require.Contains(t, err.Error(), unsupportedTypeErrMsg)
+
+			require.NoError(t, con.Close())
+			require.NoError(t, db.Close())
+		})
+	}
 }
 
 func BenchmarkRowTableUDF(b *testing.B) {

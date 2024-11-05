@@ -6,12 +6,12 @@ package duckdb
 import "C"
 
 import (
-	"time"
 	"unsafe"
 )
 
-func getValue(t TypeInfo, v C.duckdb_value) (any, error) {
-	switch t.(*typeInfo).Type {
+func getValue(info TypeInfo, v C.duckdb_value) (any, error) {
+	t := info.InternalType()
+	switch t {
 	case TYPE_BOOLEAN:
 		return bool(C.duckdb_get_bool(v)), nil
 	case TYPE_TINYINT:
@@ -34,23 +34,24 @@ func getValue(t TypeInfo, v C.duckdb_value) (any, error) {
 		return float32(C.duckdb_get_float(v)), nil
 	case TYPE_DOUBLE:
 		return float64(C.duckdb_get_double(v)), nil
-	case TYPE_TIMESTAMP:
-		val := C.duckdb_get_timestamp(v)
-		return time.UnixMicro(int64(val.micros)).UTC(), nil
+	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
+		// DuckDB's C API does not yet support get_timestamp_s|ms|ns.
+		return nil, unsupportedTypeError(typeToStringMap[t])
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		ts := C.duckdb_get_timestamp(v)
+		return getTS(t, ts), nil
 	case TYPE_DATE:
-		primitiveDate := C.duckdb_get_date(v)
-		date := C.duckdb_from_date(primitiveDate)
-		return time.Date(int(date.year), time.Month(date.month), int(date.day), 0, 0, 0, 0, time.UTC), nil
+		date := C.duckdb_get_date(v)
+		return getDate(date), nil
 	case TYPE_TIME:
-		val := C.duckdb_get_time(v)
-		return time.UnixMicro(int64(val.micros)).UTC(), nil
+		ti := C.duckdb_get_time(v)
+		return getTime(ti), nil
+	case TYPE_TIME_TZ:
+		ti := C.duckdb_get_time_tz(v)
+		return getTimeTZ(ti), nil
 	case TYPE_INTERVAL:
 		interval := C.duckdb_get_interval(v)
-		return Interval{
-			Days:   int32(interval.days),
-			Months: int32(interval.months),
-			Micros: int64(interval.micros),
-		}, nil
+		return getInterval(interval), nil
 	case TYPE_HUGEINT:
 		hugeint := C.duckdb_get_hugeint(v)
 		return hugeIntToNative(hugeint), nil
@@ -59,19 +60,7 @@ func getValue(t TypeInfo, v C.duckdb_value) (any, error) {
 		ret := C.GoString(str)
 		C.duckdb_free(unsafe.Pointer(str))
 		return ret, nil
-	case TYPE_TIMESTAMP_S:
-		val := C.duckdb_get_timestamp(v)
-		return time.UnixMicro(int64(val.micros)).UTC(), nil
-	case TYPE_TIMESTAMP_MS:
-		val := C.duckdb_get_timestamp(v)
-		return time.UnixMicro(int64(val.micros)).UTC(), nil
-	case TYPE_TIMESTAMP_NS:
-		val := C.duckdb_get_timestamp(v)
-		return time.UnixMicro(int64(val.micros)).UTC(), nil
-	case TYPE_TIMESTAMP_TZ:
-		val := C.duckdb_get_timestamp(v)
-		return time.UnixMicro(int64(val.micros)).UTC(), nil
 	default:
-		return nil, unsupportedTypeError(typeToStringMap[t.InternalType()])
+		return nil, unsupportedTypeError(typeToStringMap[t])
 	}
 }

@@ -55,7 +55,6 @@ var unsupportedTypeToStringMap = map[Type]string{
 	TYPE_ARRAY:    "ARRAY",
 	TYPE_UNION:    "UNION",
 	TYPE_BIT:      "BIT",
-	TYPE_TIME_TZ:  "TIME_TZ",
 	TYPE_ANY:      "ANY",
 	TYPE_VARINT:   "VARINT",
 }

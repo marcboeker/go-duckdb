@@ -560,7 +560,7 @@ func TestAppenderTime(t *testing.T) {
 	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (time TIME)`)
 
-	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123, time.UTC)
+	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123000, time.UTC)
 	require.NoError(t, a.AppendRow(ts))
 	require.NoError(t, a.Flush())
 
@@ -569,7 +569,27 @@ func TestAppenderTime(t *testing.T) {
 
 	var res time.Time
 	require.NoError(t, row.Scan(&res))
-	require.Equal(t, ts.UnixMicro(), res.UnixMicro())
+	base := time.Date(1, time.January, 1, 11, 42, 23, 123000, time.UTC)
+	require.Equal(t, base.UnixMicro(), res.UnixMicro())
+	cleanupAppender(t, c, con, a)
+}
+
+func TestAppenderTimeTZ(t *testing.T) {
+	t.Parallel()
+	c, con, a := prepareAppender(t, `CREATE TABLE test (time TIMETZ)`)
+
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123000, loc)
+	require.NoError(t, a.AppendRow(ts))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	row := sql.OpenDB(c).QueryRowContext(context.Background(), `SELECT time FROM test`)
+
+	var res time.Time
+	require.NoError(t, row.Scan(&res))
+	base := time.Date(1, time.January, 1, 3, 42, 23, 123000, time.UTC)
+	require.Equal(t, base.UnixMicro(), res.UnixMicro())
 	cleanupAppender(t, c, con, a)
 }
 
