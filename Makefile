@@ -1,5 +1,5 @@
 DUCKDB_REPO=https://github.com/duckdb/duckdb.git
-DUCKDB_BRANCH=v1.1.2
+DUCKDB_BRANCH=v1.1.3
 
 .PHONY: install
 install:
