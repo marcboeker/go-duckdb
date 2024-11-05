@@ -146,7 +146,9 @@ func setTime[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
 	}
 
-	base := time.Date(1970, time.January, 1, ti.Hour(), ti.Minute(), ti.Second(), ti.Nanosecond(), ti.Location())
+	// DuckDB stores time as microseconds since 00:00:00.
+	ti = ti.UTC()
+	base := time.Date(1970, time.January, 1, ti.Hour(), ti.Minute(), ti.Second(), ti.Nanosecond(), time.UTC)
 	ticks := base.UnixMicro()
 
 	switch vec.Type {
@@ -155,6 +157,7 @@ func setTime[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		duckTime.micros = C.int64_t(ticks)
 		setPrimitive(vec, rowIdx, duckTime)
 	case TYPE_TIME_TZ:
+		// The UTC offset is 0.
 		duckTimeTZ := C.duckdb_create_time_tz(C.int64_t(ticks), 0)
 		setPrimitive(vec, rowIdx, duckTimeTZ)
 	}

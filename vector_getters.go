@@ -85,6 +85,7 @@ func getTimeTZ(ti C.duckdb_time_tz) time.Time {
 	hour := int(timeTZ.time.hour)
 	minute := int(timeTZ.time.min)
 	sec := int(timeTZ.time.sec)
+	// TIMETZ has microsecond precision.
 	nanos := int(timeTZ.time.micros) * 1000
 	loc := time.FixedZone("", int(timeTZ.offset))
 	return time.Date(1, time.January, 1, hour, minute, sec, nanos, loc).UTC()
