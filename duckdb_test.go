@@ -399,7 +399,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		// DUCKDB_TYPE_TIME
 		{
 			sql:      "SELECT '11:30:00'::TIME AS col",
-			value:    time.Date(1970, 1, 1, 11, 30, 0, 0, time.UTC),
+			value:    time.Date(1, 1, 1, 11, 30, 0, 0, time.UTC),
 			typeName: "TIME",
 		},
 		// DUCKDB_TYPE_INTERVAL

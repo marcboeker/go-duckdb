@@ -103,7 +103,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 
 	// Get the DATE and TIME column values.
 	dateUTC := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
-	timeUTC := time.Date(1970, 1, 1, 11, 42, 7, 0, time.UTC)
+	timeUTC := time.Date(1, 1, 1, 11, 42, 7, 0, time.UTC)
 
 	var buffer bytes.Buffer
 	for j := 0; j < i; j++ {

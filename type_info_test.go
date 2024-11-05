@@ -31,6 +31,7 @@ var testPrimitiveSQLValues = map[Type]testTypeValues{
 	TYPE_TIMESTAMP:    {input: `TIMESTAMP '1992-09-20 11:30:00.123456789'`, output: `1992-09-20 11:30:00.123456`},
 	TYPE_DATE:         {input: `DATE '1992-09-20 11:30:00.123456789'`, output: `1992-09-20`},
 	TYPE_TIME:         {input: `TIME '1992-09-20 11:30:00.123456789'`, output: `11:30:00.123456`},
+	TYPE_TIME_TZ:      {input: `TIMETZ '1992-09-20 11:30:00.123456789+06'`, output: `05:30:00.123456+00`},
 	TYPE_INTERVAL:     {input: `INTERVAL 1 YEAR`, output: `1 year`},
 	TYPE_HUGEINT:      {input: `44::HUGEINT`, output: `44`},
 	TYPE_VARCHAR:      {input: `'hello world'::VARCHAR`, output: `hello world`},

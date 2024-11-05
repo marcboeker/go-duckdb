@@ -73,8 +73,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		vec.initTS(t)
 	case TYPE_DATE:
 		vec.initDate()
-	case TYPE_TIME:
-		vec.initTime()
+	case TYPE_TIME, TYPE_TIME_TZ:
+		vec.initTime(t)
 	case TYPE_INTERVAL:
 		vec.initInterval()
 	case TYPE_HUGEINT:
@@ -183,7 +183,7 @@ func (vec *vector) initTS(t Type) {
 			vec.setNull(rowIdx)
 			return nil
 		}
-		return setTS(vec, t, rowIdx, val)
+		return setTS(vec, rowIdx, val)
 	}
 	vec.Type = t
 }
@@ -205,7 +205,7 @@ func (vec *vector) initDate() {
 	vec.Type = TYPE_DATE
 }
 
-func (vec *vector) initTime() {
+func (vec *vector) initTime(t Type) {
 	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
 		if vec.getNull(rowIdx) {
 			return nil
@@ -219,7 +219,7 @@ func (vec *vector) initTime() {
 		}
 		return setTime(vec, rowIdx, val)
 	}
-	vec.Type = TYPE_TIME
+	vec.Type = t
 }
 
 func (vec *vector) initInterval() {
