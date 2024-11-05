@@ -34,7 +34,10 @@ func getValue(info TypeInfo, v C.duckdb_value) (any, error) {
 		return float32(C.duckdb_get_float(v)), nil
 	case TYPE_DOUBLE:
 		return float64(C.duckdb_get_double(v)), nil
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
+		// DuckDB's C API does not yet support get_timestamp_s|ms|ns.
+		return nil, unsupportedTypeError(typeToStringMap[info.InternalType()])
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
 		ts := C.duckdb_get_timestamp(v)
 		return getTS(t, ts), nil
 	case TYPE_DATE:
