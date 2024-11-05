@@ -386,20 +386,20 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		},
 		// DUCKDB_TYPE_TIMESTAMP
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP",
 		},
 		// DUCKDB_TYPE_DATE
 		{
-			sql:      "SELECT '1992-09-20'::DATE AS col",
-			value:    time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20'::DATE AS col`,
+			value:    time.Date(1992, time.September, 20, 0, 0, 0, 0, time.UTC),
 			typeName: "DATE",
 		},
 		// DUCKDB_TYPE_TIME
 		{
-			sql:      "SELECT '11:30:00'::TIME AS col",
-			value:    time.Date(1, 1, 1, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '11:30:00'::TIME AS col`,
+			value:    time.Date(1, time.January, 1, 11, 30, 0, 0, time.UTC),
 			typeName: "TIME",
 		},
 		// DUCKDB_TYPE_INTERVAL
@@ -434,20 +434,20 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		},
 		// DUCKDB_TYPE_TIMESTAMP_S
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP_S AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP_S AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP_S",
 		},
 		// DUCKDB_TYPE_TIMESTAMP_MS
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP_MS AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP_MS AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP_MS",
 		},
 		// DUCKDB_TYPE_TIMESTAMP_NS
 		{
-			sql:      "SELECT '1992-09-20 11:30:00'::TIMESTAMP_NS AS col",
-			value:    time.Date(1992, 9, 20, 11, 30, 0, 0, time.UTC),
+			sql:      `SELECT '1992-09-20 11:30:00'::TIMESTAMP_NS AS col`,
+			value:    time.Date(1992, time.September, 20, 11, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMP_NS",
 		},
 		// DUCKDB_TYPE_LIST

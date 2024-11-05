@@ -10,7 +10,7 @@ import (
 )
 
 func getValue(info TypeInfo, v C.duckdb_value) (any, error) {
-	t := info.(*typeInfo).Type
+	t := info.InternalType()
 	switch t {
 	case TYPE_BOOLEAN:
 		return bool(C.duckdb_get_bool(v)), nil
@@ -36,7 +36,7 @@ func getValue(info TypeInfo, v C.duckdb_value) (any, error) {
 		return float64(C.duckdb_get_double(v)), nil
 	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
 		// DuckDB's C API does not yet support get_timestamp_s|ms|ns.
-		return nil, unsupportedTypeError(typeToStringMap[info.InternalType()])
+		return nil, unsupportedTypeError(typeToStringMap[t])
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
 		ts := C.duckdb_get_timestamp(v)
 		return getTS(t, ts), nil
@@ -61,6 +61,6 @@ func getValue(info TypeInfo, v C.duckdb_value) (any, error) {
 		C.duckdb_free(unsafe.Pointer(str))
 		return ret, nil
 	default:
-		return nil, unsupportedTypeError(typeToStringMap[info.InternalType()])
+		return nil, unsupportedTypeError(typeToStringMap[t])
 	}
 }

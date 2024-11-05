@@ -102,8 +102,8 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	require.NoError(t, err)
 
 	// Get the DATE and TIME column values.
-	dateUTC := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
-	timeUTC := time.Date(1, 1, 1, 11, 42, 7, 0, time.UTC)
+	dateUTC := time.Date(1992, time.September, 20, 0, 0, 0, 0, time.UTC)
+	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
 
 	var buffer bytes.Buffer
 	for j := 0; j < i; j++ {
@@ -439,8 +439,8 @@ func TestDate(t *testing.T) {
 		input string
 	}{
 		"epoch":       {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
-		"before 1970": {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"after 1970":  {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
+		"before 1970": {input: "1950-12-12", want: time.Date(1950, time.December, 12, 0, 0, 0, 0, time.UTC)},
+		"after 1970":  {input: "2022-12-12", want: time.Date(2022, time.December, 12, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, test := range tests {
 		var res time.Time
@@ -589,10 +589,10 @@ func TestTimestamp(t *testing.T) {
 		want  time.Time
 	}{
 		"epoch":         {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
-		"before 1970":   {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"after 1970":    {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"HH:MM:SS":      {input: "2022-12-12 11:35:43", want: time.Date(2022, 12, 12, 11, 35, 43, 0, time.UTC)},
-		"HH:MM:SS.DDDD": {input: "2022-12-12 11:35:43.5678", want: time.Date(2022, 12, 12, 11, 35, 43, 567800000, time.UTC)},
+		"before 1970":   {input: "1950-12-12", want: time.Date(1950, time.December, 12, 0, 0, 0, 0, time.UTC)},
+		"after 1970":    {input: "2022-12-12", want: time.Date(2022, time.December, 12, 0, 0, 0, 0, time.UTC)},
+		"HH:MM:SS":      {input: "2022-12-12 11:35:43", want: time.Date(2022, time.December, 12, 11, 35, 43, 0, time.UTC)},
+		"HH:MM:SS.DDDD": {input: "2022-12-12 11:35:43.5678", want: time.Date(2022, time.December, 12, 11, 35, 43, 567800000, time.UTC)},
 	}
 	for _, test := range tests {
 		var res time.Time

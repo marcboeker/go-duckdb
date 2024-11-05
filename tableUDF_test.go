@@ -238,19 +238,19 @@ var (
 	}
 	unsupportedTypeUDFs = []tableUDFTest[RowTableFunction]{
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
 			name:        "constTableUDF_timestamp_s",
 			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
 			name:        "constTableUDF_timestamp_ms",
 			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_NS},
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_NS},
 			name:        "constTableUDF_timestamp_ns",
 			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
 			resultCount: 1,
