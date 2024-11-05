@@ -316,11 +316,11 @@ func TestErrAppenderTSConversion(t *testing.T) {
 		t.Run(tc+" conversion error", func(t *testing.T) {
 			c, con, a := prepareAppender(t, `CREATE TABLE test (t `+tc+`)`)
 
-			tsLess := time.Date(-290407, time.January, 1, 15, 04, 5, 123456, time.UTC)
+			tsLess := time.Date(-290407, time.January, 1, 15, 0o4, 5, 123456, time.UTC)
 			err := a.AppendRow(tsLess)
 			testError(t, err, errAppenderAppendRow.Error(), convertErrMsg)
 
-			tsGreater := time.Date(294346, time.January, 1, 15, 04, 5, 123456, time.UTC)
+			tsGreater := time.Date(294346, time.January, 1, 15, 0o4, 5, 123456, time.UTC)
 			err = a.AppendRow(tsGreater)
 			testError(t, err, errAppenderAppendRow.Error(), convertErrMsg)
 

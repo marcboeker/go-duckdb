@@ -146,7 +146,7 @@ func setTime[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
 	}
 
-	base := time.Date(1970, time.January, 1, ti.Hour(), ti.Minute(), ti.Second(), ti.Nanosecond(), time.UTC)
+	base := time.Date(1970, time.January, 1, ti.Hour(), ti.Minute(), ti.Second(), ti.Nanosecond(), ti.Location())
 	ticks := base.UnixMicro()
 
 	switch vec.Type {
