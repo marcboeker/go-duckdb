@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -305,6 +306,27 @@ func TestErrAppendNestedList(t *testing.T) {
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
 
 	cleanupAppender(t, c, con, a)
+}
+
+func TestErrAppenderTSConversion(t *testing.T) {
+	t.Parallel()
+
+	testCases := []string{"TIMESTAMP_NS", "TIMESTAMP", "TIMESTAMPTZ"}
+	for _, tc := range testCases {
+		t.Run(tc+" conversion error", func(t *testing.T) {
+			c, con, a := prepareAppender(t, `CREATE TABLE test (t `+tc+`)`)
+
+			tsLess := time.Date(-290407, time.January, 1, 15, 0o4, 5, 123456, time.UTC)
+			err := a.AppendRow(tsLess)
+			testError(t, err, errAppenderAppendRow.Error(), convertErrMsg)
+
+			tsGreater := time.Date(294346, time.January, 1, 15, 0o4, 5, 123456, time.UTC)
+			err = a.AppendRow(tsGreater)
+			testError(t, err, errAppenderAppendRow.Error(), convertErrMsg)
+
+			cleanupAppender(t, c, con, a)
+		})
+	}
 }
 
 func TestErrAPISetValue(t *testing.T) {

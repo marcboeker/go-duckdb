@@ -17,10 +17,6 @@ type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }
 
-func convertNumericType[srcT numericType, destT numericType](val srcT) destT {
-	return destT(val)
-}
-
 const uuid_length = 16
 
 type UUID [uuid_length]byte

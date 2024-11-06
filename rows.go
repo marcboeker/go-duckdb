@@ -109,7 +109,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(float32(0))
 	case TYPE_DOUBLE:
 		return reflect.TypeOf(float64(0))
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_DATE, TYPE_TIME, TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_DATE, TYPE_TIME, TYPE_TIME_TZ, TYPE_TIMESTAMP_TZ:
 		return reflect.TypeOf(time.Time{})
 	case TYPE_INTERVAL:
 		return reflect.TypeOf(Interval{})

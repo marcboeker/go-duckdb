@@ -20,7 +20,6 @@ type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any) error
 
 func (vec *vector) setNull(rowIdx C.idx_t) {
 	C.duckdb_validity_set_row_invalid(vec.mask, rowIdx)
-
 	if vec.Type == TYPE_STRUCT {
 		for i := 0; i < len(vec.childVectors); i++ {
 			vec.childVectors[i].setNull(rowIdx)
@@ -77,37 +76,44 @@ func setNumeric[S any, T numericType](vec *vector, rowIdx C.idx_t, val S) error 
 }
 
 func setBool[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var fv bool
+	var b bool
 	switch v := any(val).(type) {
 	case bool:
-		fv = v
+		b = v
 	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(b).String())
 	}
-	setPrimitive(vec, rowIdx, fv)
+	setPrimitive(vec, rowIdx, b)
 	return nil
 }
 
-func setTS[S any](vec *vector, t Type, rowIdx C.idx_t, val S) error {
+func setTS[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	var ti time.Time
 	switch v := any(val).(type) {
 	case time.Time:
 		ti = v
 	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(t).String())
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
 	}
+
 	var ticks int64
-	switch t {
-	case TYPE_TIMESTAMP:
+	switch vec.Type {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		year := ti.UTC().Year()
+		if year < -290307 || year > 294246 {
+			return conversionError(year, -290307, 294246)
+		}
 		ticks = ti.UTC().UnixMicro()
 	case TYPE_TIMESTAMP_S:
 		ticks = ti.UTC().Unix()
 	case TYPE_TIMESTAMP_MS:
 		ticks = ti.UTC().UnixMilli()
 	case TYPE_TIMESTAMP_NS:
+		year := ti.UTC().Year()
+		if year < 1678 || year > 2262 {
+			return conversionError(year, -290307, 294246)
+		}
 		ticks = ti.UTC().UnixNano()
-	case TYPE_TIMESTAMP_TZ:
-		ticks = ti.UTC().UnixMicro()
 	}
 	var ts C.duckdb_timestamp
 	ts.micros = C.int64_t(ticks)
@@ -116,33 +122,45 @@ func setTS[S any](vec *vector, t Type, rowIdx C.idx_t, val S) error {
 }
 
 func setDate[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var date time.Time
+	var ti time.Time
 	switch v := any(val).(type) {
 	case time.Time:
-		date = v
+		ti = v
 	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(date).String())
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
 	}
-	days := int32(date.UTC().Unix() / secondsPerDay)
-	var date2 C.duckdb_date
-	date2.days = C.int32_t(days)
-	setPrimitive(vec, rowIdx, date2)
+
+	days := int32(ti.UTC().Unix() / secondsPerDay)
+	var date C.duckdb_date
+	date.days = C.int32_t(days)
+	setPrimitive(vec, rowIdx, date)
 	return nil
 }
 
 func setTime[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var date time.Time
+	var ti time.Time
 	switch v := any(val).(type) {
 	case time.Time:
-		date = v
+		ti = v
 	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(date).String())
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
 	}
-	ticks := date.UTC().UnixMicro()
 
-	var t C.duckdb_time
-	t.micros = C.int64_t(ticks)
-	setPrimitive(vec, rowIdx, t)
+	// DuckDB stores time as microseconds since 00:00:00.
+	ti = ti.UTC()
+	base := time.Date(1970, time.January, 1, ti.Hour(), ti.Minute(), ti.Second(), ti.Nanosecond(), time.UTC)
+	ticks := base.UnixMicro()
+
+	switch vec.Type {
+	case TYPE_TIME:
+		var duckTime C.duckdb_time
+		duckTime.micros = C.int64_t(ticks)
+		setPrimitive(vec, rowIdx, duckTime)
+	case TYPE_TIME_TZ:
+		// The UTC offset is 0.
+		duckTimeTZ := C.duckdb_create_time_tz(C.int64_t(ticks), 0)
+		setPrimitive(vec, rowIdx, duckTimeTZ)
+	}
 	return nil
 }
 
@@ -466,10 +484,10 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case TYPE_DOUBLE:
 		return setNumeric[S, float64](vec, rowIdx, val)
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
-		return setTS[S](vec, vec.Type, rowIdx, val)
+		return setTS[S](vec, rowIdx, val)
 	case TYPE_DATE:
 		return setDate[S](vec, rowIdx, val)
-	case TYPE_TIME:
+	case TYPE_TIME, TYPE_TIME_TZ:
 		return setTime[S](vec, rowIdx, val)
 	case TYPE_INTERVAL:
 		return setInterval[S](vec, rowIdx, val)

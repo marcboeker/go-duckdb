@@ -22,6 +22,10 @@ func castError(actual string, expected string) error {
 	return fmt.Errorf("%s: cannot cast %s to %s", castErrMsg, actual, expected)
 }
 
+func conversionError(actual int, min int, max int) error {
+	return fmt.Errorf("%s: cannot convert %d, minimum: %d, maximum: %d", convertErrMsg, actual, min, max)
+}
+
 func structFieldError(actual string, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
 }
@@ -61,6 +65,7 @@ const (
 	driverErrMsg           = "database/sql/driver"
 	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
+	convertErrMsg          = "conversion error"
 	structFieldErrMsg      = "invalid STRUCT field"
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"

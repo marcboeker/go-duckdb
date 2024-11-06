@@ -52,6 +52,7 @@ type testTypesRow struct {
 	List_col         Composite[[]int32]
 	Struct_col       Composite[testTypesStruct]
 	Map_col          Map
+	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
 }
 
@@ -81,6 +82,7 @@ const testTypesTableSQL = `CREATE TABLE test (
 	List_col INTEGER[],
 	Struct_col STRUCT(A INTEGER, B VARCHAR),
 	Map_col MAP(INTEGER, VARCHAR),
+	Time_tz_col TIMETZ,
 	Timestamp_tz_col TIMESTAMPTZ
 )`
 
@@ -89,6 +91,7 @@ func (r *testTypesRow) toUTC() {
 	r.Timestamp_s_col = r.Timestamp_s_col.UTC()
 	r.Timestamp_ms_col = r.Timestamp_ms_col.UTC()
 	r.Timestamp_ns_col = r.Timestamp_ns_col.UTC()
+	r.Time_tz_col = r.Time_tz_col.UTC()
 	r.Timestamp_tz_col = r.Timestamp_tz_col.UTC()
 }
 
@@ -101,9 +104,10 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	ts, err := time.ParseInLocation(longForm, "2016-01-17 20:04:05 IST", IST)
 	require.NoError(t, err)
 
-	// Get the DATE and TIME column values.
-	dateUTC := time.Date(1992, 9, 20, 0, 0, 0, 0, time.UTC)
-	timeUTC := time.Date(1970, 1, 1, 11, 42, 7, 0, time.UTC)
+	// Get the DATE, TIME, and TIMETZ column values.
+	dateUTC := time.Date(1992, time.September, 20, 0, 0, 0, 0, time.UTC)
+	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
+	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
 
 	var buffer bytes.Buffer
 	for j := 0; j < i; j++ {
@@ -147,6 +151,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		listCol,
 		structCol,
 		mapCol,
+		timeTZ,
 		ts,
 	}
 }
@@ -195,6 +200,7 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			r.List_col.Get(),
 			r.Struct_col.Get(),
 			r.Map_col,
+			r.Time_tz_col,
 			r.Timestamp_tz_col)
 		require.NoError(t, err)
 	}
@@ -233,6 +239,7 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			&r.List_col,
 			&r.Struct_col,
 			&r.Map_col,
+			&r.Time_tz_col,
 			&r.Timestamp_tz_col)
 		require.NoError(t, err)
 		actualRows = append(actualRows, r)
@@ -291,7 +298,7 @@ func TestDecimal(t *testing.T) {
 
 	t.Run("SELECT all possible DECIMAL widths", func(t *testing.T) {
 		for i := 1; i <= 38; i++ {
-			r := db.QueryRow(fmt.Sprintf("SELECT 0::DECIMAL(%d, 1)", i))
+			r := db.QueryRow(fmt.Sprintf(`SELECT 0::DECIMAL(%d, 1)`, i))
 			var actual Decimal
 			require.NoError(t, r.Scan(&actual))
 			expected := Decimal{Width: uint8(i), Value: big.NewInt(0), Scale: 1}
@@ -379,9 +386,9 @@ func TestBlob(t *testing.T) {
 	db := openDB(t)
 
 	// Scan a hexadecimal value.
-	var bytes []byte
-	require.NoError(t, db.QueryRow("SELECT '\\xAA'::BLOB").Scan(&bytes))
-	require.Equal(t, []byte{0xAA}, bytes)
+	var b []byte
+	require.NoError(t, db.QueryRow("SELECT '\\xAA'::BLOB").Scan(&b))
+	require.Equal(t, []byte{0xAA}, b)
 	require.NoError(t, db.Close())
 }
 
@@ -439,8 +446,8 @@ func TestDate(t *testing.T) {
 		input string
 	}{
 		"epoch":       {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
-		"before 1970": {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"after 1970":  {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
+		"before 1970": {input: "1950-12-12", want: time.Date(1950, time.December, 12, 0, 0, 0, 0, time.UTC)},
+		"after 1970":  {input: "2022-12-12", want: time.Date(2022, time.December, 12, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, test := range tests {
 		var res time.Time
@@ -589,10 +596,10 @@ func TestTimestamp(t *testing.T) {
 		want  time.Time
 	}{
 		"epoch":         {input: "1970-01-01", want: time.UnixMilli(0).UTC()},
-		"before 1970":   {input: "1950-12-12", want: time.Date(1950, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"after 1970":    {input: "2022-12-12", want: time.Date(2022, 12, 12, 0, 0, 0, 0, time.UTC)},
-		"HH:MM:SS":      {input: "2022-12-12 11:35:43", want: time.Date(2022, 12, 12, 11, 35, 43, 0, time.UTC)},
-		"HH:MM:SS.DDDD": {input: "2022-12-12 11:35:43.5678", want: time.Date(2022, 12, 12, 11, 35, 43, 567800000, time.UTC)},
+		"before 1970":   {input: "1950-12-12", want: time.Date(1950, time.December, 12, 0, 0, 0, 0, time.UTC)},
+		"after 1970":    {input: "2022-12-12", want: time.Date(2022, time.December, 12, 0, 0, 0, 0, time.UTC)},
+		"HH:MM:SS":      {input: "2022-12-12 11:35:43", want: time.Date(2022, time.December, 12, 11, 35, 43, 0, time.UTC)},
+		"HH:MM:SS.DDDD": {input: "2022-12-12 11:35:43.5678", want: time.Date(2022, time.December, 12, 11, 35, 43, 567800000, time.UTC)},
 	}
 	for _, test := range tests {
 		var res time.Time
