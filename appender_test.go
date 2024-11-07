@@ -64,6 +64,7 @@ type nestedDataRow struct {
 	ID                  int64
 	stringList          []string
 	intList             []int32
+	stringArray         [3]string
 	nestedIntList       [][]int32
 	tripleNestedIntList [][][]int32
 	simpleStruct        simpleStruct
@@ -79,6 +80,7 @@ type resultRow struct {
 	ID                  int64
 	stringList          []any
 	intList             []any
+	stringArray         []any
 	nestedIntList       []any
 	tripleNestedIntList []any
 	simpleStruct        any
@@ -215,6 +217,41 @@ func TestAppenderList(t *testing.T) {
 		require.NoError(t, res.Scan(&r.stringList, &r.intList))
 		require.Equal(t, rowsToAppend[i].stringList, castList[string](r.stringList))
 		require.Equal(t, rowsToAppend[i].intList, castList[int32](r.intList))
+		i++
+	}
+
+	require.Equal(t, 10, i)
+	require.NoError(t, res.Close())
+	cleanupAppender(t, c, con, a)
+}
+
+func TestAppenderArray(t *testing.T) {
+	t.Parallel()
+	c, con, a := prepareAppender(t, `CREATE TABLE test (string_array VARCHAR[3])`)
+
+	rowsToAppend := make([]nestedDataRow, 10)
+	for i := 0; i < 10; i++ {
+		rowsToAppend[i].stringArray = [3]string{"a", "b", "c"}
+	}
+
+	for _, row := range rowsToAppend {
+		require.NoError(t, a.AppendRow(row.stringArray))
+	}
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test`)
+	require.NoError(t, err)
+
+	expected := [3]string{"a", "b", "c"}
+	i := 0
+	for res.Next() {
+		var r resultRow
+		require.NoError(t, res.Scan(&r.stringArray))
+		list := castList[string](r.stringArray)
+		for k, v := range list {
+			require.Equal(t, expected[k], v)
+		}
 		i++
 	}
 

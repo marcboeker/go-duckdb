@@ -127,6 +127,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(map[string]any{})
 	case TYPE_MAP:
 		return reflect.TypeOf(Map{})
+	case TYPE_ARRAY:
+		return reflect.TypeOf([]any{})
 	case TYPE_UUID:
 		return reflect.TypeOf([]byte{})
 	default:

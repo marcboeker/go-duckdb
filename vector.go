@@ -91,6 +91,8 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		return vec.initStruct(logicalType, colIdx)
 	case TYPE_MAP:
 		return vec.initMap(logicalType, colIdx)
+	case TYPE_ARRAY:
+		return vec.initArray(logicalType, colIdx)
 	case TYPE_UUID:
 		vec.initUUID()
 	case TYPE_SQLNULL:
@@ -126,7 +128,7 @@ func (vec *vector) initVectors(v C.duckdb_vector, writable bool) {
 
 func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
 	switch vec.Type {
-	case TYPE_LIST, TYPE_MAP:
+	case TYPE_LIST, TYPE_MAP, TYPE_ARRAY:
 		child := C.duckdb_list_vector_get_child(v)
 		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_STRUCT:
@@ -450,6 +452,37 @@ func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error 
 		return setMap(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_MAP
+	return nil
+}
+
+func (vec *vector) initArray(logicalType C.duckdb_logical_type, colIdx int) error {
+	vec.arrayLength = uint64(C.duckdb_array_type_array_size(logicalType))
+
+	// Get the child vector type.
+	childType := C.duckdb_array_type_child_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&childType)
+
+	// Recurse into the child.
+	vec.childVectors = make([]vector, 1)
+	err := vec.childVectors[0].init(childType, colIdx)
+	if err != nil {
+		return err
+	}
+
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return vec.getArray(rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) error {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return nil
+		}
+		return setArray(vec, rowIdx, val)
+	}
+	vec.Type = TYPE_ARRAY
 	return nil
 }
 

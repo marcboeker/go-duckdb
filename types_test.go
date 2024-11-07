@@ -52,6 +52,7 @@ type testTypesRow struct {
 	List_col         Composite[[]int32]
 	Struct_col       Composite[testTypesStruct]
 	Map_col          Map
+	Array_col        Composite[[]int32]
 	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
 }
@@ -82,6 +83,7 @@ const testTypesTableSQL = `CREATE TABLE test (
 	List_col INTEGER[],
 	Struct_col STRUCT(A INTEGER, B VARCHAR),
 	Map_col MAP(INTEGER, VARCHAR),
+	Array_col INTEGER[3],
 	Time_tz_col TIMETZ,
 	Timestamp_tz_col TIMESTAMPTZ
 )`
@@ -124,6 +126,9 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	mapCol := Map{
 		int32(i): "other_longer_val",
 	}
+	arrayCol := Composite[[]int32]{
+		[]int32{int32(i), int32(i), int32(i)},
+	}
 
 	return testTypesRow{
 		i%2 == 1,
@@ -151,6 +156,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		listCol,
 		structCol,
 		mapCol,
+		arrayCol,
 		timeTZ,
 		ts,
 	}
@@ -200,6 +206,7 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			r.List_col.Get(),
 			r.Struct_col.Get(),
 			r.Map_col,
+			r.Array_col.Get(),
 			r.Time_tz_col,
 			r.Timestamp_tz_col)
 		require.NoError(t, err)
@@ -239,6 +246,7 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			&r.List_col,
 			&r.Struct_col,
 			&r.Map_col,
+			&r.Array_col,
 			&r.Time_tz_col,
 			&r.Timestamp_tz_col)
 		require.NoError(t, err)

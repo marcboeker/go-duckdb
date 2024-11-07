@@ -473,6 +473,12 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			value:    Map{int32(1): "a", int32(5): "e"},
 			typeName: "MAP(INTEGER, VARCHAR)",
 		},
+		// DUCKDB_TYPE_ARRAY
+		{
+			sql:      "SELECT ['duck', 'goose', NULL] AS col",
+			value:    []any{"duck", "goose", nil},
+			typeName: "VARCHAR[]",
+		},
 		// DUCKDB_TYPE_UUID
 		{
 			sql:      "SELECT '53b4e983-b287-481a-94ad-6e3c90489913'::UUID AS col",

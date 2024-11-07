@@ -505,7 +505,7 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return setList[S](vec, rowIdx, val)
 	case TYPE_STRUCT:
 		return setStruct[S](vec, rowIdx, val)
-	case TYPE_MAP:
+	case TYPE_MAP, TYPE_ARRAY:
 		// FIXME: Is this already supported? And tested?
 		return unsupportedTypeError(unsupportedTypeToStringMap[vec.Type])
 	case TYPE_UUID:

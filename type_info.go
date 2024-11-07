@@ -103,6 +103,8 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewStructInfo)))
 	case TYPE_MAP:
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
+	case TYPE_ARRAY:
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewArrayInfo)))
 	case TYPE_SQLNULL:
 		return nil, getError(errAPI, unsupportedTypeError(typeToStringMap[t]))
 	}
@@ -233,6 +235,25 @@ func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
 	return info, nil
 }
 
+// NewArrayInfo returns ARRAY type information.
+// childInfo contains the type information of the ARRAY's elements.
+// size is the ARRAY's fixed size.
+func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
+	if childInfo == nil {
+		return nil, getError(errAPI, interfaceIsNilError("childInfo"))
+	}
+	if size == 0 {
+		return nil, getError(errAPI, errInvalidArraySize)
+	}
+
+	info := &typeInfo{
+		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: size},
+		childTypes:   make([]TypeInfo, 1),
+	}
+	info.childTypes[0] = childInfo
+	return info, nil
+}
+
 func (info *typeInfo) logicalType() C.duckdb_logical_type {
 	switch info.Type {
 	case TYPE_BOOLEAN, TYPE_TINYINT, TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_UTINYINT, TYPE_USMALLINT,
@@ -251,6 +272,8 @@ func (info *typeInfo) logicalType() C.duckdb_logical_type {
 		return info.logicalStructType()
 	case TYPE_MAP:
 		return info.logicalMapType()
+	case TYPE_ARRAY:
+		return info.logicalArrayType()
 	}
 	return nil
 }
@@ -313,6 +336,13 @@ func (info *typeInfo) logicalMapType() C.duckdb_logical_type {
 
 	C.duckdb_destroy_logical_type(&key)
 	C.duckdb_destroy_logical_type(&value)
+	return logicalType
+}
+
+func (info *typeInfo) logicalArrayType() C.duckdb_logical_type {
+	child := info.childTypes[0].logicalType()
+	logicalType := C.duckdb_create_array_type(child, C.idx_t(info.arrayLength))
+	C.duckdb_destroy_logical_type(&child)
 	return logicalType
 }
 
