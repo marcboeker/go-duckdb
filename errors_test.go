@@ -171,6 +171,13 @@ func TestErrAppender(t *testing.T) {
 		testError(t, err, errAppenderAppendRow.Error(), errUnsupportedMapKeyType.Error())
 		cleanupAppender(t, c, con, a)
 	})
+
+	t.Run(invalidInputErrMsg, func(t *testing.T) {
+		c, con, a := prepareAppender(t, `CREATE TABLE test (col INT[3])`)
+		err := a.AppendRow([]int32{1, 2})
+		testError(t, err, errAppenderAppendRow.Error(), invalidInputErrMsg)
+		cleanupAppender(t, c, con, a)
+	})
 }
 
 func TestErrAppend(t *testing.T) {

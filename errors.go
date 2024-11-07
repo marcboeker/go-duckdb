@@ -26,6 +26,10 @@ func conversionError(actual int, min int, max int) error {
 	return fmt.Errorf("%s: cannot convert %d, minimum: %d, maximum: %d", convertErrMsg, actual, min, max)
 }
 
+func invalidInputError(actual string, expected string) error {
+	return fmt.Errorf("%s: expected %s, got %s", invalidInputErrMsg, expected, actual)
+}
+
 func structFieldError(actual string, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
 }
@@ -66,6 +70,7 @@ const (
 	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
 	convertErrMsg          = "conversion error"
+	invalidInputErrMsg     = "invalid input"
 	structFieldErrMsg      = "invalid STRUCT field"
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"

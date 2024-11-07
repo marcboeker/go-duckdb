@@ -52,7 +52,7 @@ type testTypesRow struct {
 	List_col         Composite[[]int32]
 	Struct_col       Composite[testTypesStruct]
 	Map_col          Map
-	Array_col        Composite[[]int32]
+	Array_col        Composite[[3]int32]
 	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
 }
@@ -126,8 +126,8 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	mapCol := Map{
 		int32(i): "other_longer_val",
 	}
-	arrayCol := Composite[[]int32]{
-		[]int32{int32(i), int32(i), int32(i)},
+	arrayCol := Composite[[3]int32]{
+		[3]int32{int32(i), int32(i), int32(i)},
 	}
 
 	return testTypesRow{

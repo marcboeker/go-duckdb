@@ -8,6 +8,7 @@ import "C"
 import (
 	"math/big"
 	"reflect"
+	"strconv"
 	"time"
 	"unsafe"
 )
@@ -388,6 +389,9 @@ func setArray[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	array, err := extractSlice(vec, val)
 	if err != nil {
 		return err
+	}
+	if len(array) != int(vec.arrayLength) {
+		return invalidInputError(strconv.Itoa(len(array)), strconv.Itoa(int(vec.arrayLength)))
 	}
 	return setSliceChild(vec, array, rowIdx*C.idx_t(vec.arrayLength))
 }
