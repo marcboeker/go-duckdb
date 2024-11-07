@@ -128,7 +128,7 @@ func (vec *vector) initVectors(v C.duckdb_vector, writable bool) {
 
 func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
 	switch vec.Type {
-	case TYPE_LIST, TYPE_MAP, TYPE_ARRAY:
+	case TYPE_LIST, TYPE_MAP:
 		child := C.duckdb_list_vector_get_child(v)
 		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_STRUCT:
@@ -136,6 +136,9 @@ func (vec *vector) getChildVectors(v C.duckdb_vector, writable bool) {
 			child := C.duckdb_struct_vector_get_child(v, C.idx_t(i))
 			vec.childVectors[i].initVectors(child, writable)
 		}
+	case TYPE_ARRAY:
+		child := C.duckdb_array_vector_get_child(v)
+		vec.childVectors[0].initVectors(child, writable)
 	}
 }
 

@@ -475,9 +475,9 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		},
 		// DUCKDB_TYPE_ARRAY
 		{
-			sql:      "SELECT ['duck', 'goose', NULL] AS col",
+			sql:      "SELECT ['duck', 'goose', NULL]::VARCHAR[3] AS col",
 			value:    []any{"duck", "goose", nil},
-			typeName: "VARCHAR[]",
+			typeName: "VARCHAR[3]",
 		},
 		// DUCKDB_TYPE_UUID
 		{

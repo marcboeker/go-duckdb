@@ -140,7 +140,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
 	switch t {
-	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP:
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
 		// Only allocate the logical type if necessary.
 		logicalType := C.duckdb_column_logical_type(&r.res, C.idx_t(index))
 		defer C.duckdb_destroy_logical_type(&logicalType)
@@ -169,23 +169,34 @@ func logicalTypeName(logicalType C.duckdb_logical_type) string {
 	t := Type(C.duckdb_get_type_id(logicalType))
 	switch t {
 	case TYPE_DECIMAL:
-		width := C.duckdb_decimal_width(logicalType)
-		scale := C.duckdb_decimal_scale(logicalType)
-		return fmt.Sprintf("DECIMAL(%d,%d)", width, scale)
+		return logicalTypeNameDecimal(logicalType)
 	case TYPE_ENUM:
 		// The C API does not expose ENUM names.
 		return "ENUM"
 	case TYPE_LIST:
-		childType := C.duckdb_list_type_child_type(logicalType)
-		defer C.duckdb_destroy_logical_type(&childType)
-		return logicalTypeName(childType) + "[]"
+		return logicalTypeNameList(logicalType)
 	case TYPE_STRUCT:
 		return logicalTypeNameStruct(logicalType)
 	case TYPE_MAP:
 		return logicalTypeNameMap(logicalType)
+	case TYPE_ARRAY:
+		return logicalTypeNameArray(logicalType)
 	default:
 		return typeToStringMap[t]
 	}
+}
+
+func logicalTypeNameDecimal(logicalType C.duckdb_logical_type) string {
+	width := C.duckdb_decimal_width(logicalType)
+	scale := C.duckdb_decimal_scale(logicalType)
+	return fmt.Sprintf("DECIMAL(%d,%d)", int(width), int(scale))
+}
+
+func logicalTypeNameList(logicalType C.duckdb_logical_type) string {
+	childType := C.duckdb_list_type_child_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&childType)
+	childName := logicalTypeName(childType)
+	return fmt.Sprintf("%s[]", childName)
 }
 
 func logicalTypeNameStruct(logicalType C.duckdb_logical_type) string {
@@ -217,6 +228,14 @@ func logicalTypeNameMap(logicalType C.duckdb_logical_type) string {
 	defer C.duckdb_destroy_logical_type(&valueType)
 
 	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(keyType), logicalTypeName(valueType))
+}
+
+func logicalTypeNameArray(logicalType C.duckdb_logical_type) string {
+	size := C.duckdb_array_type_array_size(logicalType)
+	childType := C.duckdb_array_type_child_type(logicalType)
+	defer C.duckdb_destroy_logical_type(&childType)
+	childName := logicalTypeName(childType)
+	return fmt.Sprintf("%s[%d]", childName, int(size))
 }
 
 func escapeStructFieldName(s string) string {
