@@ -314,7 +314,7 @@ func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 
 	newLength := C.idx_t(len(list)) + childVectorSize
 	vec.resizeListVector(newLength)
-	return setSliceChild(vec, list, childVectorSize)
+	return setSliceChildren(vec, list, childVectorSize)
 }
 
 func setStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
@@ -393,37 +393,37 @@ func setArray[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	if len(array) != int(vec.arrayLength) {
 		return invalidInputError(strconv.Itoa(len(array)), strconv.Itoa(int(vec.arrayLength)))
 	}
-	return setSliceChild(vec, array, rowIdx*C.idx_t(vec.arrayLength))
+	return setSliceChildren(vec, array, rowIdx*C.idx_t(vec.arrayLength))
 }
 
 func extractSlice[S any](vec *vector, val S) ([]any, error) {
-	var array []any
+	var s []any
 	switch v := any(val).(type) {
 	case []any:
-		array = v
+		s = v
 	default:
 		kind := reflect.TypeOf(val).Kind()
 		if kind != reflect.Array && kind != reflect.Slice {
-			return nil, castError(reflect.TypeOf(val).String(), reflect.TypeOf(array).String())
+			return nil, castError(reflect.TypeOf(val).String(), reflect.TypeOf(s).String())
 		}
 		// Insert the values into the child vector.
 		rv := reflect.ValueOf(val)
-		array = make([]any, rv.Len())
+		s = make([]any, rv.Len())
 
 		for i := 0; i < rv.Len(); i++ {
 			idx := rv.Index(i)
 			if vec.canNil(idx) && idx.IsNil() {
-				array[i] = nil
+				s[i] = nil
 				continue
 			}
 
-			array[i] = idx.Interface()
+			s[i] = idx.Interface()
 		}
 	}
-	return array, nil
+	return s, nil
 }
 
-func setSliceChild(vec *vector, s []any, offset C.idx_t) error {
+func setSliceChildren(vec *vector, s []any, offset C.idx_t) error {
 	childVector := &vec.childVectors[0]
 
 	for i, entry := range s {
