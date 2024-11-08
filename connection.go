@@ -176,11 +176,13 @@ func (c *conn) prepareStmts(ctx context.Context, query string) (*stmt, error) {
 		}
 
 		// Execute the statement without any arguments and ignore the result.
-		if _, err = prepared.ExecContext(ctx, nil); err != nil {
-			return nil, err
+		_, execErr := prepared.ExecContext(ctx, nil)
+		closeErr := prepared.Close()
+		if execErr != nil {
+			return nil, execErr
 		}
-		if err = prepared.Close(); err != nil {
-			return nil, err
+		if closeErr != nil {
+			return nil, closeErr
 		}
 	}
 	return c.prepareExtractedStmt(stmts, count-1)
