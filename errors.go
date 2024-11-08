@@ -26,6 +26,10 @@ func conversionError(actual int, min int, max int) error {
 	return fmt.Errorf("%s: cannot convert %d, minimum: %d, maximum: %d", convertErrMsg, actual, min, max)
 }
 
+func invalidInputError(actual string, expected string) error {
+	return fmt.Errorf("%s: expected %s, got %s", invalidInputErrMsg, expected, actual)
+}
+
 func structFieldError(actual string, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
 }
@@ -66,6 +70,7 @@ const (
 	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
 	convertErrMsg          = "conversion error"
+	invalidInputErrMsg     = "invalid input"
 	structFieldErrMsg      = "invalid STRUCT field"
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"
@@ -109,6 +114,7 @@ var (
 	errEmptyName             = errors.New("empty name")
 	errInvalidDecimalWidth   = fmt.Errorf("the DECIMAL with must be between 1 and %d", max_decimal_width)
 	errInvalidDecimalScale   = errors.New("the DECIMAL scale must be less than or equal to the width")
+	errInvalidArraySize      = errors.New("invalid ARRAY size")
 	errSetSQLNULLValue       = errors.New("cannot write to a NULL column")
 
 	errScalarUDFCreate          = errors.New("could not create scalar UDF")

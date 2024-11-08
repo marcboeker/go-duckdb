@@ -114,7 +114,7 @@ func TestErrAppender(t *testing.T) {
 		c, err := NewConnector("", nil)
 		require.NoError(t, err)
 
-		_, err = sql.OpenDB(c).Exec(`CREATE TABLE test (int_array INTEGER[2])`)
+		_, err = sql.OpenDB(c).Exec(`CREATE TABLE test (bit_col BIT)`)
 		require.NoError(t, err)
 
 		con, err := c.Connect(context.Background())
@@ -169,6 +169,13 @@ func TestErrAppender(t *testing.T) {
 		c, con, a := prepareAppender(t, `CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
 		err := a.AppendRow(nil)
 		testError(t, err, errAppenderAppendRow.Error(), errUnsupportedMapKeyType.Error())
+		cleanupAppender(t, c, con, a)
+	})
+
+	t.Run(invalidInputErrMsg, func(t *testing.T) {
+		c, con, a := prepareAppender(t, `CREATE TABLE test (col INT[3])`)
+		err := a.AppendRow([]int32{1, 2})
+		testError(t, err, errAppenderAppendRow.Error(), invalidInputErrMsg)
 		cleanupAppender(t, c, con, a)
 	})
 }

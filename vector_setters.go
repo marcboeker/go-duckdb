@@ -8,6 +8,7 @@ import "C"
 import (
 	"math/big"
 	"reflect"
+	"strconv"
 	"time"
 	"unsafe"
 )
@@ -298,32 +299,13 @@ func setEnum[S any](vec *vector, rowIdx C.idx_t, val S) error {
 }
 
 func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var list []any
-	switch v := any(val).(type) {
-	case []any:
-		list = v
-	default:
-		kind := reflect.TypeOf(val).Kind()
-		if kind != reflect.Array && kind != reflect.Slice {
-			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(list).String())
-		}
-		// Insert the values into the child vector.
-		rv := reflect.ValueOf(val)
-		list = make([]any, rv.Len())
-
-		for i := 0; i < rv.Len(); i++ {
-			idx := rv.Index(i)
-			if vec.canNil(idx) && idx.IsNil() {
-				list[i] = nil
-				continue
-			}
-
-			list[i] = idx.Interface()
-		}
+	list, err := extractSlice(vec, val)
+	if err != nil {
+		return err
 	}
-	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
 
 	// Set the offset and length of the list vector using the current size of the child vector.
+	childVectorSize := C.duckdb_list_vector_get_size(vec.duckdbVector)
 	listEntry := C.duckdb_list_entry{
 		offset: C.idx_t(childVectorSize),
 		length: C.idx_t(len(list)),
@@ -332,17 +314,7 @@ func setList[S any](vec *vector, rowIdx C.idx_t, val S) error {
 
 	newLength := C.idx_t(len(list)) + childVectorSize
 	vec.resizeListVector(newLength)
-
-	// Insert the values into the child vector.
-	childVector := &vec.childVectors[0]
-	for i, entry := range list {
-		offset := C.idx_t(i) + childVectorSize
-		err := childVector.setFn(childVector, offset, entry)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return setSliceChildren(vec, list, childVectorSize)
 }
 
 func setStruct[S any](vec *vector, rowIdx C.idx_t, val S) error {
@@ -413,6 +385,57 @@ func setMap[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	return setList(vec, rowIdx, list)
 }
 
+func setArray[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	array, err := extractSlice(vec, val)
+	if err != nil {
+		return err
+	}
+	if len(array) != int(vec.arrayLength) {
+		return invalidInputError(strconv.Itoa(len(array)), strconv.Itoa(int(vec.arrayLength)))
+	}
+	return setSliceChildren(vec, array, rowIdx*C.idx_t(vec.arrayLength))
+}
+
+func extractSlice[S any](vec *vector, val S) ([]any, error) {
+	var s []any
+	switch v := any(val).(type) {
+	case []any:
+		s = v
+	default:
+		kind := reflect.TypeOf(val).Kind()
+		if kind != reflect.Array && kind != reflect.Slice {
+			return nil, castError(reflect.TypeOf(val).String(), reflect.TypeOf(s).String())
+		}
+		// Insert the values into the child vector.
+		rv := reflect.ValueOf(val)
+		s = make([]any, rv.Len())
+
+		for i := 0; i < rv.Len(); i++ {
+			idx := rv.Index(i)
+			if vec.canNil(idx) && idx.IsNil() {
+				s[i] = nil
+				continue
+			}
+
+			s[i] = idx.Interface()
+		}
+	}
+	return s, nil
+}
+
+func setSliceChildren(vec *vector, s []any, offset C.idx_t) error {
+	childVector := &vec.childVectors[0]
+
+	for i, entry := range s {
+		rowIdx := C.idx_t(i) + offset
+		err := childVector.setFn(childVector, rowIdx, entry)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func setUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	var uuid UUID
 	switch v := any(val).(type) {
@@ -464,8 +487,7 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return setNumeric[S, float32](vec, rowIdx, val)
 	case TYPE_DOUBLE:
 		return setNumeric[S, float64](vec, rowIdx, val)
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS,
-		TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
 		return setTS[S](vec, rowIdx, val)
 	case TYPE_DATE:
 		return setDate[S](vec, rowIdx, val)
@@ -487,6 +509,9 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return setList[S](vec, rowIdx, val)
 	case TYPE_STRUCT:
 		return setStruct[S](vec, rowIdx, val)
+	case TYPE_MAP, TYPE_ARRAY:
+		// FIXME: Is this already supported? And tested?
+		return unsupportedTypeError(unsupportedTypeToStringMap[vec.Type])
 	case TYPE_UUID:
 		return setUUID[S](vec, rowIdx, val)
 	default:

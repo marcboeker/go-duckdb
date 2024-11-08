@@ -173,15 +173,7 @@ func (vec *vector) getEnum(rowIdx C.idx_t) string {
 
 func (vec *vector) getList(rowIdx C.idx_t) []any {
 	entry := getPrimitive[duckdb_list_entry_t](vec, rowIdx)
-	slice := make([]any, 0, entry.length)
-	child := &vec.childVectors[0]
-
-	// Fill the slice with all child values.
-	for i := C.idx_t(0); i < entry.length; i++ {
-		val := child.getFn(child, i+entry.offset)
-		slice = append(slice, val)
-	}
-	return slice
+	return vec.getSliceChild(entry.offset, entry.length)
 }
 
 func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
@@ -205,4 +197,21 @@ func (vec *vector) getMap(rowIdx C.idx_t) Map {
 		m[key] = val
 	}
 	return m
+}
+
+func (vec *vector) getArray(rowIdx C.idx_t) []any {
+	length := C.idx_t(vec.arrayLength)
+	return vec.getSliceChild(rowIdx*length, length)
+}
+
+func (vec *vector) getSliceChild(offset C.idx_t, length C.idx_t) []any {
+	slice := make([]any, 0, length)
+	child := &vec.childVectors[0]
+
+	// Fill the slice with all child values.
+	for i := C.idx_t(0); i < length; i++ {
+		val := child.getFn(child, i+offset)
+		slice = append(slice, val)
+	}
+	return slice
 }

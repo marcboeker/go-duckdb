@@ -223,6 +223,35 @@ func TestAppenderList(t *testing.T) {
 	cleanupAppender(t, c, con, a)
 }
 
+func TestAppenderArray(t *testing.T) {
+	t.Parallel()
+	c, con, a := prepareAppender(t, `CREATE TABLE test (string_array VARCHAR[3])`)
+
+	count := 10
+	expected := Composite[[3]string]{[3]string{"a", "b", "c"}}
+	for i := 0; i < count; i++ {
+		require.NoError(t, a.AppendRow([]string{"a", "b", "c"}))
+		require.NoError(t, a.AppendRow(expected.Get()))
+	}
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test`)
+	require.NoError(t, err)
+
+	i := 0
+	for res.Next() {
+		var r Composite[[3]string]
+		require.NoError(t, res.Scan(&r))
+		require.Equal(t, expected, r)
+		i++
+	}
+
+	require.Equal(t, 2*count, i)
+	require.NoError(t, res.Close())
+	cleanupAppender(t, c, con, a)
+}
+
 func TestAppenderNested(t *testing.T) {
 	t.Parallel()
 	c, con, a := prepareAppender(t, createNestedDataTableSQL)
