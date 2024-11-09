@@ -160,7 +160,3 @@ func (d *Decimal) String() string {
 	}
 	return signStr + zeroTrimmed[:len(zeroTrimmed)-scale] + "." + zeroTrimmed[len(zeroTrimmed)-scale:]
 }
-
-func (d *Decimal) toString() string {
-	return fmt.Sprintf("DECIMAL(%d,%d)", d.Width, d.Scale)
-}

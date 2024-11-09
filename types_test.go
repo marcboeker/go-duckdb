@@ -378,7 +378,176 @@ func TestDecimal(t *testing.T) {
 		}
 	})
 
+	t.Run("SELECT DECIMAL types and compare them to STRING", func(t *testing.T) {
+		tests := []struct {
+			input string
+			want  string
+		}{
+			{input: "1.23::DECIMAL(3, 2)", want: "1.23"},
+			{input: "-1.23::DECIMAL(3, 2)", want: "-1.23"},
+			{input: "123.45::DECIMAL(5, 2)", want: "123.45"},
+			{input: "-123.45::DECIMAL(5, 2)", want: "-123.45"},
+			{input: "123456789.01::DECIMAL(11, 2)", want: "123456789.01"},
+			{input: "-123456789.01::DECIMAL(11, 2)", want: "-123456789.01"},
+			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: "1234567890123456789.234"},
+			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: "-1234567890123456789.234"},
+			{input: "123456789.01234567890123456789::DECIMAL(29, 20)", want: "123456789.01234567890123456789"},
+			{input: "-123456789.01234567890123456789::DECIMAL(29, 20)", want: "-123456789.01234567890123456789"},
+		}
+		for _, test := range tests {
+			r := db.QueryRow(fmt.Sprintf("SELECT %s", test.input))
+			var fs Decimal
+			require.NoError(t, r.Scan(&fs))
+			require.Equal(t, test.want, fs.String())
+		}
+	})
+
 	require.NoError(t, db.Close())
+}
+
+func TestDecimalString(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		input    Decimal
+		expected string
+	}{
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 0,
+				Value: big.NewInt(0),
+			},
+			expected: "0",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 6,
+				Value: big.NewInt(0),
+			},
+			expected: "0",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 0,
+				Value: big.NewInt(1234567890),
+			},
+			expected: "1234567890",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 0,
+				Value: big.NewInt(-1234567890),
+			},
+			expected: "-1234567890",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 1,
+				Value: big.NewInt(1234567890),
+			},
+			expected: "123456789",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 1,
+				Value: big.NewInt(-1234567890),
+			},
+			expected: "-123456789",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 2,
+				Value: big.NewInt(1234567890),
+			},
+			expected: "12345678.9",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 2,
+				Value: big.NewInt(-1234567890),
+			},
+			expected: "-12345678.9",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 6,
+				Value: big.NewInt(1234567890),
+			},
+			expected: "1234.56789",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 6,
+				Value: big.NewInt(-1234567890),
+			},
+			expected: "-1234.56789",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 12,
+				Value: big.NewInt(1234567890),
+			},
+			expected: "0.00123456789",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 12,
+				Value: big.NewInt(-1234567890),
+			},
+			expected: "-0.00123456789",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 1,
+				Value: big.NewInt(1234500000),
+			},
+			expected: "123450000",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 1,
+				Value: big.NewInt(-1234500000),
+			},
+			expected: "-123450000",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 8,
+				Value: big.NewInt(-705399),
+			},
+			expected: "-0.00705399",
+		},
+		{
+			input: Decimal{
+				Width: 18,
+				Scale: 8,
+				Value: big.NewInt(821662),
+			},
+			expected: "0.00821662",
+		},
+	}
+
+	for _, tc := range testCases {
+		actual := tc.input.String()
+		if actual != tc.expected {
+			require.Equal(t, tc.expected, actual)
+		}
+	}
 }
 
 func TestBlob(t *testing.T) {
