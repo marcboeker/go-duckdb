@@ -19,7 +19,7 @@ import (
 // rows is a helper struct for scanning a duckdb result.
 type rows struct {
 	// stmt is a pointer to the stmt of which we are scanning the result.
-	stmt *stmt
+	stmt *Stmt
 	// res is the result of stmt.
 	res C.duckdb_result
 	// chunk holds the currently active data chunk.
@@ -32,7 +32,7 @@ type rows struct {
 	rowCount int
 }
 
-func newRowsWithStmt(res C.duckdb_result, stmt *stmt) *rows {
+func newRowsWithStmt(res C.duckdb_result, stmt *Stmt) *rows {
 	columnCount := C.duckdb_column_count(&res)
 	r := rows{
 		res:        res,

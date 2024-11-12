@@ -13,7 +13,7 @@ import (
 
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
 type Appender struct {
-	con            *conn
+	con            *Conn
 	schema         string
 	table          string
 	duckdbAppender C.duckdb_appender
@@ -31,7 +31,7 @@ type Appender struct {
 
 // NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
-	con, ok := driverConn.(*conn)
+	con, ok := driverConn.(*Conn)
 	if !ok {
 		return nil, getError(errInvalidCon, nil)
 	}
