@@ -88,7 +88,7 @@ func (s *Stmt) ParamName(n int) string {
 		panic("database/sql/driver: misuse of duckdb driver: ParamName after Close")
 	}
 
-	name := C.duckdb_parameter_name(*s.stmt, C.idx_t(n+1))
+	name := C.duckdb_parameter_name(*s.stmt, C.idx_t(n))
 	return C.GoString(name)
 }
 
