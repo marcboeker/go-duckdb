@@ -31,7 +31,7 @@ func TestPrepareQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Access the raw connection & statement.
-	c.Raw(func(driverConn interface{}) error {
+	err = c.Raw(func(driverConn interface{}) error {
 		conn := driverConn.(*Conn)
 		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE baz = ?`)
 		require.NoError(t, err)
@@ -41,6 +41,7 @@ func TestPrepareQuery(t *testing.T) {
 		require.NoError(t, stmt.Close())
 		return nil
 	})
+	require.NoError(t, err)
 
 	require.NoError(t, res.Close())
 	require.NoError(t, prepared.Close())
@@ -78,7 +79,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 	require.NoError(t, prepared.Close())
 
 	// Access the raw connection & statement.
-	c.Raw(func(driverConn interface{}) error {
+	err = c.Raw(func(driverConn interface{}) error {
 		conn := driverConn.(*Conn)
 		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $2 AND baz = $1`)
 		require.NoError(t, err)
@@ -91,6 +92,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 		require.NoError(t, stmt.Close())
 		return nil
 	})
+	require.NoError(t, err)
 
 	require.NoError(t, db.Close())
 }
@@ -125,7 +127,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 	require.NoError(t, prepared.Close())
 
 	// Access the raw connection & statement.
-	c.Raw(func(driverConn interface{}) error {
+	err = c.Raw(func(driverConn interface{}) error {
 		conn := driverConn.(*Conn)
 		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $bar AND baz = $baz`)
 		require.NoError(t, err)
@@ -138,6 +140,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 		require.NoError(t, stmt.Close())
 		return nil
 	})
+	require.NoError(t, err)
 
 	require.NoError(t, db.Close())
 }
