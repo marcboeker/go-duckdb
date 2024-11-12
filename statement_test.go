@@ -30,6 +30,18 @@ func TestPrepareQuery(t *testing.T) {
 	res, err = prepared.Query(0)
 	require.NoError(t, err)
 
+	// Access the raw connection & statement.
+	c.Raw(func(driverConn interface{}) error {
+		conn := driverConn.(*Conn)
+		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE baz = ?`)
+		require.NoError(t, err)
+		stmt := s.(*Stmt)
+		require.Equal(t, DUCKDB_STATEMENT_TYPE_SELECT, stmt.StatementType())
+		require.Equal(t, TYPE_INTEGER, stmt.ParamType(1))
+		require.NoError(t, stmt.Close())
+		return nil
+	})
+
 	require.NoError(t, res.Close())
 	require.NoError(t, prepared.Close())
 	require.NoError(t, c.Close())
@@ -53,6 +65,33 @@ func TestPrepareQueryPositional(t *testing.T) {
 	require.Equal(t, 2, bar)
 
 	require.NoError(t, prepared.Close())
+
+	// Prepare on a connection.
+	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	prepared, err = c.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $2 AND baz = $1`)
+	require.NoError(t, err)
+	res, err := prepared.Query(0, "hello")
+	require.NoError(t, err)
+	require.NoError(t, res.Close())
+	require.NoError(t, prepared.Close())
+
+	// Access the raw connection & statement.
+	c.Raw(func(driverConn interface{}) error {
+		conn := driverConn.(*Conn)
+		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $2 AND baz = $1`)
+		require.NoError(t, err)
+		stmt := s.(*Stmt)
+		require.Equal(t, DUCKDB_STATEMENT_TYPE_SELECT, stmt.StatementType())
+		require.Equal(t, "1", stmt.ParamName(1))
+		require.Equal(t, TYPE_INTEGER, stmt.ParamType(1))
+		require.Equal(t, "2", stmt.ParamName(2))
+		require.Equal(t, TYPE_VARCHAR, stmt.ParamType(2))
+		require.NoError(t, stmt.Close())
+		return nil
+	})
+
 	require.NoError(t, db.Close())
 }
 
@@ -73,6 +112,33 @@ func TestPrepareQueryNamed(t *testing.T) {
 	require.Equal(t, 1, foo2)
 
 	require.NoError(t, prepared.Close())
+
+	// Prepare on a connection.
+	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	prepared, err = c.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $bar AND baz = $baz`)
+	require.NoError(t, err)
+	res, err := prepared.Query(sql.Named("bar", "hello"), sql.Named("baz", 0))
+	require.NoError(t, err)
+	require.NoError(t, res.Close())
+	require.NoError(t, prepared.Close())
+
+	// Access the raw connection & statement.
+	c.Raw(func(driverConn interface{}) error {
+		conn := driverConn.(*Conn)
+		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $bar AND baz = $baz`)
+		require.NoError(t, err)
+		stmt := s.(*Stmt)
+		require.Equal(t, DUCKDB_STATEMENT_TYPE_SELECT, stmt.StatementType())
+		require.Equal(t, "bar", stmt.ParamName(1))
+		require.Equal(t, TYPE_INVALID, stmt.ParamType(1)) // Not sure why this is invalid.
+		require.Equal(t, "baz", stmt.ParamName(2))
+		require.Equal(t, TYPE_INVALID, stmt.ParamType(2))
+		require.NoError(t, stmt.Close())
+		return nil
+	})
+
 	require.NoError(t, db.Close())
 }
 

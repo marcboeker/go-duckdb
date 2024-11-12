@@ -89,7 +89,9 @@ func (s *Stmt) ParamName(n int) string {
 	}
 
 	name := C.duckdb_parameter_name(*s.stmt, C.idx_t(n))
-	return C.GoString(name)
+	paramName := C.GoString(name)
+	C.duckdb_free(unsafe.Pointer(name))
+	return paramName
 }
 
 // ParamType returns the expected type of the parameter at the given index (1-based).
