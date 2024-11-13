@@ -53,6 +53,7 @@ type Stmt struct {
 	c                *Conn
 	stmt             *C.duckdb_prepared_statement
 	closeOnRowsClose bool
+	bound            bool
 	closed           bool
 	rows             bool
 }
@@ -110,6 +111,15 @@ func (s *Stmt) StatementType() StmtType {
 	}
 
 	return StmtType(C.duckdb_prepared_statement_type(*s.stmt))
+}
+
+// Bind binds the arguments to the query.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) Bind(args []driver.NamedValue) error {
+	if s.closed {
+		return errors.Join(errCouldNotBind, errClosedCon)
+	}
+	return s.bind(args)
 }
 
 func (s *Stmt) bind(args []driver.NamedValue) error {
@@ -239,6 +249,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 		}
 	}
 
+	s.bound = true
 	return nil
 }
 
@@ -250,7 +261,36 @@ func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 // ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
 // It implements the driver.StmtExecContext interface.
 func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
-	res, err := s.execute(ctx, nargs)
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if err := s.bind(nargs); err != nil {
+		return nil, err
+	}
+	return s.execBound(ctx)
+}
+
+// ExecBound executes a bound query that doesn't return rows, such as an INSERT or UPDATE.
+// It can only be called after Bind has been called.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if !s.bound {
+		return nil, errNotBound
+	}
+	return s.execBound(ctx)
+}
+
+func (s *Stmt) execBound(ctx context.Context) (driver.Result, error) {
+	res, err := s.execute(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +308,30 @@ func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 // QueryContext executes a query that may return rows, such as a SELECT.
 // It implements the driver.StmtQueryContext interface.
 func (s *Stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
-	res, err := s.execute(ctx, nargs)
+	if err := s.Bind(nargs); err != nil {
+		return nil, err
+	}
+	return s.QueryBound(ctx)
+}
+
+// QueryBound executes a bound statement that may return rows, such as a SELECT.
+// It can only be called after Bind has been called.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if !s.bound {
+		return nil, errNotBound
+	}
+	return s.queryBound(ctx)
+}
+
+func (s *Stmt) queryBound(ctx context.Context) (driver.Rows, error) {
+	res, err := s.execute(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -278,18 +341,7 @@ func (s *Stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
-	if s.closed {
-		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
-	}
-	if s.rows {
-		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
-	}
-
-	if err := s.bind(args); err != nil {
-		return nil, err
-	}
-
+func (s *Stmt) execute(ctx context.Context) (*C.duckdb_result, error) {
 	var pendingRes C.duckdb_pending_result
 	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
 		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))
@@ -341,5 +393,3 @@ func argsToNamedArgs(values []driver.Value) []driver.NamedValue {
 	}
 	return args
 }
-
-var errCouldNotBind = errors.New("could not bind parameter")
