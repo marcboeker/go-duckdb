@@ -221,7 +221,7 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*C.duckdb_arrow, err
 		return nil, errClosedCon
 	}
 
-	if err := s.Bind(args); err != nil {
+	if err := s.bind(args); err != nil {
 		return nil, err
 	}
 
