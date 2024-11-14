@@ -80,7 +80,7 @@ func TestConnector_Close(t *testing.T) {
 }
 
 func ExampleNewConnector() {
-	c, err := NewConnector("duckdb?access_mode=READ_WRITE", func(execer driver.ExecerContext) error {
+	c, err := NewConnector("duck.db?access_mode=READ_WRITE", func(execer driver.ExecerContext) error {
 		initQueries := []string{
 			`SET memory_limit = '10GB';`,
 			`SET threads TO 1;`,
@@ -95,20 +95,29 @@ func ExampleNewConnector() {
 		}
 		return nil
 	})
-	checkErr(err, "failed to create new duckdb connector: %s")
-	defer c.Close()
+	if err != nil {
+		log.Fatalf("failed to create new duckdb connector: %s", err)
+	}
 
 	db := sql.OpenDB(c)
-	defer db.Close()
-
 	var value string
 	row := db.QueryRow(`SELECT value FROM duckdb_settings() WHERE name = 'memory_limit';`)
 	if row.Scan(&value) != nil {
 		log.Fatalf("failed to scan row: %s", err)
 	}
 
-	fmt.Printf("Setting memory_limit is %s", value)
-	// Output: Setting memory_limit is 9.3 GiB
+	if err = c.Close(); err != nil {
+		log.Fatalf("failed to close the connector: %s", err)
+	}
+	if err = db.Close(); err != nil {
+		log.Fatalf("failed to close the database: %s", err)
+	}
+	if err = os.Remove("duck.db"); err != nil {
+		log.Fatalf("failed to remove the database file: %s", err)
+	}
+
+	fmt.Printf("The memory_limit is %s.", value)
+	// Output: The memory_limit is 9.3 GiB.
 }
 
 func TestConnPool(t *testing.T) {
