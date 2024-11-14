@@ -87,7 +87,7 @@ func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 		return nil, getError(errConnect, nil)
 	}
 
-	con := &conn{duckdbCon: duckdbCon}
+	con := &Conn{duckdbCon: duckdbCon}
 
 	if c.connInitFn != nil {
 		if err := c.connInitFn(con); err != nil {

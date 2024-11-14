@@ -472,7 +472,7 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err := c.Raw(func(driverConn any) error {
-		con := driverConn.(*conn)
+		con := driverConn.(*Conn)
 		state := C.duckdb_register_table_function(con.duckdbCon, function)
 		C.duckdb_destroy_table_function(&function)
 		if state == C.DuckDBError {

@@ -15,15 +15,52 @@ import (
 	"unsafe"
 )
 
-type stmt struct {
-	c                *conn
+type StmtType C.duckdb_statement_type
+
+const (
+	DUCKDB_STATEMENT_TYPE_INVALID      StmtType = C.DUCKDB_STATEMENT_TYPE_INVALID
+	DUCKDB_STATEMENT_TYPE_SELECT       StmtType = C.DUCKDB_STATEMENT_TYPE_SELECT
+	DUCKDB_STATEMENT_TYPE_INSERT       StmtType = C.DUCKDB_STATEMENT_TYPE_INSERT
+	DUCKDB_STATEMENT_TYPE_UPDATE       StmtType = C.DUCKDB_STATEMENT_TYPE_UPDATE
+	DUCKDB_STATEMENT_TYPE_EXPLAIN      StmtType = C.DUCKDB_STATEMENT_TYPE_EXPLAIN
+	DUCKDB_STATEMENT_TYPE_DELETE       StmtType = C.DUCKDB_STATEMENT_TYPE_DELETE
+	DUCKDB_STATEMENT_TYPE_PREPARE      StmtType = C.DUCKDB_STATEMENT_TYPE_PREPARE
+	DUCKDB_STATEMENT_TYPE_CREATE       StmtType = C.DUCKDB_STATEMENT_TYPE_CREATE
+	DUCKDB_STATEMENT_TYPE_EXECUTE      StmtType = C.DUCKDB_STATEMENT_TYPE_EXECUTE
+	DUCKDB_STATEMENT_TYPE_ALTER        StmtType = C.DUCKDB_STATEMENT_TYPE_ALTER
+	DUCKDB_STATEMENT_TYPE_TRANSACTION  StmtType = C.DUCKDB_STATEMENT_TYPE_TRANSACTION
+	DUCKDB_STATEMENT_TYPE_COPY         StmtType = C.DUCKDB_STATEMENT_TYPE_COPY
+	DUCKDB_STATEMENT_TYPE_ANALYZE      StmtType = C.DUCKDB_STATEMENT_TYPE_ANALYZE
+	DUCKDB_STATEMENT_TYPE_VARIABLE_SET StmtType = C.DUCKDB_STATEMENT_TYPE_VARIABLE_SET
+	DUCKDB_STATEMENT_TYPE_CREATE_FUNC  StmtType = C.DUCKDB_STATEMENT_TYPE_CREATE_FUNC
+	DUCKDB_STATEMENT_TYPE_DROP         StmtType = C.DUCKDB_STATEMENT_TYPE_DROP
+	DUCKDB_STATEMENT_TYPE_EXPORT       StmtType = C.DUCKDB_STATEMENT_TYPE_EXPORT
+	DUCKDB_STATEMENT_TYPE_PRAGMA       StmtType = C.DUCKDB_STATEMENT_TYPE_PRAGMA
+	DUCKDB_STATEMENT_TYPE_VACUUM       StmtType = C.DUCKDB_STATEMENT_TYPE_VACUUM
+	DUCKDB_STATEMENT_TYPE_CALL         StmtType = C.DUCKDB_STATEMENT_TYPE_CALL
+	DUCKDB_STATEMENT_TYPE_SET          StmtType = C.DUCKDB_STATEMENT_TYPE_SET
+	DUCKDB_STATEMENT_TYPE_LOAD         StmtType = C.DUCKDB_STATEMENT_TYPE_LOAD
+	DUCKDB_STATEMENT_TYPE_RELATION     StmtType = C.DUCKDB_STATEMENT_TYPE_RELATION
+	DUCKDB_STATEMENT_TYPE_EXTENSION    StmtType = C.DUCKDB_STATEMENT_TYPE_EXTENSION
+	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN StmtType = C.DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN
+	DUCKDB_STATEMENT_TYPE_ATTACH       StmtType = C.DUCKDB_STATEMENT_TYPE_ATTACH
+	DUCKDB_STATEMENT_TYPE_DETACH       StmtType = C.DUCKDB_STATEMENT_TYPE_DETACH
+	DUCKDB_STATEMENT_TYPE_MULTI        StmtType = C.DUCKDB_STATEMENT_TYPE_MULTI
+)
+
+// Stmt implements the driver.Stmt interface.
+type Stmt struct {
+	c                *Conn
 	stmt             *C.duckdb_prepared_statement
 	closeOnRowsClose bool
+	bound            bool
 	closed           bool
 	rows             bool
 }
 
-func (s *stmt) Close() error {
+// Close closes the statement.
+// It implements the driver.Stmt interface.
+func (s *Stmt) Close() error {
 	if s.rows {
 		panic("database/sql/driver: misuse of duckdb driver: Close with active Rows")
 	}
@@ -36,7 +73,9 @@ func (s *stmt) Close() error {
 	return nil
 }
 
-func (s *stmt) NumInput() int {
+// NumInput returns the number of placeholders in the statement.
+// It implements the driver.Stmt interface.
+func (s *Stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
@@ -44,7 +83,46 @@ func (s *stmt) NumInput() int {
 	return int(paramCount)
 }
 
-func (s *stmt) bind(args []driver.NamedValue) error {
+// ParamName returns the name of the parameter at the given index (1-based).
+func (s *Stmt) ParamName(n int) string {
+	if s.closed {
+		panic("database/sql/driver: misuse of duckdb driver: ParamName after Close")
+	}
+
+	name := C.duckdb_parameter_name(*s.stmt, C.idx_t(n))
+	paramName := C.GoString(name)
+	C.duckdb_free(unsafe.Pointer(name))
+	return paramName
+}
+
+// ParamType returns the expected type of the parameter at the given index (1-based).
+func (s *Stmt) ParamType(n int) Type {
+	if s.closed {
+		panic("database/sql/driver: misuse of duckdb driver: ParamType after Close")
+	}
+
+	return Type(C.duckdb_param_type(*s.stmt, C.idx_t(n)))
+}
+
+// StatementType returns the type of the statement.
+func (s *Stmt) StatementType() StmtType {
+	if s.closed {
+		panic("database/sql/driver: misuse of duckdb driver: StatementType after Close")
+	}
+
+	return StmtType(C.duckdb_prepared_statement_type(*s.stmt))
+}
+
+// Bind binds the arguments to the query.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) Bind(args []driver.NamedValue) error {
+	if s.closed {
+		return errors.Join(errCouldNotBind, errClosedCon)
+	}
+	return s.bind(args)
+}
+
+func (s *Stmt) bind(args []driver.NamedValue) error {
 	if s.NumInput() > len(args) {
 		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
@@ -171,16 +249,48 @@ func (s *stmt) bind(args []driver.NamedValue) error {
 		}
 	}
 
+	s.bound = true
 	return nil
 }
 
 // Deprecated: Use ExecContext instead.
-func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
+func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 	return s.ExecContext(context.Background(), argsToNamedArgs(args))
 }
 
-func (s *stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
-	res, err := s.execute(ctx, nargs)
+// ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
+// It implements the driver.StmtExecContext interface.
+func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if err := s.bind(nargs); err != nil {
+		return nil, err
+	}
+	return s.execBound(ctx)
+}
+
+// ExecBound executes a bound query that doesn't return rows, such as an INSERT or UPDATE.
+// It can only be called after Bind has been called.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if !s.bound {
+		return nil, errNotBound
+	}
+	return s.execBound(ctx)
+}
+
+func (s *Stmt) execBound(ctx context.Context) (driver.Result, error) {
+	res, err := s.execute(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -191,12 +301,37 @@ func (s *stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 }
 
 // Deprecated: Use QueryContext instead.
-func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
+func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	return s.QueryContext(context.Background(), argsToNamedArgs(args))
 }
 
-func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
-	res, err := s.execute(ctx, nargs)
+// QueryContext executes a query that may return rows, such as a SELECT.
+// It implements the driver.StmtQueryContext interface.
+func (s *Stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
+	if err := s.Bind(nargs); err != nil {
+		return nil, err
+	}
+	return s.QueryBound(ctx)
+}
+
+// QueryBound executes a bound statement that may return rows, such as a SELECT.
+// It can only be called after Bind has been called.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if !s.bound {
+		return nil, errNotBound
+	}
+	return s.queryBound(ctx)
+}
+
+func (s *Stmt) queryBound(ctx context.Context) (driver.Rows, error) {
+	res, err := s.execute(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -206,18 +341,7 @@ func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
-	if s.closed {
-		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
-	}
-	if s.rows {
-		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
-	}
-
-	if err := s.bind(args); err != nil {
-		return nil, err
-	}
-
+func (s *Stmt) execute(ctx context.Context) (*C.duckdb_result, error) {
 	var pendingRes C.duckdb_pending_result
 	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
 		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))
@@ -269,5 +393,3 @@ func argsToNamedArgs(values []driver.Value) []driver.NamedValue {
 	}
 	return args
 }
-
-var errCouldNotBind = errors.New("could not bind parameter")

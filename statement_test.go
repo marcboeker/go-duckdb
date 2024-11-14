@@ -3,6 +3,7 @@ package duckdb
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"testing"
 
@@ -30,6 +31,32 @@ func TestPrepareQuery(t *testing.T) {
 	res, err = prepared.Query(0)
 	require.NoError(t, err)
 
+	// Access the raw connection & statement.
+	err = c.Raw(func(driverConn interface{}) error {
+		conn := driverConn.(*Conn)
+		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE baz = ?`)
+		require.NoError(t, err)
+		stmt := s.(*Stmt)
+		require.Equal(t, DUCKDB_STATEMENT_TYPE_SELECT, stmt.StatementType())
+		require.Equal(t, TYPE_INTEGER, stmt.ParamType(1))
+
+		rows, err := stmt.QueryBound(context.Background())
+		require.Nil(t, rows)
+		require.ErrorIs(t, err, errNotBound)
+
+		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
+		require.NoError(t, err)
+
+		rows, err = stmt.QueryBound(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, rows)
+		require.NoError(t, rows.Close())
+
+		require.NoError(t, stmt.Close())
+		return nil
+	})
+	require.NoError(t, err)
+
 	require.NoError(t, res.Close())
 	require.NoError(t, prepared.Close())
 	require.NoError(t, c.Close())
@@ -53,6 +80,46 @@ func TestPrepareQueryPositional(t *testing.T) {
 	require.Equal(t, 2, bar)
 
 	require.NoError(t, prepared.Close())
+
+	// Prepare on a connection.
+	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	prepared, err = c.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $2 AND baz = $1`)
+	require.NoError(t, err)
+	res, err := prepared.Query(0, "hello")
+	require.NoError(t, err)
+	require.NoError(t, res.Close())
+	require.NoError(t, prepared.Close())
+
+	// Access the raw connection & statement.
+	err = c.Raw(func(driverConn interface{}) error {
+		conn := driverConn.(*Conn)
+		s, err := conn.PrepareContext(context.Background(), `UPDATE foo SET bar = $2 WHERE baz = $1`)
+		require.NoError(t, err)
+		stmt := s.(*Stmt)
+		require.Equal(t, DUCKDB_STATEMENT_TYPE_UPDATE, stmt.StatementType())
+		require.Equal(t, "1", stmt.ParamName(1))
+		require.Equal(t, TYPE_INTEGER, stmt.ParamType(1))
+		require.Equal(t, "2", stmt.ParamName(2))
+		require.Equal(t, TYPE_VARCHAR, stmt.ParamType(2))
+
+		result, err := stmt.ExecBound(context.Background())
+		require.Nil(t, result)
+		require.ErrorIs(t, err, errNotBound)
+
+		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}, {Ordinal: 2, Value: "hello"}})
+		require.NoError(t, err)
+
+		result, err = stmt.ExecBound(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		require.NoError(t, stmt.Close())
+		return nil
+	})
+	require.NoError(t, err)
+
 	require.NoError(t, db.Close())
 }
 
@@ -73,6 +140,46 @@ func TestPrepareQueryNamed(t *testing.T) {
 	require.Equal(t, 1, foo2)
 
 	require.NoError(t, prepared.Close())
+
+	// Prepare on a connection.
+	c, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	prepared, err = c.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $bar AND baz = $baz`)
+	require.NoError(t, err)
+	res, err := prepared.Query(sql.Named("bar", "hello"), sql.Named("baz", 0))
+	require.NoError(t, err)
+	require.NoError(t, res.Close())
+	require.NoError(t, prepared.Close())
+
+	// Access the raw connection & statement.
+	err = c.Raw(func(driverConn interface{}) error {
+		conn := driverConn.(*Conn)
+		s, err := conn.PrepareContext(context.Background(), `INSERT INTO foo VALUES ($bar, $baz)`)
+		require.NoError(t, err)
+		stmt := s.(*Stmt)
+		require.Equal(t, DUCKDB_STATEMENT_TYPE_INSERT, stmt.StatementType())
+		require.Equal(t, "bar", stmt.ParamName(1))
+		require.Equal(t, TYPE_INVALID, stmt.ParamType(1)) // Not sure why this is invalid.
+		require.Equal(t, "baz", stmt.ParamName(2))
+		require.Equal(t, TYPE_INVALID, stmt.ParamType(2))
+
+		result, err := stmt.ExecBound(context.Background())
+		require.Nil(t, result)
+		require.ErrorIs(t, err, errNotBound)
+
+		err = stmt.Bind([]driver.NamedValue{{Name: "bar", Value: "hello"}, {Name: "baz", Value: 0}})
+		require.NoError(t, err)
+
+		result, err = stmt.ExecBound(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		require.NoError(t, stmt.Close())
+		return nil
+	})
+	require.NoError(t, err)
+
 	require.NoError(t, db.Close())
 }
 

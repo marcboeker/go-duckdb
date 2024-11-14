@@ -26,7 +26,7 @@ type ProfilingInfo struct {
 func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
 	err := c.Raw(func(driverConn any) error {
-		con := driverConn.(*conn)
+		con := driverConn.(*Conn)
 		duckdbInfo := C.duckdb_get_profiling_info(con.duckdbCon)
 		if duckdbInfo == nil {
 			return getError(errProfilingInfoEmpty, nil)

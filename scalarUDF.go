@@ -70,7 +70,7 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err = c.Raw(func(driverConn any) error {
-		con := driverConn.(*conn)
+		con := driverConn.(*Conn)
 		state := C.duckdb_register_scalar_function(con.duckdbCon, function)
 		C.duckdb_destroy_scalar_function(&function)
 		if state == C.DuckDBError {
@@ -111,7 +111,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 	// Register the function set on the underlying driver connection exposed by c.Raw.
 	err := c.Raw(func(driverConn any) error {
-		con := driverConn.(*conn)
+		con := driverConn.(*Conn)
 		state := C.duckdb_register_scalar_function_set(con.duckdbCon, set)
 		C.duckdb_destroy_scalar_function_set(&set)
 		if state == C.DuckDBError {
