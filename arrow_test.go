@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"testing"
 
 	"github.com/apache/arrow/go/v17/arrow"
@@ -203,6 +204,97 @@ func TestArrow(t *testing.T) {
 			}
 			require.NoError(t, rows.Err())
 			require.Equal(t, 20, i)
+
+			return nil
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("register arrow stream lists subselect", func(t *testing.T) {
+		err = conn.Raw(func(driverConn any) error {
+			conn, ok := driverConn.(driver.Conn)
+			require.True(t, ok)
+
+			ar, err := NewArrowFromConn(conn)
+			require.NoError(t, err)
+
+			pool := memory.NewGoAllocator()
+
+			schema := arrow.NewSchema(
+				[]arrow.Field{
+					{
+						Name: "m",
+						Type: arrow.StructOf(
+							arrow.Field{
+								Name: "array",
+								Type: arrow.ListOf(arrow.StructOf(
+									arrow.Field{Name: "a", Type: arrow.PrimitiveTypes.Int64},
+								)),
+							},
+						),
+					},
+					{
+						Name: "a",
+						Type: arrow.StructOf(
+							arrow.Field{
+								Name: "array",
+								Type: arrow.ListOf(arrow.PrimitiveTypes.Int64),
+							},
+						),
+					},
+				},
+				nil,
+			)
+
+			b := array.NewRecordBuilder(pool, schema)
+			defer b.Release()
+			mBuilder := b.Field(0).(*array.StructBuilder)
+			mBuilder.Append(true)
+			mArrayBuilder := mBuilder.FieldBuilder(0).(*array.ListBuilder)
+			mArrayBuilder.Append(true)
+			mArrayStructBuilder := mArrayBuilder.ValueBuilder().(*array.StructBuilder)
+			mArrayStructBuilder.Append(true)
+			mArrayStructBuilder.FieldBuilder(0).(*array.Int64Builder).AppendValues([]int64{1}, nil)
+
+			aBuilder := b.Field(1).(*array.StructBuilder)
+			aBuilder.Append(true)
+			aArrayBuilder := aBuilder.FieldBuilder(0).(*array.ListBuilder)
+			aArrayBuilder.Append(true)
+			aArrayBuilder.ValueBuilder().(*array.Int64Builder).AppendValues([]int64{1}, nil)
+
+			rec1 := b.NewRecord()
+
+			defer rec1.Release()
+			tbl := array.NewTableFromRecords(schema, []arrow.Record{rec1})
+			defer tbl.Release()
+
+			tr := array.NewTableReader(tbl, 5)
+			defer tr.Release()
+
+			release, err := ar.RegisterView(tr, "arrow_table")
+			require.NoError(t, err)
+			require.NotNil(t, release)
+			defer release()
+
+			rdr, err := ar.QueryContext(context.Background(), "SELECT a FROM arrow_table")
+			require.NoError(t, err)
+			defer rdr.Release()
+			for rdr.Next() {
+				rec := rdr.Record()
+				v := fmt.Sprint(rec)
+				fmt.Println(v)
+				require.Equal(t,
+					`record:
+  schema:
+  fields: 1
+    - a: type=struct<array: list<l: int64, nullable>>, nullable
+  rows: 1
+  col[0][a]: {[[1]]}
+`,
+					v)
+				rec.Release()
+			}
+			require.NoError(t, rdr.Err())
 
 			return nil
 		})
