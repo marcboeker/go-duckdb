@@ -14,13 +14,16 @@ import (
 	"unsafe"
 )
 
-type conn struct {
+// Conn holds a connection to a DuckDB database.
+// It implements the driver.Conn interface.
+type Conn struct {
 	duckdbCon C.duckdb_connection
 	closed    bool
 	tx        bool
 }
 
-func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
+// CheckNamedValue implements the driver.NamedValueChecker interface.
+func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
 	case *big.Int, Interval:
 		return nil
@@ -28,7 +31,9 @@ func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	return driver.ErrSkip
 }
 
-func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+// ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
+// It implements the driver.ExecerContext interface.
+func (c *Conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	prepared, err := c.prepareStmts(ctx, query)
 	if err != nil {
 		return nil, err
@@ -48,7 +53,9 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	return res, nil
 }
 
-func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+// QueryContext executes a query that may return rows, such as a SELECT.
+// It implements the driver.QueryerContext interface.
+func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	prepared, err := c.prepareStmts(ctx, query)
 	if err != nil {
 		return nil, err
@@ -68,11 +75,15 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	return r, nil
 }
 
-func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+// PrepareContext returns a prepared statement, bound to this connection.
+// It implements the driver.ConnPrepareContext interface.
+func (c *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	return c.prepareStmts(ctx, query)
 }
 
-func (c *conn) Prepare(query string) (driver.Stmt, error) {
+// Prepare returns a prepared statement, bound to this connection.
+// It implements the driver.Conn interface.
+func (c *Conn) Prepare(query string) (driver.Stmt, error) {
 	if c.closed {
 		return nil, errors.Join(errPrepare, errClosedCon)
 	}
@@ -90,11 +101,13 @@ func (c *conn) Prepare(query string) (driver.Stmt, error) {
 }
 
 // Begin is deprecated: Use BeginTx instead.
-func (c *conn) Begin() (driver.Tx, error) {
+func (c *Conn) Begin() (driver.Tx, error) {
 	return c.BeginTx(context.Background(), driver.TxOptions{})
 }
 
-func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+// BeginTx starts and returns a new transaction.
+// It implements the driver.ConnBeginTx interface.
+func (c *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if c.tx {
 		return nil, errors.Join(errBeginTx, errMultipleTx)
 	}
@@ -117,7 +130,9 @@ func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 	return &tx{c}, nil
 }
 
-func (c *conn) Close() error {
+// Close closes the connection to the database.
+// It implements the driver.Conn interface.
+func (c *Conn) Close() error {
 	if c.closed {
 		return errClosedCon
 	}
@@ -126,7 +141,7 @@ func (c *conn) Close() error {
 	return nil
 }
 
-func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
+func (c *Conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
 	cQuery := C.CString(query)
 	defer C.duckdb_free(unsafe.Pointer(cQuery))
 
@@ -145,7 +160,7 @@ func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_
 	return stmts, count, nil
 }
 
-func (c *conn) prepareExtractedStmt(stmts C.duckdb_extracted_statements, i C.idx_t) (*stmt, error) {
+func (c *Conn) prepareExtractedStmt(stmts C.duckdb_extracted_statements, i C.idx_t) (*Stmt, error) {
 	var s C.duckdb_prepared_statement
 	state := C.duckdb_prepare_extracted_statement(c.duckdbCon, stmts, i, &s)
 
@@ -155,10 +170,10 @@ func (c *conn) prepareExtractedStmt(stmts C.duckdb_extracted_statements, i C.idx
 		return nil, err
 	}
 
-	return &stmt{c: c, stmt: &s}, nil
+	return &Stmt{c: c, stmt: &s}, nil
 }
 
-func (c *conn) prepareStmts(ctx context.Context, query string) (*stmt, error) {
+func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
 	if c.closed {
 		return nil, errClosedCon
 	}
