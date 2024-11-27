@@ -91,7 +91,7 @@ const testTypesTableSQL = `CREATE TABLE test (
 	Array_col INTEGER[3],
 	Time_tz_col TIMETZ,
 	Timestamp_tz_col TIMESTAMPTZ,
-    Json_col_map JSON,
+	Json_col_map JSON,
 	Json_col_array JSON,
 	Json_col_string JSON,
 	Json_col_bool JSON,
@@ -878,9 +878,9 @@ func TestJSONType(t *testing.T) {
 	SELECT json_group_object(t2.status, t2.count) AS result
 	FROM (
 		SELECT json_extract(c1, '$.index') AS status, COUNT(*) AS count
-    	FROM test
-    	GROUP BY status
-    ) AS t2`)
+		FROM test
+		GROUP BY status
+	) AS t2`)
 
 	var res Composite[map[string]any]
 	require.NoError(t, row.Scan(&res))
