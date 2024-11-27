@@ -46,6 +46,15 @@ func (vec *vector) init(logicalType C.duckdb_logical_type, colIdx int) error {
 		return addIndexToError(unsupportedTypeError(name), colIdx)
 	}
 
+	cStr := C.duckdb_logical_type_get_alias(logicalType)
+	alias := C.GoString(cStr)
+	C.duckdb_free(unsafe.Pointer(cStr))
+	switch alias {
+	case aliasJSON:
+		vec.initJSON()
+		return nil
+	}
+
 	switch t {
 	case TYPE_BOOLEAN:
 		initBool(vec)
@@ -266,7 +275,7 @@ func (vec *vector) initBytes(t Type) {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
-		return vec.getCString(rowIdx)
+		return vec.getBytes(rowIdx)
 	}
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) error {
 		if val == nil {
@@ -276,6 +285,23 @@ func (vec *vector) initBytes(t Type) {
 		return setBytes(vec, rowIdx, val)
 	}
 	vec.Type = t
+}
+
+func (vec *vector) initJSON() {
+	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return vec.getJSON(rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) error {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return nil
+		}
+		return setJSON(vec, rowIdx, val)
+	}
+	vec.Type = TYPE_VARCHAR
 }
 
 func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) error {

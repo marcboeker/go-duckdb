@@ -55,6 +55,7 @@ type testTypesRow struct {
 	Array_col        Composite[[3]int32]
 	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
+	Json_col         Composite[map[string]any]
 }
 
 const testTypesTableSQL = `CREATE TABLE test (
@@ -85,7 +86,8 @@ const testTypesTableSQL = `CREATE TABLE test (
 	Map_col MAP(INTEGER, VARCHAR),
 	Array_col INTEGER[3],
 	Time_tz_col TIMETZ,
-	Timestamp_tz_col TIMESTAMPTZ
+	Timestamp_tz_col TIMESTAMPTZ,
+	Json_col JSON
 )`
 
 func (r *testTypesRow) toUTC() {
@@ -129,6 +131,12 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	arrayCol := Composite[[3]int32]{
 		[3]int32{int32(i), int32(i), int32(i)},
 	}
+	jsonCol := Composite[map[string]any]{
+		map[string]any{
+			"hello": float64(42),
+			"world": float64(84),
+		},
+	}
 
 	return testTypesRow{
 		i%2 == 1,
@@ -159,6 +167,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		arrayCol,
 		timeTZ,
 		ts,
+		jsonCol,
 	}
 }
 
@@ -208,7 +217,8 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			r.Map_col,
 			r.Array_col.Get(),
 			r.Time_tz_col,
-			r.Timestamp_tz_col)
+			r.Timestamp_tz_col,
+			r.Json_col.Get())
 		require.NoError(t, err)
 	}
 	require.NoError(t, a.Flush())
@@ -248,7 +258,8 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			&r.Map_col,
 			&r.Array_col,
 			&r.Time_tz_col,
-			&r.Timestamp_tz_col)
+			&r.Timestamp_tz_col,
+			&r.Json_col)
 		require.NoError(t, err)
 		actualRows = append(actualRows, r)
 	}
@@ -826,5 +837,32 @@ func TestInterval(t *testing.T) {
 		}
 	})
 
+	require.NoError(t, db.Close())
+}
+
+func TestJSONType(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	_, err := db.Exec(`CREATE TABLE test (c1 STRUCT(index INTEGER))`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO test VALUES ({index: 1}), ({index: 2}), ({index: 2}), ({index: 3}), ({index: 3}), ({index: 3})`)
+	require.NoError(t, err)
+
+	// Verify results.
+	row := db.QueryRowContext(context.Background(), `
+	SELECT json_group_object(t2.status, t2.count) AS result
+	FROM (
+		SELECT json_extract(c1, '$.index') AS status, COUNT(*) AS count
+    	FROM test
+    	GROUP BY status
+    ) AS t2`)
+
+	var res Composite[map[string]any]
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, float64(1), res.Get()["1"])
+	require.Equal(t, float64(2), res.Get()["2"])
+	require.Equal(t, float64(3), res.Get()["3"])
 	require.NoError(t, db.Close())
 }

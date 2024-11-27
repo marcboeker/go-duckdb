@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"encoding/json"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -256,6 +257,22 @@ func setBytes[S any](vec *vector, rowIdx C.idx_t, val S) error {
 
 	C.duckdb_vector_assign_string_element_len(vec.duckdbVector, rowIdx, cStr, C.idx_t(length))
 	return nil
+}
+
+func setJSON[S any](vec *vector, rowIdx C.idx_t, val S) error {
+	var m map[string]any
+	switch v := any(val).(type) {
+	case map[string]any:
+		m = v
+	default:
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(m).String())
+	}
+
+	bytes, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return setBytes(vec, rowIdx, bytes)
 }
 
 func setDecimal[S any](vec *vector, rowIdx C.idx_t, val S) error {
