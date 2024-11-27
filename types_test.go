@@ -55,7 +55,11 @@ type testTypesRow struct {
 	Array_col        Composite[[3]int32]
 	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
-	Json_col         Composite[map[string]any]
+	Json_col_map     Composite[map[string]any]
+	Json_col_array   Composite[[]any]
+	Json_col_string  string
+	Json_col_bool    bool
+	Json_col_float64 float64
 }
 
 const testTypesTableSQL = `CREATE TABLE test (
@@ -87,7 +91,11 @@ const testTypesTableSQL = `CREATE TABLE test (
 	Array_col INTEGER[3],
 	Time_tz_col TIMETZ,
 	Timestamp_tz_col TIMESTAMPTZ,
-	Json_col JSON
+    Json_col_map JSON,
+	Json_col_array JSON,
+	Json_col_string JSON,
+	Json_col_bool JSON,
+	Json_col_float64 JSON
 )`
 
 func (r *testTypesRow) toUTC() {
@@ -131,11 +139,14 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	arrayCol := Composite[[3]int32]{
 		[3]int32{int32(i), int32(i), int32(i)},
 	}
-	jsonCol := Composite[map[string]any]{
+	jsonMapCol := Composite[map[string]any]{
 		map[string]any{
 			"hello": float64(42),
 			"world": float64(84),
 		},
+	}
+	jsonArrayCol := Composite[[]any]{
+		[]any{"hello", "world"},
 	}
 
 	return testTypesRow{
@@ -167,7 +178,11 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		arrayCol,
 		timeTZ,
 		ts,
-		jsonCol,
+		jsonMapCol,
+		jsonArrayCol,
+		varcharCol,
+		i%2 == 1,
+		float64(i),
 	}
 }
 
@@ -218,7 +233,11 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			r.Array_col.Get(),
 			r.Time_tz_col,
 			r.Timestamp_tz_col,
-			r.Json_col.Get())
+			r.Json_col_map.Get(),
+			r.Json_col_array.Get(),
+			r.Json_col_string,
+			r.Json_col_bool,
+			r.Json_col_float64)
 		require.NoError(t, err)
 	}
 	require.NoError(t, a.Flush())
@@ -259,7 +278,11 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			&r.Array_col,
 			&r.Time_tz_col,
 			&r.Timestamp_tz_col,
-			&r.Json_col)
+			&r.Json_col_map,
+			&r.Json_col_array,
+			&r.Json_col_string,
+			&r.Json_col_bool,
+			&r.Json_col_float64)
 		require.NoError(t, err)
 		actualRows = append(actualRows, r)
 	}

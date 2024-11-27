@@ -260,16 +260,7 @@ func setBytes[S any](vec *vector, rowIdx C.idx_t, val S) error {
 }
 
 func setJSON[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var m map[string]any
-	// TODO: we need the base types here, not jsut map[string]any.
-	switch v := any(val).(type) {
-	case map[string]any:
-		m = v
-	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(m).String())
-	}
-
-	bytes, err := json.Marshal(m)
+	bytes, err := json.Marshal(val)
 	if err != nil {
 		return err
 	}
