@@ -15,15 +15,18 @@ import (
 	"unsafe"
 )
 
-type stmt struct {
-	c                *conn
+// Stmt implements the driver.Stmt interface.
+type Stmt struct {
+	c                *Conn
 	stmt             *C.duckdb_prepared_statement
 	closeOnRowsClose bool
 	closed           bool
 	rows             bool
 }
 
-func (s *stmt) Close() error {
+// Close closes the statement.
+// It implements the driver.Stmt interface.
+func (s *Stmt) Close() error {
 	if s.rows {
 		panic("database/sql/driver: misuse of duckdb driver: Close with active Rows")
 	}
@@ -36,7 +39,9 @@ func (s *stmt) Close() error {
 	return nil
 }
 
-func (s *stmt) NumInput() int {
+// NumInput returns the number of placeholder parameters.
+// It implements the driver.Stmt interface.
+func (s *Stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
@@ -44,7 +49,7 @@ func (s *stmt) NumInput() int {
 	return int(paramCount)
 }
 
-func (s *stmt) bind(args []driver.NamedValue) error {
+func (s *Stmt) bind(args []driver.NamedValue) error {
 	if s.NumInput() > len(args) {
 		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
@@ -175,11 +180,13 @@ func (s *stmt) bind(args []driver.NamedValue) error {
 }
 
 // Deprecated: Use ExecContext instead.
-func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
+func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 	return s.ExecContext(context.Background(), argsToNamedArgs(args))
 }
 
-func (s *stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
+// ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
+// It implements the driver.StmtExecContext interface.
+func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
 	res, err := s.execute(ctx, nargs)
 	if err != nil {
 		return nil, err
@@ -191,11 +198,13 @@ func (s *stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 }
 
 // Deprecated: Use QueryContext instead.
-func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
+func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	return s.QueryContext(context.Background(), argsToNamedArgs(args))
 }
 
-func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
+// QueryContext executes a query that may return rows, such as a SELECT.
+// It implements the driver.StmtQueryContext interface.
+func (s *Stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
 	res, err := s.execute(ctx, nargs)
 	if err != nil {
 		return nil, err
@@ -206,7 +215,7 @@ func (s *stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
+func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
 	}
