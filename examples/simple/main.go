@@ -22,17 +22,15 @@ type user struct {
 func main() {
 	var err error
 	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 	defer db.Close()
 
 	check(db.Ping())
 
 	setting := db.QueryRowContext(context.Background(), "SELECT current_setting('access_mode')")
-	var am string
-	check(setting.Scan(&am))
-	log.Printf("DB opened with access mode %s", am)
+	var accessMode string
+	check(setting.Scan(&accessMode))
+	log.Printf("DB opened with access mode %s", accessMode)
 
 	check(db.ExecContext(context.Background(), "CREATE TABLE users(name VARCHAR, age INTEGER, height FLOAT, awesome BOOLEAN, bday DATE)"))
 	check(db.ExecContext(context.Background(), "INSERT INTO users VALUES('marc', 99, 1.91, true, '1970-01-01')"))

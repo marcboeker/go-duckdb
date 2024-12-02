@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"encoding/json"
 	"math/big"
 	"time"
 	"unsafe"
@@ -109,7 +110,7 @@ func (vec *vector) getHugeint(rowIdx C.idx_t) *big.Int {
 	return hugeIntToNative(hugeInt)
 }
 
-func (vec *vector) getCString(rowIdx C.idx_t) any {
+func (vec *vector) getBytes(rowIdx C.idx_t) any {
 	cStr := getPrimitive[duckdb_string_t](vec, rowIdx)
 
 	var blob []byte
@@ -125,6 +126,13 @@ func (vec *vector) getCString(rowIdx C.idx_t) any {
 		return string(blob)
 	}
 	return blob
+}
+
+func (vec *vector) getJSON(rowIdx C.idx_t) any {
+	bytes := vec.getBytes(rowIdx).(string)
+	var value any
+	_ = json.Unmarshal([]byte(bytes), &value)
+	return value
 }
 
 func (vec *vector) getDecimal(rowIdx C.idx_t) Decimal {
