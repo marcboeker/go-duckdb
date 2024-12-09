@@ -643,9 +643,32 @@ func TestUUID(t *testing.T) {
 
 		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&val))
 		require.Equal(t, test, val)
+
+		var u UUID
+		require.NoError(t, db.QueryRow(`SELECT uuid FROM uuid_test WHERE uuid = ?`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
+
+		require.NoError(t, db.QueryRow(`SELECT ?`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
+
+		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
 	}
 
 	require.NoError(t, db.Close())
+}
+
+func TestUUIDScanError(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	var u UUID
+	// invalid value type
+	require.Error(t, db.QueryRow(`SELECT 12345`).Scan(&u))
+	// string value not valid
+	require.Error(t, db.QueryRow(`SELECT 'I am not a UUID.'`).Scan(&u))
+	// blob value not valid
+	require.Error(t, db.QueryRow(`SELECT '123456789012345678901234567890123456'::BLOB`).Scan(&u))
 }
 
 func TestDate(t *testing.T) {
