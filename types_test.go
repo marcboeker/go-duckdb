@@ -643,6 +643,16 @@ func TestUUID(t *testing.T) {
 
 		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&val))
 		require.Equal(t, test, val)
+
+		var u UUID
+		require.NoError(t, db.QueryRow(`SELECT uuid FROM uuid_test WHERE uuid = ?`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
+
+		require.NoError(t, db.QueryRow(`SELECT ?`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
+
+		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
 	}
 
 	require.NoError(t, db.Close())
