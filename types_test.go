@@ -658,6 +658,19 @@ func TestUUID(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
+func TestUUIDScanError(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	var u UUID
+	// invalid value type
+	require.Error(t, db.QueryRow(`SELECT 12345`).Scan(&u))
+	// string value not valid
+	require.Error(t, db.QueryRow(`SELECT 'I am not a UUID.'`).Scan(&u))
+	// blob value not valid
+	require.Error(t, db.QueryRow(`SELECT '123456789012345678901234567890123456'::BLOB`).Scan(&u))
+}
+
 func TestDate(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)

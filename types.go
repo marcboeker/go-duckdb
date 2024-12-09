@@ -38,7 +38,7 @@ func (u *UUID) Scan(v any) error {
 		}
 		copy(u[:], id[:])
 	default:
-		return fmt.Errorf("invalid UUID type: %#v", val)
+		return fmt.Errorf("invalid UUID value type: %T", val)
 	}
 	return nil
 }
