@@ -38,6 +38,10 @@ func columnCountError(actual int, expected int) error {
 	return fmt.Errorf("%s: expected %d, got %d", columnCountErrMsg, expected, actual)
 }
 
+func paramIndexError(idx int, max uint64) error {
+	return fmt.Errorf("%s: %d is out of range [1, %d]", paramIndexErrMsg, idx, max)
+}
+
 func unsupportedTypeError(name string) error {
 	return fmt.Errorf("%s: %s", unsupportedTypeErrMsg, name)
 }
@@ -80,6 +84,7 @@ const (
 	unknownTypeErrMsg      = "unknown type"
 	interfaceIsNilErrMsg   = "interface is nil"
 	duplicateNameErrMsg    = "duplicate name"
+	paramIndexErrMsg       = "invalid parameter index"
 )
 
 var (
@@ -94,6 +99,9 @@ var (
 
 	errInvalidCon = errors.New("not a DuckDB driver connection")
 	errClosedCon  = errors.New("closed connection")
+
+	errClosedStmt        = errors.New("closed statement")
+	errUninitializedStmt = errors.New("uninitialized statement")
 
 	errPrepare                    = errors.New("could not prepare query")
 	errMissingPrepareContext      = errors.New("missing context for multi-statement query: try using PrepareContext")
