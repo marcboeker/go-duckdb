@@ -59,11 +59,11 @@ func TestPrepareQuery(t *testing.T) {
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 		paramType, err = stmt.ParamType(1)
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		return nil
@@ -149,15 +149,15 @@ func TestPrepareQueryPositional(t *testing.T) {
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 		paramName, err = stmt.ParamName(1)
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, "", paramName)
 
 		paramType, err = stmt.ParamType(1)
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		return nil
@@ -248,15 +248,15 @@ func TestPrepareQueryNamed(t *testing.T) {
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 		paramName, err = stmt.ParamName(1)
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, "", paramName)
 
 		paramType, err = stmt.ParamType(1)
-		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		return nil
@@ -270,15 +270,15 @@ func TestUninitializedStmt(t *testing.T) {
 	stmt := &Stmt{}
 
 	stmtType, err := stmt.StatementType()
-	require.ErrorContains(t, err, errUninitializedStmt.Error())
+	require.ErrorIs(t, err, errUninitializedStmt)
 	require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 	paramType, err := stmt.ParamType(1)
-	require.ErrorContains(t, err, errUninitializedStmt.Error())
+	require.ErrorIs(t, err, errUninitializedStmt)
 	require.Equal(t, TYPE_INVALID, paramType)
 
 	paramName, err := stmt.ParamName(1)
-	require.ErrorContains(t, err, errUninitializedStmt.Error())
+	require.ErrorIs(t, err, errUninitializedStmt)
 	require.Equal(t, "", paramName)
 }
 

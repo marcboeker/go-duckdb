@@ -85,10 +85,10 @@ func (s *Stmt) NumInput() int {
 // ParamName returns the name of the parameter at the given index (1-based).
 func (s *Stmt) ParamName(n int) (string, error) {
 	if s.closed {
-		return "", getError(errAPI, errClosedStmt)
+		return "", errClosedStmt
 	}
 	if s.stmt == nil {
-		return "", getError(errAPI, errUninitializedStmt)
+		return "", errUninitializedStmt
 	}
 
 	paramCount := C.duckdb_nparams(*s.stmt)
@@ -105,10 +105,10 @@ func (s *Stmt) ParamName(n int) (string, error) {
 // ParamType returns the expected type of the parameter at the given index (1-based).
 func (s *Stmt) ParamType(n int) (Type, error) {
 	if s.closed {
-		return TYPE_INVALID, getError(errAPI, errClosedStmt)
+		return TYPE_INVALID, errClosedStmt
 	}
 	if s.stmt == nil {
-		return TYPE_INVALID, getError(errAPI, errUninitializedStmt)
+		return TYPE_INVALID, errUninitializedStmt
 	}
 
 	paramCount := C.duckdb_nparams(*s.stmt)
@@ -122,10 +122,10 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 // StatementType returns the type of the statement.
 func (s *Stmt) StatementType() (StmtType, error) {
 	if s.closed {
-		return STATEMENT_TYPE_INVALID, getError(errAPI, errClosedStmt)
+		return STATEMENT_TYPE_INVALID, errClosedStmt
 	}
 	if s.stmt == nil {
-		return STATEMENT_TYPE_INVALID, getError(errAPI, errUninitializedStmt)
+		return STATEMENT_TYPE_INVALID, errUninitializedStmt
 	}
 
 	return StmtType(C.duckdb_prepared_statement_type(*s.stmt)), nil
