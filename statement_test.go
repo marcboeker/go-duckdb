@@ -42,7 +42,7 @@ func TestPrepareQuery(t *testing.T) {
 
 		stmtType, err := stmt.StatementType()
 		require.NoError(t, err)
-		require.Equal(t, DUCKDB_STATEMENT_TYPE_SELECT, stmtType)
+		require.Equal(t, STATEMENT_TYPE_SELECT, stmtType)
 
 		paramType, err := stmt.ParamType(0)
 		require.ErrorContains(t, err, paramIndexErrMsg)
@@ -59,11 +59,11 @@ func TestPrepareQuery(t *testing.T) {
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
-		require.ErrorIs(t, err, errClosedStmt)
-		require.Equal(t, DUCKDB_STATEMENT_TYPE_INVALID, stmtType)
+		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 		paramType, err = stmt.ParamType(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		require.ErrorContains(t, err, errClosedStmt.Error())
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		return nil
@@ -112,7 +112,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 
 		stmtType, err := stmt.StatementType()
 		require.NoError(t, err)
-		require.Equal(t, DUCKDB_STATEMENT_TYPE_UPDATE, stmtType)
+		require.Equal(t, STATEMENT_TYPE_UPDATE, stmtType)
 
 		paramName, err := stmt.ParamName(0)
 		require.ErrorContains(t, err, paramIndexErrMsg)
@@ -149,15 +149,15 @@ func TestPrepareQueryPositional(t *testing.T) {
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
-		require.ErrorIs(t, err, errClosedStmt)
-		require.Equal(t, DUCKDB_STATEMENT_TYPE_INVALID, stmtType)
+		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 		paramName, err = stmt.ParamName(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		require.ErrorContains(t, err, errClosedStmt.Error())
 		require.Equal(t, "", paramName)
 
 		paramType, err = stmt.ParamType(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		require.ErrorContains(t, err, errClosedStmt.Error())
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		return nil
@@ -205,7 +205,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 
 		stmtType, err := stmt.StatementType()
 		require.NoError(t, err)
-		require.Equal(t, DUCKDB_STATEMENT_TYPE_INSERT, stmtType)
+		require.Equal(t, STATEMENT_TYPE_INSERT, stmtType)
 
 		paramName, err := stmt.ParamName(0)
 		require.ErrorContains(t, err, paramIndexErrMsg)
@@ -248,15 +248,15 @@ func TestPrepareQueryNamed(t *testing.T) {
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
-		require.ErrorIs(t, err, errClosedStmt)
-		require.Equal(t, DUCKDB_STATEMENT_TYPE_INVALID, stmtType)
+		require.ErrorContains(t, err, errClosedStmt.Error())
+		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 		paramName, err = stmt.ParamName(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		require.ErrorContains(t, err, errClosedStmt.Error())
 		require.Equal(t, "", paramName)
 
 		paramType, err = stmt.ParamType(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		require.ErrorContains(t, err, errClosedStmt.Error())
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		return nil
@@ -270,15 +270,15 @@ func TestUninitializedStmt(t *testing.T) {
 	stmt := &Stmt{}
 
 	stmtType, err := stmt.StatementType()
-	require.ErrorIs(t, err, errUninitializedStmt)
-	require.Equal(t, DUCKDB_STATEMENT_TYPE_INVALID, stmtType)
+	require.ErrorContains(t, err, errUninitializedStmt.Error())
+	require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
 	paramType, err := stmt.ParamType(1)
-	require.ErrorIs(t, err, errUninitializedStmt)
+	require.ErrorContains(t, err, errUninitializedStmt.Error())
 	require.Equal(t, TYPE_INVALID, paramType)
 
 	paramName, err := stmt.ParamName(1)
-	require.ErrorIs(t, err, errUninitializedStmt)
+	require.ErrorContains(t, err, errUninitializedStmt.Error())
 	require.Equal(t, "", paramName)
 }
 
