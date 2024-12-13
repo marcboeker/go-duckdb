@@ -52,7 +52,7 @@ func TestErrNestedMap(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
 
-	var m Map
+	var m duckdbtypes.Map
 	err := db.QueryRow(`SELECT MAP([MAP([1], [1]), MAP([2], [2])], ['a', 'e'])`).Scan(&m)
 	testError(t, err, errUnsupportedMapKeyType.Error())
 	require.NoError(t, db.Close())

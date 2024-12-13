@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/marcboeker/go-duckdb/duckdbtypes"
+	"github.com/marcboeker/go-duckdb/internal/uuidx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,7 +52,7 @@ type testTypesRow struct {
 	Enum_col         testTypesEnum
 	List_col         duckdbtypes.Composite[[]int32]
 	Struct_col       duckdbtypes.Composite[testTypesStruct]
-	Map_col          Map
+	Map_col          duckdbtypes.Map
 	Array_col        duckdbtypes.Composite[[3]int32]
 	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
@@ -134,7 +134,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	structCol := duckdbtypes.NewComposite(
 		testTypesStruct{int32(i), "a" + strconv.Itoa(i)},
 	)
-	mapCol := Map{
+	mapCol := duckdbtypes.Map{
 		int32(i): "other_longer_val",
 	}
 	arrayCol := duckdbtypes.NewComposite(
@@ -626,16 +626,16 @@ func TestUUID(t *testing.T) {
 	_, err := db.Exec(`CREATE TABLE uuid_test(uuid UUID)`)
 	require.NoError(t, err)
 
-	tests := []uuid.UUID{
-		uuid.New(),
-		uuid.Nil,
-		uuid.MustParse("80000000-0000-0000-0000-200000000000"),
+	tests := []uuidx.UUID{
+		uuidx.MustParse("2ab477ec-9e4b-4dd0-8a7e-e3d9fadfd08f"),
+		uuidx.Nil(),
+		uuidx.MustParse("80000000-0000-0000-0000-200000000000"),
 	}
 	for _, test := range tests {
 		_, err = db.Exec(`INSERT INTO uuid_test VALUES(?)`, test)
 		require.NoError(t, err)
 
-		var val uuid.UUID
+		var val uuidx.UUID
 		require.NoError(t, db.QueryRow(`SELECT uuid FROM uuid_test WHERE uuid = ?`, test).Scan(&val))
 		require.Equal(t, test, val)
 

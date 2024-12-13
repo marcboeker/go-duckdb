@@ -196,10 +196,10 @@ func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
 	return m
 }
 
-func (vec *vector) getMap(rowIdx C.idx_t) Map {
+func (vec *vector) getMap(rowIdx C.idx_t) duckdbtypes.Map {
 	list := vec.getList(rowIdx)
 
-	m := Map{}
+	m := duckdbtypes.Map{}
 	for i := 0; i < len(list); i++ {
 		mapItem := list[i].(map[string]any)
 		key := mapItem[mapKeysField()]

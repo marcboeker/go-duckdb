@@ -168,7 +168,7 @@ func (s *Stmt) bindBlob(val []byte, n int) (C.duckdb_state, error) {
 	return state, nil
 }
 
-func (s *Stmt) bindInterval(val Interval, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindInterval(val duckdbtypes.Interval, n int) (C.duckdb_state, error) {
 	v := C.duckdb_interval{
 		months: C.int32_t(val.Months),
 		days:   C.int32_t(val.Days),

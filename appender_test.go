@@ -15,8 +15,8 @@ import (
 	_ "time/tzdata"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/google/uuid"
 	"github.com/marcboeker/go-duckdb/duckdbtypes"
+	"github.com/marcboeker/go-duckdb/internal/uuidx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +57,7 @@ type mixedStruct struct {
 		L []int32
 	}
 	C struct {
-		L Map
+		L duckdbtypes.Map
 	}
 }
 
@@ -482,8 +482,8 @@ func TestAppenderUUID(t *testing.T) {
 	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (id UUID)`)
 
-	id := duckdbtypes.UUID(uuid.New())
-	otherId := duckdbtypes.UUID(uuid.New())
+	id := duckdbtypes.UUID(uuidx.Random())
+	otherId := duckdbtypes.UUID(uuidx.Random())
 	require.NoError(t, a.AppendRow(id))
 	require.NoError(t, a.AppendRow(&otherId))
 	require.NoError(t, a.AppendRow((*duckdbtypes.UUID)(nil)))
@@ -887,8 +887,8 @@ func prepareNestedData(rowCount int) []nestedDataRow {
 			{[]int32{1, 2, 3}},
 		},
 		C: struct {
-			L Map
-		}{L: Map{"foo": int32(1), "bar": int32(2)}},
+			L duckdbtypes.Map
+		}{L: duckdbtypes.Map{"foo": int32(1), "bar": int32(2)}},
 	}
 
 	rowsToAppend := make([]nestedDataRow, rowCount)

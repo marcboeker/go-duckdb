@@ -128,7 +128,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case TYPE_STRUCT:
 		return reflect.TypeOf(map[string]any{})
 	case TYPE_MAP:
-		return reflect.TypeOf(Map{})
+		return reflect.TypeOf(duckdbtypes.Map{})
 	case TYPE_ARRAY:
 		return reflect.TypeOf([]any{})
 	case TYPE_UUID:
