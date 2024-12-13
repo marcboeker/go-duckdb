@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -196,7 +197,7 @@ var (
 			resultCount: 1,
 		},
 		{
-			udf:         &constTableUDF[Interval]{value: Interval{Months: 16, Days: 10, Micros: 172800000000}, t: TYPE_INTERVAL},
+			udf:         &constTableUDF[duckdbtypes.Interval]{value: duckdbtypes.Interval{Months: 16, Days: 10, Micros: 172800000000}, t: TYPE_INTERVAL},
 			name:        "constTableUDF_interval",
 			query:       `SELECT * FROM %s('16 months 10 days 48:00:00'::INTERVAL)`,
 			resultCount: 1,

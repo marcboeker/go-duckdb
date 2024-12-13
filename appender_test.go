@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -228,7 +229,7 @@ func TestAppenderArray(t *testing.T) {
 	c, con, a := prepareAppender(t, `CREATE TABLE test (string_array VARCHAR[3])`)
 
 	count := 10
-	expected := Composite[[3]string]{[3]string{"a", "b", "c"}}
+	expected := duckdbtypes.NewComposite([3]string{"a", "b", "c"})
 	for i := 0; i < count; i++ {
 		require.NoError(t, a.AppendRow([]string{"a", "b", "c"}))
 		require.NoError(t, a.AppendRow(expected.Get()))
@@ -241,7 +242,7 @@ func TestAppenderArray(t *testing.T) {
 
 	i := 0
 	for res.Next() {
-		var r Composite[[3]string]
+		var r duckdbtypes.Composite[[3]string]
 		require.NoError(t, res.Scan(&r))
 		require.Equal(t, expected, r)
 		i++
@@ -481,11 +482,11 @@ func TestAppenderUUID(t *testing.T) {
 	t.Parallel()
 	c, con, a := prepareAppender(t, `CREATE TABLE test (id UUID)`)
 
-	id := UUID(uuid.New())
-	otherId := UUID(uuid.New())
+	id := duckdbtypes.UUID(uuid.New())
+	otherId := duckdbtypes.UUID(uuid.New())
 	require.NoError(t, a.AppendRow(id))
 	require.NoError(t, a.AppendRow(&otherId))
-	require.NoError(t, a.AppendRow((*UUID)(nil)))
+	require.NoError(t, a.AppendRow((*duckdbtypes.UUID)(nil)))
 	require.NoError(t, a.AppendRow(nil))
 	require.NoError(t, a.Flush())
 
@@ -496,11 +497,11 @@ func TestAppenderUUID(t *testing.T) {
 	i := 0
 	for res.Next() {
 		if i == 0 {
-			var r UUID
+			var r duckdbtypes.UUID
 			require.NoError(t, res.Scan(&r))
 			require.Equal(t, id, r)
 		} else {
-			var r *UUID
+			var r *duckdbtypes.UUID
 			require.NoError(t, res.Scan(&r))
 			if i == 1 {
 				require.Equal(t, otherId, *r)
@@ -733,8 +734,8 @@ func TestAppenderDecimal(t *testing.T) {
 	)`)
 
 	require.NoError(t, a.AppendRow(nil))
-	require.NoError(t, a.AppendRow(Decimal{Width: uint8(4), Value: big.NewInt(1), Scale: 3}))
-	require.NoError(t, a.AppendRow(Decimal{Width: uint8(4), Value: big.NewInt(2), Scale: 3}))
+	require.NoError(t, a.AppendRow(duckdbtypes.Decimal{Width: uint8(4), Value: big.NewInt(1), Scale: 3}))
+	require.NoError(t, a.AppendRow(duckdbtypes.Decimal{Width: uint8(4), Value: big.NewInt(2), Scale: 3}))
 	require.NoError(t, a.Flush())
 
 	// Verify results.

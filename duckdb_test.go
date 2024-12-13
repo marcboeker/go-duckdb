@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -281,7 +282,7 @@ func TestJSON(t *testing.T) {
 	db := openDB(t)
 
 	t.Run("SELECT an empty JSON", func(t *testing.T) {
-		var res Composite[map[string]any]
+		var res duckdbtypes.Composite[map[string]any]
 		require.NoError(t, db.QueryRow(`SELECT '{}'::JSON`).Scan(&res))
 		require.Empty(t, res.Get())
 	})
@@ -300,7 +301,7 @@ func TestJSON(t *testing.T) {
 	})
 
 	t.Run("SELECT a JSON array", func(t *testing.T) {
-		var res Composite[[]any]
+		var res duckdbtypes.Composite[[]any]
 		require.NoError(t, db.QueryRow(`SELECT json_array('foo', 'bar')`).Scan(&res))
 		require.Len(t, res.Get(), 2)
 		require.Equal(t, "foo", res.Get()[0])
@@ -415,7 +416,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		// DUCKDB_TYPE_INTERVAL
 		{
 			sql:      "SELECT INTERVAL 15 MINUTES AS col",
-			value:    Interval{Micros: 15 * 60 * 1000000},
+			value:    duckdbtypes.Interval{Micros: 15 * 60 * 1000000},
 			typeName: "INTERVAL",
 		},
 		// DUCKDB_TYPE_HUGEINT
@@ -439,7 +440,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		// DUCKDB_TYPE_DECIMAL
 		{
 			sql:      "SELECT 31::DECIMAL(30,17) AS col",
-			value:    Decimal{Value: big.NewInt(3100000000000000000), Width: 30, Scale: 17},
+			value:    duckdbtypes.Decimal{Value: big.NewInt(3100000000000000000), Width: 30, Scale: 17},
 			typeName: "DECIMAL(30,17)",
 		},
 		// DUCKDB_TYPE_TIMESTAMP_S

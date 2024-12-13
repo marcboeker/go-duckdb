@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +42,7 @@ type testTypesRow struct {
 	Timestamp_col    time.Time
 	Date_col         time.Time
 	Time_col         time.Time
-	Interval_col     Interval
+	Interval_col     duckdbtypes.Interval
 	Hugeint_col      *big.Int
 	Varchar_col      string
 	Blob_col         []byte
@@ -49,14 +50,14 @@ type testTypesRow struct {
 	Timestamp_ms_col time.Time
 	Timestamp_ns_col time.Time
 	Enum_col         testTypesEnum
-	List_col         Composite[[]int32]
-	Struct_col       Composite[testTypesStruct]
+	List_col         duckdbtypes.Composite[[]int32]
+	Struct_col       duckdbtypes.Composite[testTypesStruct]
 	Map_col          Map
-	Array_col        Composite[[3]int32]
+	Array_col        duckdbtypes.Composite[[3]int32]
 	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
-	Json_col_map     Composite[map[string]any]
-	Json_col_array   Composite[[]any]
+	Json_col_map     duckdbtypes.Composite[map[string]any]
+	Json_col_array   duckdbtypes.Composite[[]any]
 	Json_col_string  string
 	Json_col_bool    bool
 	Json_col_float64 float64
@@ -127,27 +128,27 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	}
 	varcharCol := buffer.String()
 
-	listCol := Composite[[]int32]{
+	listCol := duckdbtypes.NewComposite(
 		[]int32{int32(i)},
-	}
-	structCol := Composite[testTypesStruct]{
+	)
+	structCol := duckdbtypes.NewComposite(
 		testTypesStruct{int32(i), "a" + strconv.Itoa(i)},
-	}
+	)
 	mapCol := Map{
 		int32(i): "other_longer_val",
 	}
-	arrayCol := Composite[[3]int32]{
+	arrayCol := duckdbtypes.NewComposite(
 		[3]int32{int32(i), int32(i), int32(i)},
-	}
-	jsonMapCol := Composite[map[string]any]{
+	)
+	jsonMapCol := duckdbtypes.NewComposite(
 		map[string]any{
 			"hello": float64(42),
 			"world": float64(84),
 		},
-	}
-	jsonArrayCol := Composite[[]any]{
+	)
+	jsonArrayCol := duckdbtypes.NewComposite(
 		[]any{"hello", "world"},
-	}
+	)
 
 	return testTypesRow{
 		i%2 == 1,
@@ -164,7 +165,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		ts,
 		dateUTC,
 		timeUTC,
-		Interval{Days: 0, Months: int32(i), Micros: 0},
+		duckdbtypes.Interval{Days: 0, Months: int32(i), Micros: 0},
 		big.NewInt(int64(i)),
 		varcharCol,
 		[]byte{'A', 'B'},
@@ -328,7 +329,7 @@ func BenchmarkTypes(b *testing.B) {
 	cleanupAppender(b, c, con, a)
 }
 
-func compareDecimal(t *testing.T, want Decimal, got Decimal) {
+func compareDecimal(t *testing.T, want duckdbtypes.Decimal, got duckdbtypes.Decimal) {
 	require.Equal(t, want.Scale, got.Scale)
 	require.Equal(t, want.Width, got.Width)
 	require.Equal(t, want.Value.String(), got.Value.String())
@@ -341,9 +342,9 @@ func TestDecimal(t *testing.T) {
 	t.Run("SELECT all possible DECIMAL widths", func(t *testing.T) {
 		for i := 1; i <= 38; i++ {
 			r := db.QueryRow(fmt.Sprintf(`SELECT 0::DECIMAL(%d, 1)`, i))
-			var actual Decimal
+			var actual duckdbtypes.Decimal
 			require.NoError(t, r.Scan(&actual))
-			expected := Decimal{Width: uint8(i), Value: big.NewInt(0), Scale: 1}
+			expected := duckdbtypes.Decimal{Width: uint8(i), Value: big.NewInt(0), Scale: 1}
 			require.Equal(t, expected, actual)
 		}
 	})
@@ -369,20 +370,20 @@ func TestDecimal(t *testing.T) {
 		require.True(t, success)
 		tests := []struct {
 			input string
-			want  Decimal
+			want  duckdbtypes.Decimal
 		}{
-			{input: "1.23::DECIMAL(3, 2)", want: Decimal{Value: big.NewInt(123), Width: 3, Scale: 2}},
-			{input: "-1.23::DECIMAL(3, 2)", want: Decimal{Value: big.NewInt(-123), Width: 3, Scale: 2}},
-			{input: "123.45::DECIMAL(5, 2)", want: Decimal{Value: big.NewInt(12345), Width: 5, Scale: 2}},
-			{input: "-123.45::DECIMAL(5, 2)", want: Decimal{Value: big.NewInt(-12345), Width: 5, Scale: 2}},
-			{input: "123456789.01::DECIMAL(11, 2)", want: Decimal{Value: big.NewInt(12345678901), Width: 11, Scale: 2}},
-			{input: "-123456789.01::DECIMAL(11, 2)", want: Decimal{Value: big.NewInt(-12345678901), Width: 11, Scale: 2}},
-			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNumber, Width: 22, Scale: 3}},
-			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNegativeNumber, Width: 22, Scale: 3}},
+			{input: "1.23::DECIMAL(3, 2)", want: duckdbtypes.Decimal{Value: big.NewInt(123), Width: 3, Scale: 2}},
+			{input: "-1.23::DECIMAL(3, 2)", want: duckdbtypes.Decimal{Value: big.NewInt(-123), Width: 3, Scale: 2}},
+			{input: "123.45::DECIMAL(5, 2)", want: duckdbtypes.Decimal{Value: big.NewInt(12345), Width: 5, Scale: 2}},
+			{input: "-123.45::DECIMAL(5, 2)", want: duckdbtypes.Decimal{Value: big.NewInt(-12345), Width: 5, Scale: 2}},
+			{input: "123456789.01::DECIMAL(11, 2)", want: duckdbtypes.Decimal{Value: big.NewInt(12345678901), Width: 11, Scale: 2}},
+			{input: "-123456789.01::DECIMAL(11, 2)", want: duckdbtypes.Decimal{Value: big.NewInt(-12345678901), Width: 11, Scale: 2}},
+			{input: "1234567890123456789.234::DECIMAL(22, 3)", want: duckdbtypes.Decimal{Value: bigNumber, Width: 22, Scale: 3}},
+			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: duckdbtypes.Decimal{Value: bigNegativeNumber, Width: 22, Scale: 3}},
 		}
 		for _, test := range tests {
-			r := db.QueryRow(fmt.Sprintf(`SELECT %s`, test.input))
-			var fs Decimal
+			r := db.QueryRow(fmt.Sprintf("SELECT %s", test.input))
+			var fs duckdbtypes.Decimal
 			require.NoError(t, r.Scan(&fs))
 			compareDecimal(t, test.want, fs)
 		}
@@ -390,10 +391,10 @@ func TestDecimal(t *testing.T) {
 
 	t.Run("SELECT a huge DECIMAL ", func(t *testing.T) {
 		bigInt, success := new(big.Int).SetString("12345678901234567890123456789", 10)
-		require.True(t, success)
-		var f Decimal
+		require.Equal(t, true, success)
+		var f duckdbtypes.Decimal
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
-		compareDecimal(t, Decimal{Value: bigInt, Width: 29, Scale: 20}, f)
+		compareDecimal(t, duckdbtypes.Decimal{Value: bigInt, Width: 29, Scale: 20}, f)
 	})
 
 	t.Run("SELECT DECIMAL types and compare them to FLOAT64", func(t *testing.T) {
@@ -414,7 +415,7 @@ func TestDecimal(t *testing.T) {
 		}
 		for _, test := range tests {
 			r := db.QueryRow(fmt.Sprintf("SELECT %s", test.input))
-			var fs Decimal
+			var fs duckdbtypes.Decimal
 			require.NoError(t, r.Scan(&fs))
 			require.Equal(t, test.want, fs.Float64())
 		}
@@ -438,7 +439,7 @@ func TestDecimal(t *testing.T) {
 		}
 		for _, test := range tests {
 			r := db.QueryRow(fmt.Sprintf("SELECT %s", test.input))
-			var fs Decimal
+			var fs duckdbtypes.Decimal
 			require.NoError(t, r.Scan(&fs))
 			require.Equal(t, test.want, fs.String())
 		}
@@ -451,11 +452,11 @@ func TestDecimalString(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		input    Decimal
+		input    duckdbtypes.Decimal
 		expected string
 	}{
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 0,
 				Value: big.NewInt(0),
@@ -463,7 +464,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "0",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 6,
 				Value: big.NewInt(0),
@@ -471,7 +472,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "0",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 0,
 				Value: big.NewInt(1234567890),
@@ -479,7 +480,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "1234567890",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 0,
 				Value: big.NewInt(-1234567890),
@@ -487,7 +488,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "-1234567890",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 1,
 				Value: big.NewInt(1234567890),
@@ -495,7 +496,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "123456789",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 1,
 				Value: big.NewInt(-1234567890),
@@ -503,7 +504,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "-123456789",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 2,
 				Value: big.NewInt(1234567890),
@@ -511,7 +512,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "12345678.9",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 2,
 				Value: big.NewInt(-1234567890),
@@ -519,7 +520,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "-12345678.9",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 6,
 				Value: big.NewInt(1234567890),
@@ -527,7 +528,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "1234.56789",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 6,
 				Value: big.NewInt(-1234567890),
@@ -535,7 +536,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "-1234.56789",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 12,
 				Value: big.NewInt(1234567890),
@@ -543,7 +544,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "0.00123456789",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 12,
 				Value: big.NewInt(-1234567890),
@@ -551,7 +552,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "-0.00123456789",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 1,
 				Value: big.NewInt(1234500000),
@@ -559,7 +560,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "123450000",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 1,
 				Value: big.NewInt(-1234500000),
@@ -567,7 +568,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "-123450000",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 8,
 				Value: big.NewInt(-705399),
@@ -575,7 +576,7 @@ func TestDecimalString(t *testing.T) {
 			expected: "-0.00705399",
 		},
 		{
-			input: Decimal{
+			input: duckdbtypes.Decimal{
 				Width: 18,
 				Scale: 8,
 				Value: big.NewInt(821662),
@@ -609,7 +610,7 @@ func TestList(t *testing.T) {
 
 	// Test a LIST exceeding duckdb's standard vector size.
 	const n = 4000
-	var row Composite[[]int]
+	var row duckdbtypes.Composite[[]int]
 	require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
 	require.Len(t, row.Get(), n)
 	for i := 0; i < n; i++ {
@@ -644,7 +645,7 @@ func TestUUID(t *testing.T) {
 		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&val))
 		require.Equal(t, test, val)
 
-		var u UUID
+		var u duckdbtypes.UUID
 		require.NoError(t, db.QueryRow(`SELECT uuid FROM uuid_test WHERE uuid = ?`, test).Scan(&u))
 		require.Equal(t, test.String(), u.String())
 
@@ -662,7 +663,7 @@ func TestUUIDScanError(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
 
-	var u UUID
+	var u duckdbtypes.UUID
 	// invalid value type
 	require.Error(t, db.QueryRow(`SELECT 12345`).Scan(&u))
 	// string value not valid
@@ -756,7 +757,7 @@ func TestENUMs(t *testing.T) {
 	_, err = db.Exec("INSERT INTO all_enums VALUES ([?, ?, ?])", Air, Land, Sea)
 	require.NoError(t, err)
 
-	var row Composite[[]environment]
+	var row duckdbtypes.Composite[[]environment]
 	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
 	require.ElementsMatch(t, []environment{Air, Sea, Land}, row.Get())
 
@@ -880,10 +881,10 @@ func TestInterval(t *testing.T) {
 	db := openDB(t)
 
 	t.Run("INTERVAL binding", func(t *testing.T) {
-		interval := Interval{Days: 10, Months: 4, Micros: 4}
+		interval := duckdbtypes.Interval{Days: 10, Months: 4, Micros: 4}
 		row := db.QueryRow("SELECT ?::INTERVAL", interval)
 
-		var res Interval
+		var res duckdbtypes.Interval
 		require.NoError(t, row.Scan(&res))
 		require.Equal(t, interval, res)
 	})
@@ -891,23 +892,23 @@ func TestInterval(t *testing.T) {
 	t.Run("INTERVAL scanning", func(t *testing.T) {
 		tests := map[string]struct {
 			input string
-			want  Interval
+			want  duckdbtypes.Interval
 		}{
 			"simple interval": {
 				input: "INTERVAL 5 HOUR",
-				want:  Interval{Days: 0, Months: 0, Micros: 18000000000},
+				want:  duckdbtypes.Interval{Days: 0, Months: 0, Micros: 18000000000},
 			},
 			"interval arithmetic": {
 				input: "INTERVAL 1 DAY + INTERVAL 5 DAY",
-				want:  Interval{Days: 6, Months: 0, Micros: 0},
+				want:  duckdbtypes.Interval{Days: 6, Months: 0, Micros: 0},
 			},
 			"timestamp arithmetic": {
 				input: "CAST('2022-05-01' as TIMESTAMP) - CAST('2022-04-01' as TIMESTAMP)",
-				want:  Interval{Days: 30, Months: 0, Micros: 0},
+				want:  duckdbtypes.Interval{Days: 30, Months: 0, Micros: 0},
 			},
 		}
 		for _, test := range tests {
-			var res Interval
+			var res duckdbtypes.Interval
 			err := db.QueryRow(fmt.Sprintf("SELECT %s", test.input)).Scan(&res)
 			require.NoError(t, err)
 			require.Equal(t, test.want, res)
@@ -933,7 +934,7 @@ func TestArray(t *testing.T) {
 	require.NoError(t, err)
 
 	for res.Next() {
-		var vec Composite[[3]float64]
+		var vec duckdbtypes.Composite[[3]float64]
 		err = res.Scan(&vec)
 		require.NoError(t, err)
 		require.NoError(t, res.Err())
@@ -963,7 +964,7 @@ func TestJSONType(t *testing.T) {
 		GROUP BY status
 	) AS t2`)
 
-	var res Composite[map[string]any]
+	var res duckdbtypes.Composite[map[string]any]
 	require.NoError(t, row.Scan(&res))
 	require.Equal(t, float64(1), res.Get()["1"])
 	require.Equal(t, float64(2), res.Get()["2"])

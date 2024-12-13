@@ -8,6 +8,8 @@ import "C"
 import (
 	"reflect"
 	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 )
 
 // vector storage of a DuckDB column.
@@ -524,7 +526,7 @@ func (vec *vector) initUUID() {
 		return hugeIntToUUID(hugeInt)
 	}
 	vec.setFn = func(vec *vector, rowIdx C.idx_t, val any) error {
-		if val == nil || val == (*UUID)(nil) {
+		if val == nil || val == (*duckdbtypes.UUID)(nil) {
 			vec.setNull(rowIdx)
 			return nil
 		}

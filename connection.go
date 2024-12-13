@@ -12,6 +12,8 @@ import (
 	"errors"
 	"math/big"
 	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 )
 
 // Conn holds a connection to a DuckDB database.
@@ -25,7 +27,7 @@ type Conn struct {
 // CheckNamedValue implements the driver.NamedValueChecker interface.
 func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
-	case *big.Int, Interval:
+	case *big.Int, duckdbtypes.Interval:
 		return nil
 	}
 	return driver.ErrSkip

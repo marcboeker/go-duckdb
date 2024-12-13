@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -194,9 +195,9 @@ func TestErrAppend(t *testing.T) {
 func TestErrAppendDecimal(t *testing.T) {
 	c, con, a := prepareAppender(t, `CREATE TABLE test (d DECIMAL(8, 2))`)
 
-	err := a.AppendRow(Decimal{Width: 9, Scale: 2})
+	err := a.AppendRow(duckdbtypes.Decimal{Width: 9, Scale: 2})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
-	err = a.AppendRow(Decimal{Width: 8, Scale: 3})
+	err = a.AppendRow(duckdbtypes.Decimal{Width: 8, Scale: 3})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
 
 	cleanupAppender(t, c, con, a)

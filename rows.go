@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 )
 
 // rows is a helper struct for scanning a duckdb result.
@@ -112,7 +114,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_DATE, TYPE_TIME, TYPE_TIME_TZ, TYPE_TIMESTAMP_TZ:
 		return reflect.TypeOf(time.Time{})
 	case TYPE_INTERVAL:
-		return reflect.TypeOf(Interval{})
+		return reflect.TypeOf(duckdbtypes.Interval{})
 	case TYPE_HUGEINT:
 		return reflect.TypeOf(big.NewInt(0))
 	case TYPE_VARCHAR, TYPE_ENUM:
@@ -120,7 +122,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case TYPE_BLOB:
 		return reflect.TypeOf([]byte{})
 	case TYPE_DECIMAL:
-		return reflect.TypeOf(Decimal{})
+		return reflect.TypeOf(duckdbtypes.Decimal{})
 	case TYPE_LIST:
 		return reflect.TypeOf([]any{})
 	case TYPE_STRUCT:
