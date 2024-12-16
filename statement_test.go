@@ -3,6 +3,7 @@ package duckdb
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"testing"
 
@@ -56,6 +57,18 @@ func TestPrepareQuery(t *testing.T) {
 		require.ErrorContains(t, err, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
+		rows, err := stmt.QueryBound(context.Background())
+		require.Nil(t, rows)
+		require.ErrorIs(t, err, errNotBound)
+
+		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
+		require.NoError(t, err)
+
+		rows, err = stmt.QueryBound(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, rows)
+		require.NoError(t, rows.Close())
+
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
@@ -65,6 +78,10 @@ func TestPrepareQuery(t *testing.T) {
 		paramType, err = stmt.ParamType(1)
 		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
+
+		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
+		require.ErrorIs(t, err, errCouldNotBind)
+		require.ErrorIs(t, err, errClosedStmt)
 
 		return nil
 	})
@@ -146,6 +163,17 @@ func TestPrepareQueryPositional(t *testing.T) {
 		require.ErrorContains(t, err, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
+		result, err := stmt.ExecBound(context.Background())
+		require.Nil(t, result)
+		require.ErrorIs(t, err, errNotBound)
+
+		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}, {Ordinal: 2, Value: "hello"}})
+		require.NoError(t, err)
+
+		result, err = stmt.ExecBound(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
@@ -159,6 +187,10 @@ func TestPrepareQueryPositional(t *testing.T) {
 		paramType, err = stmt.ParamType(1)
 		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
+
+		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}, {Ordinal: 2, Value: "hello"}})
+		require.ErrorIs(t, err, errCouldNotBind)
+		require.ErrorIs(t, err, errClosedStmt)
 
 		return nil
 	})
@@ -245,6 +277,17 @@ func TestPrepareQueryNamed(t *testing.T) {
 		require.ErrorContains(t, err, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
+		result, err := stmt.ExecBound(context.Background())
+		require.Nil(t, result)
+		require.ErrorIs(t, err, errNotBound)
+
+		err = stmt.Bind([]driver.NamedValue{{Name: "bar", Value: "hello"}, {Name: "baz", Value: 0}})
+		require.NoError(t, err)
+
+		result, err = stmt.ExecBound(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
 		require.NoError(t, stmt.Close())
 
 		stmtType, err = stmt.StatementType()
@@ -258,6 +301,10 @@ func TestPrepareQueryNamed(t *testing.T) {
 		paramType, err = stmt.ParamType(1)
 		require.ErrorIs(t, err, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
+
+		err = stmt.Bind([]driver.NamedValue{{Name: "bar", Value: "hello"}, {Name: "baz", Value: 0}})
+		require.ErrorIs(t, err, errCouldNotBind)
+		require.ErrorIs(t, err, errClosedStmt)
 
 		return nil
 	})
@@ -280,6 +327,13 @@ func TestUninitializedStmt(t *testing.T) {
 	paramName, err := stmt.ParamName(1)
 	require.ErrorIs(t, err, errUninitializedStmt)
 	require.Equal(t, "", paramName)
+
+	err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
+	require.ErrorIs(t, err, errCouldNotBind)
+	require.ErrorIs(t, err, errUninitializedStmt)
+
+	_, err = stmt.ExecBound(context.Background())
+	require.ErrorIs(t, err, errNotBound)
 }
 
 func TestPrepareWithError(t *testing.T) {
