@@ -16,8 +16,6 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - shell: bash
         run: make deps.header
       - uses: actions/upload-artifact@v4
@@ -30,8 +28,6 @@ jobs:
     runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - shell: bash
         run: make deps.darwin.amd64
       - uses: actions/upload-artifact@v4
@@ -44,8 +40,6 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - shell: bash
         run: make deps.darwin.arm64
       - uses: actions/upload-artifact@v4
@@ -58,8 +52,6 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - shell: bash
         run: make deps.linux.amd64
       - uses: actions/upload-artifact@v4
@@ -72,8 +64,6 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - name: Install cross compile toolchain
         shell: bash
         run: |
@@ -91,8 +81,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - uses: vmactions/freebsd-vm@v1
         with:
           usesh: true
@@ -113,8 +101,6 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - shell: bash
         run: make deps.windows.amd64
       - uses: actions/upload-artifact@v4
@@ -127,8 +113,6 @@ jobs:
     needs: [darwin_amd64, darwin_arm64, linux_amd64, linux_arm64, freebsd_amd64, windows_amd64]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - shell: bash
         run: |
           rm -f deps/darwin_amd64/libduckdb.a
