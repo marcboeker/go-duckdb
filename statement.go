@@ -53,6 +53,7 @@ type Stmt struct {
 	c                *Conn
 	stmt             *C.duckdb_prepared_statement
 	closeOnRowsClose bool
+	bound            bool
 	closed           bool
 	rows             bool
 }
@@ -129,6 +130,18 @@ func (s *Stmt) StatementType() (StmtType, error) {
 	}
 
 	return StmtType(C.duckdb_prepared_statement_type(*s.stmt)), nil
+}
+
+// Bind binds the parameters to the statement.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) Bind(args []driver.NamedValue) error {
+	if s.closed {
+		return errors.Join(errCouldNotBind, errClosedStmt)
+	}
+	if s.stmt == nil {
+		return errors.Join(errCouldNotBind, errUninitializedStmt)
+	}
+	return s.bind(args)
 }
 
 func (s *Stmt) bind(args []driver.NamedValue) error {
@@ -258,6 +271,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 		}
 	}
 
+	s.bound = true
 	return nil
 }
 
@@ -270,6 +284,30 @@ func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 // It implements the driver.StmtExecContext interface.
 func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
 	res, err := s.execute(ctx, nargs)
+	if err != nil {
+		return nil, err
+	}
+	defer C.duckdb_destroy_result(res)
+
+	ra := int64(C.duckdb_value_int64(res, 0, 0))
+	return &result{ra}, nil
+}
+
+// ExecBound executes a bound query that doesn't return rows, such as an INSERT or UPDATE.
+// It can only be used after Bind has been called.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if !s.bound {
+		return nil, errNotBound
+	}
+
+	res, err := s.executeBound(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -295,6 +333,28 @@ func (s *Stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (dri
 	return newRowsWithStmt(*res, s), nil
 }
 
+// QueryBound executes a bound query that may return rows, such as a SELECT.
+// It can only be used after Bind has been called.
+// WARNING: This is a low-level API and should be used with caution.
+func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
+	if s.closed {
+		return nil, errClosedCon
+	}
+	if s.rows {
+		return nil, errActiveRows
+	}
+	if !s.bound {
+		return nil, errNotBound
+	}
+
+	res, err := s.executeBound(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.rows = true
+	return newRowsWithStmt(*res, s), nil
+}
+
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
 func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
@@ -304,11 +364,13 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	if s.rows {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext with active Rows")
 	}
-
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
+	return s.executeBound(ctx)
+}
 
+func (s *Stmt) executeBound(ctx context.Context) (*C.duckdb_result, error) {
 	var pendingRes C.duckdb_pending_result
 	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
 		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))
@@ -360,5 +422,3 @@ func argsToNamedArgs(values []driver.Value) []driver.NamedValue {
 	}
 	return args
 }
-
-var errCouldNotBind = errors.New("could not bind parameter")
