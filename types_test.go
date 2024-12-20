@@ -886,6 +886,33 @@ func TestInterval(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
+func TestArray(t *testing.T) {
+	t.Parallel()
+
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE needle (vec FLOAT[3])`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO needle VALUES (array[5, 5, 5])`)
+	require.NoError(t, err)
+
+	res, err := db.Query(`SELECT vec FROM needle`)
+	require.NoError(t, err)
+
+	for res.Next() {
+		var vec Composite[[3]float64]
+		err = res.Scan(&vec)
+		require.NoError(t, err)
+		require.NoError(t, res.Err())
+		require.Equal(t, [3]float64{5, 5, 5}, vec.Get())
+	}
+
+	require.NoError(t, res.Close())
+	require.NoError(t, db.Close())
+}
+
 func TestJSONType(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
