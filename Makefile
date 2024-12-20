@@ -20,7 +20,7 @@ test:
 
 .PHONY: deps.header
 deps.header:
-  git clone --depth 1 ${DUCKDB_REPO}
+	git clone --depth 1 ${DUCKDB_REPO}
 	git -C ./duckdb fetch --depth 1 origin ${DUCKDB_REF}
 	git -C ./duckdb checkout ${DUCKDB_REF}
 	cp duckdb/src/include/duckdb.h duckdb.h
@@ -28,7 +28,7 @@ deps.header:
 .PHONY: duckdb
 duckdb:
 	rm -rf duckdb
-  git clone --depth 1 ${DUCKDB_REPO}
+	git clone --depth 1 ${DUCKDB_REPO}
 	git -C ./duckdb fetch --depth 1 origin ${DUCKDB_REF}
 	git -C ./duckdb checkout ${DUCKDB_REF}
 
@@ -50,7 +50,7 @@ deps.darwin.arm64: duckdb
 	mkdir -p deps/darwin_arm64
 
 	cd duckdb && \
-	CFLAGS="-target arm64-apple-macos11 -O3" CXXFLAGS="-target arm64-apple-macos11 -O3" ${DUCKDB_COMMON_BUILD_FLAGS}  make bundle-library -j 2
+	CFLAGS="-target arm64-apple-macos11 -O3" CXXFLAGS="-target arm64-apple-macos11 -O3" ${DUCKDB_COMMON_BUILD_FLAGS}	make bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/darwin_arm64/libduckdb.a
 
 .PHONY: deps.linux.amd64
