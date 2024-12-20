@@ -1,5 +1,5 @@
 DUCKDB_REPO=https://github.com/duckdb/duckdb.git
-DUCKDB_BRANCH=v1.1.3
+DUCKDB_REF=43c9d167d0a6c22c9d0afed9fba7ae363b32f166
 
 .PHONY: install
 install:
@@ -20,13 +20,18 @@ test:
 
 .PHONY: deps.header
 deps.header:
-	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
+  git clone --depth 1 ${DUCKDB_REPO}
+	git -C ./duckdb fetch --depth 1 origin ${DUCKDB_REF}
+	git -C ./duckdb checkout ${DUCKDB_REF}
 	cp duckdb/src/include/duckdb.h duckdb.h
 
 .PHONY: duckdb
 duckdb:
 	rm -rf duckdb
-	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
+  git clone --depth 1 ${DUCKDB_REPO}
+	git -C ./duckdb fetch --depth 1 origin ${DUCKDB_REF}
+	git -C ./duckdb checkout ${DUCKDB_REF}
+
 
 DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any ENABLE_EXTENSION_AUTOLOADING=1 ENABLE_EXTENSION_AUTOINSTALL=1 BUILD_EXTENSIONS="json"
 
@@ -72,7 +77,7 @@ deps.freebsd.amd64: duckdb
 	mkdir -p deps/freebsd_amd64
 
 	cd duckdb && \
-	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
+	CFLAGS="-Oz" CXXFLAGS="-Oz" ${DUCKDB_COMMON_BUILD_FLAGS} SMALLER_BINARY=1 gmake bundle-library -j 2
 	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a
 
 .PHONY: deps.windows.amd64
