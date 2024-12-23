@@ -67,6 +67,15 @@ func TestPrepareQuery(t *testing.T) {
 		rows, err = stmt.QueryBound(context.Background())
 		require.NoError(t, err)
 		require.NotNil(t, rows)
+
+		badRows, err := stmt.QueryBound(context.Background())
+		require.ErrorIs(t, err, errActiveRows)
+		require.Nil(t, badRows)
+
+		badResults, err := stmt.ExecBound(context.Background())
+		require.ErrorIs(t, err, errActiveRows)
+		require.Nil(t, badResults)
+
 		require.NoError(t, rows.Close())
 
 		require.NoError(t, stmt.Close())
