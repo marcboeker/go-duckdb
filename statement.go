@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 	"unsafe"
 )
 
@@ -58,8 +57,8 @@ type Stmt struct {
 	rows             bool
 }
 
-// Close closes the statement.
-// It implements the driver.Stmt interface.
+// Close the statement.
+// Implements the driver.Stmt interface.
 func (s *Stmt) Close() error {
 	if s.rows {
 		panic("database/sql/driver: misuse of duckdb driver: Close with active Rows")
@@ -74,13 +73,13 @@ func (s *Stmt) Close() error {
 }
 
 // NumInput returns the number of placeholder parameters.
-// It implements the driver.Stmt interface.
+// Implements the driver.Stmt interface.
 func (s *Stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	paramCount := C.duckdb_nparams(*s.stmt)
-	return int(paramCount)
+	count := C.duckdb_nparams(*s.stmt)
+	return int(count)
 }
 
 // ParamName returns the name of the parameter at the given index (1-based).
@@ -92,15 +91,15 @@ func (s *Stmt) ParamName(n int) (string, error) {
 		return "", errUninitializedStmt
 	}
 
-	paramCount := C.duckdb_nparams(*s.stmt)
-	if C.idx_t(n) == 0 || C.idx_t(n) > paramCount {
-		return "", getError(errAPI, paramIndexError(n, uint64(paramCount)))
+	count := C.duckdb_nparams(*s.stmt)
+	if C.idx_t(n) == 0 || C.idx_t(n) > count {
+		return "", getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	name := C.duckdb_parameter_name(*s.stmt, C.idx_t(n))
-	paramName := C.GoString(name)
-	C.duckdb_free(unsafe.Pointer(name))
-	return paramName, nil
+	cStr := C.duckdb_parameter_name(*s.stmt, C.idx_t(n))
+	name := C.GoString(cStr)
+	C.duckdb_free(unsafe.Pointer(cStr))
+	return name, nil
 }
 
 // ParamType returns the expected type of the parameter at the given index (1-based).
@@ -112,9 +111,9 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 		return TYPE_INVALID, errUninitializedStmt
 	}
 
-	paramCount := C.duckdb_nparams(*s.stmt)
-	if C.idx_t(n) == 0 || C.idx_t(n) > paramCount {
-		return TYPE_INVALID, getError(errAPI, paramIndexError(n, uint64(paramCount)))
+	count := C.duckdb_nparams(*s.stmt)
+	if C.idx_t(n) == 0 || C.idx_t(n) > count {
+		return TYPE_INVALID, getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
 	return Type(C.duckdb_param_type(*s.stmt, C.idx_t(n))), nil
@@ -132,7 +131,7 @@ func (s *Stmt) StatementType() (StmtType, error) {
 	return StmtType(C.duckdb_prepared_statement_type(*s.stmt)), nil
 }
 
-// Bind binds the parameters to the statement.
+// Bind the parameters to the statement.
 // WARNING: This is a low-level API and should be used with caution.
 func (s *Stmt) Bind(args []driver.NamedValue) error {
 	if s.closed {
@@ -144,18 +143,152 @@ func (s *Stmt) Bind(args []driver.NamedValue) error {
 	return s.bind(args)
 }
 
+// TODO: internal duckdb_state type
+
+func (s *Stmt) bindHugeint(val *big.Int, n int) (C.duckdb_state, error) {
+	hugeint, err := hugeIntFromNative(val)
+	if err != nil {
+		return C.DuckDBError, err
+	}
+	return C.duckdb_bind_hugeint(*s.stmt, C.idx_t(n+1), hugeint), nil
+}
+
+func (s *Stmt) bindString(val string, n int) (C.duckdb_state, error) {
+	v := C.CString(val)
+	state := C.duckdb_bind_varchar(*s.stmt, C.idx_t(n+1), v)
+	C.duckdb_free(unsafe.Pointer(v))
+	return state, nil
+}
+
+func (s *Stmt) bindBlob(val []byte, n int) (C.duckdb_state, error) {
+	v := C.CBytes(val)
+	state := C.duckdb_bind_blob(*s.stmt, C.idx_t(n+1), v, C.uint64_t(len(val)))
+	C.duckdb_free(unsafe.Pointer(v))
+	return state, nil
+}
+
+func (s *Stmt) bindInterval(val Interval, n int) (C.duckdb_state, error) {
+	v := C.duckdb_interval{
+		months: C.int32_t(val.Months),
+		days:   C.int32_t(val.Days),
+		micros: C.int64_t(val.Micros),
+	}
+	return C.duckdb_bind_interval(*s.stmt, C.idx_t(n+1), v), nil
+}
+
+func (s *Stmt) bindTimestamp(val driver.Value, t Type, n int) (C.duckdb_state, error) {
+	ts, err := getCTimestamp(t, val)
+	if err != nil {
+		return C.DuckDBError, err
+	}
+	return C.duckdb_bind_timestamp(*s.stmt, C.idx_t(n+1), ts), nil
+}
+
+func (s *Stmt) bindDate(val driver.Value, n int) (C.duckdb_state, error) {
+	date, err := getCDate(val)
+	if err != nil {
+		return C.DuckDBError, err
+	}
+	return C.duckdb_bind_date(*s.stmt, C.idx_t(n+1), date), nil
+}
+
+func (s *Stmt) bindTime(val driver.Value, t Type, n int) (C.duckdb_state, error) {
+	ticks, err := getTimeTicks(val)
+	if err != nil {
+		return C.DuckDBError, err
+	}
+
+	if t == TYPE_TIME {
+		var ti C.duckdb_time
+		ti.micros = C.int64_t(ticks)
+		return C.duckdb_bind_time(*s.stmt, C.idx_t(n+1), ti), nil
+	}
+
+	// TYPE_TIME_TZ: The UTC offset is 0.
+	ti := C.duckdb_create_time_tz(C.int64_t(ticks), 0)
+	v := C.duckdb_create_time_tz_value(ti)
+	state := C.duckdb_bind_value(*s.stmt, C.idx_t(n+1), v)
+	C.duckdb_destroy_value(&v)
+	return state, nil
+}
+
+func (s *Stmt) bindPrimitiveValue(val driver.Value, n int) (C.duckdb_state, error) {
+	switch v := val.(type) {
+	case bool:
+		return C.duckdb_bind_boolean(*s.stmt, C.idx_t(n+1), C.bool(v)), nil
+	case int8:
+		return C.duckdb_bind_int8(*s.stmt, C.idx_t(n+1), C.int8_t(v)), nil
+	case int16:
+		return C.duckdb_bind_int16(*s.stmt, C.idx_t(n+1), C.int16_t(v)), nil
+	case int32:
+		return C.duckdb_bind_int32(*s.stmt, C.idx_t(n+1), C.int32_t(v)), nil
+	case int64:
+		return C.duckdb_bind_int64(*s.stmt, C.idx_t(n+1), C.int64_t(v)), nil
+	case int:
+		return C.duckdb_bind_int64(*s.stmt, C.idx_t(n+1), C.int64_t(v)), nil
+	case *big.Int:
+		return s.bindHugeint(v, n)
+	case Decimal:
+		// TODO.
+	case uint8:
+		return C.duckdb_bind_uint8(*s.stmt, C.idx_t(n+1), C.uchar(v)), nil
+	case uint16:
+		return C.duckdb_bind_uint16(*s.stmt, C.idx_t(n+1), C.uint16_t(v)), nil
+	case uint32:
+		return C.duckdb_bind_uint32(*s.stmt, C.idx_t(n+1), C.uint32_t(v)), nil
+	case uint64:
+		return C.duckdb_bind_uint64(*s.stmt, C.idx_t(n+1), C.uint64_t(v)), nil
+	case float32:
+		return C.duckdb_bind_float(*s.stmt, C.idx_t(n+1), C.float(v)), nil
+	case float64:
+		return C.duckdb_bind_double(*s.stmt, C.idx_t(n+1), C.double(v)), nil
+	case string:
+		return s.bindString(v, n)
+	case []byte:
+		return s.bindBlob(v, n)
+	case Interval:
+		return s.bindInterval(v, n)
+	case nil:
+		return C.duckdb_bind_null(*s.stmt, C.idx_t(n+1)), nil
+	}
+
+	t, err := s.ParamType(n + 1)
+	if err != nil {
+		return C.DuckDBError, err
+	}
+	if name, ok := unsupportedTypeToStringMap[t]; !ok {
+		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+	}
+
+	switch t {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		return s.bindTimestamp(val, t, n)
+	case TYPE_DATE:
+		return s.bindDate(val, n)
+	case TYPE_TIME, TYPE_TIME_TZ:
+		return s.bindTime(val, t, n)
+	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_LIST, TYPE_STRUCT, TYPE_MAP,
+		TYPE_ARRAY, TYPE_ENUM:
+		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
+		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
+		name := typeToStringMap[t]
+		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+	case TYPE_UUID:
+		// TODO: need to create value?
+	}
+	return C.DuckDBError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+}
+
 func (s *Stmt) bind(args []driver.NamedValue) error {
 	if s.NumInput() > len(args) {
 		return fmt.Errorf("incorrect argument count for command: have %d want %d", len(args), s.NumInput())
 	}
 
-	// FIXME (feature): we can't pass nested types as parameters (bind_value) yet
-
 	// relaxed length check allow for unused parameters.
 	for i := 0; i < s.NumInput(); i++ {
-		name := C.duckdb_parameter_name(*s.stmt, C.idx_t(i+1))
-		paramName := C.GoString(name)
-		C.duckdb_free(unsafe.Pointer(name))
+		cStr := C.duckdb_parameter_name(*s.stmt, C.idx_t(i+1))
+		name := C.GoString(cStr)
+		C.duckdb_free(unsafe.Pointer(cStr))
 
 		// fallback on index position
 		arg := args[i]
@@ -169,105 +302,15 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 
 		// override with name if set
 		for _, v := range args {
-			if v.Name == paramName {
+			if v.Name == name {
 				arg = v
 			}
 		}
 
-		switch v := arg.Value.(type) {
-		case bool:
-			if rv := C.duckdb_bind_boolean(*s.stmt, C.idx_t(i+1), C.bool(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case int8:
-			if rv := C.duckdb_bind_int8(*s.stmt, C.idx_t(i+1), C.int8_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case int16:
-			if rv := C.duckdb_bind_int16(*s.stmt, C.idx_t(i+1), C.int16_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case int32:
-			if rv := C.duckdb_bind_int32(*s.stmt, C.idx_t(i+1), C.int32_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case int64:
-			if rv := C.duckdb_bind_int64(*s.stmt, C.idx_t(i+1), C.int64_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case int:
-			if rv := C.duckdb_bind_int64(*s.stmt, C.idx_t(i+1), C.int64_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case *big.Int:
-			val, err := hugeIntFromNative(v)
-			if err != nil {
-				return err
-			}
-			if rv := C.duckdb_bind_hugeint(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case uint8:
-			if rv := C.duckdb_bind_uint8(*s.stmt, C.idx_t(i+1), C.uchar(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case uint16:
-			if rv := C.duckdb_bind_uint16(*s.stmt, C.idx_t(i+1), C.uint16_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case uint32:
-			if rv := C.duckdb_bind_uint32(*s.stmt, C.idx_t(i+1), C.uint32_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case uint64:
-			if rv := C.duckdb_bind_uint64(*s.stmt, C.idx_t(i+1), C.uint64_t(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case float32:
-			if rv := C.duckdb_bind_float(*s.stmt, C.idx_t(i+1), C.float(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case float64:
-			if rv := C.duckdb_bind_double(*s.stmt, C.idx_t(i+1), C.double(v)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case string:
-			val := C.CString(v)
-			if rv := C.duckdb_bind_varchar(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
-				C.duckdb_free(unsafe.Pointer(val))
-				return errCouldNotBind
-			}
-			C.duckdb_free(unsafe.Pointer(val))
-		case []byte:
-			val := C.CBytes(v)
-			l := len(v)
-			if rv := C.duckdb_bind_blob(*s.stmt, C.idx_t(i+1), val, C.uint64_t(l)); rv == C.DuckDBError {
-				C.duckdb_free(unsafe.Pointer(val))
-				return errCouldNotBind
-			}
-			C.duckdb_free(unsafe.Pointer(val))
-		case time.Time:
-			val := C.duckdb_timestamp{
-				micros: C.int64_t(v.UTC().UnixMicro()),
-			}
-			if rv := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case Interval:
-			val := C.duckdb_interval{
-				months: C.int32_t(v.Months),
-				days:   C.int32_t(v.Days),
-				micros: C.int64_t(v.Micros),
-			}
-			if rv := C.duckdb_bind_interval(*s.stmt, C.idx_t(i+1), val); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		case nil:
-			if rv := C.duckdb_bind_null(*s.stmt, C.idx_t(i+1)); rv == C.DuckDBError {
-				return errCouldNotBind
-			}
-		default:
-			return driver.ErrSkip
+		state, err := s.bindPrimitiveValue(arg, i)
+		if state == C.DuckDBError {
+			// TODO: more info might be interesting, do we set an error in the statement?
+			return errors.Join(errCouldNotBind, err)
 		}
 	}
 
