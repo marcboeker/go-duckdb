@@ -14,13 +14,16 @@ import (
 	"unsafe"
 )
 
-type conn struct {
-	con    *C.duckdb_connection
-	closed bool
-	tx     bool
+// Conn holds a connection to a DuckDB database.
+// It implements the driver.Conn interface.
+type Conn struct {
+	duckdbCon C.duckdb_connection
+	closed    bool
+	tx        bool
 }
 
-func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
+// CheckNamedValue implements the driver.NamedValueChecker interface.
+func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
 	case *big.Int, Interval:
 		return nil
@@ -28,110 +31,98 @@ func (c *conn) CheckNamedValue(nv *driver.NamedValue) error {
 	return driver.ErrSkip
 }
 
-func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: ExecContext after Close")
+// ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
+// It implements the driver.ExecerContext interface.
+func (c *Conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	prepared, err := c.prepareStmts(ctx, query)
+	if err != nil {
+		return nil, err
 	}
 
-	stmts, size, err := c.extractStmts(query)
+	res, err := prepared.ExecContext(ctx, args)
+	errClose := prepared.Close()
+	if err != nil {
+		if errClose != nil {
+			return nil, errors.Join(err, errClose)
+		}
+		return nil, err
+	}
+	if errClose != nil {
+		return nil, errClose
+	}
+	return res, nil
+}
+
+// QueryContext executes a query that may return rows, such as a SELECT.
+// It implements the driver.QueryerContext interface.
+func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	prepared, err := c.prepareStmts(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := prepared.QueryContext(ctx, args)
+	if err != nil {
+		errClose := prepared.Close()
+		if errClose != nil {
+			return nil, errors.Join(err, errClose)
+		}
+		return nil, err
+	}
+
+	// We must close the prepared statement after closing the rows r.
+	prepared.closeOnRowsClose = true
+	return r, nil
+}
+
+// PrepareContext returns a prepared statement, bound to this connection.
+// It implements the driver.ConnPrepareContext interface.
+func (c *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	return c.prepareStmts(ctx, query)
+}
+
+// Prepare returns a prepared statement, bound to this connection.
+// It implements the driver.Conn interface.
+func (c *Conn) Prepare(query string) (driver.Stmt, error) {
+	if c.closed {
+		return nil, errors.Join(errPrepare, errClosedCon)
+	}
+
+	stmts, count, err := c.extractStmts(query)
 	if err != nil {
 		return nil, err
 	}
 	defer C.duckdb_destroy_extracted(&stmts)
 
-	// execute all statements without args, except the last one
-	for i := C.idx_t(0); i < size-1; i++ {
-		stmt, err := c.prepareExtractedStmt(stmts, i)
-		if err != nil {
-			return nil, err
-		}
-		// send nil args to execute statement and ignore result
-		_, err = stmt.ExecContext(ctx, nil)
-		stmt.Close()
-		if err != nil {
-			return nil, err
-		}
+	if count != 1 {
+		return nil, errors.Join(errPrepare, errMissingPrepareContext)
 	}
-
-	// prepare and execute last statement with args and return result
-	stmt, err := c.prepareExtractedStmt(stmts, size-1)
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	return stmt.ExecContext(ctx, args)
+	return c.prepareExtractedStmt(stmts, 0)
 }
 
-func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: QueryContext after Close")
-	}
-
-	stmts, size, err := c.extractStmts(query)
-	if err != nil {
-		return nil, err
-	}
-	defer C.duckdb_destroy_extracted(&stmts)
-
-	// execute all statements without args, except the last one
-	for i := C.idx_t(0); i < size-1; i++ {
-		stmt, err := c.prepareExtractedStmt(stmts, i)
-		if err != nil {
-			return nil, err
-		}
-		// send nil args to execute statement and ignore result (using ExecContext since we're ignoring the result anyway)
-		_, err = stmt.ExecContext(ctx, nil)
-		stmt.Close()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// prepare and execute last statement with args and return result
-	stmt, err := c.prepareExtractedStmt(stmts, size-1)
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := stmt.QueryContext(ctx, args)
-	if err != nil {
-		stmt.Close()
-		return nil, err
-	}
-
-	// we can't close the statement before the query result rows are closed
-	stmt.closeOnRowsClose = true
-	return rows, err
-}
-
-func (c *conn) Prepare(cmd string) (driver.Stmt, error) {
-	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Prepare after Close")
-	}
-	return c.prepareStmt(cmd)
-}
-
-// Deprecated: Use BeginTx instead.
-func (c *conn) Begin() (driver.Tx, error) {
+// Begin is deprecated: Use BeginTx instead.
+func (c *Conn) Begin() (driver.Tx, error) {
 	return c.BeginTx(context.Background(), driver.TxOptions{})
 }
 
-func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+// BeginTx starts and returns a new transaction.
+// It implements the driver.ConnBeginTx interface.
+func (c *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if c.tx {
-		panic("database/sql/driver: misuse of duckdb driver: multiple Tx")
+		return nil, errors.Join(errBeginTx, errMultipleTx)
 	}
 
 	if opts.ReadOnly {
-		return nil, errors.New("read-only transactions are not supported")
+		return nil, errors.Join(errBeginTx, errReadOnlyTxNotSupported)
 	}
 
 	switch sql.IsolationLevel(opts.Isolation) {
 	case sql.LevelDefault:
 	default:
-		return nil, errors.New("isolation levels other than default are not supported")
+		return nil, errors.Join(errBeginTx, errIsolationLevelNotSupported)
 	}
 
-	if _, err := c.ExecContext(ctx, "BEGIN TRANSACTION", nil); err != nil {
+	if _, err := c.ExecContext(ctx, `BEGIN TRANSACTION`, nil); err != nil {
 		return nil, err
 	}
 
@@ -139,56 +130,75 @@ func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 	return &tx{c}, nil
 }
 
-func (c *conn) Close() error {
+// Close closes the connection to the database.
+// It implements the driver.Conn interface.
+func (c *Conn) Close() error {
 	if c.closed {
-		panic("database/sql/driver: misuse of duckdb driver: Close of already closed connection")
+		return errClosedCon
 	}
 	c.closed = true
-
-	C.duckdb_disconnect(c.con)
-
+	C.duckdb_disconnect(&c.duckdbCon)
 	return nil
 }
 
-func (c *conn) prepareStmt(cmd string) (*stmt, error) {
-	cmdstr := C.CString(cmd)
-	defer C.free(unsafe.Pointer(cmdstr))
-
-	var s C.duckdb_prepared_statement
-	if state := C.duckdb_prepare(*c.con, cmdstr, &s); state == C.DuckDBError {
-		dbErr := C.GoString(C.duckdb_prepare_error(s))
-		C.duckdb_destroy_prepare(&s)
-		return nil, errors.New(dbErr)
-	}
-
-	return &stmt{c: c, stmt: &s}, nil
-}
-
-func (c *conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
-	cquery := C.CString(query)
-	defer C.free(unsafe.Pointer(cquery))
+func (c *Conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
+	cQuery := C.CString(query)
+	defer C.duckdb_free(unsafe.Pointer(cQuery))
 
 	var stmts C.duckdb_extracted_statements
-	stmtsCount := C.duckdb_extract_statements(*c.con, cquery, &stmts)
-	if stmtsCount == 0 {
-		err := C.GoString(C.duckdb_extract_statements_error(stmts))
+	count := C.duckdb_extract_statements(c.duckdbCon, cQuery, &stmts)
+
+	if count == 0 {
+		errMsg := C.GoString(C.duckdb_extract_statements_error(stmts))
 		C.duckdb_destroy_extracted(&stmts)
-		if err != "" {
-			return nil, 0, errors.New(err)
+		if errMsg != "" {
+			return nil, 0, getDuckDBError(errMsg)
 		}
-		return nil, 0, errors.New("no statements found")
+		return nil, 0, errEmptyQuery
 	}
 
-	return stmts, stmtsCount, nil
+	return stmts, count, nil
 }
 
-func (c *conn) prepareExtractedStmt(extractedStmts C.duckdb_extracted_statements, index C.idx_t) (*stmt, error) {
+func (c *Conn) prepareExtractedStmt(stmts C.duckdb_extracted_statements, i C.idx_t) (*Stmt, error) {
 	var s C.duckdb_prepared_statement
-	if state := C.duckdb_prepare_extracted_statement(*c.con, extractedStmts, index, &s); state == C.DuckDBError {
-		dbErr := C.GoString(C.duckdb_prepare_error(s))
+	state := C.duckdb_prepare_extracted_statement(c.duckdbCon, stmts, i, &s)
+
+	if state == C.DuckDBError {
+		err := getDuckDBError(C.GoString(C.duckdb_prepare_error(s)))
 		C.duckdb_destroy_prepare(&s)
-		return nil, errors.New(dbErr)
+		return nil, err
 	}
 
-	return &stmt{c: c, stmt: &s}, nil
+	return &Stmt{c: c, stmt: &s}, nil
+}
+
+func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
+	if c.closed {
+		return nil, errClosedCon
+	}
+
+	stmts, count, errExtract := c.extractStmts(query)
+	if errExtract != nil {
+		return nil, errExtract
+	}
+	defer C.duckdb_destroy_extracted(&stmts)
+
+	for i := C.idx_t(0); i < count-1; i++ {
+		prepared, err := c.prepareExtractedStmt(stmts, i)
+		if err != nil {
+			return nil, err
+		}
+
+		// Execute the statement without any arguments and ignore the result.
+		_, execErr := prepared.ExecContext(ctx, nil)
+		closeErr := prepared.Close()
+		if execErr != nil {
+			return nil, execErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+	}
+	return c.prepareExtractedStmt(stmts, count-1)
 }

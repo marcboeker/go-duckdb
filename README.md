@@ -3,10 +3,7 @@
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
 ![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
-
-## Notice on v1.4.0
-
-Version `1.4.0` changed the DuckDB decimal representation from `float64` to a new [`Decimal`](https://github.com/marcboeker/go-duckdb/blob/d722d9c9d2bc9364d2f22a3afec3cbd26ac07f41/types.go#L83) type, which is much more precise. If you are upgrading to `v1.4.0` and are using DuckDBs decimals, please make sure to update your code to make use of the new `Decimal` type.
+[![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb)
 
 ## Installation
 
@@ -14,7 +11,16 @@ Version `1.4.0` changed the DuckDB decimal representation from `float64` to a ne
 go get github.com/marcboeker/go-duckdb
 ```
 
-`go-duckdb` uses `CGO` to make calls to DuckDB. You must build your binaries with `CGO_ENABLED=1`.
+### Windows
+
+On windows, the correct version of gcc and the neccesary runtime libraries needs to be installed.
+One method to do this is using msys64. To begin, install msys64 using their installer. Once this is done, open a msys64 shell and run
+
+```
+pacman -S mingw-w64-ucrt-x86_64-gcc
+```
+
+select yes when neccesary, its ok if the shell closes. Then add gcc to the path using whatever method you prefer. In powershell this is `$env:PATH = "C:\msys64\ucrt64\bin:$env:PATH"`. Once this is done, you can compile this package on windows.
 
 ## Usage
 
@@ -22,21 +28,16 @@ go get github.com/marcboeker/go-duckdb
 
 ```go
 db, err := sql.Open("duckdb", "")
-if err != nil {
-    ...
-}
+check(err)
 defer db.Close()
 ```
 
 This creates an in-memory instance of DuckDB. To open a persistent database, you need to specify a filepath to the database file. If
 the file does not exist, then DuckDB creates it.
 
-
 ```go
 db, err := sql.Open("duckdb", "/path/to/foo.db")
-if err != nil {
-	...
-}
+check(err)
 defer db.Close()
 ```
 
@@ -44,33 +45,30 @@ If you want to set specific [config options for DuckDB](https://duckdb.org/docs/
 
 ```go
 db, err := sql.Open("duckdb", "/path/to/foo.db?access_mode=read_only&threads=4")
-if err != nil {
-    ...
-}
+check(err)
 defer db.Close()
 ```
 
-Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/go1.21.6:src/database/sql/sql.go;l=781). That way, you can perform initialization steps in a callback function before opening the database.
-Here's an example that installs and loads the JSON extension when opening a database with `sql.OpenDB(connector)`.
+Alternatively, you can use [sql.OpenDB](https://cs.opensource.google/go/go/+/refs/tags/go1.23.0:src/database/sql/sql.go;l=824).
+That way, you can perform initialization steps in a callback function before opening the database.
+Here's an example that configures some database parameters when opening a database with `sql.OpenDB(connector)`.
 
 ```go
-connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.Execer) error {
+connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
     bootQueries := []string{
-        "INSTALL 'json'",
-        "LOAD 'json'",
+        "SET schema=main",
+        "SET search_path=main",
     }
 
     for _, query := range bootQueries {
-        _, err = execer.Exec(query, nil)
+        _, err = execer.ExecContext(context.Background(), query, nil)
         if err != nil {
-            ...
+			return err
         }
     }
     return nil
 })
-if err != nil {
-    ...
-}
+check(err)
 
 db := sql.OpenDB(connector)
 defer db.Close()
@@ -78,11 +76,36 @@ defer db.Close()
 
 Please refer to the [database/sql](https://godoc.org/database/sql) documentation for further usage instructions.
 
-## A Note on Memory Allocation
+## Notes and FAQs
+
+**`undefined: conn`**
+
+When building this package, some people run into an `undefined: conn` error.
+This is due to the go compiler determining that CGO is not available. This can happen due to a few issues.
+
+The first noted in the [comment here](https://github.com/marcboeker/go-duckdb/issues/275#issuecomment-2355712997) is that the buildtools are not installed.
+To fix this for ubuntu, you can install them using:
+```
+sudo apt-get update && sudo apt-get install build-essential
+```
+
+Another issue is when you are cross-compiling, since the go compiler automatically disables CGO when cross-compiling.
+To enable cgo when cross-compiling use `CC={C cross compiler} CGO_ENABLED=1 {command}` to force-enable CGO and set the right cross-compiler. 
+
+**`TIMESTAMP vs. TIMESTAMP_TZ`**
+
+In the C API, DuckDB stores both `TIMESTAMP` and `TIMESTAMP_TZ` as `duckdb_timestamp`, which holds the number of
+microseconds elapsed since January 1, 1970 UTC (i.e., an instant without offset information).
+When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`,
+even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model
+time zone information for individual values.
+
+## Memory Allocation
 
 DuckDB lives in-process. Therefore, all its memory lives in the driver. All allocations live in the host process, which
 is the Go application. Especially for long-running applications, it is crucial to call the corresponding `Close`-functions as specified
 in [database/sql](https://godoc.org/database/sql). The following is a list of examples.
+
 ```go
 db, err := sql.Open("duckdb", "")
 defer db.Close()
@@ -91,13 +114,13 @@ conn, err := db.Conn(context.Background())
 defer conn.Close()
 
 rows, err := conn.QueryContext(context.Background(), "SELECT 42")
-// alternatively, rows.Next() has to return false
+// Alternatively, rows.Next() has to return false.
 rows.Close()
 
 appender, err := NewAppenderFromConn(conn, "", "test")
 defer appender.Close()
 
-// if not passed to sql.OpenDB
+// If not passed to sql.OpenDB.
 connector, err := NewConnector("", nil)
 defer connector.Close()
 ```
@@ -105,32 +128,56 @@ defer connector.Close()
 ## DuckDB Appender API
 
 If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new `Appender` by passing a DuckDB connection to `NewAppenderFromConn()`.
+See `examples/appender.go` for a complete example.
 
 ```go
 connector, err := duckdb.NewConnector("test.db", nil)
-if err != nil {
-	...
-}
+check(err)
 defer connector.Close()
 
 conn, err := connector.Connect(context.Background())
-if err != nil {
-	...
-}
+check(err)
 defer conn.Close()
 
-// obtain an appender from the connection
-// NOTE: the table 'test_tbl' must exist in test.db
+// Obtain an appender from the connection.
+// NOTE: The table 'test_tbl' must exist in test.db.
 appender, err := NewAppenderFromConn(conn, "", "test_tbl")
-if err != nil {
-	...
-}
+check(err)
 defer appender.Close()
 
 err = appender.AppendRow(...)
-if err != nil {
-	...
-}
+check(err)
+```
+
+## DuckDB Profiling API
+
+This section describes using the [DuckDB Profiling API](https://duckdb.org/docs/dev/profiling.html).
+DuckDB's profiling information is connection-local.
+The following example walks you through the necessary steps to obtain the `ProfilingInfo` type, which contains all available metrics.
+Please refer to the [DuckDB documentation](https://duckdb.org/docs/dev/profiling.html) on configuring and collecting specific metrics.
+
+- First, you need to obtain a connection.
+- Then, you enable profiling for the connection.
+- Now, for each subsequent query on this connection, DuckDB will collect profiling information.
+    - Optionally, you can turn off profiling at any point.
+- Next, you execute the query for which you want to obtain profiling information.
+- Finally, directly after executing the query, retrieve any available profiling information.
+
+For readability, we omit error handling in this example.
+```Go
+db, err := sql.Open("duckdb", "")
+con, err := db.Conn(context.Background())
+
+_, err = con.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
+_, err = con.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
+
+res, err := con.QueryContext(context.Background(), `SELECT 42`)
+info, err := GetProfilingInfo(con)
+err = res.Close()
+
+_, err = con.ExecContext(context.Background(), `PRAGMA disable_profiling`)
+err = con.Close()
+err = db.Close()
 ```
 
 ## DuckDB Apache Arrow Interface
@@ -139,46 +186,76 @@ If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/ap
 
 ```go
 connector, err := duckdb.NewConnector("", nil)
-if err != nil {
-	...
-}
+check(err)
 defer connector.Close()
 
 conn, err := connector.Connect(context.Background())
-if err != nil {
-	...
-}
+check(err)
 defer conn.Close()
 
-// obtain the Arrow from the connection
+// Obtain the Arrow from the connection.
 arrow, err := duckdb.NewArrowFromConn(conn)
-if err != nil w
-	...
-}
+check(err)
 
 rdr, err := arrow.QueryContext(context.Background(), "SELECT * FROM generate_series(1, 10)")
-if err != nil {
-	...
-}
+check(err)
 defer rdr.Release()
 
 for rdr.Next() {
-  // process records
+  // Process each record.
 }
 ```
 
-## Linking DuckDB
-
-By default, `go-duckdb` statically links DuckDB into your binary. Statically linking DuckDB adds around 30 MB to your binary size. On Linux (Intel) and macOS (Intel and ARM), `go-duckdb` bundles pre-compiled static libraries for fast builds.
-
-Alternatively, you can dynamically link DuckDB by passing `-tags=duckdb_use_lib` to `go build`. You must have a copy of `libduckdb` available on your system (`.so` on Linux or `.dylib` on macOS), which you can download from the DuckDB [releases page](https://github.com/duckdb/duckdb/releases). For example:
+The Arrow interface is a heavy dependency.
+If you do not need it, you can disable it by passing `-tags=no_duckdb_arrow` to `go build`.
+This will be made opt-in in V2.
 
 ```sh
-# On Linux
+go build -tags="no_duckdb_arrow"
+```
+
+## Vendoring
+
+If you want to vendor a module containing `go-duckdb`, please use `modvendor` to include the missing header files and libraries.
+See issue [#174](https://github.com/marcboeker/go-duckdb/issues/174#issuecomment-1979097864) for more details.
+
+1. `go install github.com/goware/modvendor@latest`
+2. `go mod vendor`
+3. `modvendor -copy="**/*.a **/*.h" -v`
+
+Now you can build your module as usual.
+
+## Linking DuckDB
+
+By default, `go-duckdb` statically links DuckDB into your binary.
+Statically linking DuckDB increases your binary size.
+
+`go-duckdb` bundles pre-compiled static libraries for some OS and architecture combinations.
+- MacOS: amd64, arm64.
+- Linux: amd64, arm64.
+- FreeBSD: amd64.
+- Windows: amd64.
+
+Alternatively, you can dynamically link DuckDB by passing `-tags=duckdb_use_lib` to `go build`.
+You must have a copy of `libduckdb` available on your system (`.so` on Linux or `.dylib` on macOS), which you can download from the DuckDB [releases page](https://github.com/duckdb/duckdb/releases).
+For example:
+
+```sh
+# On Linux.
 CGO_ENABLED=1 CGO_LDFLAGS="-L/path/to/libs" go build -tags=duckdb_use_lib main.go
 LD_LIBRARY_PATH=/path/to/libs ./main
 
-# On macOS
+# On macOS.
 CGO_ENABLED=1 CGO_LDFLAGS="-L/path/to/libs" go build -tags=duckdb_use_lib main.go
 DYLD_LIBRARY_PATH=/path/to/libs ./main
 ```
+
+## DuckDB Extensions
+
+`go-duckdb` statically builds the `JSON` extension for its pre-compiled libraries.
+Additionally, automatic extension loading is enabled.
+The extensions available differ between the pre-compiled libraries.
+Thus, if you fail to install and load an extension, you might have to link a custom DuckDB.
+
+Specifically, for MingW (Windows), there are no distributed extensions (yet).
+You can statically include them by extending the `BUILD_EXTENSIONS="json"` variable in the `Makefile`.
