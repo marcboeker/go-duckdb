@@ -178,7 +178,7 @@ func (a *Arrow) queryArrowSchema(res *C.duckdb_arrow) (*arrow.Schema, error) {
 	if state := C.duckdb_query_arrow_schema(
 		*res,
 		(*C.duckdb_arrow_schema)(unsafe.Pointer(&schema)),
-	); state == C.DuckDBError {
+	); returnState(state) == stateError {
 		return nil, errors.New("duckdb_query_arrow_schema")
 	}
 
@@ -204,7 +204,7 @@ func (a *Arrow) queryArrowArray(res *C.duckdb_arrow, sc *arrow.Schema) (arrow.Re
 	if state := C.duckdb_query_arrow_array(
 		*res,
 		(*C.duckdb_arrow_array)(unsafe.Pointer(&arr)),
-	); state == C.DuckDBError {
+	); returnState(state) == stateError {
 		return nil, errors.New("duckdb_query_arrow_array")
 	}
 
@@ -226,7 +226,7 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*C.duckdb_arrow, err
 	}
 
 	var res C.duckdb_arrow
-	if state := C.duckdb_execute_prepared_arrow(*s.stmt, &res); state == C.DuckDBError {
+	if state := C.duckdb_execute_prepared_arrow(*s.stmt, &res); returnState(state) == stateError {
 		dbErr := C.GoString(C.duckdb_query_arrow_error(res))
 		C.duckdb_destroy_arrow(&res)
 		return nil, fmt.Errorf("duckdb_execute_prepared_arrow: %v", dbErr)
@@ -270,7 +270,7 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 		a.c.duckdbCon,
 		cName,
 		(C.duckdb_arrow_stream)(stream),
-	); state == C.DuckDBError {
+	); returnState(state) == stateError {
 		release()
 		return nil, errors.New("duckdb_arrow_scan")
 	}

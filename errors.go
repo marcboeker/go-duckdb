@@ -1,6 +1,10 @@
 package duckdb
 
+/*
+#include <duckdb.h>
+*/
 import "C"
+
 import (
 	"errors"
 	"fmt"
@@ -272,3 +276,10 @@ func getDuckDBError(errMsg string) error {
 		Msg:  errMsg,
 	}
 }
+
+type returnState C.duckdb_state
+
+const (
+	stateSuccess returnState = C.DuckDBSuccess
+	stateError   returnState = C.DuckDBError
+)

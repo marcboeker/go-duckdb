@@ -690,6 +690,37 @@ func TestDate(t *testing.T) {
 		require.Equal(t, test.want, res)
 	}
 
+	ts, err := time.Parse(time.DateTime, time.DateTime)
+	require.NoError(t, err)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::DATE`, ts).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, time.Date(2006, time.January, 0o2, 0, 0, 0, 0, time.UTC), res)
+
+	require.NoError(t, db.Close())
+}
+
+func TestTime(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	IST, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+
+	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::TIME`, timeUTC).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeUTC, res)
+
+	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
+
+	err = db.QueryRow(`SELECT ?::TIMETZ`, timeTZ).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeTZ.UTC(), res)
+
 	require.NoError(t, db.Close())
 }
 

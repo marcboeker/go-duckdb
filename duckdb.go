@@ -62,7 +62,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	var outError *C.char
 	defer C.duckdb_free(unsafe.Pointer(outError))
 
-	if state := C.duckdb_open_ext(connStr, &db, config, &outError); state == C.DuckDBError {
+	if state := C.duckdb_open_ext(connStr, &db, config, &outError); returnState(state) == stateError {
 		return nil, getError(errConnect, duckdbError(outError))
 	}
 
@@ -83,7 +83,7 @@ func (*Connector) Driver() driver.Driver {
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 	var duckdbCon C.duckdb_connection
-	if state := C.duckdb_connect(c.db, &duckdbCon); state == C.DuckDBError {
+	if state := C.duckdb_connect(c.db, &duckdbCon); returnState(state) == stateError {
 		return nil, getError(errConnect, nil)
 	}
 
@@ -114,7 +114,7 @@ func getConnString(dsn string) string {
 
 func prepareConfig(parsedDSN *url.URL) (C.duckdb_config, error) {
 	var config C.duckdb_config
-	if state := C.duckdb_create_config(&config); state == C.DuckDBError {
+	if state := C.duckdb_create_config(&config); returnState(state) == stateError {
 		C.duckdb_destroy_config(&config)
 		return nil, getError(errCreateConfig, nil)
 	}
@@ -148,7 +148,7 @@ func setConfigOption(config C.duckdb_config, name string, option string) error {
 	defer C.duckdb_free(unsafe.Pointer(cOption))
 
 	state := C.duckdb_set_config(config, cName, cOption)
-	if state == C.DuckDBError {
+	if returnState(state) == stateError {
 		C.duckdb_destroy_config(&config)
 		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))
 	}
