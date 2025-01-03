@@ -51,7 +51,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	var duckdbAppender C.duckdb_appender
 	state := C.duckdb_appender_create(con.duckdbCon, cSchema, cTable, &duckdbAppender)
 
-	if returnState(state) == stateError {
+	if state == C.DuckDBError {
 		// We destroy the error message when destroying the appender.
 		err := duckdbError(C.duckdb_appender_error(duckdbAppender))
 		C.duckdb_appender_destroy(&duckdbAppender)
@@ -95,7 +95,7 @@ func (a *Appender) Flush() error {
 	}
 
 	state := C.duckdb_appender_flush(a.duckdbAppender)
-	if returnState(state) == stateError {
+	if state == C.DuckDBError {
 		err := duckdbError(C.duckdb_appender_error(a.duckdbAppender))
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
@@ -116,7 +116,7 @@ func (a *Appender) Close() error {
 	// We flush before closing to get a meaningful error message.
 	var errFlush error
 	state := C.duckdb_appender_flush(a.duckdbAppender)
-	if returnState(state) == stateError {
+	if state == C.DuckDBError {
 		errFlush = duckdbError(C.duckdb_appender_error(a.duckdbAppender))
 	}
 
@@ -124,7 +124,7 @@ func (a *Appender) Close() error {
 	destroyTypeSlice(a.ptr, a.types)
 	var errClose error
 	state = C.duckdb_appender_destroy(&a.duckdbAppender)
-	if returnState(state) == stateError {
+	if state == C.DuckDBError {
 		errClose = errAppenderClose
 	}
 
@@ -199,7 +199,7 @@ func (a *Appender) appendDataChunks() error {
 		}
 
 		state = C.duckdb_append_data_chunk(a.duckdbAppender, chunk.data)
-		if returnState(state) == stateError {
+		if state == C.DuckDBError {
 			err = duckdbError(C.duckdb_appender_error(a.duckdbAppender))
 			break
 		}

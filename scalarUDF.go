@@ -73,7 +73,7 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 		con := driverConn.(*Conn)
 		state := C.duckdb_register_scalar_function(con.duckdbCon, function)
 		C.duckdb_destroy_scalar_function(&function)
-		if returnState(state) == stateError {
+		if state == C.DuckDBError {
 			return getError(errAPI, errScalarUDFCreate)
 		}
 		return nil
@@ -103,7 +103,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 		state := C.duckdb_add_scalar_function_to_set(set, function)
 		C.duckdb_destroy_scalar_function(&function)
-		if returnState(state) == stateError {
+		if state == C.DuckDBError {
 			C.duckdb_destroy_scalar_function_set(&set)
 			return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
 		}
@@ -114,7 +114,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 		con := driverConn.(*Conn)
 		state := C.duckdb_register_scalar_function_set(con.duckdbCon, set)
 		C.duckdb_destroy_scalar_function_set(&set)
-		if returnState(state) == stateError {
+		if state == C.DuckDBError {
 			return getError(errAPI, errScalarUDFCreateSet)
 		}
 		return nil

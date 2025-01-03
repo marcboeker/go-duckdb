@@ -475,7 +475,7 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 		con := driverConn.(*Conn)
 		state := C.duckdb_register_table_function(con.duckdbCon, function)
 		C.duckdb_destroy_table_function(&function)
-		if returnState(state) == stateError {
+		if state == C.DuckDBError {
 			return getError(errAPI, errTableUDFCreate)
 		}
 		return nil

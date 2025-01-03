@@ -164,7 +164,7 @@ func (c *Conn) prepareExtractedStmt(stmts C.duckdb_extracted_statements, i C.idx
 	var s C.duckdb_prepared_statement
 	state := C.duckdb_prepare_extracted_statement(c.duckdbCon, stmts, i, &s)
 
-	if returnState(state) == stateError {
+	if state == C.DuckDBError {
 		err := getDuckDBError(C.GoString(C.duckdb_prepare_error(s)))
 		C.duckdb_destroy_prepare(&s)
 		return nil, err
