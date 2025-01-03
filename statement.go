@@ -176,21 +176,6 @@ func (s *Stmt) bindInterval(val Interval, n int) (returnState, error) {
 	return returnState(state), nil
 }
 
-func (s *Stmt) bindDecimal(val Decimal, n int) (returnState, error) {
-	v, err := hugeIntFromNative(val.Value)
-	if err != nil {
-		return stateError, err
-	}
-
-	decimal := C.duckdb_decimal{
-		width: C.uint8_t(val.Width),
-		scale: C.uint8_t(val.Scale),
-		value: v,
-	}
-	state := C.duckdb_bind_decimal(*s.stmt, C.idx_t(n+1), decimal)
-	return returnState(state), nil
-}
-
 func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (returnState, error) {
 	ts, err := getCTimestamp(t, val.Value)
 	if err != nil {
@@ -250,10 +235,9 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (returnState, erro
 		TYPE_ARRAY, TYPE_ENUM:
 		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
+		// FIXME: for other types: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[t]
 		return stateError, addIndexToError(unsupportedTypeError(name), n+1)
-	case TYPE_UUID:
-		// TODO: need to create value?
 	}
 	return stateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
 }
@@ -281,7 +265,9 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (returnState, error) {
 	case *big.Int:
 		return s.bindHugeint(v, n)
 	case Decimal:
-		return s.bindDecimal(v, n)
+		// FIXME: implement NamedValueChecker to support custom data types.
+		name := typeToStringMap[TYPE_DECIMAL]
+		return stateError, addIndexToError(unsupportedTypeError(name), n+1)
 	case uint8:
 		state := C.duckdb_bind_uint8(*s.stmt, C.idx_t(n+1), C.uint8_t(v))
 		return returnState(state), nil

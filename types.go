@@ -65,11 +65,11 @@ func (u *UUID) String() string {
 // The value is computed as: upper * 2^64 + lower
 
 func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
-	var uuid [uuid_length]byte
-	// We need to flip the sign bit of the signed hugeint to transform it to UUID bytes
-	binary.BigEndian.PutUint64(uuid[:8], uint64(hi.upper)^1<<63)
-	binary.BigEndian.PutUint64(uuid[8:], uint64(hi.lower))
-	return uuid[:]
+	// Flip the sign bit of the signed hugeint to transform it to UUID bytes.
+	var val [uuid_length]byte
+	binary.BigEndian.PutUint64(val[:8], uint64(hi.upper)^1<<63)
+	binary.BigEndian.PutUint64(val[8:], uint64(hi.lower))
+	return val[:]
 }
 
 func uuidToHugeInt(uuid UUID) C.duckdb_hugeint {

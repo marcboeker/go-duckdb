@@ -444,28 +444,6 @@ func TestDecimal(t *testing.T) {
 		}
 	})
 
-	t.Run("Bind and INSERT a DECIMAL into a table", func(t *testing.T) {
-		_, err := db.Exec(`CREATE TABLE tbl (d1 DECIMAL(5, 2), d2 DECIMAL(22, 3))`)
-		require.NoError(t, err)
-
-		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
-		require.Equal(t, true, success)
-		d1 := Decimal{Value: big.NewInt(-12345), Width: 5, Scale: 2}
-		d2 := Decimal{Value: bigNumber, Width: 22, Scale: 3}
-
-		_, err = db.Exec(`INSERT INTO tbl VALUES (?, ?)`, d1, d2)
-		require.NoError(t, err)
-
-		var res Decimal
-		err = db.QueryRow(`SELECT d1 FROM tbl`).Scan(&res)
-		require.NoError(t, err)
-		compareDecimal(t, d1, res)
-
-		err = db.QueryRow(`SELECT d2 FROM tbl`).Scan(&res)
-		require.NoError(t, err)
-		compareDecimal(t, d2, res)
-	})
-
 	require.NoError(t, db.Close())
 }
 
