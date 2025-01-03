@@ -316,7 +316,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 
 		state, err := s.bindValue(arg, i)
 		if state == C.DuckDBError {
-			// TODO: more info might be interesting, do we set an error in the statement?
+			err = errors.Join(err, duckdbError(C.duckdb_prepare_error(*s.stmt)))
 			return errors.Join(errCouldNotBind, err)
 		}
 	}
