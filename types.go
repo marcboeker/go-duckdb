@@ -193,9 +193,8 @@ func (d *Decimal) String() string {
 	return signStr + zeroTrimmed[:len(zeroTrimmed)-scale] + "." + zeroTrimmed[len(zeroTrimmed)-scale:]
 }
 
-func getGoTime[T any](val T) (time.Time, error) {
+func castToTime[T any](val T) (time.Time, error) {
 	var ti time.Time
-
 	switch v := any(val).(type) {
 	case time.Time:
 		ti = v
@@ -206,7 +205,7 @@ func getGoTime[T any](val T) (time.Time, error) {
 }
 
 func getTSTicks[T any](t Type, val T) (int64, error) {
-	ti, err := getGoTime(val)
+	ti, err := castToTime(val)
 	if err != nil {
 		return 0, err
 	}
@@ -235,7 +234,6 @@ func getTSTicks[T any](t Type, val T) (int64, error) {
 
 func getCTimestamp[T any](t Type, val T) (C.duckdb_timestamp, error) {
 	var ts C.duckdb_timestamp
-
 	ticks, err := getTSTicks(t, val)
 	if err != nil {
 		return ts, err
@@ -247,7 +245,7 @@ func getCTimestamp[T any](t Type, val T) (C.duckdb_timestamp, error) {
 
 func getCDate[T any](val T) (C.duckdb_date, error) {
 	var date C.duckdb_date
-	ti, err := getGoTime(val)
+	ti, err := castToTime(val)
 	if err != nil {
 		return date, err
 	}
@@ -258,7 +256,7 @@ func getCDate[T any](val T) (C.duckdb_date, error) {
 }
 
 func getTimeTicks[T any](val T) (int64, error) {
-	ti, err := getGoTime(val)
+	ti, err := castToTime(val)
 	if err != nil {
 		return 0, err
 	}
