@@ -146,7 +146,7 @@ func (s *Stmt) Bind(args []driver.NamedValue) error {
 func (s *Stmt) bindHugeint(val *big.Int, n int) (returnState, error) {
 	hugeint, err := hugeIntFromNative(val)
 	if err != nil {
-		return C.DuckDBError, err
+		return stateError, err
 	}
 	state := C.duckdb_bind_hugeint(*s.stmt, C.idx_t(n+1), hugeint)
 	return returnState(state), nil
@@ -176,10 +176,25 @@ func (s *Stmt) bindInterval(val Interval, n int) (returnState, error) {
 	return returnState(state), nil
 }
 
+func (s *Stmt) bindDecimal(val Decimal, n int) (returnState, error) {
+	v, err := hugeIntFromNative(val.Value)
+	if err != nil {
+		return stateError, err
+	}
+
+	decimal := C.duckdb_decimal{
+		width: C.uint8_t(val.Width),
+		scale: C.uint8_t(val.Scale),
+		value: v,
+	}
+	state := C.duckdb_bind_decimal(*s.stmt, C.idx_t(n+1), decimal)
+	return returnState(state), nil
+}
+
 func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (returnState, error) {
 	ts, err := getCTimestamp(t, val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return stateError, err
 	}
 	state := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(n+1), ts)
 	return returnState(state), nil
@@ -188,7 +203,7 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (returnState,
 func (s *Stmt) bindDate(val driver.NamedValue, n int) (returnState, error) {
 	date, err := getCDate(val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return stateError, err
 	}
 	state := C.duckdb_bind_date(*s.stmt, C.idx_t(n+1), date)
 	return returnState(state), nil
@@ -197,7 +212,7 @@ func (s *Stmt) bindDate(val driver.NamedValue, n int) (returnState, error) {
 func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (returnState, error) {
 	ticks, err := getTimeTicks(val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return stateError, err
 	}
 
 	if t == TYPE_TIME {
@@ -215,7 +230,35 @@ func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (returnState, erro
 	return returnState(state), nil
 }
 
-func (s *Stmt) bindPrimitiveValue(val driver.NamedValue, n int) (returnState, error) {
+func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (returnState, error) {
+	t, err := s.ParamType(n + 1)
+	if err != nil {
+		return stateError, err
+	}
+	if name, ok := unsupportedTypeToStringMap[t]; ok {
+		return stateError, addIndexToError(unsupportedTypeError(name), n+1)
+	}
+
+	switch t {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		return s.bindTimestamp(val, t, n)
+	case TYPE_DATE:
+		return s.bindDate(val, n)
+	case TYPE_TIME, TYPE_TIME_TZ:
+		return s.bindTime(val, t, n)
+	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_LIST, TYPE_STRUCT, TYPE_MAP,
+		TYPE_ARRAY, TYPE_ENUM:
+		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
+		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
+		name := typeToStringMap[t]
+		return stateError, addIndexToError(unsupportedTypeError(name), n+1)
+	case TYPE_UUID:
+		// TODO: need to create value?
+	}
+	return stateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+}
+
+func (s *Stmt) bindValue(val driver.NamedValue, n int) (returnState, error) {
 	switch v := val.Value.(type) {
 	case bool:
 		state := C.duckdb_bind_boolean(*s.stmt, C.idx_t(n+1), C.bool(v))
@@ -238,9 +281,9 @@ func (s *Stmt) bindPrimitiveValue(val driver.NamedValue, n int) (returnState, er
 	case *big.Int:
 		return s.bindHugeint(v, n)
 	case Decimal:
-		// TODO.
+		return s.bindDecimal(v, n)
 	case uint8:
-		state := C.duckdb_bind_uint8(*s.stmt, C.idx_t(n+1), C.uchar(v))
+		state := C.duckdb_bind_uint8(*s.stmt, C.idx_t(n+1), C.uint8_t(v))
 		return returnState(state), nil
 	case uint16:
 		state := C.duckdb_bind_uint16(*s.stmt, C.idx_t(n+1), C.uint16_t(v))
@@ -267,32 +310,7 @@ func (s *Stmt) bindPrimitiveValue(val driver.NamedValue, n int) (returnState, er
 		state := C.duckdb_bind_null(*s.stmt, C.idx_t(n+1))
 		return returnState(state), nil
 	}
-
-	t, err := s.ParamType(n + 1)
-	if err != nil {
-		return stateError, err
-	}
-	if name, ok := unsupportedTypeToStringMap[t]; ok {
-		return stateError, addIndexToError(unsupportedTypeError(name), n+1)
-	}
-
-	switch t {
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		return s.bindTimestamp(val, t, n)
-	case TYPE_DATE:
-		return s.bindDate(val, n)
-	case TYPE_TIME, TYPE_TIME_TZ:
-		return s.bindTime(val, t, n)
-	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_LIST, TYPE_STRUCT, TYPE_MAP,
-		TYPE_ARRAY, TYPE_ENUM:
-		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
-		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
-		name := typeToStringMap[t]
-		return stateError, addIndexToError(unsupportedTypeError(name), n+1)
-	case TYPE_UUID:
-		// TODO: need to create value?
-	}
-	return stateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+	return s.bindComplexValue(val, n)
 }
 
 func (s *Stmt) bind(args []driver.NamedValue) error {
@@ -323,8 +341,8 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 			}
 		}
 
-		state, err := s.bindPrimitiveValue(arg, i)
-		if state == C.DuckDBError {
+		state, err := s.bindValue(arg, i)
+		if state == stateError {
 			// TODO: more info might be interesting, do we set an error in the statement?
 			return errors.Join(errCouldNotBind, err)
 		}
@@ -431,7 +449,7 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 
 func (s *Stmt) executeBound(ctx context.Context) (*C.duckdb_result, error) {
 	var pendingRes C.duckdb_pending_result
-	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
+	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); returnState(state) == stateError {
 		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))
 		C.duckdb_destroy_pending(&pendingRes)
 		return nil, dbErr
@@ -459,7 +477,7 @@ func (s *Stmt) executeBound(ctx context.Context) (*C.duckdb_result, error) {
 	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
 	// it can cancel that query so need to wait for it to finish as well
 	<-bgDoneCh
-	if state == C.DuckDBError {
+	if returnState(state) == stateError {
 		if ctx.Err() != nil {
 			C.duckdb_destroy_result(&res)
 			return nil, ctx.Err()
