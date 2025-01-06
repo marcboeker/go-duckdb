@@ -287,9 +287,9 @@ func TestAppenderNested(t *testing.T) {
 		require.Equal(t, rowsToAppend[i].intList, castList[int32](r.intList))
 
 		strRes := fmt.Sprintf("%v", r.nestedIntList)
-		require.Equal(t, strRes, "[[1 2 3] [4 5 6]]")
+		require.Equal(t, "[[1 2 3] [4 5 6]]", strRes)
 		strRes = fmt.Sprintf("%v", r.tripleNestedIntList)
-		require.Equal(t, strRes, "[[[1 2 3] [4 5 6]] [[7 8 9] [10 11 12]]]")
+		require.Equal(t, "[[[1 2 3] [4 5 6]] [[7 8 9] [10 11 12]]]", strRes)
 
 		require.Equal(t, rowsToAppend[i].simpleStruct, castMapToStruct[simpleStruct](t, r.simpleStruct))
 		require.Equal(t, rowsToAppend[i].wrappedStruct, castMapToStruct[wrappedStruct](t, r.wrappedStruct))
@@ -343,7 +343,7 @@ func TestAppenderNullList(t *testing.T) {
 			strS = fmt.Sprintf("%v", intS)
 		}
 
-		require.Equal(t, strResult[i], strS, fmt.Sprintf("row %d: expected %v, got %v", i, strResult[i], strS))
+		require.Equal(t, strResult[i], strS, "row %d: expected %v, got %v", i, strResult[i], strS)
 		i++
 	}
 
@@ -374,7 +374,7 @@ func TestAppenderNullStruct(t *testing.T) {
 		case 0:
 			require.NoError(t, err)
 		case 1:
-			require.Equal(t, nil, row)
+			require.Nil(t, row)
 		}
 		i++
 	}
@@ -425,7 +425,7 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 		var row any
 		err = res.Scan(&row)
 		if i == 1 {
-			require.Equal(t, nil, row)
+			require.Nil(t, row)
 		} else {
 			require.NoError(t, err)
 		}
@@ -461,14 +461,14 @@ func TestAppenderNullIntAndString(t *testing.T) {
 		)
 		if i == 0 {
 			require.NoError(t, err)
-			require.Equal(t, id, 32)
-			require.Equal(t, str, "hello")
+			require.Equal(t, 32, id)
+			require.Equal(t, "hello", str)
 		} else if i > 0 && i < 4 {
 			require.Error(t, err)
 		} else {
 			require.NoError(t, err)
-			require.Equal(t, id, 42)
-			require.Equal(t, str, "valid again")
+			require.Equal(t, 42, id)
+			require.Equal(t, "valid again", str)
 		}
 		i++
 	}

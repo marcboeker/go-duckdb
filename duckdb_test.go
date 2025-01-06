@@ -283,7 +283,7 @@ func TestJSON(t *testing.T) {
 	t.Run("SELECT an empty JSON", func(t *testing.T) {
 		var res Composite[map[string]any]
 		require.NoError(t, db.QueryRow(`SELECT '{}'::JSON`).Scan(&res))
-		require.Equal(t, 0, len(res.Get()))
+		require.Empty(t, res.Get())
 	})
 
 	t.Run("SELECT a marshalled JSON", func(t *testing.T) {
@@ -302,7 +302,7 @@ func TestJSON(t *testing.T) {
 	t.Run("SELECT a JSON array", func(t *testing.T) {
 		var res Composite[[]any]
 		require.NoError(t, db.QueryRow(`SELECT json_array('foo', 'bar')`).Scan(&res))
-		require.Equal(t, 2, len(res.Get()))
+		require.Len(t, res.Get(), 2)
 		require.Equal(t, "foo", res.Get()[0])
 		require.Equal(t, "bar", res.Get()[1])
 	})
@@ -525,7 +525,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			err = r.Scan(&val)
 			require.NoError(t, err)
 			require.Equal(t, test.value, val)
-			require.Equal(t, r.Next(), false)
+			require.False(t, r.Next())
 		})
 	}
 	require.NoError(t, db.Close())

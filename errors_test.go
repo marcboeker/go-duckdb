@@ -481,10 +481,9 @@ func TestGetDuckDBErrorIs(t *testing.T) {
 		Msg:  "Invalid Input Error: Map keys can not be NULL",
 	}
 
-	require.ErrorIs(t, outOfRangeErr1, outOfRangeErr1)
 	require.ErrorIs(t, outOfRangeErr1Copy, outOfRangeErr1)
 	require.ErrorIs(t, &wrappedDuckDBError{outOfRangeErr1Copy}, outOfRangeErr1)
-	require.Equal(t, false, errors.Is(outOfRangeErr2, outOfRangeErr1))
-	require.Equal(t, false, errors.Is(invalidInputErr, outOfRangeErr1))
-	require.Equal(t, false, errors.Is(errors.New(errMsg), outOfRangeErr1))
+	require.NotErrorIs(t, outOfRangeErr2, outOfRangeErr1)
+	require.NotErrorIs(t, invalidInputErr, outOfRangeErr1)
+	require.NotErrorIs(t, errors.New(errMsg), outOfRangeErr1)
 }
