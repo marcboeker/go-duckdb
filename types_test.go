@@ -364,9 +364,9 @@ func TestDecimal(t *testing.T) {
 		require.NoError(t, res.Close())
 
 		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		bigNegativeNumber, success := new(big.Int).SetString("-1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		tests := []struct {
 			input string
 			want  Decimal
@@ -390,7 +390,7 @@ func TestDecimal(t *testing.T) {
 
 	t.Run("SELECT a huge DECIMAL ", func(t *testing.T) {
 		bigInt, success := new(big.Int).SetString("12345678901234567890123456789", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		var f Decimal
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
 		compareDecimal(t, Decimal{Value: bigInt, Width: 29, Scale: 20}, f)
@@ -611,7 +611,7 @@ func TestList(t *testing.T) {
 	const n = 4000
 	var row Composite[[]int]
 	require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
-	require.Equal(t, n, len(row.Get()))
+	require.Len(t, row.Get(), n)
 	for i := 0; i < n; i++ {
 		require.Equal(t, i, row.Get()[i])
 	}
@@ -839,16 +839,16 @@ func TestBoolean(t *testing.T) {
 
 	var res bool
 	require.NoError(t, db.QueryRow("SELECT ?", true).Scan(&res))
-	require.Equal(t, true, res)
+	require.True(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", false).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 0).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 1).Scan(&res))
-	require.Equal(t, true, res)
+	require.True(t, res)
 	require.NoError(t, db.Close())
 }
 
