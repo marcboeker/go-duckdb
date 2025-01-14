@@ -3,7 +3,8 @@
 package duckdb
 
 /*
-#cgo LDFLAGS: -lduckdb_static
+#cgo CPPFLAGS: -DDUCKDB_STATIC_BUILD
+#cgo LDFLAGS: -lduckdb
 #include <duckdb.h>
 */
 import "C"
