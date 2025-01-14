@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"reflect"
 	"strconv"
-	"time"
 	"unsafe"
 )
 
@@ -90,68 +89,28 @@ func setBool[S any](vec *vector, rowIdx C.idx_t, val S) error {
 }
 
 func setTS[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var ti time.Time
-	switch v := any(val).(type) {
-	case time.Time:
-		ti = v
-	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
+	ts, err := getCTimestamp(vec.Type, val)
+	if err != nil {
+		return err
 	}
-
-	var ticks int64
-	switch vec.Type {
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		year := ti.UTC().Year()
-		if year < -290307 || year > 294246 {
-			return conversionError(year, -290307, 294246)
-		}
-		ticks = ti.UTC().UnixMicro()
-	case TYPE_TIMESTAMP_S:
-		ticks = ti.UTC().Unix()
-	case TYPE_TIMESTAMP_MS:
-		ticks = ti.UTC().UnixMilli()
-	case TYPE_TIMESTAMP_NS:
-		year := ti.UTC().Year()
-		if year < 1678 || year > 2262 {
-			return conversionError(year, -290307, 294246)
-		}
-		ticks = ti.UTC().UnixNano()
-	}
-	var ts C.duckdb_timestamp
-	ts.micros = C.int64_t(ticks)
 	setPrimitive(vec, rowIdx, ts)
 	return nil
 }
 
 func setDate[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var ti time.Time
-	switch v := any(val).(type) {
-	case time.Time:
-		ti = v
-	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
+	date, err := getCDate(val)
+	if err != nil {
+		return err
 	}
-
-	days := int32(ti.UTC().Unix() / secondsPerDay)
-	var date C.duckdb_date
-	date.days = C.int32_t(days)
 	setPrimitive(vec, rowIdx, date)
 	return nil
 }
 
 func setTime[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	var ti time.Time
-	switch v := any(val).(type) {
-	case time.Time:
-		ti = v
-	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
+	ticks, err := getTimeTicks(val)
+	if err != nil {
+		return err
 	}
-
-	// DuckDB stores time as microseconds since 00:00:00.
-	ti = ti.UTC()
-	base := time.Date(1970, time.January, 1, ti.Hour(), ti.Minute(), ti.Second(), ti.Nanosecond(), time.UTC)
-	ticks := base.UnixMicro()
 
 	switch vec.Type {
 	case TYPE_TIME:

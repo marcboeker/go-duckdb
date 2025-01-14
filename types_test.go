@@ -364,9 +364,9 @@ func TestDecimal(t *testing.T) {
 		require.NoError(t, res.Close())
 
 		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		bigNegativeNumber, success := new(big.Int).SetString("-1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		tests := []struct {
 			input string
 			want  Decimal
@@ -381,7 +381,7 @@ func TestDecimal(t *testing.T) {
 			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNegativeNumber, Width: 22, Scale: 3}},
 		}
 		for _, test := range tests {
-			r := db.QueryRow(fmt.Sprintf("SELECT %s", test.input))
+			r := db.QueryRow(fmt.Sprintf(`SELECT %s`, test.input))
 			var fs Decimal
 			require.NoError(t, r.Scan(&fs))
 			compareDecimal(t, test.want, fs)
@@ -390,7 +390,7 @@ func TestDecimal(t *testing.T) {
 
 	t.Run("SELECT a huge DECIMAL ", func(t *testing.T) {
 		bigInt, success := new(big.Int).SetString("12345678901234567890123456789", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		var f Decimal
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
 		compareDecimal(t, Decimal{Value: bigInt, Width: 29, Scale: 20}, f)
@@ -611,7 +611,7 @@ func TestList(t *testing.T) {
 	const n = 4000
 	var row Composite[[]int]
 	require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
-	require.Equal(t, n, len(row.Get()))
+	require.Len(t, row.Get(), n)
 	for i := 0; i < n; i++ {
 		require.Equal(t, i, row.Get()[i])
 	}
@@ -689,6 +689,37 @@ func TestDate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, test.want, res)
 	}
+
+	ts, err := time.Parse(time.DateTime, time.DateTime)
+	require.NoError(t, err)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::DATE`, ts).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, time.Date(2006, time.January, 0o2, 0, 0, 0, 0, time.UTC), res)
+
+	require.NoError(t, db.Close())
+}
+
+func TestTime(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	IST, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+
+	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::TIME`, timeUTC).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeUTC, res)
+
+	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
+
+	err = db.QueryRow(`SELECT ?::TIMETZ`, timeTZ).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeTZ.UTC(), res)
 
 	require.NoError(t, db.Close())
 }
@@ -808,16 +839,16 @@ func TestBoolean(t *testing.T) {
 
 	var res bool
 	require.NoError(t, db.QueryRow("SELECT ?", true).Scan(&res))
-	require.Equal(t, true, res)
+	require.True(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", false).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 0).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 1).Scan(&res))
-	require.Equal(t, true, res)
+	require.True(t, res)
 	require.NoError(t, db.Close())
 }
 

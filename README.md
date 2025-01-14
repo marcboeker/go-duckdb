@@ -13,14 +13,14 @@ go get github.com/marcboeker/go-duckdb
 
 ### Windows
 
-On windows, the correct version of gcc and the neccesary runtime libraries needs to be installed.
+On windows, the correct version of gcc and the necessary runtime libraries needs to be installed.
 One method to do this is using msys64. To begin, install msys64 using their installer. Once this is done, open a msys64 shell and run
 
 ```
 pacman -S mingw-w64-ucrt-x86_64-gcc
 ```
 
-select yes when neccesary, its ok if the shell closes. Then add gcc to the path using whatever method you prefer. In powershell this is `$env:PATH = "C:\msys64\ucrt64\bin:$env:PATH"`. Once this is done, you can compile this package on windows.
+select yes when necessary, its ok if the shell closes. Then add gcc to the path using whatever method you prefer. In powershell this is `$env:PATH = "C:\msys64\ucrt64\bin:$env:PATH"`. Once this is done, you can compile this package on windows.
 
 ## Usage
 
