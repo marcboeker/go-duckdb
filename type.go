@@ -97,3 +97,5 @@ var typeToStringMap = map[Type]string{
 	TYPE_VARINT:       "VARINT",
 	TYPE_SQLNULL:      "SQLNULL",
 }
+
+const aliasJSON = "JSON"

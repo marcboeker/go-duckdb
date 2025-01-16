@@ -55,6 +55,11 @@ type testTypesRow struct {
 	Array_col        Composite[[3]int32]
 	Time_tz_col      time.Time
 	Timestamp_tz_col time.Time
+	Json_col_map     Composite[map[string]any]
+	Json_col_array   Composite[[]any]
+	Json_col_string  string
+	Json_col_bool    bool
+	Json_col_float64 float64
 }
 
 const testTypesTableSQL = `CREATE TABLE test (
@@ -85,7 +90,12 @@ const testTypesTableSQL = `CREATE TABLE test (
 	Map_col MAP(INTEGER, VARCHAR),
 	Array_col INTEGER[3],
 	Time_tz_col TIMETZ,
-	Timestamp_tz_col TIMESTAMPTZ
+	Timestamp_tz_col TIMESTAMPTZ,
+	Json_col_map JSON,
+	Json_col_array JSON,
+	Json_col_string JSON,
+	Json_col_bool JSON,
+	Json_col_float64 JSON
 )`
 
 func (r *testTypesRow) toUTC() {
@@ -129,6 +139,15 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	arrayCol := Composite[[3]int32]{
 		[3]int32{int32(i), int32(i), int32(i)},
 	}
+	jsonMapCol := Composite[map[string]any]{
+		map[string]any{
+			"hello": float64(42),
+			"world": float64(84),
+		},
+	}
+	jsonArrayCol := Composite[[]any]{
+		[]any{"hello", "world"},
+	}
 
 	return testTypesRow{
 		i%2 == 1,
@@ -159,6 +178,11 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		arrayCol,
 		timeTZ,
 		ts,
+		jsonMapCol,
+		jsonArrayCol,
+		varcharCol,
+		i%2 == 1,
+		float64(i),
 	}
 }
 
@@ -208,7 +232,12 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			r.Map_col,
 			r.Array_col.Get(),
 			r.Time_tz_col,
-			r.Timestamp_tz_col)
+			r.Timestamp_tz_col,
+			r.Json_col_map.Get(),
+			r.Json_col_array.Get(),
+			r.Json_col_string,
+			r.Json_col_bool,
+			r.Json_col_float64)
 		require.NoError(t, err)
 	}
 	require.NoError(t, a.Flush())
@@ -248,7 +277,12 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 			&r.Map_col,
 			&r.Array_col,
 			&r.Time_tz_col,
-			&r.Timestamp_tz_col)
+			&r.Timestamp_tz_col,
+			&r.Json_col_map,
+			&r.Json_col_array,
+			&r.Json_col_string,
+			&r.Json_col_bool,
+			&r.Json_col_float64)
 		require.NoError(t, err)
 		actualRows = append(actualRows, r)
 	}
@@ -330,9 +364,9 @@ func TestDecimal(t *testing.T) {
 		require.NoError(t, res.Close())
 
 		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		bigNegativeNumber, success := new(big.Int).SetString("-1234567890123456789234", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		tests := []struct {
 			input string
 			want  Decimal
@@ -347,7 +381,7 @@ func TestDecimal(t *testing.T) {
 			{input: "-1234567890123456789.234::DECIMAL(22, 3)", want: Decimal{Value: bigNegativeNumber, Width: 22, Scale: 3}},
 		}
 		for _, test := range tests {
-			r := db.QueryRow(fmt.Sprintf("SELECT %s", test.input))
+			r := db.QueryRow(fmt.Sprintf(`SELECT %s`, test.input))
 			var fs Decimal
 			require.NoError(t, r.Scan(&fs))
 			compareDecimal(t, test.want, fs)
@@ -356,7 +390,7 @@ func TestDecimal(t *testing.T) {
 
 	t.Run("SELECT a huge DECIMAL ", func(t *testing.T) {
 		bigInt, success := new(big.Int).SetString("12345678901234567890123456789", 10)
-		require.Equal(t, true, success)
+		require.True(t, success)
 		var f Decimal
 		require.NoError(t, db.QueryRow("SELECT 123456789.01234567890123456789::DECIMAL(29, 20)").Scan(&f))
 		compareDecimal(t, Decimal{Value: bigInt, Width: 29, Scale: 20}, f)
@@ -577,7 +611,7 @@ func TestList(t *testing.T) {
 	const n = 4000
 	var row Composite[[]int]
 	require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
-	require.Equal(t, n, len(row.Get()))
+	require.Len(t, row.Get(), n)
 	for i := 0; i < n; i++ {
 		require.Equal(t, i, row.Get()[i])
 	}
@@ -609,9 +643,32 @@ func TestUUID(t *testing.T) {
 
 		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&val))
 		require.Equal(t, test, val)
+
+		var u UUID
+		require.NoError(t, db.QueryRow(`SELECT uuid FROM uuid_test WHERE uuid = ?`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
+
+		require.NoError(t, db.QueryRow(`SELECT ?`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
+
+		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&u))
+		require.Equal(t, test.String(), u.String())
 	}
 
 	require.NoError(t, db.Close())
+}
+
+func TestUUIDScanError(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	var u UUID
+	// invalid value type
+	require.Error(t, db.QueryRow(`SELECT 12345`).Scan(&u))
+	// string value not valid
+	require.Error(t, db.QueryRow(`SELECT 'I am not a UUID.'`).Scan(&u))
+	// blob value not valid
+	require.Error(t, db.QueryRow(`SELECT '123456789012345678901234567890123456'::BLOB`).Scan(&u))
 }
 
 func TestDate(t *testing.T) {
@@ -632,6 +689,37 @@ func TestDate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, test.want, res)
 	}
+
+	ts, err := time.Parse(time.DateTime, time.DateTime)
+	require.NoError(t, err)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::DATE`, ts).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, time.Date(2006, time.January, 0o2, 0, 0, 0, 0, time.UTC), res)
+
+	require.NoError(t, db.Close())
+}
+
+func TestTime(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	IST, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+
+	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
+
+	var res time.Time
+	err = db.QueryRow(`SELECT ?::TIME`, timeUTC).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeUTC, res)
+
+	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
+
+	err = db.QueryRow(`SELECT ?::TIMETZ`, timeTZ).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, timeTZ.UTC(), res)
 
 	require.NoError(t, db.Close())
 }
@@ -751,16 +839,16 @@ func TestBoolean(t *testing.T) {
 
 	var res bool
 	require.NoError(t, db.QueryRow("SELECT ?", true).Scan(&res))
-	require.Equal(t, true, res)
+	require.True(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", false).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 0).Scan(&res))
-	require.Equal(t, false, res)
+	require.False(t, res)
 
 	require.NoError(t, db.QueryRow("SELECT ?", 1).Scan(&res))
-	require.Equal(t, true, res)
+	require.True(t, res)
 	require.NoError(t, db.Close())
 }
 
@@ -826,5 +914,59 @@ func TestInterval(t *testing.T) {
 		}
 	})
 
+	require.NoError(t, db.Close())
+}
+
+func TestArray(t *testing.T) {
+	t.Parallel()
+
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE needle (vec FLOAT[3])`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO needle VALUES (array[5, 5, 5])`)
+	require.NoError(t, err)
+
+	res, err := db.Query(`SELECT vec FROM needle`)
+	require.NoError(t, err)
+
+	for res.Next() {
+		var vec Composite[[3]float64]
+		err = res.Scan(&vec)
+		require.NoError(t, err)
+		require.NoError(t, res.Err())
+		require.Equal(t, [3]float64{5, 5, 5}, vec.Get())
+	}
+
+	require.NoError(t, res.Close())
+	require.NoError(t, db.Close())
+}
+
+func TestJSONType(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+
+	_, err := db.Exec(`CREATE TABLE test (c1 STRUCT(index INTEGER))`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO test VALUES ({index: 1}), ({index: 2}), ({index: 2}), ({index: 3}), ({index: 3}), ({index: 3})`)
+	require.NoError(t, err)
+
+	// Verify results.
+	row := db.QueryRowContext(context.Background(), `
+	SELECT json_group_object(t2.status, t2.count) AS result
+	FROM (
+		SELECT json_extract(c1, '$.index') AS status, COUNT(*) AS count
+		FROM test
+		GROUP BY status
+	) AS t2`)
+
+	var res Composite[map[string]any]
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, float64(1), res.Get()["1"])
+	require.Equal(t, float64(2), res.Get()["2"])
+	require.Equal(t, float64(3), res.Get()["3"])
 	require.NoError(t, db.Close())
 }

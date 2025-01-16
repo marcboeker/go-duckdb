@@ -38,6 +38,10 @@ func columnCountError(actual int, expected int) error {
 	return fmt.Errorf("%s: expected %d, got %d", columnCountErrMsg, expected, actual)
 }
 
+func paramIndexError(idx int, max uint64) error {
+	return fmt.Errorf("%s: %d is out of range [1, %d]", paramIndexErrMsg, idx, max)
+}
+
 func unsupportedTypeError(name string) error {
 	return fmt.Errorf("%s: %s", unsupportedTypeErrMsg, name)
 }
@@ -80,6 +84,7 @@ const (
 	unknownTypeErrMsg      = "unknown type"
 	interfaceIsNilErrMsg   = "interface is nil"
 	duplicateNameErrMsg    = "duplicate name"
+	paramIndexErrMsg       = "invalid parameter index"
 )
 
 var (
@@ -95,9 +100,15 @@ var (
 	errInvalidCon = errors.New("not a DuckDB driver connection")
 	errClosedCon  = errors.New("closed connection")
 
+	errClosedStmt        = errors.New("closed statement")
+	errUninitializedStmt = errors.New("uninitialized statement")
+
 	errPrepare                    = errors.New("could not prepare query")
 	errMissingPrepareContext      = errors.New("missing context for multi-statement query: try using PrepareContext")
 	errEmptyQuery                 = errors.New("empty query")
+	errCouldNotBind               = errors.New("could not bind parameter")
+	errActiveRows                 = errors.New("ExecContext or QueryContext with active Rows")
+	errNotBound                   = errors.New("parameters have not been bound")
 	errBeginTx                    = errors.New("could not begin transaction")
 	errMultipleTx                 = errors.New("multiple transactions")
 	errReadOnlyTxNotSupported     = errors.New("read-only transactions are not supported")

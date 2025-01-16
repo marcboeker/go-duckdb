@@ -279,31 +279,32 @@ func TestQuery(t *testing.T) {
 func TestJSON(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	var data string
 
-	t.Run("select empty JSON", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT '{}'::JSON").Scan(&data))
-		require.Equal(t, "{}", string(data))
+	t.Run("SELECT an empty JSON", func(t *testing.T) {
+		var res Composite[map[string]any]
+		require.NoError(t, db.QueryRow(`SELECT '{}'::JSON`).Scan(&res))
+		require.Empty(t, res.Get())
 	})
 
-	t.Run("select from marshalled JSON", func(t *testing.T) {
-		val, _ := json.Marshal(struct {
+	t.Run("SELECT a marshalled JSON", func(t *testing.T) {
+		val, err := json.Marshal(struct {
 			Foo string `json:"foo"`
 		}{
 			Foo: "bar",
 		})
-		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, string(val)).Scan(&data))
-		require.Equal(t, "bar", data)
+		require.NoError(t, err)
+
+		var res string
+		require.NoError(t, db.QueryRow(`SELECT ?::JSON->>'foo'`, string(val)).Scan(&res))
+		require.Equal(t, "bar", res)
 	})
 
-	t.Run("select JSON array", func(t *testing.T) {
-		require.NoError(t, db.QueryRow("SELECT json_array('foo', 'bar')").Scan(&data))
-		require.Equal(t, `["foo","bar"]`, data)
-
-		var items []string
-		require.NoError(t, json.Unmarshal([]byte(data), &items))
-		require.Equal(t, len(items), 2)
-		require.Equal(t, items, []string{"foo", "bar"})
+	t.Run("SELECT a JSON array", func(t *testing.T) {
+		var res Composite[[]any]
+		require.NoError(t, db.QueryRow(`SELECT json_array('foo', 'bar')`).Scan(&res))
+		require.Len(t, res.Get(), 2)
+		require.Equal(t, "foo", res.Get()[0])
+		require.Equal(t, "bar", res.Get()[1])
 	})
 
 	require.NoError(t, db.Close())
@@ -524,7 +525,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			err = r.Scan(&val)
 			require.NoError(t, err)
 			require.Equal(t, test.value, val)
-			require.Equal(t, r.Next(), false)
+			require.False(t, r.Next())
 		})
 	}
 	require.NoError(t, db.Close())
@@ -620,7 +621,7 @@ func TestMultipleStatements(t *testing.T) {
 	var family string
 	err = rows.Scan(&family)
 	require.NoError(t, err)
-	require.Equal(t, "\"anatidae\"", family)
+	require.Equal(t, "anatidae", family)
 	require.False(t, rows.Next())
 	err = rows.Close()
 	require.NoError(t, err)
