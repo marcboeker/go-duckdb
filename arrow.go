@@ -64,6 +64,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -93,6 +94,8 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 
 // arrowStreamReader implements array.RecordReader for streaming DuckDB results.
 type arrowStreamReader struct {
+	refCount int64
+
 	ctx        context.Context
 	stmt       *Stmt
 	res        *C.duckdb_arrow
@@ -103,20 +106,29 @@ type arrowStreamReader struct {
 	err        error
 }
 
-func (r *arrowStreamReader) Retain() {}
+// Retain increases the reference count by 1.
+// Retain may be called simultaneously from multiple goroutines.
+func (r *arrowStreamReader) Retain() {
+	atomic.AddInt64(&r.refCount, 1)
+}
 
+// Release decreases the reference count by 1.
+// When the reference count goes to zero, the memory is freed.
+// Release may be called simultaneously from multiple goroutines.
 func (r *arrowStreamReader) Release() {
-	if r.currentRec != nil {
-		r.currentRec.Release()
-		r.currentRec = nil
-	}
-	if r.res != nil {
-		C.duckdb_destroy_arrow(r.res)
-		r.res = nil
-	}
-	if r.stmt != nil {
-		r.stmt.Close()
-		r.stmt = nil
+	if atomic.AddInt64(&r.refCount, -1) == 0 {
+		if r.currentRec != nil {
+			r.currentRec.Release()
+			r.currentRec = nil
+		}
+		if r.res != nil {
+			C.duckdb_destroy_arrow(r.res)
+			r.res = nil
+		}
+		if r.stmt != nil {
+			r.stmt.Close()
+			r.stmt = nil
+		}
 	}
 }
 
@@ -207,6 +219,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	}
 
 	return &arrowStreamReader{
+		refCount: 1,
 		ctx:      ctx,
 		stmt:     stmt,
 		res:      res,
