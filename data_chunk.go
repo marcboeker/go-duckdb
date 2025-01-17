@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"sync"
 	"unsafe"
 )
 
@@ -21,10 +22,7 @@ type DataChunk struct {
 	size int
 }
 
-// GetDataChunkCapacity returns the capacity of a data chunk.
-func GetDataChunkCapacity() int {
-	return int(C.duckdb_vector_size())
-}
+var GetDataChunkCapacity = sync.OnceValue[int](func() int {return int(C.duckdb_vector_size())})
 
 // GetSize returns the internal size of the data chunk.
 func (chunk *DataChunk) GetSize() int {
