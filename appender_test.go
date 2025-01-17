@@ -936,3 +936,46 @@ func appendNestedData[T require.TestingT](t T, a *Appender, rowsToAppend []neste
 	}
 	require.NoError(t, a.Flush())
 }
+
+var types = map[reflect.Type]string{
+	reflect.TypeFor[int8](): "TINYINT",
+}
+
+func benchmarkAppenderSingle[T any](v T) func(*testing.B) {
+	return func(b *testing.B) {
+		if _, ok := types[reflect.TypeFor[T]()]; !ok {
+			b.Fatal("Type not defined in table:", reflect.TypeFor[T]())
+		}
+		tableSQL := fmt.Sprintf(createSingleTableSQL, types[reflect.TypeFor[T]()])
+		c, con, a := prepareAppender(b, tableSQL)
+		const rowsToAppend = 2048
+
+		var vec [rowsToAppend]T = [rowsToAppend]T{}
+		for i := 0; i < 2048; i++ {
+			vec[i] = v
+		}
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			for i := 0; i < rowsToAppend; i++ {
+				// require took up the majority of the time
+				err := a.AppendRow(v)
+				if err != nil {
+					b.Error(err)
+				}
+			}
+		}
+		b.StopTimer()
+		cleanupAppender(b, c, con, a)
+	}
+}
+
+func BenchmarkAppenderSingle(b *testing.B) {
+	b.Run("int8", benchmarkAppenderSingle[int8](0))
+}
+
+const createSingleTableSQL = `
+	CREATE TABLE test (
+		nested_int_list %s,
+	)
+`
