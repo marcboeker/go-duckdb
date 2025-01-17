@@ -314,7 +314,7 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 		chunk:      &chunk,
 		projection: instance.projection,
 	}
-	maxSize := C.duckdb_vector_size()
+	maxSize :=  C.idx_t(GetDataChunkCapacity())
 
 	switch fun := instance.fun.(type) {
 	case RowTableSource:

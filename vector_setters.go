@@ -427,11 +427,6 @@ func setUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
 }
 
 func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
-	name, inMap := unsupportedTypeToStringMap[vec.Type]
-	if inMap {
-		return unsupportedTypeError(name)
-	}
-
 	switch vec.Type {
 	case TYPE_BOOLEAN:
 		return setBool[S](vec, rowIdx, val)
@@ -483,6 +478,10 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	case TYPE_UUID:
 		return setUUID[S](vec, rowIdx, val)
 	default:
+		name, inMap := unsupportedTypeToStringMap[vec.Type]
+		if inMap {
+			return unsupportedTypeError(name)
+		}
 		return unsupportedTypeError(unknownTypeErrMsg)
 	}
 }

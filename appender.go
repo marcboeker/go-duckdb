@@ -230,3 +230,107 @@ func destroyTypeSlice(ptr unsafe.Pointer, slice []C.duckdb_logical_type) {
 	}
 	C.duckdb_free(ptr)
 }
+
+// TODO: check if we need the schema, or if it can be null (default schema)
+func AppendTableSource(driverConn driver.Conn, s RowTableSource, schema, table string) error {
+	con, ok := driverConn.(*Conn)
+	if !ok {
+		return getError(errInvalidCon, nil)
+	}
+	if con.closed {
+		return getError(errClosedCon, nil)
+	}
+
+	var cSchema *C.char
+	if schema != "" {
+		cSchema = C.CString(schema)
+		defer C.duckdb_free(unsafe.Pointer(cSchema))
+	}
+
+	cTable := C.CString(table)
+	defer C.duckdb_free(unsafe.Pointer(cTable))
+
+	var duckdbAppender C.duckdb_appender
+	state := C.duckdb_appender_create(con.duckdbCon, cSchema, cTable, &duckdbAppender)
+
+	if state == C.DuckDBError {
+		// We destroy the error message when destroying the appender.
+		err := duckdbError(C.duckdb_appender_error(duckdbAppender))
+		C.duckdb_appender_destroy(&duckdbAppender)
+		return getError(errAppenderCreation, err)
+	}
+
+	columnCount := int(C.duckdb_appender_column_count(duckdbAppender))
+	var projection = make([]int, columnCount)
+	var ptr, types = mallocTypeSlice(columnCount)
+	for i := 0; i < columnCount; i++ {
+		projection[i] = i
+		types[i] = C.duckdb_appender_column_type(duckdbAppender, C.idx_t(i))
+
+		// Ensure that we only create an appender for supported column types.
+		t := Type(C.duckdb_get_type_id(types[i]))
+		name, found := unsupportedTypeToStringMap[t]
+		if found {
+			err := addIndexToError(unsupportedTypeError(name), i+1)
+			destroyTypeSlice(ptr, types)
+			C.duckdb_appender_destroy(&duckdbAppender)
+			return getError(errAppenderCreation, err)
+		}
+	}
+
+	maxSize := C.idx_t(GetDataChunkCapacity())
+	for true {
+		var chunk DataChunk
+		chunk.initFromTypes(ptr, types, true)
+
+		row := Row{
+			chunk:      &chunk,
+			projection: projection,
+		}
+		var next bool
+		var err error
+		for row.r = 0; row.r < maxSize; row.r++ {
+			next, err = s.FillRow(row)
+			if err != nil {
+				return err
+			}
+			if !next {
+				break
+			}
+		}
+		
+		C.duckdb_data_chunk_set_size(chunk.data, row.r)
+		state = C.duckdb_append_data_chunk(duckdbAppender, chunk.data)
+		if state == C.DuckDBError {
+			return duckdbError(C.duckdb_appender_error(duckdbAppender))
+		}
+		chunk.close()
+		if !next {
+			break
+		}
+	}
+
+	// TODO: This should all be in a defer
+
+	// We flush before closing to get a meaningful error message.
+	var errFlush error
+	state = C.duckdb_appender_flush(duckdbAppender)
+	if state == C.DuckDBError {
+		errFlush = duckdbError(C.duckdb_appender_error(duckdbAppender))
+	}
+
+	// Destroy all appender data and the appender.
+	destroyTypeSlice(ptr, types)
+	var errClose error
+	state = C.duckdb_appender_destroy(&duckdbAppender)
+	if state == C.DuckDBError {
+		errClose = errAppenderClose
+	}
+
+	err := errors.Join(errFlush, errClose)
+	if err != nil {
+		return getError(invalidatedAppenderError(err), nil)
+	}
+	return nil
+
+}
