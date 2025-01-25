@@ -8,26 +8,42 @@ import "C"
 import (
 	"database/sql/driver"
 	"errors"
+	"runtime"
+	"sync"
 	"unsafe"
 )
 
-// Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
-type Appender struct {
-	con            *Conn
-	schema         string
-	table          string
-	duckdbAppender C.duckdb_appender
-	closed         bool
+type (
+	appenderSource[T any] struct {
+		s T
+	}
 
-	// The appender storage before flushing any data.
-	chunks []DataChunk
-	// The column types of the table to append to.
-	types []C.duckdb_logical_type
-	// A pointer to the allocated memory of the column types.
-	ptr unsafe.Pointer
-	// The number of appended rows.
-	rowCount int
-}
+	RowAppenderSource         = appenderSource[RowTableSource]
+	ParallelRowAppenderSource = appenderSource[ParallelRowTableSource]
+	ChunkAppenderSource       = appenderSource[ChunkTableSource]
+
+	AppenderSource interface {
+		RowAppenderSource | ParallelRowAppenderSource | ChunkAppenderSource
+	}
+
+	// Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
+	Appender struct {
+		con            *Conn
+		schema         string
+		table          string
+		duckdbAppender C.duckdb_appender
+		closed         bool
+
+		// The appender storage before flushing any data.
+		chunks []DataChunk
+		// The column types of the table to append to.
+		types []C.duckdb_logical_type
+		// A pointer to the allocated memory of the column types.
+		ptr unsafe.Pointer
+		// The number of appended rows.
+		rowCount int
+	}
+)
 
 // NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
@@ -231,8 +247,26 @@ func destroyTypeSlice(ptr unsafe.Pointer, slice []C.duckdb_logical_type) {
 	C.duckdb_free(ptr)
 }
 
+func NewRowAppenderSource(s RowTableSource) RowAppenderSource {
+	return RowAppenderSource{
+		s: s,
+	}
+}
+
+func NewParallelRowAppenderSource(s ParallelRowTableSource) ParallelRowAppenderSource {
+	return ParallelRowAppenderSource{
+		s: s,
+	}
+}
+
+func NewChunkAppenderSource(s ChunkTableSource) ChunkAppenderSource {
+	return ChunkAppenderSource{
+		s: s,
+	}
+}
+
 // TODO: check if we need the schema, or if it can be null (default schema)
-func AppendTableSource(driverConn driver.Conn, s RowTableSource, schema, table string) error {
+func AppendTableSource[AST AppenderSource](driverConn driver.Conn, s AST, schema, table string) error {
 	con, ok := driverConn.(*Conn)
 	if !ok {
 		return getError(errInvalidCon, nil)
@@ -279,34 +313,109 @@ func AppendTableSource(driverConn driver.Conn, s RowTableSource, schema, table s
 	}
 
 	maxSize := C.idx_t(GetDataChunkCapacity())
-	for true {
-		var chunk DataChunk
-		chunk.initFromTypes(ptr, types, true)
+	var x any = s
+	switch s := x.(type) {
+	case RowAppenderSource:
+		for true {
+			var chunk DataChunk
+			chunk.initFromTypes(ptr, types, true)
 
-		row := Row{
-			chunk:      &chunk,
-			projection: projection,
-		}
-		var next bool
-		var err error
-		for row.r = 0; row.r < maxSize; row.r++ {
-			next, err = s.FillRow(row)
-			if err != nil {
-				return err
+			row := Row{
+				chunk:      &chunk,
+				projection: projection,
 			}
+			var next bool
+			var err error
+			for row.r = 0; row.r < maxSize; row.r++ {
+				next, err = s.s.FillRow(row)
+				if err != nil {
+					return err
+				}
+				if !next {
+					break
+				}
+			}
+
+			C.duckdb_data_chunk_set_size(chunk.data, row.r)
+			state = C.duckdb_append_data_chunk(duckdbAppender, chunk.data)
+			if state == C.DuckDBError {
+				return duckdbError(C.duckdb_appender_error(duckdbAppender))
+			}
+			chunk.close()
 			if !next {
 				break
 			}
 		}
+	case ParallelRowAppenderSource:
+		wg := sync.WaitGroup{}
 		
-		C.duckdb_data_chunk_set_size(chunk.data, row.r)
-		state = C.duckdb_append_data_chunk(duckdbAppender, chunk.data)
-		if state == C.DuckDBError {
-			return duckdbError(C.duckdb_appender_error(duckdbAppender))
+		info := s.s.Init()
+		threads := min(info.MaxThreads, runtime.NumCPU())
+		lock := &sync.Mutex{}
+		var oerr error
+		for range threads {
+			wg.Add(1)
+			go func() {
+				lstate := s.s.NewLocalState()
+				for true {
+					var chunk DataChunk
+					chunk.initFromTypes(ptr, types, true)
+					
+					row := Row{
+						chunk:      &chunk,
+						projection: projection,
+					}
+					var next bool
+					var err error
+					for row.r = 0; row.r < maxSize; row.r++ {
+						next, err = s.s.FillRow(lstate, row)
+						if err != nil {
+							oerr = err
+							return
+						}
+						if !next {
+							break
+						}
+					}
+
+					C.duckdb_data_chunk_set_size(chunk.data, row.r)
+					lock.Lock()
+					state = C.duckdb_append_data_chunk(duckdbAppender, chunk.data)
+					lock.Unlock()
+					if state == C.DuckDBError {
+						oerr = duckdbError(C.duckdb_appender_error(duckdbAppender))
+						return
+					}
+					chunk.close()
+					if !next {
+						break
+					}
+				}
+				wg.Done()
+			}()
 		}
-		chunk.close()
-		if !next {
-			break
+		wg.Wait()
+		if oerr != nil {
+			return oerr
+		}
+	case ChunkAppenderSource:
+		for true {
+			var chunk DataChunk
+			chunk.initFromTypes(ptr, types, true)
+
+			err := s.s.FillChunk(chunk)
+			if err != nil {
+				return err
+			}
+			if chunk.GetSize() == 0 {
+				chunk.close()
+				break
+			}
+			state = C.duckdb_append_data_chunk(duckdbAppender, chunk.data)
+			if state == C.DuckDBError {
+				return duckdbError(C.duckdb_appender_error(duckdbAppender))
+			}
+			chunk.close()
 		}
 	}
 

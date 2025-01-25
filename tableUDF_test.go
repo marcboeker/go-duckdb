@@ -610,7 +610,7 @@ func (udf *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
 			return err
 		}
 		udf.count++
-		err := chunk.SetValue(0, i, udf.count)
+		err := SetChunkValue(chunk, 0, i, udf.count)
 		if err != nil {
 			return err
 		}

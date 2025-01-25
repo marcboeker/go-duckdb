@@ -118,7 +118,7 @@ type (
 	ChunkTableSource interface {
 		sequentialTableSource
 		// FillChunk takes a Chunk and fills it with values.
-		// It returns true, if there are more chunks to fill.
+		// Set the chunk size to 0 for end the function
 		FillChunk(DataChunk) error
 	}
 
@@ -131,7 +131,7 @@ type (
 	ParallelChunkTableSource interface {
 		parallelTableSource
 		// FillChunk takes a Chunk and fills it with values.
-		// It returns true, if there are more chunks to fill.
+		// Set the chunk size to 0 for end the function
 		FillChunk(any, DataChunk) error
 	}
 
@@ -258,7 +258,7 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 	cardinality := instance.Cardinality()
 	if cardinality != nil {
-		C.duckdb_bind_set_cardinality(info, C.idx_t(cardinality.Cardinality), C.bool(cardinality.Exact))
+	C.duckdb_bind_set_cardinality(info, C.idx_t(cardinality.Cardinality), C.bool(cardinality.Exact))
 	}
 
 	pinnedInstanceData := pinnedValue[tableFunctionData]{
