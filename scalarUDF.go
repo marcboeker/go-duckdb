@@ -209,6 +209,9 @@ func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) er
 		if info == nil {
 			return addIndexToError(errScalarUDFInputTypeIsNil, i)
 		}
+		if info.InternalType() == TYPE_UNION {
+			return errScalarUDFInputTypeIsUNION
+		}
 		t := info.logicalType()
 		C.duckdb_scalar_function_add_parameter(f, t)
 		C.duckdb_destroy_logical_type(&t)
@@ -222,6 +225,9 @@ func registerResultParams(config ScalarFuncConfig, f C.duckdb_scalar_function) e
 	}
 	if config.ResultTypeInfo.InternalType() == TYPE_ANY {
 		return errScalarUDFResultTypeIsANY
+	}
+	if config.ResultTypeInfo.InternalType() == TYPE_UNION {
+		return errScalarUDFResultTypeIsUNION
 	}
 	t := config.ResultTypeInfo.logicalType()
 	C.duckdb_scalar_function_set_return_type(f, t)

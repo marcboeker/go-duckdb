@@ -487,3 +487,94 @@ func TestGetDuckDBErrorIs(t *testing.T) {
 	require.NotErrorIs(t, invalidInputErr, outOfRangeErr1)
 	require.NotErrorIs(t, errors.New(errMsg), outOfRangeErr1)
 }
+
+func TestUnionErrors(t *testing.T) {
+	t.Parallel()
+	db := openDB(t)
+	defer db.Close()
+
+	t.Run("empty union type", func(t *testing.T) {
+		_, err := db.Query("SELECT (1)::UNION() as empty_union")
+		var de *Error
+		require.True(t, errors.As(err, &de))
+		require.Equal(t, ErrorTypeParser, de.Type)
+	})
+
+	t.Run("duplicate member names", func(t *testing.T) {
+		_, err := db.Query("SELECT (1)::UNION(val INTEGER, val VARCHAR) as dup_union")
+		var de *Error
+		require.True(t, errors.As(err, &de))
+		require.Equal(t, ErrorTypeParser, de.Type)
+	})
+
+	t.Run("type mismatch", func(t *testing.T) {
+		_, err := db.Query("SELECT (true)::UNION(num INTEGER, str VARCHAR) as mismatch_union")
+		var de *Error
+		require.True(t, errors.As(err, &de))
+		require.Equal(t, ErrorTypeConversion, de.Type)
+	})
+
+	t.Run("nested union type", func(t *testing.T) {
+		_, err := db.Query(`
+            WITH inner_union AS (
+                SELECT (1)::UNION(num INTEGER, str VARCHAR) as u
+            )
+            SELECT (u)::UNION(nested UNION(num INTEGER, str VARCHAR), other INTEGER)
+            FROM inner_union
+        `)
+		var de *Error
+		require.True(t, errors.As(err, &de))
+		require.Equal(t, ErrorTypeConversion, de.Type)
+	})
+
+	t.Run("union in table creation", func(t *testing.T) {
+		// Test that unions work in table creation
+		_, err := db.Exec(`
+            CREATE TABLE test_union (
+                u UNION(num INTEGER, str VARCHAR)
+            )
+        `)
+		require.NoError(t, err)
+
+		// Test inserting wrong type
+		_, err = db.Exec(`
+            INSERT INTO test_union VALUES ((true)::UNION(num INTEGER, str VARCHAR))
+        `)
+		var de *Error
+		require.True(t, errors.As(err, &de))
+		require.Equal(t, ErrorTypeConversion, de.Type)
+	})
+
+	t.Run("null member access", func(t *testing.T) {
+		rows, err := db.Query(`
+            SELECT
+                NULL::UNION(num INTEGER, str VARCHAR) as null_union
+        `)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		require.True(t, rows.Next())
+		var nullUnion interface{}
+		err = rows.Scan(&nullUnion)
+		require.NoError(t, err)
+		require.Nil(t, nullUnion)
+	})
+
+	t.Run("invalid member type", func(t *testing.T) {
+		_, err := db.Query(`
+            SELECT (1)::UNION(val ANY, str VARCHAR) as invalid_type_union
+        `)
+		var de *Error
+		require.True(t, errors.As(err, &de))
+		require.Equal(t, ErrorTypeParser, de.Type)
+	})
+
+	t.Run("missing member name", func(t *testing.T) {
+		_, err := db.Query(`
+            SELECT (1)::UNION(INTEGER, VARCHAR) as unnamed_union
+        `)
+		var de *Error
+		require.True(t, errors.As(err, &de))
+		require.Equal(t, ErrorTypeParser, de.Type)
+	})
+}

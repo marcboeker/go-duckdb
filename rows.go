@@ -129,6 +129,9 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(Map{})
 	case TYPE_ARRAY:
 		return reflect.TypeOf([]any{})
+	case TYPE_UNION:
+		// Union types are scanned as interface{} since they can contain any of their member types
+		return reflect.TypeOf((*interface{})(nil)).Elem()
 	case TYPE_UUID:
 		return reflect.TypeOf([]byte{})
 	default:
@@ -140,7 +143,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
 	switch t {
-	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		// Only allocate the logical type if necessary.
 		logicalType := C.duckdb_column_logical_type(&r.res, C.idx_t(index))
 		defer C.duckdb_destroy_logical_type(&logicalType)
@@ -181,6 +184,8 @@ func logicalTypeName(logicalType C.duckdb_logical_type) string {
 		return logicalTypeNameMap(logicalType)
 	case TYPE_ARRAY:
 		return logicalTypeNameArray(logicalType)
+	case TYPE_UNION:
+		return logicalTypeNameUnion(logicalType)
 	default:
 		return typeToStringMap[t]
 	}
@@ -236,6 +241,27 @@ func logicalTypeNameArray(logicalType C.duckdb_logical_type) string {
 	defer C.duckdb_destroy_logical_type(&childType)
 	childName := logicalTypeName(childType)
 	return fmt.Sprintf("%s[%d]", childName, int(size))
+}
+
+func logicalTypeNameUnion(logicalType C.duckdb_logical_type) string {
+	count := int(C.duckdb_union_type_member_count(logicalType))
+	name := "UNION("
+
+	for i := 0; i < count; i++ {
+		ptrToMemberName := C.duckdb_union_type_member_name(logicalType, C.idx_t(i))
+		memberName := C.GoString(ptrToMemberName)
+		memberType := C.duckdb_union_type_member_type(logicalType, C.idx_t(i))
+
+		// Add comma if not at the end of the list
+		name += memberName + " " + logicalTypeName(memberType)
+		if i != count-1 {
+			name += ", "
+		}
+
+		C.duckdb_free(unsafe.Pointer(ptrToMemberName))
+		C.duckdb_destroy_logical_type(&memberType)
+	}
+	return name + ")"
 }
 
 func escapeStructFieldName(s string) string {

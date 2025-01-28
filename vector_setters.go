@@ -482,6 +482,8 @@ func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
 		return unsupportedTypeError(unsupportedTypeToStringMap[vec.Type])
 	case TYPE_UUID:
 		return setUUID[S](vec, rowIdx, val)
+	case TYPE_UNION:
+		return unsupportedTypeError("writing to union type is not supported")
 	default:
 		return unsupportedTypeError(unknownTypeErrMsg)
 	}
