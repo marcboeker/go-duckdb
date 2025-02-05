@@ -5,6 +5,13 @@ The DuckDB driver conforms to the built-in `database/sql` interface.
 ![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
 [![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb)
 
+```diff
+! DuckDB just (Feb 5th, 2025) released its latest version (1.2.0).
+! go-duckdb is working on moving to that version within the next few days.
+! However, we expect some breaking changes around pre-built static libraries and the arrow dependency.
+! Therefore, it is likely that go-duckdb moves to v2 to support DuckDB v1.2.0.
+```
+
 ## Installation
 
 ```
