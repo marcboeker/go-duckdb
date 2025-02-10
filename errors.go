@@ -18,11 +18,6 @@ func duckdbError(err *C.char) error {
 	return fmt.Errorf("%s: %w", duckdbErrMsg, errors.New(C.GoString(err)))
 }
 
-// TODO: rename?
-func duckdbErrorStr(err string) error {
-	return fmt.Errorf("%s: %w", duckdbErrMsg, errors.New(err))
-}
-
 func castError(actual string, expected string) error {
 	return fmt.Errorf("%s: cannot cast %s to %s", castErrMsg, actual, expected)
 }

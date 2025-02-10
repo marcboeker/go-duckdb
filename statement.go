@@ -14,42 +14,42 @@ import (
 	"unsafe"
 )
 
-type StmtType C.duckdb_statement_type
+type StmtType apiStatementType
 
 const (
-	STATEMENT_TYPE_INVALID      StmtType = C.DUCKDB_STATEMENT_TYPE_INVALID
-	STATEMENT_TYPE_SELECT       StmtType = C.DUCKDB_STATEMENT_TYPE_SELECT
-	STATEMENT_TYPE_INSERT       StmtType = C.DUCKDB_STATEMENT_TYPE_INSERT
-	STATEMENT_TYPE_UPDATE       StmtType = C.DUCKDB_STATEMENT_TYPE_UPDATE
-	STATEMENT_TYPE_EXPLAIN      StmtType = C.DUCKDB_STATEMENT_TYPE_EXPLAIN
-	STATEMENT_TYPE_DELETE       StmtType = C.DUCKDB_STATEMENT_TYPE_DELETE
-	STATEMENT_TYPE_PREPARE      StmtType = C.DUCKDB_STATEMENT_TYPE_PREPARE
-	STATEMENT_TYPE_CREATE       StmtType = C.DUCKDB_STATEMENT_TYPE_CREATE
-	STATEMENT_TYPE_EXECUTE      StmtType = C.DUCKDB_STATEMENT_TYPE_EXECUTE
-	STATEMENT_TYPE_ALTER        StmtType = C.DUCKDB_STATEMENT_TYPE_ALTER
-	STATEMENT_TYPE_TRANSACTION  StmtType = C.DUCKDB_STATEMENT_TYPE_TRANSACTION
-	STATEMENT_TYPE_COPY         StmtType = C.DUCKDB_STATEMENT_TYPE_COPY
-	STATEMENT_TYPE_ANALYZE      StmtType = C.DUCKDB_STATEMENT_TYPE_ANALYZE
-	STATEMENT_TYPE_VARIABLE_SET StmtType = C.DUCKDB_STATEMENT_TYPE_VARIABLE_SET
-	STATEMENT_TYPE_CREATE_FUNC  StmtType = C.DUCKDB_STATEMENT_TYPE_CREATE_FUNC
-	STATEMENT_TYPE_DROP         StmtType = C.DUCKDB_STATEMENT_TYPE_DROP
-	STATEMENT_TYPE_EXPORT       StmtType = C.DUCKDB_STATEMENT_TYPE_EXPORT
-	STATEMENT_TYPE_PRAGMA       StmtType = C.DUCKDB_STATEMENT_TYPE_PRAGMA
-	STATEMENT_TYPE_VACUUM       StmtType = C.DUCKDB_STATEMENT_TYPE_VACUUM
-	STATEMENT_TYPE_CALL         StmtType = C.DUCKDB_STATEMENT_TYPE_CALL
-	STATEMENT_TYPE_SET          StmtType = C.DUCKDB_STATEMENT_TYPE_SET
-	STATEMENT_TYPE_LOAD         StmtType = C.DUCKDB_STATEMENT_TYPE_LOAD
-	STATEMENT_TYPE_RELATION     StmtType = C.DUCKDB_STATEMENT_TYPE_RELATION
-	STATEMENT_TYPE_EXTENSION    StmtType = C.DUCKDB_STATEMENT_TYPE_EXTENSION
-	STATEMENT_TYPE_LOGICAL_PLAN StmtType = C.DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN
-	STATEMENT_TYPE_ATTACH       StmtType = C.DUCKDB_STATEMENT_TYPE_ATTACH
-	STATEMENT_TYPE_DETACH       StmtType = C.DUCKDB_STATEMENT_TYPE_DETACH
-	STATEMENT_TYPE_MULTI        StmtType = C.DUCKDB_STATEMENT_TYPE_MULTI
+	STATEMENT_TYPE_INVALID      = StmtType(apiStatementTypeInvalid)
+	STATEMENT_TYPE_SELECT       = StmtType(apiStatementTypeSelect)
+	STATEMENT_TYPE_INSERT       = StmtType(apiStatementTypeInsert)
+	STATEMENT_TYPE_UPDATE       = StmtType(apiStatementTypeUpdate)
+	STATEMENT_TYPE_EXPLAIN      = StmtType(apiStatementTypeExplain)
+	STATEMENT_TYPE_DELETE       = StmtType(apiStatementTypeDelete)
+	STATEMENT_TYPE_PREPARE      = StmtType(apiStatementTypePrepare)
+	STATEMENT_TYPE_CREATE       = StmtType(apiStatementTypeCreate)
+	STATEMENT_TYPE_EXECUTE      = StmtType(apiStatementTypeExecute)
+	STATEMENT_TYPE_ALTER        = StmtType(apiStatementTypeAlter)
+	STATEMENT_TYPE_TRANSACTION  = StmtType(apiStatementTypeTransaction)
+	STATEMENT_TYPE_COPY         = StmtType(apiStatementTypeCopy)
+	STATEMENT_TYPE_ANALYZE      = StmtType(apiStatementTypeAnalyze)
+	STATEMENT_TYPE_VARIABLE_SET = StmtType(apiStatementTypeVariableSet)
+	STATEMENT_TYPE_CREATE_FUNC  = StmtType(apiStatementTypeCreateFunc)
+	STATEMENT_TYPE_DROP         = StmtType(apiStatementTypeDrop)
+	STATEMENT_TYPE_EXPORT       = StmtType(apiStatementTypeExport)
+	STATEMENT_TYPE_PRAGMA       = StmtType(apiStatementTypePragma)
+	STATEMENT_TYPE_VACUUM       = StmtType(apiStatementTypeVacuum)
+	STATEMENT_TYPE_CALL         = StmtType(apiStatementTypeCall)
+	STATEMENT_TYPE_SET          = StmtType(apiStatementTypeSet)
+	STATEMENT_TYPE_LOAD         = StmtType(apiStatementTypeLoad)
+	STATEMENT_TYPE_RELATION     = StmtType(apiStatementTypeRelation)
+	STATEMENT_TYPE_EXTENSION    = StmtType(apiStatementTypeExtension)
+	STATEMENT_TYPE_LOGICAL_PLAN = StmtType(apiStatementTypeLogicalPlan)
+	STATEMENT_TYPE_ATTACH       = StmtType(apiStatementTypeAttach)
+	STATEMENT_TYPE_DETACH       = StmtType(apiStatementTypeDetach)
+	STATEMENT_TYPE_MULTI        = StmtType(apiStatementTypeMulti)
 )
 
 // Stmt implements the driver.Stmt interface.
 type Stmt struct {
-	c                *Conn
+	conn             *Conn
 	preparedStmt     *apiPreparedStatement
 	closeOnRowsClose bool
 	bound            bool
@@ -68,7 +68,7 @@ func (s *Stmt) Close() error {
 	}
 
 	s.closed = true
-	C.duckdb_destroy_prepare(s.stmt)
+	apiDestroyPrepare(s.preparedStmt)
 	return nil
 }
 
@@ -78,7 +78,7 @@ func (s *Stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	count := C.duckdb_nparams(*s.stmt)
+	count := apiNParams(*s.preparedStmt)
 	return int(count)
 }
 
@@ -87,18 +87,16 @@ func (s *Stmt) ParamName(n int) (string, error) {
 	if s.closed {
 		return "", errClosedStmt
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return "", errUninitializedStmt
 	}
 
-	count := C.duckdb_nparams(*s.stmt)
-	if C.idx_t(n) == 0 || C.idx_t(n) > count {
+	count := apiNParams(*s.preparedStmt)
+	if n == 0 || n > int(count) {
 		return "", getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	cStr := C.duckdb_parameter_name(*s.stmt, C.idx_t(n))
-	name := C.GoString(cStr)
-	C.duckdb_free(unsafe.Pointer(cStr))
+	name := apiParameterName(*s.preparedStmt, apiIdxT(n))
 	return name, nil
 }
 
@@ -107,16 +105,17 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	if s.closed {
 		return TYPE_INVALID, errClosedStmt
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return TYPE_INVALID, errUninitializedStmt
 	}
 
-	count := C.duckdb_nparams(*s.stmt)
-	if C.idx_t(n) == 0 || C.idx_t(n) > count {
+	count := apiNParams(*s.preparedStmt)
+	if n == 0 || n > int(count) {
 		return TYPE_INVALID, getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	return Type(C.duckdb_param_type(*s.stmt, C.idx_t(n))), nil
+	t := apiParamType(*s.preparedStmt, apiIdxT(n))
+	return Type(t), nil
 }
 
 // StatementType returns the type of the statement.

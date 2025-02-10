@@ -160,7 +160,7 @@ func (c *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i api
 		return nil, err
 	}
 
-	return &Stmt{c: c, preparedStmt: &preparedStmt}, nil
+	return &Stmt{conn: c, preparedStmt: &preparedStmt}, nil
 }
 
 func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {

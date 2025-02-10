@@ -1,16 +1,51 @@
 package duckdb
 
-import "C"
+import (
+	api "github.com/duckdb/duckdb-go-bindings"
+)
 
 // ------------------------------------------------------------------ //
 // Enums
 // ------------------------------------------------------------------ //
 
-type apiState DDBState
+type apiState api.State
 
 const (
-	apiSuccess = apiState(DDBSuccess)
-	apiError   = apiState(DDBError)
+	apiSuccess = apiState(api.Success)
+	apiError   = apiState(api.Error)
+)
+
+type apiStatementType api.StatementType
+
+const (
+	apiStatementTypeInvalid     = apiStatementType(api.StatementTypeInvalid)
+	apiStatementTypeSelect      = apiStatementType(api.StatementTypeSelect)
+	apiStatementTypeInsert      = apiStatementType(api.StatementTypeInsert)
+	apiStatementTypeUpdate      = apiStatementType(api.StatementTypeUpdate)
+	apiStatementTypeExplain     = apiStatementType(api.StatementTypeExplain)
+	apiStatementTypeDelete      = apiStatementType(api.StatementTypeDelete)
+	apiStatementTypePrepare     = apiStatementType(api.StatementTypePrepare)
+	apiStatementTypeCreate      = apiStatementType(api.StatementTypeCreate)
+	apiStatementTypeExecute     = apiStatementType(api.StatementTypeExecute)
+	apiStatementTypeAlter       = apiStatementType(api.StatementTypeAlter)
+	apiStatementTypeTransaction = apiStatementType(api.StatementTypeTransaction)
+	apiStatementTypeCopy        = apiStatementType(api.StatementTypeCopy)
+	apiStatementTypeAnalyze     = apiStatementType(api.StatementTypeAnalyze)
+	apiStatementTypeVariableSet = apiStatementType(api.StatementTypeVariableSet)
+	apiStatementTypeCreateFunc  = apiStatementType(api.StatementTypeCreateFunc)
+	apiStatementTypeDrop        = apiStatementType(api.StatementTypeDrop)
+	apiStatementTypeExport      = apiStatementType(api.StatementTypeExport)
+	apiStatementTypePragma      = apiStatementType(api.StatementTypePragma)
+	apiStatementTypeVacuum      = apiStatementType(api.StatementTypeVacuum)
+	apiStatementTypeCall        = apiStatementType(api.StatementTypeCall)
+	apiStatementTypeSet         = apiStatementType(api.StatementTypeSet)
+	apiStatementTypeLoad        = apiStatementType(api.StatementTypeLoad)
+	apiStatementTypeRelation    = apiStatementType(api.StatementTypeRelation)
+	apiStatementTypeExtension   = apiStatementType(api.StatementTypeExtension)
+	apiStatementTypeLogicalPlan = apiStatementType(api.StatementTypeLogicalPlan)
+	apiStatementTypeAttach      = apiStatementType(api.StatementTypeAttach)
+	apiStatementTypeDetach      = apiStatementType(api.StatementTypeDetach)
+	apiStatementTypeMulti       = apiStatementType(api.StatementTypeMulti)
 )
 
 // ...
@@ -20,7 +55,7 @@ const (
 // ------------------------------------------------------------------ //
 
 type (
-	apiIdxT = DDBIdxT
+	apiIdxT = api.IdxT
 )
 
 // ...
@@ -35,21 +70,25 @@ type (
 // type Database *C.duckdb_database
 
 type (
-	apiDatabase            = DDBDatabase
-	apiConnection          = DDBConnection
-	apiPreparedStatement   = DDBPreparedStatement
-	apiExtractedStatements = DDBExtractedStatements
+	apiDatabase            = api.Database
+	apiConnection          = api.Connection
+	apiPreparedStatement   = api.PreparedStatement
+	apiExtractedStatements = api.ExtractedStatements
 )
 
 //type PendingResult *C.duckdb_pending_result
-//type AppenderRename *C.duckdb_appender
+
+type (
+	apiAppender = api.Appender
+)
+
 //type TableDescription *C.duckdb_table_description
 
 type (
-	apiConfig = DDBConfig
+	apiConfig      = api.Config
+	apiLogicalType = api.LogicalType
 )
 
-//type LogicalType *C.duckdb_logical_type
 //create_type_info
 //data_chunk
 //value
@@ -78,30 +117,30 @@ type (
 //#define duckdb_open                                    duckdb_ext_api.duckdb_open
 
 var (
-	apiOpenExt = DDBOpenExt
-	apiClose   = DDBClose
-	apiConnect = DDBConnect
+	apiOpenExt = api.OpenExt
+	apiClose   = api.Close
+	apiConnect = api.Connect
 )
 
 //#define duckdb_interrupt                               duckdb_ext_api.duckdb_interrupt
 //#define duckdb_query_progress                          duckdb_ext_api.duckdb_query_progress
 
 var (
-	apiDisconnect = DDBDisconnect
+	apiDisconnect = api.Disconnect
 )
 
 //#define duckdb_library_version                         duckdb_ext_api.duckdb_library_version
 
 var (
-	apiCreateConfig = DDBCreateConfig
+	apiCreateConfig = api.CreateConfig
 )
 
 //#define duckdb_config_count                            duckdb_ext_api.duckdb_config_count
 //#define duckdb_get_config_flag                         duckdb_ext_api.duckdb_get_config_flag
 
 var (
-	apiSetConfig     = DDBSetConfig
-	apiDestroyConfig = DDBDestroyConfig
+	apiSetConfig     = api.SetConfig
+	apiDestroyConfig = api.DestroyConfig
 )
 
 //#define duckdb_query                                   duckdb_ext_api.duckdb_query
@@ -118,7 +157,7 @@ var (
 //#define duckdb_malloc                                  duckdb_ext_api.duckdb_malloc
 
 var (
-	apiFree = DDBFree
+	apiFree = api.Free
 )
 
 //#define duckdb_vector_size                             duckdb_ext_api.duckdb_vector_size
@@ -147,13 +186,13 @@ var (
 //#define duckdb_prepare                                 duckdb_ext_api.duckdb_prepare
 
 var (
-	apiDestroyPrepare = DDBDestroyPrepare
-	apiPrepareError   = DDBPrepareError
+	apiDestroyPrepare = api.DestroyPrepare
+	apiPrepareError   = api.PrepareError
+	apiNParams        = api.NParams
+	apiParameterName  = api.ParameterName
+	apiParamType      = api.ParamType
 )
 
-//#define duckdb_nparams                                 duckdb_ext_api.duckdb_nparams
-//#define duckdb_parameter_name                          duckdb_ext_api.duckdb_parameter_name
-//#define duckdb_param_type                              duckdb_ext_api.duckdb_param_type
 //#define duckdb_param_logical_type                      duckdb_ext_api.duckdb_param_logical_type
 //#define duckdb_clear_bindings                          duckdb_ext_api.duckdb_clear_bindings
 //#define duckdb_prepared_statement_type                 duckdb_ext_api.duckdb_prepared_statement_type
@@ -185,10 +224,10 @@ var (
 //#define duckdb_execute_prepared                        duckdb_ext_api.duckdb_execute_prepared
 
 var (
-	apiExtractStatements         = DDBExtractStatements
-	apiPrepareExtractedStatement = DDBPrepareExtractedStatement
-	apiExtractStatementsError    = DDBExtractStatementsError
-	apiDestroyExtracted          = DDBDestroyExtracted
+	apiExtractStatements         = api.ExtractStatements
+	apiPrepareExtractedStatement = api.PrepareExtractedStatement
+	apiExtractStatementsError    = api.ExtractStatementsError
+	apiDestroyExtracted          = api.DestroyExtracted
 )
 
 //#define duckdb_pending_prepared                        duckdb_ext_api.duckdb_pending_prepared
@@ -280,7 +319,11 @@ var (
 //#define duckdb_create_struct_type                      duckdb_ext_api.duckdb_create_struct_type
 //#define duckdb_create_enum_type                        duckdb_ext_api.duckdb_create_enum_type
 //#define duckdb_create_decimal_type                     duckdb_ext_api.duckdb_create_decimal_type
-//#define duckdb_get_type_id                             duckdb_ext_api.duckdb_get_type_id
+
+var (
+	apiGetTypeId = api.GetTypeId
+)
+
 //#define duckdb_decimal_width                           duckdb_ext_api.duckdb_decimal_width
 //#define duckdb_decimal_scale                           duckdb_ext_api.duckdb_decimal_scale
 //#define duckdb_decimal_internal_type                   duckdb_ext_api.duckdb_decimal_internal_type
@@ -298,7 +341,11 @@ var (
 //#define duckdb_union_type_member_count                 duckdb_ext_api.duckdb_union_type_member_count
 //#define duckdb_union_type_member_name                  duckdb_ext_api.duckdb_union_type_member_name
 //#define duckdb_union_type_member_type                  duckdb_ext_api.duckdb_union_type_member_type
-//#define duckdb_destroy_logical_type                    duckdb_ext_api.duckdb_destroy_logical_type
+
+var (
+	apiDestroyLogicalType = api.DestroyLogicalType
+)
+
 //#define duckdb_register_logical_type                   duckdb_ext_api.duckdb_register_logical_type
 //#define duckdb_create_data_chunk                       duckdb_ext_api.duckdb_create_data_chunk
 //#define duckdb_destroy_data_chunk                      duckdb_ext_api.duckdb_destroy_data_chunk
@@ -398,14 +445,22 @@ var (
 //#define duckdb_profiling_info_get_metrics           duckdb_ext_api.duckdb_profiling_info_get_metrics
 //#define duckdb_profiling_info_get_child_count       duckdb_ext_api.duckdb_profiling_info_get_child_count
 //#define duckdb_profiling_info_get_child             duckdb_ext_api.duckdb_profiling_info_get_child
-//#define duckdb_appender_create                      duckdb_ext_api.duckdb_appender_create
+
+var (
+	apiAppenderCreate = api.AppenderCreate
+)
+
 //#define duckdb_appender_create_ext                  duckdb_ext_api.duckdb_appender_create_ext
-//#define duckdb_appender_column_count                duckdb_ext_api.duckdb_appender_column_count
-//#define duckdb_appender_column_type                 duckdb_ext_api.duckdb_appender_column_type
-//#define duckdb_appender_error                       duckdb_ext_api.duckdb_appender_error
-//#define duckdb_appender_flush                       duckdb_ext_api.duckdb_appender_flush
-//#define duckdb_appender_close                       duckdb_ext_api.duckdb_appender_close
-//#define duckdb_appender_destroy                     duckdb_ext_api.duckdb_appender_destroy
+
+var (
+	apiAppenderColumnCount = api.AppenderColumnCount
+	apiAppenderColumnType  = api.AppenderColumnType
+	apiAppenderError       = api.AppenderError
+	apiAppenderFlush       = api.AppenderFlush
+	apiAppenderClose       = api.AppenderClose
+	apiAppenderDestroy     = api.AppenderDestroy
+)
+
 //#define duckdb_appender_add_column                  duckdb_ext_api.duckdb_appender_add_column
 //#define duckdb_appender_clear_columns               duckdb_ext_api.duckdb_appender_clear_columns
 //#define duckdb_appender_begin_row                   duckdb_ext_api.duckdb_appender_begin_row
@@ -433,7 +488,11 @@ var (
 //#define duckdb_append_blob                          duckdb_ext_api.duckdb_append_blob
 //#define duckdb_append_null                          duckdb_ext_api.duckdb_append_null
 //#define duckdb_append_value                         duckdb_ext_api.duckdb_append_value
-//#define duckdb_append_data_chunk                    duckdb_ext_api.duckdb_append_data_chunk
+
+var (
+	apiAppendDataChunk = api.AppendDataChunk
+)
+
 //#define duckdb_table_description_create             duckdb_ext_api.duckdb_table_description_create
 //#define duckdb_table_description_create_ext         duckdb_ext_api.duckdb_table_description_create_ext
 //#define duckdb_table_description_destroy            duckdb_ext_api.duckdb_table_description_destroy
@@ -518,3 +577,11 @@ var (
 //
 //// Version unstable_new_append_functions
 //#define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// ------------------------------------------------------------------ //
+// Helper
+// ------------------------------------------------------------------ //
+
+var (
+	apiMallocLogicalTypeSlice = api.MallocLogicalTypeSlice
+)
