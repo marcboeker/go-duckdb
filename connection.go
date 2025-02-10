@@ -1,25 +1,19 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"math/big"
-	"unsafe"
 )
 
 // Conn holds a connection to a DuckDB database.
 // It implements the driver.Conn interface.
 type Conn struct {
-	duckdbCon C.duckdb_connection
-	closed    bool
-	tx        bool
+	apiConn apiConnection
+	closed  bool
+	tx      bool
 }
 
 // CheckNamedValue implements the driver.NamedValueChecker interface.
@@ -88,16 +82,16 @@ func (c *Conn) Prepare(query string) (driver.Stmt, error) {
 		return nil, errors.Join(errPrepare, errClosedCon)
 	}
 
-	stmts, count, err := c.extractStmts(query)
+	extractedStmts, count, err := c.extractStmts(query)
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_extracted(&stmts)
+	defer apiDestroyExtracted(&extractedStmts)
 
 	if count != 1 {
 		return nil, errors.Join(errPrepare, errMissingPrepareContext)
 	}
-	return c.prepareExtractedStmt(stmts, 0)
+	return c.prepareExtractedStmt(extractedStmts, 0)
 }
 
 // Begin is deprecated: Use BeginTx instead.
@@ -137,40 +131,36 @@ func (c *Conn) Close() error {
 		return errClosedCon
 	}
 	c.closed = true
-	C.duckdb_disconnect(&c.duckdbCon)
+	apiDisconnect(&c.apiConn)
 	return nil
 }
 
-func (c *Conn) extractStmts(query string) (C.duckdb_extracted_statements, C.idx_t, error) {
-	cQuery := C.CString(query)
-	defer C.duckdb_free(unsafe.Pointer(cQuery))
+func (c *Conn) extractStmts(query string) (apiExtractedStatements, apiIdxT, error) {
+	var extractedStmts apiExtractedStatements
 
-	var stmts C.duckdb_extracted_statements
-	count := C.duckdb_extract_statements(c.duckdbCon, cQuery, &stmts)
-
+	count := apiExtractStatements(c.apiConn, query, &extractedStmts)
 	if count == 0 {
-		errMsg := C.GoString(C.duckdb_extract_statements_error(stmts))
-		C.duckdb_destroy_extracted(&stmts)
+		errMsg := apiExtractStatementsError(extractedStmts)
+		apiDestroyExtracted(&extractedStmts)
 		if errMsg != "" {
-			return nil, 0, getDuckDBError(errMsg)
+			return extractedStmts, 0, getDuckDBError(errMsg)
 		}
-		return nil, 0, errEmptyQuery
+		return extractedStmts, 0, errEmptyQuery
 	}
-
-	return stmts, count, nil
+	return extractedStmts, count, nil
 }
 
-func (c *Conn) prepareExtractedStmt(stmts C.duckdb_extracted_statements, i C.idx_t) (*Stmt, error) {
-	var s C.duckdb_prepared_statement
-	state := C.duckdb_prepare_extracted_statement(c.duckdbCon, stmts, i, &s)
+func (c *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i apiIdxT) (*Stmt, error) {
+	var preparedStmt apiPreparedStatement
+	state := apiPrepareExtractedStatement(c.apiConn, extractedStmts, i, &preparedStmt)
 
-	if state == C.DuckDBError {
-		err := getDuckDBError(C.GoString(C.duckdb_prepare_error(s)))
-		C.duckdb_destroy_prepare(&s)
+	if apiState(state) == apiError {
+		err := getDuckDBError(apiPrepareError(preparedStmt))
+		apiDestroyPrepare(&preparedStmt)
 		return nil, err
 	}
 
-	return &Stmt{c: c, stmt: &s}, nil
+	return &Stmt{c: c, preparedStmt: &preparedStmt}, nil
 }
 
 func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
@@ -178,21 +168,21 @@ func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
 		return nil, errClosedCon
 	}
 
-	stmts, count, errExtract := c.extractStmts(query)
+	extractedStmts, count, errExtract := c.extractStmts(query)
 	if errExtract != nil {
 		return nil, errExtract
 	}
-	defer C.duckdb_destroy_extracted(&stmts)
+	defer apiDestroyExtracted(&extractedStmts)
 
-	for i := C.idx_t(0); i < count-1; i++ {
-		prepared, err := c.prepareExtractedStmt(stmts, i)
+	for i := apiIdxT(0); i < count-1; i++ {
+		preparedStmt, err := c.prepareExtractedStmt(extractedStmts, i)
 		if err != nil {
 			return nil, err
 		}
 
 		// Execute the statement without any arguments and ignore the result.
-		_, execErr := prepared.ExecContext(ctx, nil)
-		closeErr := prepared.Close()
+		_, execErr := preparedStmt.ExecContext(ctx, nil)
+		closeErr := preparedStmt.Close()
 		if execErr != nil {
 			return nil, execErr
 		}
@@ -200,5 +190,5 @@ func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
 			return nil, closeErr
 		}
 	}
-	return c.prepareExtractedStmt(stmts, count-1)
+	return c.prepareExtractedStmt(extractedStmts, count-1)
 }

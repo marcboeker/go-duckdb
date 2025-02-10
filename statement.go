@@ -50,7 +50,7 @@ const (
 // Stmt implements the driver.Stmt interface.
 type Stmt struct {
 	c                *Conn
-	stmt             *C.duckdb_prepared_statement
+	preparedStmt     *apiPreparedStatement
 	closeOnRowsClose bool
 	bound            bool
 	closed           bool
