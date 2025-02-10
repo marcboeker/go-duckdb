@@ -123,11 +123,12 @@ func (s *Stmt) StatementType() (StmtType, error) {
 	if s.closed {
 		return STATEMENT_TYPE_INVALID, errClosedStmt
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return STATEMENT_TYPE_INVALID, errUninitializedStmt
 	}
 
-	return StmtType(C.duckdb_prepared_statement_type(*s.stmt)), nil
+	t := apiPreparedStatementType(*s.preparedStmt)
+	return StmtType(t), nil
 }
 
 // Bind the parameters to the statement.
@@ -136,67 +137,43 @@ func (s *Stmt) Bind(args []driver.NamedValue) error {
 	if s.closed {
 		return errors.Join(errCouldNotBind, errClosedStmt)
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return errors.Join(errCouldNotBind, errUninitializedStmt)
 	}
 	return s.bind(args)
 }
 
-func (s *Stmt) bindHugeint(val *big.Int, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindHugeint(val *big.Int, n int) (apiState, error) {
 	hugeint, err := hugeIntFromNative(val)
 	if err != nil {
-		return C.DuckDBError, err
+		return apiError, err
 	}
-	state := C.duckdb_bind_hugeint(*s.stmt, C.idx_t(n+1), hugeint)
-	return state, nil
+	state := apiBindHugeInt(*s.preparedStmt, apiIdxT(n+1), hugeint)
+	return apiState(state), nil
 }
 
-func (s *Stmt) bindString(val string, n int) (C.duckdb_state, error) {
-	v := C.CString(val)
-	state := C.duckdb_bind_varchar(*s.stmt, C.idx_t(n+1), v)
-	C.duckdb_free(unsafe.Pointer(v))
-	return state, nil
-}
-
-func (s *Stmt) bindBlob(val []byte, n int) (C.duckdb_state, error) {
-	v := C.CBytes(val)
-	state := C.duckdb_bind_blob(*s.stmt, C.idx_t(n+1), v, C.uint64_t(len(val)))
-	C.duckdb_free(unsafe.Pointer(v))
-	return state, nil
-}
-
-func (s *Stmt) bindInterval(val Interval, n int) (C.duckdb_state, error) {
-	v := C.duckdb_interval{
-		months: C.int32_t(val.Months),
-		days:   C.int32_t(val.Days),
-		micros: C.int64_t(val.Micros),
-	}
-	state := C.duckdb_bind_interval(*s.stmt, C.idx_t(n+1), v)
-	return state, nil
-}
-
-func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (C.duckdb_state, error) {
-	ts, err := getCTimestamp(t, val.Value)
+func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (apiState, error) {
+	ts, err := getAPITimestamp(t, val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return apiError, err
 	}
-	state := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(n+1), ts)
-	return state, nil
+	state := apiBindTimestamp(*s.preparedStmt, apiIdxT(n+1), ts)
+	return apiState(state), nil
 }
 
-func (s *Stmt) bindDate(val driver.NamedValue, n int) (C.duckdb_state, error) {
-	date, err := getCDate(val.Value)
+func (s *Stmt) bindDate(val driver.NamedValue, n int) (apiState, error) {
+	date, err := getAPIDate(val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return apiError, err
 	}
-	state := C.duckdb_bind_date(*s.stmt, C.idx_t(n+1), date)
-	return state, nil
+	state := apiBindDate(*s.preparedStmt, apiIdxT(n+1), date)
+	return apiState(state), nil
 }
 
-func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (apiState, error) {
 	ticks, err := getTimeTicks(val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return apiError, err
 	}
 
 	if t == TYPE_TIME {
@@ -241,46 +218,47 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (C.duckdb_state, e
 	return C.DuckDBError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
 }
 
-func (s *Stmt) bindValue(val driver.NamedValue, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindValue(val driver.NamedValue, n int) (apiState, error) {
 	switch v := val.Value.(type) {
 	case bool:
-		return C.duckdb_bind_boolean(*s.stmt, C.idx_t(n+1), C.bool(v)), nil
+		return apiBindBoolean(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case int8:
-		return C.duckdb_bind_int8(*s.stmt, C.idx_t(n+1), C.int8_t(v)), nil
+		return apiBindInt8(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case int16:
-		return C.duckdb_bind_int16(*s.stmt, C.idx_t(n+1), C.int16_t(v)), nil
+		return apiBindInt16(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case int32:
-		return C.duckdb_bind_int32(*s.stmt, C.idx_t(n+1), C.int32_t(v)), nil
+		return apiBindInt32(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case int64:
-		return C.duckdb_bind_int64(*s.stmt, C.idx_t(n+1), C.int64_t(v)), nil
+		return apiBindInt64(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case int:
-		return C.duckdb_bind_int64(*s.stmt, C.idx_t(n+1), C.int64_t(v)), nil
+		// FIXME: Should this be apiBindInt32?
+		return apiBindInt64(*s.preparedStmt, apiIdxT(n+1), int64(v)), nil
 	case *big.Int:
 		return s.bindHugeint(v, n)
 	case Decimal:
 		// FIXME: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[TYPE_DECIMAL]
-		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+		return apiError, addIndexToError(unsupportedTypeError(name), n+1)
 	case uint8:
-		return C.duckdb_bind_uint8(*s.stmt, C.idx_t(n+1), C.uint8_t(v)), nil
+		return apiBindUInt8(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case uint16:
-		return C.duckdb_bind_uint16(*s.stmt, C.idx_t(n+1), C.uint16_t(v)), nil
+		return apiBindUInt16(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case uint32:
-		return C.duckdb_bind_uint32(*s.stmt, C.idx_t(n+1), C.uint32_t(v)), nil
+		return apiBindUInt32(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case uint64:
-		return C.duckdb_bind_uint64(*s.stmt, C.idx_t(n+1), C.uint64_t(v)), nil
+		return apiBindUInt64(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case float32:
-		return C.duckdb_bind_float(*s.stmt, C.idx_t(n+1), C.float(v)), nil
+		return apiBindFloat(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case float64:
-		return C.duckdb_bind_double(*s.stmt, C.idx_t(n+1), C.double(v)), nil
+		return apiBindDouble(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case string:
-		return s.bindString(v, n)
+		return apiBindVarchar(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case []byte:
-		return s.bindBlob(v, n)
+		return apiBindBlob(*s.preparedStmt, apiIdxT(n+1), v), nil
 	case Interval:
-		return s.bindInterval(v, n)
+		return apiBindInterval(*s.preparedStmt, apiIdxT(n+1), v.getAPIInterval()), nil
 	case nil:
-		return C.duckdb_bind_null(*s.stmt, C.idx_t(n+1)), nil
+		return apiBindNull(*s.preparedStmt, apiIdxT(n+1)), nil
 	}
 	return s.bindComplexValue(val, n)
 }

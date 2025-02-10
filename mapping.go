@@ -1,5 +1,6 @@
 package duckdb
 
+import "C"
 import (
 	bindings "github.com/duckdb/duckdb-go-bindings"
 )
@@ -7,6 +8,48 @@ import (
 // ------------------------------------------------------------------ //
 // Enums
 // ------------------------------------------------------------------ //
+
+type apiType bindings.Type
+
+const (
+	apiTypeInvalid     = apiType(bindings.TypeInvalid)
+	apiTypeBoolean     = apiType(bindings.TypeBoolean)
+	apiTypeTinyInt     = apiType(bindings.TypeTinyInt)
+	apiTypeSmallInt    = apiType(bindings.TypeSmallInt)
+	apiTypeInteger     = apiType(bindings.TypeInteger)
+	apiTypeBigInt      = apiType(bindings.TypeBigInt)
+	apiTypeUTinyInt    = apiType(bindings.TypeUTinyInt)
+	apiTypeUSmallInt   = apiType(bindings.TypeUSmallInt)
+	apiTypeUInteger    = apiType(bindings.TypeUInteger)
+	apiTypeUBigInt     = apiType(bindings.TypeUBigInt)
+	apiTypeFloat       = apiType(bindings.TypeFloat)
+	apiTypeDouble      = apiType(bindings.TypeDouble)
+	apiTypeTimestamp   = apiType(bindings.TypeTimestamp)
+	apiTypeDate        = apiType(bindings.TypeDate)
+	apiTypeTime        = apiType(bindings.TypeTime)
+	apiTypeInterval    = apiType(bindings.TypeInterval)
+	apiTypeHugeInt     = apiType(bindings.TypeHugeInt)
+	apiTypeUHugeInt    = apiType(bindings.TypeUHugeInt)
+	apiTypeVarchar     = apiType(bindings.TypeVarchar)
+	apiTypeBlob        = apiType(bindings.TypeBlob)
+	apiTypeDecimal     = apiType(bindings.TypeDecimal)
+	apiTypeTimestampS  = apiType(bindings.TypeTimestampS)
+	apiTypeTimestampMS = apiType(bindings.TypeTimestampMS)
+	apiTypeTimestampNS = apiType(bindings.TypeTimestampNS)
+	apiTypeEnum        = apiType(bindings.TypeEnum)
+	apiTypeList        = apiType(bindings.TypeList)
+	apiTypeStruct      = apiType(bindings.TypeStruct)
+	apiTypeMap         = apiType(bindings.TypeMap)
+	apiTypeArray       = apiType(bindings.TypeArray)
+	apiTypeUUID        = apiType(bindings.TypeUUID)
+	apiTypeUnion       = apiType(bindings.TypeUnion)
+	apiTypeBit         = apiType(bindings.TypeBit)
+	apiTypeTimeTZ      = apiType(bindings.TypeTimeTZ)
+	apiTypeTimestampTZ = apiType(bindings.TypeTimestampTZ)
+	apiTypeAny         = apiType(bindings.TypeAny)
+	apiTypeVarInt      = apiType(bindings.TypeVarInt)
+	apiTypeSQLNull     = apiType(bindings.TypeSQLNull)
+)
 
 type apiState bindings.State
 
@@ -55,7 +98,11 @@ const (
 // ------------------------------------------------------------------ //
 
 type (
-	apiIdxT = bindings.IdxT
+	apiIdxT      = bindings.IdxT
+	apiDate      = bindings.Date
+	apiTimestamp = bindings.Timestamp
+	apiInterval  = bindings.Interval
+	apiHugeInt   = bindings.HugeInt
 )
 
 // ...
@@ -214,32 +261,52 @@ var (
 
 //#define duckdb_param_logical_type                      duckdb_ext_api.duckdb_param_logical_type
 //#define duckdb_clear_bindings                          duckdb_ext_api.duckdb_clear_bindings
-//#define duckdb_prepared_statement_type                 duckdb_ext_api.duckdb_prepared_statement_type
+
+var (
+	apiPreparedStatementType = bindings.PreparedStatementType
+)
+
 //#define duckdb_bind_value                              duckdb_ext_api.duckdb_bind_value
 //#define duckdb_bind_parameter_index                    duckdb_ext_api.duckdb_bind_parameter_index
-//#define duckdb_bind_boolean                            duckdb_ext_api.duckdb_bind_boolean
-//#define duckdb_bind_int8                               duckdb_ext_api.duckdb_bind_int8
-//#define duckdb_bind_int16                              duckdb_ext_api.duckdb_bind_int16
-//#define duckdb_bind_int32                              duckdb_ext_api.duckdb_bind_int32
-//#define duckdb_bind_int64                              duckdb_ext_api.duckdb_bind_int64
-//#define duckdb_bind_hugeint                            duckdb_ext_api.duckdb_bind_hugeint
+
+var (
+	apiBindBoolean = bindings.BindBoolean
+	apiBindInt8    = bindings.BindInt8
+	apiBindInt16   = bindings.BindInt16
+	apiBindInt32   = bindings.BindInt32
+	apiBindInt64   = bindings.BindInt64
+	apiBindHugeInt = bindings.BindHugeInt
+)
+
 //#define duckdb_bind_uhugeint                           duckdb_ext_api.duckdb_bind_uhugeint
-//#define duckdb_bind_decimal                            duckdb_ext_api.duckdb_bind_decimal
-//#define duckdb_bind_uint8                              duckdb_ext_api.duckdb_bind_uint8
-//#define duckdb_bind_uint16                             duckdb_ext_api.duckdb_bind_uint16
-//#define duckdb_bind_uint32                             duckdb_ext_api.duckdb_bind_uint32
-//#define duckdb_bind_uint64                             duckdb_ext_api.duckdb_bind_uint64
-//#define duckdb_bind_float                              duckdb_ext_api.duckdb_bind_float
-//#define duckdb_bind_double                             duckdb_ext_api.duckdb_bind_double
-//#define duckdb_bind_date                               duckdb_ext_api.duckdb_bind_date
-//#define duckdb_bind_time                               duckdb_ext_api.duckdb_bind_time
-//#define duckdb_bind_timestamp                          duckdb_ext_api.duckdb_bind_timestamp
+
+var (
+	apiBindDecimal   = bindings.BindDecimal
+	apiBindUInt8     = bindings.BindUInt8
+	apiBindUInt16    = bindings.BindUInt16
+	apiBindUInt32    = bindings.BindUInt32
+	apiBindUInt64    = bindings.BindUInt64
+	apiBindFloat     = bindings.BindFloat
+	apiBindDouble    = bindings.BindDouble
+	apiBindDate      = bindings.BindDate
+	apiBindTime      = bindings.BindTime
+	apiBindTimestamp = bindings.BindTimestamp
+)
+
 //#define duckdb_bind_timestamp_tz                       duckdb_ext_api.duckdb_bind_timestamp_tz
-//#define duckdb_bind_interval                           duckdb_ext_api.duckdb_bind_interval
-//#define duckdb_bind_varchar                            duckdb_ext_api.duckdb_bind_varchar
+
+var (
+	apiBindInterval = bindings.BindInterval
+	apiBindVarchar  = bindings.BindVarchar
+)
+
 //#define duckdb_bind_varchar_length                     duckdb_ext_api.duckdb_bind_varchar_length
-//#define duckdb_bind_blob                               duckdb_ext_api.duckdb_bind_blob
-//#define duckdb_bind_null                               duckdb_ext_api.duckdb_bind_null
+
+var (
+	apiBindBlob = bindings.BindBlob
+	apiBindNull = bindings.BindNull
+)
+
 //#define duckdb_execute_prepared                        duckdb_ext_api.duckdb_execute_prepared
 
 var (
@@ -340,19 +407,27 @@ var (
 //#define duckdb_create_enum_value                       duckdb_ext_api.duckdb_create_enum_value
 //#define duckdb_get_enum_value                          duckdb_ext_api.duckdb_get_enum_value
 //#define duckdb_get_struct_child                        duckdb_ext_api.duckdb_get_struct_child
-//#define duckdb_create_logical_type                     duckdb_ext_api.duckdb_create_logical_type
+
+func apiCreateLogicalType(t apiType) apiLogicalType {
+	return bindings.CreateLogicalType(bindings.Type(t))
+}
+
 //#define duckdb_logical_type_get_alias                  duckdb_ext_api.duckdb_logical_type_get_alias
 //#define duckdb_logical_type_set_alias                  duckdb_ext_api.duckdb_logical_type_set_alias
-//#define duckdb_create_list_type                        duckdb_ext_api.duckdb_create_list_type
-//#define duckdb_create_array_type                       duckdb_ext_api.duckdb_create_array_type
-//#define duckdb_create_map_type                         duckdb_ext_api.duckdb_create_map_type
-//#define duckdb_create_union_type                       duckdb_ext_api.duckdb_create_union_type
-//#define duckdb_create_struct_type                      duckdb_ext_api.duckdb_create_struct_type
-//#define duckdb_create_enum_type                        duckdb_ext_api.duckdb_create_enum_type
-//#define duckdb_create_decimal_type                     duckdb_ext_api.duckdb_create_decimal_type
 
 var (
-	apiGetTypeId = bindings.GetTypeId
+	apiCreateListType  = bindings.CreateListType
+	apiCreateArrayType = bindings.CreateArrayType
+	apiCreateMapType   = bindings.CreateMapType
+)
+
+//#define duckdb_create_union_type                       duckdb_ext_api.duckdb_create_union_type
+
+var (
+	apiCreateStructType  = bindings.CreateStructType
+	apiCreateEnumType    = bindings.CreateEnumType
+	apiCreateDecimalType = bindings.CreateDecimalType
+	apiGetTypeId         = bindings.GetTypeId
 )
 
 //#define duckdb_decimal_width                           duckdb_ext_api.duckdb_decimal_width

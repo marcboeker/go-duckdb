@@ -1,10 +1,5 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"encoding/binary"
 	"encoding/hex"
@@ -64,32 +59,32 @@ func (u *UUID) String() string {
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
-func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
+func hugeIntToUUID(hugeInt apiHugeInt) []byte {
 	// Flip the sign bit of the signed hugeint to transform it to UUID bytes.
 	var val [uuid_length]byte
-	binary.BigEndian.PutUint64(val[:8], uint64(hi.upper)^1<<63)
-	binary.BigEndian.PutUint64(val[8:], uint64(hi.lower))
+	binary.BigEndian.PutUint64(val[:8], uint64(hugeInt.Upper)^1<<63)
+	binary.BigEndian.PutUint64(val[8:], hugeInt.Lower)
 	return val[:]
 }
 
-func uuidToHugeInt(uuid UUID) C.duckdb_hugeint {
-	var dt C.duckdb_hugeint
+func uuidToHugeInt(uuid UUID) apiHugeInt {
+	var hugeInt apiHugeInt
 	upper := binary.BigEndian.Uint64(uuid[:8])
-	// flip the sign bit
-	upper = upper ^ (1 << 63)
-	dt.upper = C.int64_t(upper)
-	dt.lower = C.uint64_t(binary.BigEndian.Uint64(uuid[8:]))
-	return dt
+
+	// Flip the sign bit.
+	hugeInt.Upper = int64(upper ^ (1 << 63))
+	hugeInt.Lower = binary.BigEndian.Uint64(uuid[8:])
+	return hugeInt
 }
 
-func hugeIntToNative(hi C.duckdb_hugeint) *big.Int {
-	i := big.NewInt(int64(hi.upper))
+func hugeIntToNative(hugeInt apiHugeInt) *big.Int {
+	i := big.NewInt(hugeInt.Upper)
 	i.Lsh(i, 64)
-	i.Add(i, new(big.Int).SetUint64(uint64(hi.lower)))
+	i.Add(i, new(big.Int).SetUint64(hugeInt.Lower))
 	return i
 }
 
-func hugeIntFromNative(i *big.Int) (C.duckdb_hugeint, error) {
+func hugeIntFromNative(i *big.Int) (apiHugeInt, error) {
 	d := big.NewInt(1)
 	d.Lsh(d, 64)
 
@@ -98,12 +93,12 @@ func hugeIntFromNative(i *big.Int) (C.duckdb_hugeint, error) {
 	q.DivMod(i, d, r)
 
 	if !q.IsInt64() {
-		return C.duckdb_hugeint{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
+		return apiHugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
 	}
 
-	return C.duckdb_hugeint{
-		lower: C.uint64_t(r.Uint64()),
-		upper: C.int64_t(q.Int64()),
+	return apiHugeInt{
+		Lower: r.Uint64(),
+		Upper: q.Int64(),
 	}, nil
 }
 
@@ -131,6 +126,14 @@ type Interval struct {
 	Days   int32 `json:"days"`
 	Months int32 `json:"months"`
 	Micros int64 `json:"micros"`
+}
+
+func (i *Interval) getAPIInterval() apiInterval {
+	return apiInterval{
+		Months: i.Months,
+		Days:   i.Days,
+		Micros: i.Micros,
+	}
 }
 
 // Use as the `Scanner` type for any composite types (maps, lists, structs)
@@ -164,7 +167,7 @@ func (d *Decimal) Float64() float64 {
 }
 
 func (d *Decimal) String() string {
-	// Get the sign, and return early if zero
+	// Get the sign, and return early, if zero.
 	if d.Value.Sign() == 0 {
 		return "0"
 	}
@@ -232,26 +235,25 @@ func getTSTicks[T any](t Type, val T) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getCTimestamp[T any](t Type, val T) (C.duckdb_timestamp, error) {
-	var ts C.duckdb_timestamp
+func getAPITimestamp[T any](t Type, val T) (apiTimestamp, error) {
+	var ts apiTimestamp
 	ticks, err := getTSTicks(t, val)
 	if err != nil {
 		return ts, err
 	}
 
-	ts.micros = C.int64_t(ticks)
+	ts.Micros = ticks
 	return ts, nil
 }
 
-func getCDate[T any](val T) (C.duckdb_date, error) {
-	var date C.duckdb_date
+func getAPIDate[T any](val T) (apiDate, error) {
+	var date apiDate
 	ti, err := castToTime(val)
 	if err != nil {
 		return date, err
 	}
 
-	days := int32(ti.Unix() / secondsPerDay)
-	date.days = C.int32_t(days)
+	date.Days = int32(ti.Unix() / secondsPerDay)
 	return date, nil
 }
 
