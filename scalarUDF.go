@@ -1,12 +1,11 @@
 package duckdb
 
 /*
-#include <duckdb.h>
-
-void scalar_udf_callback(duckdb_function_info, duckdb_data_chunk, duckdb_vector);
+void scalar_udf_callback(void *, void *, void *);
 void udf_delete_callback(void *);
 
-typedef void (*scalar_udf_callback_t)(duckdb_function_info, duckdb_data_chunk, duckdb_vector);
+typedef void (*scalar_udf_callback_t)(void *, void *, void *);
+typedef void (*udf_delete_callback_t)(void *);
 */
 import "C"
 
@@ -70,10 +69,10 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err = c.Raw(func(driverConn any) error {
-		con := driverConn.(*Conn)
-		state := C.duckdb_register_scalar_function(con.duckdbCon, function)
-		C.duckdb_destroy_scalar_function(&function)
-		if state == C.DuckDBError {
+		conn := driverConn.(*Conn)
+		state := apiRegisterScalarFunction(conn.apiConn, function)
+		apiDestroyScalarFunction(&function)
+		if apiState(state) == apiError {
 			return getError(errAPI, errScalarUDFCreate)
 		}
 		return nil
@@ -88,33 +87,31 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 // name is the function name of each function in the set.
 // functions contains all ScalarFunc functions of the scalar function set.
 func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) error {
-	cName := C.CString(name)
-	defer C.duckdb_free(unsafe.Pointer(cName))
-	set := C.duckdb_create_scalar_function_set(cName)
+	set := apiCreateScalarFunctionSet(name)
 
 	// Create each function and add it to the set.
 	for i, f := range functions {
 		function, err := createScalarFunc(name, f)
 		if err != nil {
-			C.duckdb_destroy_scalar_function(&function)
-			C.duckdb_destroy_scalar_function_set(&set)
+			apiDestroyScalarFunction(&function)
+			apiDestroyScalarFunctionSet(&set)
 			return getError(errAPI, err)
 		}
 
-		state := C.duckdb_add_scalar_function_to_set(set, function)
-		C.duckdb_destroy_scalar_function(&function)
-		if state == C.DuckDBError {
-			C.duckdb_destroy_scalar_function_set(&set)
+		state := apiAddScalarFunctionToSet(set, function)
+		apiDestroyScalarFunction(&function)
+		if apiState(state) == apiError {
+			apiDestroyScalarFunctionSet(&set)
 			return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
 		}
 	}
 
 	// Register the function set on the underlying driver connection exposed by c.Raw.
 	err := c.Raw(func(driverConn any) error {
-		con := driverConn.(*Conn)
-		state := C.duckdb_register_scalar_function_set(con.duckdbCon, set)
-		C.duckdb_destroy_scalar_function_set(&set)
-		if state == C.DuckDBError {
+		conn := driverConn.(*Conn)
+		state := apiRegisterScalarFunctionSet(conn.apiConn, set)
+		apiDestroyScalarFunctionSet(&set)
+		if apiState(state) == apiError {
 			return getError(errAPI, errScalarUDFCreateSet)
 		}
 		return nil
@@ -123,21 +120,25 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 }
 
 //export scalar_udf_callback
-func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_data_chunk, output C.duckdb_vector) {
-	extraInfo := C.duckdb_scalar_function_get_extra_info(function_info)
+func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
+	functionInfo := apiFunctionInfo{Ptr: functionInfoPtr}
+	input := apiDataChunk{Ptr: inputPtr}
+	output := apiVector{Ptr: outputPtr}
+
+	extraInfo := apiScalarFunctionGetExtraInfo(functionInfo)
 	function := getPinned[ScalarFunc](extraInfo)
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
 	if err := inputChunk.initFromDuckDataChunk(input, false); err != nil {
-		setFuncError(function_info, getError(errAPI, err).Error())
+		apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 		return
 	}
 
 	// Initialize the output chunk.
 	var outputChunk DataChunk
 	if err := outputChunk.initFromDuckVector(output, true); err != nil {
-		setFuncError(function_info, getError(errAPI, err).Error())
+		apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 		return
 	}
 
@@ -155,14 +156,14 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 		// Get each column value.
 		for colIdx := 0; colIdx < columnCount; colIdx++ {
 			if values[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
-				setFuncError(function_info, getError(errAPI, err).Error())
+				apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 				return
 			}
 
 			// NULL handling.
 			if nullInNullOut && values[colIdx] == nil {
 				if err = outputChunk.SetValue(0, rowIdx, nil); err != nil {
-					setFuncError(function_info, getError(errAPI, err).Error())
+					apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 					return
 				}
 				nullRow = true
@@ -176,24 +177,24 @@ func scalar_udf_callback(function_info C.duckdb_function_info, input C.duckdb_da
 		// Execute the function.
 		var val any
 		if val, err = executor.RowExecutor(values); err != nil {
-			setFuncError(function_info, getError(errAPI, err).Error())
+			apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 			return
 		}
 
 		// Write the result to the output chunk.
 		if err = outputChunk.SetValue(0, rowIdx, val); err != nil {
-			setFuncError(function_info, getError(errAPI, err).Error())
+			apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 			return
 		}
 	}
 }
 
-func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) error {
+func registerInputParams(config ScalarFuncConfig, f apiScalarFunction) error {
 	// Set variadic input parameters.
 	if config.VariadicTypeInfo != nil {
 		t := config.VariadicTypeInfo.logicalType()
-		C.duckdb_scalar_function_set_varargs(f, t)
-		C.duckdb_destroy_logical_type(&t)
+		apiScalarFunctionSetVarargs(f, t)
+		apiDestroyLogicalType(&t)
 	}
 
 	// Early-out, if the function does not take any (non-variadic) parameters.
@@ -210,13 +211,13 @@ func registerInputParams(config ScalarFuncConfig, f C.duckdb_scalar_function) er
 			return addIndexToError(errScalarUDFInputTypeIsNil, i)
 		}
 		t := info.logicalType()
-		C.duckdb_scalar_function_add_parameter(f, t)
-		C.duckdb_destroy_logical_type(&t)
+		apiScalarFunctionAddParameter(f, t)
+		apiDestroyLogicalType(&t)
 	}
 	return nil
 }
 
-func registerResultParams(config ScalarFuncConfig, f C.duckdb_scalar_function) error {
+func registerResultParams(config ScalarFuncConfig, f apiScalarFunction) error {
 	if config.ResultTypeInfo == nil {
 		return errScalarUDFResultTypeIsNil
 	}
@@ -224,46 +225,45 @@ func registerResultParams(config ScalarFuncConfig, f C.duckdb_scalar_function) e
 		return errScalarUDFResultTypeIsANY
 	}
 	t := config.ResultTypeInfo.logicalType()
-	C.duckdb_scalar_function_set_return_type(f, t)
-	C.duckdb_destroy_logical_type(&t)
+	apiScalarFunctionSetReturnType(f, t)
+	apiDestroyLogicalType(&t)
 	return nil
 }
 
-func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, error) {
+func createScalarFunc(name string, f ScalarFunc) (apiScalarFunction, error) {
 	if name == "" {
-		return nil, errScalarUDFNoName
+		return apiScalarFunction{}, errScalarUDFNoName
 	}
 	if f == nil {
-		return nil, errScalarUDFIsNil
+		return apiScalarFunction{}, errScalarUDFIsNil
 	}
 	if f.Executor().RowExecutor == nil {
-		return nil, errScalarUDFNoExecutor
+		return apiScalarFunction{}, errScalarUDFNoExecutor
 	}
 
-	function := C.duckdb_create_scalar_function()
+	function := apiCreateScalarFunction()
 
 	// Set the name.
-	cName := C.CString(name)
-	defer C.duckdb_free(unsafe.Pointer(cName))
-	C.duckdb_scalar_function_set_name(function, cName)
+	apiScalarFunctionSetName(function, name)
 
 	// Configure the scalar function.
 	config := f.Config()
 	if err := registerInputParams(config, function); err != nil {
-		return nil, err
+		return function, err
 	}
 	if err := registerResultParams(config, function); err != nil {
-		return nil, err
+		return function, err
 	}
 	if config.SpecialNullHandling {
-		C.duckdb_scalar_function_set_special_handling(function)
+		apiScalarFunctionSetSpecialHandling(function)
 	}
 	if config.Volatile {
-		C.duckdb_scalar_function_set_volatile(function)
+		apiScalarFunctionSetVolatile(function)
 	}
 
 	// Set the function callback.
-	C.duckdb_scalar_function_set_function(function, C.scalar_udf_callback_t(C.scalar_udf_callback))
+	callbackPtr := unsafe.Pointer(C.scalar_udf_callback_t(C.scalar_udf_callback))
+	apiScalarFunctionSetFunction(function, callbackPtr)
 
 	// Pin the ScalarFunc f.
 	value := pinnedValue[ScalarFunc]{
@@ -274,10 +274,7 @@ func createScalarFunc(name string, f ScalarFunc) (C.duckdb_scalar_function, erro
 	value.pinner.Pin(&h)
 
 	// Set the execution data, which is the ScalarFunc f.
-	C.duckdb_scalar_function_set_extra_info(
-		function,
-		unsafe.Pointer(&h),
-		C.duckdb_delete_callback_t(C.udf_delete_callback))
-
+	deleteCallbackPtr := unsafe.Pointer(C.udf_delete_callback_t(C.udf_delete_callback))
+	apiScalarFunctionSetExtraInfo(function, unsafe.Pointer(&h), deleteCallbackPtr)
 	return function, nil
 }

@@ -1,13 +1,7 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"database/sql"
-	"unsafe"
 )
 
 // ProfilingInfo is a recursive type containing metrics for each node in DuckDB's query plan.
@@ -26,47 +20,42 @@ type ProfilingInfo struct {
 func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
 	err := c.Raw(func(driverConn any) error {
-		con := driverConn.(*Conn)
-		duckdbInfo := C.duckdb_get_profiling_info(con.duckdbCon)
-		if duckdbInfo == nil {
+		conn := driverConn.(*Conn)
+		profilingInfo := apiGetProfilingInfo(conn.apiConn)
+		if profilingInfo.Ptr == nil {
 			return getError(errProfilingInfoEmpty, nil)
 		}
 
 		// Recursive tree traversal.
-		info.getMetrics(duckdbInfo)
+		info.getMetrics(profilingInfo)
 		return nil
 	})
 	return info, err
 }
 
-func (info *ProfilingInfo) getMetrics(duckdbInfo C.duckdb_profiling_info) {
-	m := C.duckdb_profiling_info_get_metrics(duckdbInfo)
-	count := C.duckdb_get_map_size(m)
+func (info *ProfilingInfo) getMetrics(profilingInfo apiProfilingInfo) {
+	m := apiProfilingInfoGetMetrics(profilingInfo)
+	count := apiGetMapSize(m)
 	info.Metrics = make(map[string]string, count)
 
-	for i := C.idx_t(0); i < count; i++ {
-		key := C.duckdb_get_map_key(m, i)
-		value := C.duckdb_get_map_value(m, i)
+	for i := apiIdxT(0); i < count; i++ {
+		key := apiGetMapKey(m, i)
+		value := apiGetMapValue(m, i)
 
-		cKey := C.duckdb_get_varchar(key)
-		cValue := C.duckdb_get_varchar(value)
-		keyStr := C.GoString(cKey)
-		valueStr := C.GoString(cValue)
-
+		keyStr := apiGetVarchar(key)
+		valueStr := apiGetVarchar(value)
 		info.Metrics[keyStr] = valueStr
 
-		C.duckdb_destroy_value(&key)
-		C.duckdb_destroy_value(&value)
-		C.duckdb_free(unsafe.Pointer(cKey))
-		C.duckdb_free(unsafe.Pointer(cValue))
+		apiDestroyValue(&key)
+		apiDestroyValue(&value)
 	}
-	C.duckdb_destroy_value(&m)
+	apiDestroyValue(&m)
 
-	childCount := C.duckdb_profiling_info_get_child_count(duckdbInfo)
-	for i := C.idx_t(0); i < childCount; i++ {
-		duckdbChildInfo := C.duckdb_profiling_info_get_child(duckdbInfo, i)
+	childCount := apiProfilingInfoGetChildCount(profilingInfo)
+	for i := apiIdxT(0); i < childCount; i++ {
+		profilingInfoChild := apiProfilingInfoGetChild(profilingInfo, i)
 		childInfo := ProfilingInfo{}
-		childInfo.getMetrics(duckdbChildInfo)
+		childInfo.getMetrics(profilingInfoChild)
 		info.Children = append(info.Children, childInfo)
 	}
 }

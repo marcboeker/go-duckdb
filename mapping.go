@@ -1,51 +1,51 @@
 package duckdb
 
 import (
-	api "github.com/duckdb/duckdb-go-bindings"
+	bindings "github.com/duckdb/duckdb-go-bindings"
 )
 
 // ------------------------------------------------------------------ //
 // Enums
 // ------------------------------------------------------------------ //
 
-type apiState api.State
+type apiState bindings.State
 
 const (
-	apiSuccess = apiState(api.Success)
-	apiError   = apiState(api.Error)
+	apiSuccess = apiState(bindings.Success)
+	apiError   = apiState(bindings.Error)
 )
 
-type apiStatementType api.StatementType
+type apiStatementType bindings.StatementType
 
 const (
-	apiStatementTypeInvalid     = apiStatementType(api.StatementTypeInvalid)
-	apiStatementTypeSelect      = apiStatementType(api.StatementTypeSelect)
-	apiStatementTypeInsert      = apiStatementType(api.StatementTypeInsert)
-	apiStatementTypeUpdate      = apiStatementType(api.StatementTypeUpdate)
-	apiStatementTypeExplain     = apiStatementType(api.StatementTypeExplain)
-	apiStatementTypeDelete      = apiStatementType(api.StatementTypeDelete)
-	apiStatementTypePrepare     = apiStatementType(api.StatementTypePrepare)
-	apiStatementTypeCreate      = apiStatementType(api.StatementTypeCreate)
-	apiStatementTypeExecute     = apiStatementType(api.StatementTypeExecute)
-	apiStatementTypeAlter       = apiStatementType(api.StatementTypeAlter)
-	apiStatementTypeTransaction = apiStatementType(api.StatementTypeTransaction)
-	apiStatementTypeCopy        = apiStatementType(api.StatementTypeCopy)
-	apiStatementTypeAnalyze     = apiStatementType(api.StatementTypeAnalyze)
-	apiStatementTypeVariableSet = apiStatementType(api.StatementTypeVariableSet)
-	apiStatementTypeCreateFunc  = apiStatementType(api.StatementTypeCreateFunc)
-	apiStatementTypeDrop        = apiStatementType(api.StatementTypeDrop)
-	apiStatementTypeExport      = apiStatementType(api.StatementTypeExport)
-	apiStatementTypePragma      = apiStatementType(api.StatementTypePragma)
-	apiStatementTypeVacuum      = apiStatementType(api.StatementTypeVacuum)
-	apiStatementTypeCall        = apiStatementType(api.StatementTypeCall)
-	apiStatementTypeSet         = apiStatementType(api.StatementTypeSet)
-	apiStatementTypeLoad        = apiStatementType(api.StatementTypeLoad)
-	apiStatementTypeRelation    = apiStatementType(api.StatementTypeRelation)
-	apiStatementTypeExtension   = apiStatementType(api.StatementTypeExtension)
-	apiStatementTypeLogicalPlan = apiStatementType(api.StatementTypeLogicalPlan)
-	apiStatementTypeAttach      = apiStatementType(api.StatementTypeAttach)
-	apiStatementTypeDetach      = apiStatementType(api.StatementTypeDetach)
-	apiStatementTypeMulti       = apiStatementType(api.StatementTypeMulti)
+	apiStatementTypeInvalid     = apiStatementType(bindings.StatementTypeInvalid)
+	apiStatementTypeSelect      = apiStatementType(bindings.StatementTypeSelect)
+	apiStatementTypeInsert      = apiStatementType(bindings.StatementTypeInsert)
+	apiStatementTypeUpdate      = apiStatementType(bindings.StatementTypeUpdate)
+	apiStatementTypeExplain     = apiStatementType(bindings.StatementTypeExplain)
+	apiStatementTypeDelete      = apiStatementType(bindings.StatementTypeDelete)
+	apiStatementTypePrepare     = apiStatementType(bindings.StatementTypePrepare)
+	apiStatementTypeCreate      = apiStatementType(bindings.StatementTypeCreate)
+	apiStatementTypeExecute     = apiStatementType(bindings.StatementTypeExecute)
+	apiStatementTypeAlter       = apiStatementType(bindings.StatementTypeAlter)
+	apiStatementTypeTransaction = apiStatementType(bindings.StatementTypeTransaction)
+	apiStatementTypeCopy        = apiStatementType(bindings.StatementTypeCopy)
+	apiStatementTypeAnalyze     = apiStatementType(bindings.StatementTypeAnalyze)
+	apiStatementTypeVariableSet = apiStatementType(bindings.StatementTypeVariableSet)
+	apiStatementTypeCreateFunc  = apiStatementType(bindings.StatementTypeCreateFunc)
+	apiStatementTypeDrop        = apiStatementType(bindings.StatementTypeDrop)
+	apiStatementTypeExport      = apiStatementType(bindings.StatementTypeExport)
+	apiStatementTypePragma      = apiStatementType(bindings.StatementTypePragma)
+	apiStatementTypeVacuum      = apiStatementType(bindings.StatementTypeVacuum)
+	apiStatementTypeCall        = apiStatementType(bindings.StatementTypeCall)
+	apiStatementTypeSet         = apiStatementType(bindings.StatementTypeSet)
+	apiStatementTypeLoad        = apiStatementType(bindings.StatementTypeLoad)
+	apiStatementTypeRelation    = apiStatementType(bindings.StatementTypeRelation)
+	apiStatementTypeExtension   = apiStatementType(bindings.StatementTypeExtension)
+	apiStatementTypeLogicalPlan = apiStatementType(bindings.StatementTypeLogicalPlan)
+	apiStatementTypeAttach      = apiStatementType(bindings.StatementTypeAttach)
+	apiStatementTypeDetach      = apiStatementType(bindings.StatementTypeDetach)
+	apiStatementTypeMulti       = apiStatementType(bindings.StatementTypeMulti)
 )
 
 // ...
@@ -55,7 +55,7 @@ const (
 // ------------------------------------------------------------------ //
 
 type (
-	apiIdxT = api.IdxT
+	apiIdxT = bindings.IdxT
 )
 
 // ...
@@ -65,50 +65,69 @@ type (
 // ------------------------------------------------------------------ //
 
 // type Column C.duckdb_column
-// type Vector *C.duckdb_vector
-// type Result C.duckdb_result
-// type Database *C.duckdb_database
 
 type (
-	apiDatabase            = api.Database
-	apiConnection          = api.Connection
-	apiPreparedStatement   = api.PreparedStatement
-	apiExtractedStatements = api.ExtractedStatements
+	apiVector = bindings.Vector
+)
+
+// type Result C.duckdb_result
+
+type (
+	apiDatabase            = bindings.Database
+	apiConnection          = bindings.Connection
+	apiPreparedStatement   = bindings.PreparedStatement
+	apiExtractedStatements = bindings.ExtractedStatements
 )
 
 //type PendingResult *C.duckdb_pending_result
 
 type (
-	apiAppender = api.Appender
+	apiAppender = bindings.Appender
 )
 
 //type TableDescription *C.duckdb_table_description
 
 type (
-	apiConfig      = api.Config
-	apiLogicalType = api.LogicalType
+	apiConfig      = bindings.Config
+	apiLogicalType = bindings.LogicalType
 )
 
 //create_type_info
-//data_chunk
-//value
+
+type (
+	apiDataChunk     = bindings.DataChunk
+	apiValue         = bindings.Value
+	apiProfilingInfo = bindings.ProfilingInfo
+)
+
 //profiling_info
 // ?extension_info??
-//function_info
-//scalar_function
-//scalar_function_set
+
+type (
+	apiFunctionInfo      = bindings.FunctionInfo
+	apiScalarFunction    = bindings.ScalarFunction
+	apiScalarFunctionSet = bindings.ScalarFunctionSet
+)
+
 //aggregate_function
 //aggregate_function_set
 //aggregate_state
 //table_function
-//bind_info
+
+type (
+	apiBindInfo = bindings.BindInfo
+)
+
 //init_info
 //cast_function
 //replacement_scan_info
-//arrow
-//arrow_stream
-//arrow_schema
-//arrow_array
+
+type (
+	apiArrow       = bindings.Arrow
+	apiArrowStream = bindings.ArrowStream
+	apiArrowSchema = bindings.ArrowSchema
+	apiArrowArray  = bindings.ArrowArray
+)
 
 // ------------------------------------------------------------------ //
 // Functions
@@ -117,30 +136,30 @@ type (
 //#define duckdb_open                                    duckdb_ext_api.duckdb_open
 
 var (
-	apiOpenExt = api.OpenExt
-	apiClose   = api.Close
-	apiConnect = api.Connect
+	apiOpenExt = bindings.OpenExt
+	apiClose   = bindings.Close
+	apiConnect = bindings.Connect
 )
 
 //#define duckdb_interrupt                               duckdb_ext_api.duckdb_interrupt
 //#define duckdb_query_progress                          duckdb_ext_api.duckdb_query_progress
 
 var (
-	apiDisconnect = api.Disconnect
+	apiDisconnect = bindings.Disconnect
 )
 
 //#define duckdb_library_version                         duckdb_ext_api.duckdb_library_version
 
 var (
-	apiCreateConfig = api.CreateConfig
+	apiCreateConfig = bindings.CreateConfig
 )
 
 //#define duckdb_config_count                            duckdb_ext_api.duckdb_config_count
 //#define duckdb_get_config_flag                         duckdb_ext_api.duckdb_get_config_flag
 
 var (
-	apiSetConfig     = api.SetConfig
-	apiDestroyConfig = api.DestroyConfig
+	apiSetConfig     = bindings.SetConfig
+	apiDestroyConfig = bindings.DestroyConfig
 )
 
 //#define duckdb_query                                   duckdb_ext_api.duckdb_query
@@ -157,7 +176,7 @@ var (
 //#define duckdb_malloc                                  duckdb_ext_api.duckdb_malloc
 
 var (
-	apiFree = api.Free
+	apiFree = bindings.Free
 )
 
 //#define duckdb_vector_size                             duckdb_ext_api.duckdb_vector_size
@@ -186,11 +205,11 @@ var (
 //#define duckdb_prepare                                 duckdb_ext_api.duckdb_prepare
 
 var (
-	apiDestroyPrepare = api.DestroyPrepare
-	apiPrepareError   = api.PrepareError
-	apiNParams        = api.NParams
-	apiParameterName  = api.ParameterName
-	apiParamType      = api.ParamType
+	apiDestroyPrepare = bindings.DestroyPrepare
+	apiPrepareError   = bindings.PrepareError
+	apiNParams        = bindings.NParams
+	apiParameterName  = bindings.ParameterName
+	apiParamType      = bindings.ParamType
 )
 
 //#define duckdb_param_logical_type                      duckdb_ext_api.duckdb_param_logical_type
@@ -224,10 +243,10 @@ var (
 //#define duckdb_execute_prepared                        duckdb_ext_api.duckdb_execute_prepared
 
 var (
-	apiExtractStatements         = api.ExtractStatements
-	apiPrepareExtractedStatement = api.PrepareExtractedStatement
-	apiExtractStatementsError    = api.ExtractStatementsError
-	apiDestroyExtracted          = api.DestroyExtracted
+	apiExtractStatements         = bindings.ExtractStatements
+	apiPrepareExtractedStatement = bindings.PrepareExtractedStatement
+	apiExtractStatementsError    = bindings.ExtractStatementsError
+	apiDestroyExtracted          = bindings.DestroyExtracted
 )
 
 //#define duckdb_pending_prepared                        duckdb_ext_api.duckdb_pending_prepared
@@ -237,7 +256,11 @@ var (
 //#define duckdb_pending_execute_check_state             duckdb_ext_api.duckdb_pending_execute_check_state
 //#define duckdb_execute_pending                         duckdb_ext_api.duckdb_execute_pending
 //#define duckdb_pending_execution_is_finished           duckdb_ext_api.duckdb_pending_execution_is_finished
-//#define duckdb_destroy_value                           duckdb_ext_api.duckdb_destroy_value
+
+var (
+	apiDestroyValue = bindings.DestroyValue
+)
+
 //#define duckdb_create_varchar                          duckdb_ext_api.duckdb_create_varchar
 //#define duckdb_create_varchar_length                   duckdb_ext_api.duckdb_create_varchar_length
 //#define duckdb_create_bool                             duckdb_ext_api.duckdb_create_bool
@@ -295,13 +318,21 @@ var (
 //#define duckdb_get_blob                                duckdb_ext_api.duckdb_get_blob
 //#define duckdb_get_bit                                 duckdb_ext_api.duckdb_get_bit
 //#define duckdb_get_uuid                                duckdb_ext_api.duckdb_get_uuid
-//#define duckdb_get_varchar                             duckdb_ext_api.duckdb_get_varchar
+
+var (
+	apiGetVarchar = bindings.GetVarchar
+)
+
 //#define duckdb_create_struct_value                     duckdb_ext_api.duckdb_create_struct_value
 //#define duckdb_create_list_value                       duckdb_ext_api.duckdb_create_list_value
 //#define duckdb_create_array_value                      duckdb_ext_api.duckdb_create_array_value
-//#define duckdb_get_map_size                            duckdb_ext_api.duckdb_get_map_size
-//#define duckdb_get_map_key                             duckdb_ext_api.duckdb_get_map_key
-//#define duckdb_get_map_value                           duckdb_ext_api.duckdb_get_map_value
+
+var (
+	apiGetMapSize  = bindings.GetMapSize
+	apiGetMapKey   = bindings.GetMapKey
+	apiGetMapValue = bindings.GetMapValue
+)
+
 //#define duckdb_is_null_value                           duckdb_ext_api.duckdb_is_null_value
 //#define duckdb_create_null_value                       duckdb_ext_api.duckdb_create_null_value
 //#define duckdb_get_list_size                           duckdb_ext_api.duckdb_get_list_size
@@ -321,7 +352,7 @@ var (
 //#define duckdb_create_decimal_type                     duckdb_ext_api.duckdb_create_decimal_type
 
 var (
-	apiGetTypeId = api.GetTypeId
+	apiGetTypeId = bindings.GetTypeId
 )
 
 //#define duckdb_decimal_width                           duckdb_ext_api.duckdb_decimal_width
@@ -343,7 +374,7 @@ var (
 //#define duckdb_union_type_member_type                  duckdb_ext_api.duckdb_union_type_member_type
 
 var (
-	apiDestroyLogicalType = api.DestroyLogicalType
+	apiDestroyLogicalType = bindings.DestroyLogicalType
 )
 
 //#define duckdb_register_logical_type                   duckdb_ext_api.duckdb_register_logical_type
@@ -370,23 +401,27 @@ var (
 //#define duckdb_validity_set_row_validity               duckdb_ext_api.duckdb_validity_set_row_validity
 //#define duckdb_validity_set_row_invalid                duckdb_ext_api.duckdb_validity_set_row_invalid
 //#define duckdb_validity_set_row_valid                  duckdb_ext_api.duckdb_validity_set_row_valid
-//#define duckdb_create_scalar_function                  duckdb_ext_api.duckdb_create_scalar_function
-//#define duckdb_destroy_scalar_function                 duckdb_ext_api.duckdb_destroy_scalar_function
-//#define duckdb_scalar_function_set_name                duckdb_ext_api.duckdb_scalar_function_set_name
-//#define duckdb_scalar_function_set_varargs             duckdb_ext_api.duckdb_scalar_function_set_varargs
-//#define duckdb_scalar_function_set_special_handling    duckdb_ext_api.duckdb_scalar_function_set_special_handling
-//#define duckdb_scalar_function_set_volatile            duckdb_ext_api.duckdb_scalar_function_set_volatile
-//#define duckdb_scalar_function_add_parameter           duckdb_ext_api.duckdb_scalar_function_add_parameter
-//#define duckdb_scalar_function_set_return_type         duckdb_ext_api.duckdb_scalar_function_set_return_type
-//#define duckdb_scalar_function_set_extra_info          duckdb_ext_api.duckdb_scalar_function_set_extra_info
-//#define duckdb_scalar_function_set_function            duckdb_ext_api.duckdb_scalar_function_set_function
-//#define duckdb_register_scalar_function                duckdb_ext_api.duckdb_register_scalar_function
-//#define duckdb_scalar_function_get_extra_info          duckdb_ext_api.duckdb_scalar_function_get_extra_info
-//#define duckdb_scalar_function_set_error               duckdb_ext_api.duckdb_scalar_function_set_error
-//#define duckdb_create_scalar_function_set              duckdb_ext_api.duckdb_create_scalar_function_set
-//#define duckdb_destroy_scalar_function_set             duckdb_ext_api.duckdb_destroy_scalar_function_set
-//#define duckdb_add_scalar_function_to_set              duckdb_ext_api.duckdb_add_scalar_function_to_set
-//#define duckdb_register_scalar_function_set            duckdb_ext_api.duckdb_register_scalar_function_set
+
+var (
+	apiCreateScalarFunction             = bindings.CreateScalarFunction
+	apiDestroyScalarFunction            = bindings.DestroyScalarFunction
+	apiScalarFunctionSetName            = bindings.ScalarFunctionSetName
+	apiScalarFunctionSetVarargs         = bindings.ScalarFunctionSetVarargs
+	apiScalarFunctionSetSpecialHandling = bindings.ScalarFunctionSetSpecialHandling
+	apiScalarFunctionSetVolatile        = bindings.ScalarFunctionSetVolatile
+	apiScalarFunctionAddParameter       = bindings.ScalarFunctionAddParameter
+	apiScalarFunctionSetReturnType      = bindings.ScalarFunctionSetReturnType
+	apiScalarFunctionSetExtraInfo       = bindings.ScalarFunctionSetExtraInfo
+	apiScalarFunctionSetFunction        = bindings.ScalarFunctionSetFunction
+	apiRegisterScalarFunction           = bindings.RegisterScalarFunction
+	apiScalarFunctionGetExtraInfo       = bindings.ScalarFunctionGetExtraInfo
+	apiScalarFunctionSetError           = bindings.ScalarFunctionSetError
+	apiCreateScalarFunctionSet          = bindings.CreateScalarFunctionSet
+	apiDestroyScalarFunctionSet         = bindings.DestroyScalarFunctionSet
+	apiAddScalarFunctionToSet           = bindings.AddScalarFunctionToSet
+	apiRegisterScalarFunctionSet        = bindings.RegisterScalarFunctionSet
+)
+
 //#define duckdb_create_aggregate_function               duckdb_ext_api.duckdb_create_aggregate_function
 //#define duckdb_destroy_aggregate_function              duckdb_ext_api.duckdb_destroy_aggregate_function
 //#define duckdb_aggregate_function_set_name             duckdb_ext_api.duckdb_aggregate_function_set_name
@@ -423,7 +458,11 @@ var (
 //#define duckdb_bind_get_named_parameter             duckdb_ext_api.duckdb_bind_get_named_parameter
 //#define duckdb_bind_set_bind_data                   duckdb_ext_api.duckdb_bind_set_bind_data
 //#define duckdb_bind_set_cardinality                 duckdb_ext_api.duckdb_bind_set_cardinality
-//#define duckdb_bind_set_error                       duckdb_ext_api.duckdb_bind_set_error
+
+var (
+	apiBindSetError = bindings.BindSetError
+)
+
 //#define duckdb_init_get_extra_info                  duckdb_ext_api.duckdb_init_get_extra_info
 //#define duckdb_init_get_bind_data                   duckdb_ext_api.duckdb_init_get_bind_data
 //#define duckdb_init_set_init_data                   duckdb_ext_api.duckdb_init_set_init_data
@@ -440,25 +479,29 @@ var (
 //#define duckdb_replacement_scan_set_function_name   duckdb_ext_api.duckdb_replacement_scan_set_function_name
 //#define duckdb_replacement_scan_add_parameter       duckdb_ext_api.duckdb_replacement_scan_add_parameter
 //#define duckdb_replacement_scan_set_error           duckdb_ext_api.duckdb_replacement_scan_set_error
-//#define duckdb_get_profiling_info                   duckdb_ext_api.duckdb_get_profiling_info
-//#define duckdb_profiling_info_get_value             duckdb_ext_api.duckdb_profiling_info_get_value
-//#define duckdb_profiling_info_get_metrics           duckdb_ext_api.duckdb_profiling_info_get_metrics
-//#define duckdb_profiling_info_get_child_count       duckdb_ext_api.duckdb_profiling_info_get_child_count
-//#define duckdb_profiling_info_get_child             duckdb_ext_api.duckdb_profiling_info_get_child
 
 var (
-	apiAppenderCreate = api.AppenderCreate
+	apiGetProfilingInfo = bindings.GetProfilingInfo
+)
+
+//#define duckdb_profiling_info_get_value             duckdb_ext_api.duckdb_profiling_info_get_value
+
+var (
+	apiProfilingInfoGetMetrics    = bindings.ProfilingInfoGetMetrics
+	apiProfilingInfoGetChildCount = bindings.ProfilingInfoGetChildCount
+	apiProfilingInfoGetChild      = bindings.ProfilingInfoGetChild
+	apiAppenderCreate             = bindings.AppenderCreate
 )
 
 //#define duckdb_appender_create_ext                  duckdb_ext_api.duckdb_appender_create_ext
 
 var (
-	apiAppenderColumnCount = api.AppenderColumnCount
-	apiAppenderColumnType  = api.AppenderColumnType
-	apiAppenderError       = api.AppenderError
-	apiAppenderFlush       = api.AppenderFlush
-	apiAppenderClose       = api.AppenderClose
-	apiAppenderDestroy     = api.AppenderDestroy
+	apiAppenderColumnCount = bindings.AppenderColumnCount
+	apiAppenderColumnType  = bindings.AppenderColumnType
+	apiAppenderError       = bindings.AppenderError
+	apiAppenderFlush       = bindings.AppenderFlush
+	apiAppenderClose       = bindings.AppenderClose
+	apiAppenderDestroy     = bindings.AppenderDestroy
 )
 
 //#define duckdb_appender_add_column                  duckdb_ext_api.duckdb_appender_add_column
@@ -490,7 +533,7 @@ var (
 //#define duckdb_append_value                         duckdb_ext_api.duckdb_append_value
 
 var (
-	apiAppendDataChunk = api.AppendDataChunk
+	apiAppendDataChunk = bindings.AppendDataChunk
 )
 
 //#define duckdb_table_description_create             duckdb_ext_api.duckdb_table_description_create
@@ -555,26 +598,46 @@ var (
 //#define duckdb_execute_prepared_streaming duckdb_ext_api.duckdb_execute_prepared_streaming
 //#define duckdb_pending_prepared_streaming duckdb_ext_api.duckdb_pending_prepared_streaming
 //#define duckdb_query_arrow                duckdb_ext_api.duckdb_query_arrow
-//#define duckdb_query_arrow_schema         duckdb_ext_api.duckdb_query_arrow_schema
+
+var (
+	apiQueryArrowSchema = bindings.QueryArrowSchema
+)
+
 //#define duckdb_prepared_arrow_schema      duckdb_ext_api.duckdb_prepared_arrow_schema
 //#define duckdb_result_arrow_array         duckdb_ext_api.duckdb_result_arrow_array
-//#define duckdb_query_arrow_array          duckdb_ext_api.duckdb_query_arrow_array
+
+var (
+	apiQueryArrowArray = bindings.QueryArrowArray
+)
+
 //#define duckdb_arrow_column_count         duckdb_ext_api.duckdb_arrow_column_count
-//#define duckdb_arrow_row_count            duckdb_ext_api.duckdb_arrow_row_count
+
+var (
+	apiArrowRowCount = bindings.ArrowRowCount
+)
+
 //#define duckdb_arrow_rows_changed         duckdb_ext_api.duckdb_arrow_rows_changed
-//#define duckdb_query_arrow_error          duckdb_ext_api.duckdb_query_arrow_error
-//#define duckdb_destroy_arrow              duckdb_ext_api.duckdb_destroy_arrow
+
+var (
+	apiQueryArrowError = bindings.QueryArrowError
+	apiDestroyArrow    = bindings.DestroyArrow
+)
+
 //#define duckdb_destroy_arrow_stream       duckdb_ext_api.duckdb_destroy_arrow_stream
-//#define duckdb_execute_prepared_arrow     duckdb_ext_api.duckdb_execute_prepared_arrow
-//#define duckdb_arrow_scan                 duckdb_ext_api.duckdb_arrow_scan
+
+var (
+	apiExecutePreparedArrow = bindings.ExecutePreparedArrow
+	apiArrowScan            = bindings.ArrowScan
+)
+
 //#define duckdb_arrow_array_scan           duckdb_ext_api.duckdb_arrow_array_scan
 //#define duckdb_stream_fetch_chunk         duckdb_ext_api.duckdb_stream_fetch_chunk
-//
+
 //// Version unstable_instance_cache
 //#define duckdb_create_instance_cache    duckdb_ext_api.duckdb_create_instance_cache
 //#define duckdb_get_or_create_from_cache duckdb_ext_api.duckdb_get_or_create_from_cache
 //#define duckdb_destroy_instance_cache   duckdb_ext_api.duckdb_destroy_instance_cache
-//
+
 //// Version unstable_new_append_functions
 //#define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
@@ -583,5 +646,5 @@ var (
 // ------------------------------------------------------------------ //
 
 var (
-	apiMallocLogicalTypeSlice = api.MallocLogicalTypeSlice
+	apiMallocLogicalTypeSlice = bindings.MallocLogicalTypeSlice
 )
