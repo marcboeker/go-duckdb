@@ -98,24 +98,42 @@ const (
 // ------------------------------------------------------------------ //
 
 type (
-	apiDate      = bindings.Date
-	apiTime      = bindings.Time
-	apiTimestamp = bindings.Timestamp
-	apiInterval  = bindings.Interval
-	apiHugeInt   = bindings.HugeInt
+	apiDate         = bindings.Date
+	apiDateStruct   = bindings.DateStruct
+	apiTime         = bindings.Time
+	apiTimeStruct   = bindings.TimeStruct
+	apiTimeTZ       = bindings.TimeTZ
+	apiTimeTZStruct = bindings.TimeTZStruct
+	apiTimestamp    = bindings.Timestamp
+	apiInterval     = bindings.Interval
+	apiHugeInt      = bindings.HugeInt
 )
 
 var (
-	apiDateSetDays        = bindings.DateSetDays
-	apiTimeSetMicros      = bindings.TimeSetMicros
-	apiTimestampSetMicros = bindings.TimestampSetMicros
-	apiIntervalSetMonths  = bindings.IntervalSetMonths
-	apiIntervalSetDays    = bindings.IntervalSetDays
-	apiIntervalSetMicros  = bindings.IntervalSetMicros
-	apiHugeIntGetLower    = bindings.HugeIntGetLower
-	apiHugeIntSetLower    = bindings.HugeIntSetLower
-	apiHugeIntGetUpper    = bindings.HugeIntGetUpper
-	apiHugeIntSetUpper    = bindings.HugeIntSetUpper
+	apiDateSetDays               = bindings.DateSetDays
+	apiDateStructGetYear         = bindings.DateStructGetYear
+	apiDateStructGetMonth        = bindings.DateStructGetMonth
+	apiDateStructGetDay          = bindings.DateStructGetDay
+	apiTimeGetMicros             = bindings.TimeGetMicros
+	apiTimeSetMicros             = bindings.TimeSetMicros
+	apiTimeStructGetHour         = bindings.TimeStructGetHour
+	apiTimeStructGetMinute       = bindings.TimeStructGetMinute
+	apiTimeStructGetSecond       = bindings.TimeStructGetSecond
+	apiTimeStructGetMicros       = bindings.TimeStructGetMicros
+	apiTimeTZStructGetTimeStruct = bindings.TimeTZStructGetTimeStruct
+	apiTimeTZStructGetOffset     = bindings.TimeTZStructGetOffset
+	apiTimestampGetMicros        = bindings.TimestampGetMicros
+	apiTimestampSetMicros        = bindings.TimestampSetMicros
+	apiIntervalGetMonths         = bindings.IntervalGetMonths
+	apiIntervalSetMonths         = bindings.IntervalSetMonths
+	apiIntervalGetDays           = bindings.IntervalGetDays
+	apiIntervalSetDays           = bindings.IntervalSetDays
+	apiIntervalGetMicros         = bindings.IntervalGetMicros
+	apiIntervalSetMicros         = bindings.IntervalSetMicros
+	apiHugeIntGetLower           = bindings.HugeIntGetLower
+	apiHugeIntSetLower           = bindings.HugeIntSetLower
+	apiHugeIntGetUpper           = bindings.HugeIntGetUpper
+	apiHugeIntSetUpper           = bindings.HugeIntSetUpper
 )
 
 // ...
@@ -164,21 +182,21 @@ type (
 //aggregate_function
 //aggregate_function_set
 //aggregate_state
-//table_function
 
 type (
-	apiBindInfo = bindings.BindInfo
-	apiInitInfo = bindings.InitInfo
+	apiTableFunction = bindings.TableFunction
+	apiBindInfo      = bindings.BindInfo
+	apiInitInfo      = bindings.InitInfo
 )
 
 //cast_function
-//replacement_scan_info
 
 type (
-	apiArrow       = bindings.Arrow
-	apiArrowStream = bindings.ArrowStream
-	apiArrowSchema = bindings.ArrowSchema
-	apiArrowArray  = bindings.ArrowArray
+	apiReplacementScanInfo = bindings.ReplacementScanInfo
+	apiArrow               = bindings.Arrow
+	apiArrowStream         = bindings.ArrowStream
+	apiArrowSchema         = bindings.ArrowSchema
+	apiArrowArray          = bindings.ArrowArray
 )
 
 // ------------------------------------------------------------------ //
@@ -247,16 +265,20 @@ var (
 //#define duckdb_string_is_inlined                       duckdb_ext_api.duckdb_string_is_inlined
 //#define duckdb_string_t_length                         duckdb_ext_api.duckdb_string_t_length
 //#define duckdb_string_t_data                           duckdb_ext_api.duckdb_string_t_data
-//#define duckdb_from_date                               duckdb_ext_api.duckdb_from_date
+
+var (
+	apiFromDate = bindings.FromDate
+)
+
 //#define duckdb_to_date                                 duckdb_ext_api.duckdb_to_date
 //#define duckdb_is_finite_date                          duckdb_ext_api.duckdb_is_finite_date
 //#define duckdb_from_time                               duckdb_ext_api.duckdb_from_time
 
 var (
 	apiCreateTimeTZ = bindings.CreateTimeTZ
+	apiFromTimeTZ   = bindings.FromTimeTZ
 )
 
-//#define duckdb_from_time_tz                            duckdb_ext_api.duckdb_from_time_tz
 //#define duckdb_to_time                                 duckdb_ext_api.duckdb_to_time
 //#define duckdb_from_timestamp                          duckdb_ext_api.duckdb_from_timestamp
 //#define duckdb_to_timestamp                            duckdb_ext_api.duckdb_to_timestamp
@@ -350,10 +372,10 @@ var (
 //#define duckdb_pending_execution_is_finished           duckdb_ext_api.duckdb_pending_execution_is_finished
 
 var (
-	apiDestroyValue = bindings.DestroyValue
+	apiDestroyValue  = bindings.DestroyValue
+	apiCreateVarchar = bindings.CreateVarchar
 )
 
-//#define duckdb_create_varchar                          duckdb_ext_api.duckdb_create_varchar
 //#define duckdb_create_varchar_length                   duckdb_ext_api.duckdb_create_varchar_length
 //#define duckdb_create_bool                             duckdb_ext_api.duckdb_create_bool
 //#define duckdb_create_int8                             duckdb_ext_api.duckdb_create_int8
@@ -363,7 +385,11 @@ var (
 //#define duckdb_create_int32                            duckdb_ext_api.duckdb_create_int32
 //#define duckdb_create_uint32                           duckdb_ext_api.duckdb_create_uint32
 //#define duckdb_create_uint64                           duckdb_ext_api.duckdb_create_uint64
-//#define duckdb_create_int64                            duckdb_ext_api.duckdb_create_int64
+
+var (
+	apiCreateInt64 = bindings.CreateInt64
+)
+
 //#define duckdb_create_hugeint                          duckdb_ext_api.duckdb_create_hugeint
 //#define duckdb_create_uhugeint                         duckdb_ext_api.duckdb_create_uhugeint
 //#define duckdb_create_varint                           duckdb_ext_api.duckdb_create_varint
@@ -386,30 +412,42 @@ var (
 //#define duckdb_create_blob                             duckdb_ext_api.duckdb_create_blob
 //#define duckdb_create_bit                              duckdb_ext_api.duckdb_create_bit
 //#define duckdb_create_uuid                             duckdb_ext_api.duckdb_create_uuid
-//#define duckdb_get_bool                                duckdb_ext_api.duckdb_get_bool
-//#define duckdb_get_int8                                duckdb_ext_api.duckdb_get_int8
-//#define duckdb_get_uint8                               duckdb_ext_api.duckdb_get_uint8
-//#define duckdb_get_int16                               duckdb_ext_api.duckdb_get_int16
-//#define duckdb_get_uint16                              duckdb_ext_api.duckdb_get_uint16
-//#define duckdb_get_int32                               duckdb_ext_api.duckdb_get_int32
-//#define duckdb_get_uint32                              duckdb_ext_api.duckdb_get_uint32
-//#define duckdb_get_int64                               duckdb_ext_api.duckdb_get_int64
-//#define duckdb_get_uint64                              duckdb_ext_api.duckdb_get_uint64
-//#define duckdb_get_hugeint                             duckdb_ext_api.duckdb_get_hugeint
+
+var (
+	apiGetBool    = bindings.GetBool
+	apiGetInt8    = bindings.GetInt8
+	apiGetUInt8   = bindings.GetUInt8
+	apiGetInt16   = bindings.GetInt16
+	apiGetUInt16  = bindings.GetUInt16
+	apiGetInt32   = bindings.GetInt32
+	apiGetUInt32  = bindings.GetUInt32
+	apiGetInt64   = bindings.GetInt64
+	apiGetUInt64  = bindings.GetUInt64
+	apiGetHugeInt = bindings.GetHugeInt
+)
+
 //#define duckdb_get_uhugeint                            duckdb_ext_api.duckdb_get_uhugeint
 //#define duckdb_get_varint                              duckdb_ext_api.duckdb_get_varint
 //#define duckdb_get_decimal                             duckdb_ext_api.duckdb_get_decimal
-//#define duckdb_get_float                               duckdb_ext_api.duckdb_get_float
-//#define duckdb_get_double                              duckdb_ext_api.duckdb_get_double
-//#define duckdb_get_date                                duckdb_ext_api.duckdb_get_date
-//#define duckdb_get_time                                duckdb_ext_api.duckdb_get_time
-//#define duckdb_get_time_tz                             duckdb_ext_api.duckdb_get_time_tz
-//#define duckdb_get_timestamp                           duckdb_ext_api.duckdb_get_timestamp
+
+var (
+	apiGetFloat     = bindings.GetFloat
+	apiGetDouble    = bindings.GetDouble
+	apiGetDate      = bindings.GetDate
+	apiGetTime      = bindings.GetTime
+	apiGetTimeTZ    = bindings.GetTimeTZ
+	apiGetTimestamp = bindings.GetTimestamp
+)
+
 //#define duckdb_get_timestamp_tz                        duckdb_ext_api.duckdb_get_timestamp_tz
 //#define duckdb_get_timestamp_s                         duckdb_ext_api.duckdb_get_timestamp_s
 //#define duckdb_get_timestamp_ms                        duckdb_ext_api.duckdb_get_timestamp_ms
 //#define duckdb_get_timestamp_ns                        duckdb_ext_api.duckdb_get_timestamp_ns
-//#define duckdb_get_interval                            duckdb_ext_api.duckdb_get_interval
+
+var (
+	apiGetInterval = bindings.GetInterval
+)
+
 //#define duckdb_get_value_type                          duckdb_ext_api.duckdb_get_value_type
 //#define duckdb_get_blob                                duckdb_ext_api.duckdb_get_blob
 //#define duckdb_get_bit                                 duckdb_ext_api.duckdb_get_bit
@@ -456,20 +494,16 @@ var (
 //#define duckdb_create_union_type                       duckdb_ext_api.duckdb_create_union_type
 
 var (
-	apiCreateStructType  = bindings.CreateStructType
-	apiCreateEnumType    = bindings.CreateEnumType
-	apiCreateDecimalType = bindings.CreateDecimalType
-	apiGetTypeId         = bindings.GetTypeId
-	apiDecimalWidth      = bindings.DecimalWidth
-	apiDecimalScale      = bindings.DecimalScale
-)
-
-//#define duckdb_decimal_internal_type                   duckdb_ext_api.duckdb_decimal_internal_type
-//#define duckdb_enum_internal_type                      duckdb_ext_api.duckdb_enum_internal_type
-//#define duckdb_enum_dictionary_size                    duckdb_ext_api.duckdb_enum_dictionary_size
-//#define duckdb_enum_dictionary_value                   duckdb_ext_api.duckdb_enum_dictionary_value
-
-var (
+	apiCreateStructType     = bindings.CreateStructType
+	apiCreateEnumType       = bindings.CreateEnumType
+	apiCreateDecimalType    = bindings.CreateDecimalType
+	apiGetTypeId            = bindings.GetTypeId
+	apiDecimalWidth         = bindings.DecimalWidth
+	apiDecimalScale         = bindings.DecimalScale
+	apiDecimalInternalType  = bindings.DecimalInternalType
+	apiEnumInternalType     = bindings.EnumInternalType
+	apiEnumDictionarySize   = bindings.EnumDictionarySize
+	apiEnumDictionaryValue  = bindings.EnumDictionaryValue
 	apiListTypeChildType    = bindings.ListTypeChildType
 	apiArrayTypeChildType   = bindings.ArrayTypeChildType
 	apiArrayTypeArraySize   = bindings.ArrayTypeArraySize
@@ -522,7 +556,11 @@ var (
 
 //#define duckdb_validity_row_is_valid                   duckdb_ext_api.duckdb_validity_row_is_valid
 //#define duckdb_validity_set_row_validity               duckdb_ext_api.duckdb_validity_set_row_validity
-//#define duckdb_validity_set_row_invalid                duckdb_ext_api.duckdb_validity_set_row_invalid
+
+var (
+	apiValiditySetRowInvalid = bindings.ValiditySetRowInvalid
+)
+
 //#define duckdb_validity_set_row_valid                  duckdb_ext_api.duckdb_validity_set_row_valid
 
 var (
@@ -561,23 +599,22 @@ var (
 //#define duckdb_destroy_aggregate_function_set          duckdb_ext_api.duckdb_destroy_aggregate_function_set
 //#define duckdb_add_aggregate_function_to_set           duckdb_ext_api.duckdb_add_aggregate_function_to_set
 //#define duckdb_register_aggregate_function_set         duckdb_ext_api.duckdb_register_aggregate_function_set
-//#define duckdb_create_table_function                   duckdb_ext_api.duckdb_create_table_function
-//#define duckdb_destroy_table_function                  duckdb_ext_api.duckdb_destroy_table_function
-//#define duckdb_table_function_set_name                 duckdb_ext_api.duckdb_table_function_set_name
-//#define duckdb_table_function_add_parameter            duckdb_ext_api.duckdb_table_function_add_parameter
-//#define duckdb_table_function_add_named_parameter      duckdb_ext_api.duckdb_table_function_add_named_parameter
-//#define duckdb_table_function_set_extra_info           duckdb_ext_api.duckdb_table_function_set_extra_info
-//#define duckdb_table_function_set_bind                 duckdb_ext_api.duckdb_table_function_set_bind
-//#define duckdb_table_function_set_init                 duckdb_ext_api.duckdb_table_function_set_init
-//#define duckdb_table_function_set_local_init           duckdb_ext_api.duckdb_table_function_set_local_init
-//#define duckdb_table_function_set_function             duckdb_ext_api.duckdb_table_function_set_function
-//#define duckdb_table_function_supports_projection_pushdown                                                             \
-//	duckdb_ext_api.duckdb_table_function_supports_projection_pushdown
-//#define duckdb_register_table_function              duckdb_ext_api.duckdb_register_table_function
 
 var (
-	apiBindGetExtraInfo    = bindings.BindGetExtraInfo
-	apiBindAddResultColumn = bindings.BindAddResultColumn
+	apiCreateTableFunction                     = bindings.CreateTableFunction
+	apiDestroyTableFunction                    = bindings.DestroyTableFunction
+	apiTableFunctionSetName                    = bindings.TableFunctionSetName
+	apiTableFunctionAddParameter               = bindings.TableFunctionAddParameter
+	apiTableFunctionAddNamedParameter          = bindings.TableFunctionAddNamedParameter
+	apiTableFunctionSetExtraInfo               = bindings.TableFunctionSetExtraInfo
+	apiTableFunctionSetBind                    = bindings.TableFunctionSetBind
+	apiTableFunctionSetInit                    = bindings.TableFunctionSetInit
+	apiTableFunctionSetLocalInit               = bindings.TableFunctionSetLocalInit
+	apiTableFunctionSetFunction                = bindings.TableFunctionSetFunction
+	apiTableFunctionSupportsProjectionPushdown = bindings.TableFunctionSupportsProjectionPushdown
+	apiRegisterTableFunction                   = bindings.RegisterTableFunction
+	apiBindGetExtraInfo                        = bindings.BindGetExtraInfo
+	apiBindAddResultColumn                     = bindings.BindAddResultColumn
 )
 
 //#define duckdb_bind_get_parameter_count             duckdb_ext_api.duckdb_bind_get_parameter_count
@@ -593,30 +630,30 @@ var (
 //#define duckdb_init_get_extra_info                  duckdb_ext_api.duckdb_init_get_extra_info
 
 var (
-	apiInitGetBindData = bindings.InitGetBindData
-)
-
-//#define duckdb_init_set_init_data                   duckdb_ext_api.duckdb_init_set_init_data
-
-var (
+	apiInitGetBindData    = bindings.InitGetBindData
+	apiInitSetInitData    = bindings.InitSetInitData
 	apiInitGetColumnCount = bindings.InitGetColumnCount
 	apiInitGetColumnIndex = bindings.InitGetColumnIndex
+	apiInitSetMaxThreads  = bindings.InitSetMaxThreads
 )
 
-//#define duckdb_init_set_max_threads                 duckdb_ext_api.duckdb_init_set_max_threads
 //#define duckdb_init_set_error                       duckdb_ext_api.duckdb_init_set_error
 //#define duckdb_function_get_extra_info              duckdb_ext_api.duckdb_function_get_extra_info
-//#define duckdb_function_get_bind_data               duckdb_ext_api.duckdb_function_get_bind_data
-//#define duckdb_function_get_init_data               duckdb_ext_api.duckdb_function_get_init_data
-//#define duckdb_function_get_local_init_data         duckdb_ext_api.duckdb_function_get_local_init_data
-//#define duckdb_function_set_error                   duckdb_ext_api.duckdb_function_set_error
-//#define duckdb_add_replacement_scan                 duckdb_ext_api.duckdb_add_replacement_scan
-//#define duckdb_replacement_scan_set_function_name   duckdb_ext_api.duckdb_replacement_scan_set_function_name
-//#define duckdb_replacement_scan_add_parameter       duckdb_ext_api.duckdb_replacement_scan_add_parameter
-//#define duckdb_replacement_scan_set_error           duckdb_ext_api.duckdb_replacement_scan_set_error
 
 var (
-	apiGetProfilingInfo = bindings.GetProfilingInfo
+	apiFunctionGetBindData = bindings.FunctionGetBindData
+)
+
+//#define duckdb_function_get_init_data               duckdb_ext_api.duckdb_function_get_init_data
+
+var (
+	apiFunctionGetLocalInitData       = bindings.FunctionGetLocalInitData
+	apiFunctionSetError               = bindings.FunctionSetError
+	apiAddReplacementScan             = bindings.AddReplacementScan
+	apiReplacementScanSetFunctionName = bindings.ReplacementScanSetFunctionName
+	apiReplacementScanAddParameter    = bindings.ReplacementScanAddParameter
+	apiReplacementScanSetError        = bindings.ReplacementScanSetError
+	apiGetProfilingInfo               = bindings.GetProfilingInfo
 )
 
 //#define duckdb_profiling_info_get_value             duckdb_ext_api.duckdb_profiling_info_get_value

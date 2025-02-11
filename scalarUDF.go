@@ -249,8 +249,6 @@ func createScalarFunc(name string, f ScalarFunc) (apiScalarFunction, error) {
 	}
 
 	function := apiCreateScalarFunction()
-
-	// Set the name.
 	apiScalarFunctionSetName(function, name)
 
 	// Configure the scalar function.

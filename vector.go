@@ -1,10 +1,5 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"reflect"
 	"unsafe"
@@ -15,9 +10,9 @@ type vector struct {
 	// The underlying DuckDB vector.
 	apiVec apiVector
 	// The underlying data ptr.
-	ptr unsafe.Pointer
+	dataPtr unsafe.Pointer
 	// The vector's validity mask.
-	mask unsafe.Pointer
+	maskPtr unsafe.Pointer
 	// A callback function to get a value from this vector.
 	getFn fnGetVectorValue
 	// A callback function to write to this vector.
@@ -118,18 +113,18 @@ func (vec *vector) resizeListVector(newLength uint64) {
 
 func (vec *vector) resetChildData() {
 	for i := range vec.childVectors {
-		vec.childVectors[i].ptr = apiVectorGetData(vec.childVectors[i].apiVec)
+		vec.childVectors[i].dataPtr = apiVectorGetData(vec.childVectors[i].apiVec)
 		vec.childVectors[i].resetChildData()
 	}
 }
 
 func (vec *vector) initVectors(apiVec apiVector, writable bool) {
 	vec.apiVec = apiVec
-	vec.ptr = apiVectorGetData(apiVec)
+	vec.dataPtr = apiVectorGetData(apiVec)
 	if writable {
 		apiVectorEnsureValidityWritable(apiVec)
 	}
-	vec.mask = apiVectorGetValidity(apiVec)
+	vec.maskPtr = apiVectorGetValidity(apiVec)
 	vec.getChildVectors(apiVec, writable)
 }
 
@@ -302,11 +297,11 @@ func (vec *vector) initJSON() {
 	vec.Type = TYPE_VARCHAR
 }
 
-func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) error {
-	vec.decimalWidth = uint8(C.duckdb_decimal_width(logicalType))
-	vec.decimalScale = uint8(C.duckdb_decimal_scale(logicalType))
+func (vec *vector) initDecimal(logicalType apiLogicalType, colIdx int) error {
+	vec.decimalWidth = apiDecimalWidth(logicalType)
+	vec.decimalScale = apiDecimalScale(logicalType)
 
-	t := Type(C.duckdb_decimal_internal_type(logicalType))
+	t := Type(apiDecimalInternalType(logicalType))
 	switch t {
 	case TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_HUGEINT:
 		vec.getFn = func(vec *vector, rowIdx uint64) any {
@@ -331,18 +326,17 @@ func (vec *vector) initDecimal(logicalType C.duckdb_logical_type, colIdx int) er
 	return nil
 }
 
-func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error {
+func (vec *vector) initEnum(logicalType apiLogicalType, colIdx int) error {
 	// Initialize the dictionary.
-	dictSize := uint32(C.duckdb_enum_dictionary_size(logicalType))
+	dictSize := apiEnumDictionarySize(logicalType)
 	vec.dict = make(map[string]uint32)
+
 	for i := uint32(0); i < dictSize; i++ {
-		cStr := C.duckdb_enum_dictionary_value(logicalType, uint64(i))
-		str := C.GoString(cStr)
+		str := apiEnumDictionaryValue(logicalType, uint64(i))
 		vec.dict[str] = i
-		C.duckdb_free(unsafe.Pointer(cStr))
 	}
 
-	t := Type(C.duckdb_enum_internal_type(logicalType))
+	t := Type(apiEnumInternalType(logicalType))
 	switch t {
 	case TYPE_UTINYINT, TYPE_USMALLINT, TYPE_UINTEGER, TYPE_UBIGINT:
 		vec.getFn = func(vec *vector, rowIdx uint64) any {
@@ -367,10 +361,10 @@ func (vec *vector) initEnum(logicalType C.duckdb_logical_type, colIdx int) error
 	return nil
 }
 
-func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error {
+func (vec *vector) initList(logicalType apiLogicalType, colIdx int) error {
 	// Get the child vector type.
-	childType := C.duckdb_list_type_child_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&childType)
+	childType := apiListTypeChildType(logicalType)
+	defer apiDestroyLogicalType(&childType)
 
 	// Recurse into the child.
 	vec.childVectors = make([]vector, 1)
@@ -396,14 +390,13 @@ func (vec *vector) initList(logicalType C.duckdb_logical_type, colIdx int) error
 	return nil
 }
 
-func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) error {
-	childCount := int(C.duckdb_struct_type_child_count(logicalType))
+func (vec *vector) initStruct(logicalType apiLogicalType, colIdx int) error {
+	childCount := int(apiStructTypeChildCount(logicalType))
 	var structEntries []StructEntry
 	for i := 0; i < childCount; i++ {
-		name := C.duckdb_struct_type_child_name(logicalType, uint64(i))
-		entry, err := NewStructEntry(nil, C.GoString(name))
+		name := apiStructTypeChildName(logicalType, uint64(i))
+		entry, err := NewStructEntry(nil, name)
 		structEntries = append(structEntries, entry)
-		C.duckdb_free(unsafe.Pointer(name))
 		if err != nil {
 			return err
 		}
@@ -414,9 +407,9 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 
 	// Recurse into the children.
 	for i := 0; i < childCount; i++ {
-		childType := C.duckdb_struct_type_child_type(logicalType, uint64(i))
+		childType := apiStructTypeChildType(logicalType, uint64(i))
 		err := vec.childVectors[i].init(childType, colIdx)
-		C.duckdb_destroy_logical_type(&childType)
+		apiDestroyLogicalType(&childType)
 
 		if err != nil {
 			return err
@@ -440,12 +433,12 @@ func (vec *vector) initStruct(logicalType C.duckdb_logical_type, colIdx int) err
 	return nil
 }
 
-func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error {
+func (vec *vector) initMap(logicalType apiLogicalType, colIdx int) error {
 	// A MAP is a LIST of STRUCT values. Each STRUCT holds two children: a key and a value.
 
 	// Get the child vector type.
-	childType := C.duckdb_list_type_child_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&childType)
+	childType := apiListTypeChildType(logicalType)
+	defer apiDestroyLogicalType(&childType)
 
 	// Recurse into the child.
 	vec.childVectors = make([]vector, 1)
@@ -456,10 +449,10 @@ func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error 
 
 	// DuckDB supports more MAP key types than Go, which only supports comparable types.
 	// We ensure that the key type itself is comparable.
-	keyType := C.duckdb_map_type_key_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&keyType)
+	keyType := apiMapTypeKeyType(logicalType)
+	defer apiDestroyLogicalType(&keyType)
 
-	t := Type(C.duckdb_get_type_id(keyType))
+	t := Type(apiGetTypeId(keyType))
 	switch t {
 	case TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
 		return addIndexToError(errUnsupportedMapKeyType, colIdx)
@@ -482,12 +475,12 @@ func (vec *vector) initMap(logicalType C.duckdb_logical_type, colIdx int) error 
 	return nil
 }
 
-func (vec *vector) initArray(logicalType C.duckdb_logical_type, colIdx int) error {
-	vec.arrayLength = uint64(C.duckdb_array_type_array_size(logicalType))
+func (vec *vector) initArray(logicalType apiLogicalType, colIdx int) error {
+	vec.arrayLength = apiArrayTypeArraySize(logicalType)
 
 	// Get the child vector type.
-	childType := C.duckdb_array_type_child_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&childType)
+	childType := apiArrayTypeChildType(logicalType)
+	defer apiDestroyLogicalType(&childType)
 
 	// Recurse into the child.
 	vec.childVectors = make([]vector, 1)
@@ -518,7 +511,7 @@ func (vec *vector) initUUID() {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
-		hugeInt := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
+		hugeInt := getPrimitive[apiHugeInt](vec, rowIdx)
 		return hugeIntToUUID(hugeInt)
 	}
 	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
