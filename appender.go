@@ -50,10 +50,11 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	// Get the column types.
 	columnCount := apiAppenderColumnCount(appender)
 	for i := uint64(0); i < columnCount; i++ {
-		a.types[i] = apiAppenderColumnType(appender, i)
+		colType := apiAppenderColumnType(appender, i)
+		a.types = append(a.types, colType)
 
 		// Ensure that we only create an appender for supported column types.
-		t := Type(apiGetTypeId(a.types[i]))
+		t := Type(apiGetTypeId(colType))
 		name, found := unsupportedTypeToStringMap[t]
 		if found {
 			err := addIndexToError(unsupportedTypeError(name), int(i)+1)
