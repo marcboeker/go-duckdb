@@ -2,10 +2,10 @@ package duckdb
 
 /*
 void scalar_udf_callback(void *, void *, void *);
-void udf_delete_callback(void *);
-
 typedef void (*scalar_udf_callback_t)(void *, void *, void *);
-typedef void (*udf_delete_callback_t)(void *);
+
+void scalar_udf_delete_callback(void *);
+typedef void (*scalar_udf_delete_callback_t)(void *);
 */
 import "C"
 
@@ -72,7 +72,7 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 		conn := driverConn.(*Conn)
 		state := apiRegisterScalarFunction(conn.apiConn, function)
 		apiDestroyScalarFunction(&function)
-		if apiState(state) == apiError {
+		if apiState(state) == apiStateError {
 			return getError(errAPI, errScalarUDFCreate)
 		}
 		return nil
@@ -100,7 +100,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 		state := apiAddScalarFunctionToSet(set, function)
 		apiDestroyScalarFunction(&function)
-		if apiState(state) == apiError {
+		if apiState(state) == apiStateError {
 			apiDestroyScalarFunctionSet(&set)
 			return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
 		}
@@ -111,7 +111,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 		conn := driverConn.(*Conn)
 		state := apiRegisterScalarFunctionSet(conn.apiConn, set)
 		apiDestroyScalarFunctionSet(&set)
-		if apiState(state) == apiError {
+		if apiState(state) == apiStateError {
 			return getError(errAPI, errScalarUDFCreateSet)
 		}
 		return nil
@@ -187,6 +187,13 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 			return
 		}
 	}
+}
+
+//export scalar_udf_delete_callback
+func scalar_udf_delete_callback(info unsafe.Pointer) {
+	h := (*cgo.Handle)(info)
+	h.Value().(unpinner).unpin()
+	h.Delete()
 }
 
 func registerInputParams(config ScalarFuncConfig, f apiScalarFunction) error {
@@ -274,7 +281,7 @@ func createScalarFunc(name string, f ScalarFunc) (apiScalarFunction, error) {
 	value.pinner.Pin(&h)
 
 	// Set the execution data, which is the ScalarFunc f.
-	deleteCallbackPtr := unsafe.Pointer(C.udf_delete_callback_t(C.udf_delete_callback))
+	deleteCallbackPtr := unsafe.Pointer(C.scalar_udf_delete_callback_t(C.scalar_udf_delete_callback))
 	apiScalarFunctionSetExtraInfo(function, unsafe.Pointer(&h), deleteCallbackPtr)
 	return function, nil
 }

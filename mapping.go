@@ -54,8 +54,8 @@ const (
 type apiState bindings.State
 
 const (
-	apiSuccess = apiState(bindings.Success)
-	apiError   = apiState(bindings.Error)
+	apiStateSuccess = apiState(bindings.StateSuccess)
+	apiStateError   = apiState(bindings.StateError)
 )
 
 type apiStatementType bindings.StatementType
@@ -103,6 +103,19 @@ type (
 	apiTimestamp = bindings.Timestamp
 	apiInterval  = bindings.Interval
 	apiHugeInt   = bindings.HugeInt
+)
+
+var (
+	apiDateSetDays        = bindings.DateSetDays
+	apiTimeSetMicros      = bindings.TimeSetMicros
+	apiTimestampSetMicros = bindings.TimestampSetMicros
+	apiIntervalSetMonths  = bindings.IntervalSetMonths
+	apiIntervalSetDays    = bindings.IntervalSetDays
+	apiIntervalSetMicros  = bindings.IntervalSetMicros
+	apiHugeIntGetLower    = bindings.HugeIntGetLower
+	apiHugeIntSetLower    = bindings.HugeIntSetLower
+	apiHugeIntGetUpper    = bindings.HugeIntGetUpper
+	apiHugeIntSetUpper    = bindings.HugeIntSetUpper
 )
 
 // ...
@@ -155,9 +168,9 @@ type (
 
 type (
 	apiBindInfo = bindings.BindInfo
+	apiInitInfo = bindings.InitInfo
 )
 
-//init_info
 //cast_function
 //replacement_scan_info
 
@@ -175,12 +188,12 @@ type (
 //#define duckdb_open                                    duckdb_ext_api.duckdb_open
 
 var (
-	apiOpenExt = bindings.OpenExt
-	apiClose   = bindings.Close
-	apiConnect = bindings.Connect
+	apiOpenExt   = bindings.OpenExt
+	apiClose     = bindings.Close
+	apiConnect   = bindings.Connect
+	apiInterrupt = bindings.Interrupt
 )
 
-//#define duckdb_interrupt                               duckdb_ext_api.duckdb_interrupt
 //#define duckdb_query_progress                          duckdb_ext_api.duckdb_query_progress
 
 var (
@@ -205,24 +218,32 @@ var (
 
 var (
 	apiDestroyResult = bindings.DestroyResult
+	apiColumnName    = bindings.ColumnName
+	apiColumnType    = bindings.ColumnType
 )
 
-//#define duckdb_column_name                             duckdb_ext_api.duckdb_column_name
-//#define duckdb_column_type                             duckdb_ext_api.duckdb_column_type
 //#define duckdb_result_statement_type                   duckdb_ext_api.duckdb_result_statement_type
-//#define duckdb_column_logical_type                     duckdb_ext_api.duckdb_column_logical_type
-//#define duckdb_column_count                            duckdb_ext_api.duckdb_column_count
+
+var (
+	apiColumnLogicalType = bindings.ColumnLogicalType
+	apiColumnCount       = bindings.ColumnCount
+)
+
 //#define duckdb_rows_changed                            duckdb_ext_api.duckdb_rows_changed
-//#define duckdb_result_error                            duckdb_ext_api.duckdb_result_error
+
+var (
+	apiResultError = bindings.ResultError
+)
+
 //#define duckdb_result_error_type                       duckdb_ext_api.duckdb_result_error_type
 //#define duckdb_result_return_type                      duckdb_ext_api.duckdb_result_return_type
 //#define duckdb_malloc                                  duckdb_ext_api.duckdb_malloc
 
 var (
-	apiFree = bindings.Free
+	apiFree       = bindings.Free
+	apiVectorSize = bindings.VectorSize
 )
 
-//#define duckdb_vector_size                             duckdb_ext_api.duckdb_vector_size
 //#define duckdb_string_is_inlined                       duckdb_ext_api.duckdb_string_is_inlined
 //#define duckdb_string_t_length                         duckdb_ext_api.duckdb_string_t_length
 //#define duckdb_string_t_data                           duckdb_ext_api.duckdb_string_t_data
@@ -314,14 +335,18 @@ var (
 	apiPrepareExtractedStatement = bindings.PrepareExtractedStatement
 	apiExtractStatementsError    = bindings.ExtractStatementsError
 	apiDestroyExtracted          = bindings.DestroyExtracted
+	apiPendingPrepared           = bindings.PendingPrepared
+	apiDestroyPending            = bindings.DestroyPending
+	apiPendingError              = bindings.PendingError
 )
 
-//#define duckdb_pending_prepared                        duckdb_ext_api.duckdb_pending_prepared
-//#define duckdb_destroy_pending                         duckdb_ext_api.duckdb_destroy_pending
-//#define duckdb_pending_error                           duckdb_ext_api.duckdb_pending_error
 //#define duckdb_pending_execute_task                    duckdb_ext_api.duckdb_pending_execute_task
 //#define duckdb_pending_execute_check_state             duckdb_ext_api.duckdb_pending_execute_check_state
-//#define duckdb_execute_pending                         duckdb_ext_api.duckdb_execute_pending
+
+var (
+	apiExecutePending = bindings.ExecutePending
+)
+
 //#define duckdb_pending_execution_is_finished           duckdb_ext_api.duckdb_pending_execution_is_finished
 
 var (
@@ -416,7 +441,10 @@ func apiCreateLogicalType(t apiType) apiLogicalType {
 	return bindings.CreateLogicalType(bindings.Type(t))
 }
 
-//#define duckdb_logical_type_get_alias                  duckdb_ext_api.duckdb_logical_type_get_alias
+var (
+	apiLogicalTypeGetAlias = bindings.LogicalTypeGetAlias
+)
+
 //#define duckdb_logical_type_set_alias                  duckdb_ext_api.duckdb_logical_type_set_alias
 
 var (
@@ -432,22 +460,26 @@ var (
 	apiCreateEnumType    = bindings.CreateEnumType
 	apiCreateDecimalType = bindings.CreateDecimalType
 	apiGetTypeId         = bindings.GetTypeId
+	apiDecimalWidth      = bindings.DecimalWidth
+	apiDecimalScale      = bindings.DecimalScale
 )
 
-//#define duckdb_decimal_width                           duckdb_ext_api.duckdb_decimal_width
-//#define duckdb_decimal_scale                           duckdb_ext_api.duckdb_decimal_scale
 //#define duckdb_decimal_internal_type                   duckdb_ext_api.duckdb_decimal_internal_type
 //#define duckdb_enum_internal_type                      duckdb_ext_api.duckdb_enum_internal_type
 //#define duckdb_enum_dictionary_size                    duckdb_ext_api.duckdb_enum_dictionary_size
 //#define duckdb_enum_dictionary_value                   duckdb_ext_api.duckdb_enum_dictionary_value
-//#define duckdb_list_type_child_type                    duckdb_ext_api.duckdb_list_type_child_type
-//#define duckdb_array_type_child_type                   duckdb_ext_api.duckdb_array_type_child_type
-//#define duckdb_array_type_array_size                   duckdb_ext_api.duckdb_array_type_array_size
-//#define duckdb_map_type_key_type                       duckdb_ext_api.duckdb_map_type_key_type
-//#define duckdb_map_type_value_type                     duckdb_ext_api.duckdb_map_type_value_type
-//#define duckdb_struct_type_child_count                 duckdb_ext_api.duckdb_struct_type_child_count
-//#define duckdb_struct_type_child_name                  duckdb_ext_api.duckdb_struct_type_child_name
-//#define duckdb_struct_type_child_type                  duckdb_ext_api.duckdb_struct_type_child_type
+
+var (
+	apiListTypeChildType    = bindings.ListTypeChildType
+	apiArrayTypeChildType   = bindings.ArrayTypeChildType
+	apiArrayTypeArraySize   = bindings.ArrayTypeArraySize
+	apiMapTypeKeyType       = bindings.MapTypeKeyType
+	apiMapTypeValueType     = bindings.MapTypeValueType
+	apiStructTypeChildCount = bindings.StructTypeChildCount
+	apiStructTypeChildName  = bindings.StructTypeChildName
+	apiStructTypeChildType  = bindings.StructTypeChildType
+)
+
 //#define duckdb_union_type_member_count                 duckdb_ext_api.duckdb_union_type_member_count
 //#define duckdb_union_type_member_name                  duckdb_ext_api.duckdb_union_type_member_name
 //#define duckdb_union_type_member_type                  duckdb_ext_api.duckdb_union_type_member_type
@@ -457,25 +489,37 @@ var (
 )
 
 //#define duckdb_register_logical_type                   duckdb_ext_api.duckdb_register_logical_type
-//#define duckdb_create_data_chunk                       duckdb_ext_api.duckdb_create_data_chunk
-//#define duckdb_destroy_data_chunk                      duckdb_ext_api.duckdb_destroy_data_chunk
+
+var (
+	apiCreateDataChunk  = bindings.CreateDataChunk
+	apiDestroyDataChunk = bindings.DestroyDataChunk
+)
+
 //#define duckdb_data_chunk_reset                        duckdb_ext_api.duckdb_data_chunk_reset
-//#define duckdb_data_chunk_get_column_count             duckdb_ext_api.duckdb_data_chunk_get_column_count
-//#define duckdb_data_chunk_get_vector                   duckdb_ext_api.duckdb_data_chunk_get_vector
-//#define duckdb_data_chunk_get_size                     duckdb_ext_api.duckdb_data_chunk_get_size
-//#define duckdb_data_chunk_set_size                     duckdb_ext_api.duckdb_data_chunk_set_size
-//#define duckdb_vector_get_column_type                  duckdb_ext_api.duckdb_vector_get_column_type
-//#define duckdb_vector_get_data                         duckdb_ext_api.duckdb_vector_get_data
-//#define duckdb_vector_get_validity                     duckdb_ext_api.duckdb_vector_get_validity
-//#define duckdb_vector_ensure_validity_writable         duckdb_ext_api.duckdb_vector_ensure_validity_writable
+
+var (
+	apiDataChunkGetColumnCount      = bindings.DataChunkGetColumnCount
+	apiDataChunkGetVector           = bindings.DataChunkGetVector
+	apiDataChunkGetSize             = bindings.DataChunkGetSize
+	apiDataChunkSetSize             = bindings.DataChunkSetSize
+	apiVectorGetColumnType          = bindings.VectorGetColumnType
+	apiVectorGetData                = bindings.VectorGetData
+	apiVectorGetValidity            = bindings.VectorGetValidity
+	apiVectorEnsureValidityWritable = bindings.VectorEnsureValidityWritable
+)
+
 //#define duckdb_vector_assign_string_element            duckdb_ext_api.duckdb_vector_assign_string_element
 //#define duckdb_vector_assign_string_element_len        duckdb_ext_api.duckdb_vector_assign_string_element_len
-//#define duckdb_list_vector_get_child                   duckdb_ext_api.duckdb_list_vector_get_child
-//#define duckdb_list_vector_get_size                    duckdb_ext_api.duckdb_list_vector_get_size
-//#define duckdb_list_vector_set_size                    duckdb_ext_api.duckdb_list_vector_set_size
-//#define duckdb_list_vector_reserve                     duckdb_ext_api.duckdb_list_vector_reserve
-//#define duckdb_struct_vector_get_child                 duckdb_ext_api.duckdb_struct_vector_get_child
-//#define duckdb_array_vector_get_child                  duckdb_ext_api.duckdb_array_vector_get_child
+
+var (
+	apiListVectorGetChild   = bindings.ListVectorGetChild
+	apiListVectorGetSize    = bindings.ListVectorGetSize
+	apiListVectorSetSize    = bindings.ListVectorSetSize
+	apiListVectorReserve    = bindings.ListVectorReserve
+	apiStructVectorGetChild = bindings.StructVectorGetChild
+	apiArrayVectorGetChild  = bindings.ArrayVectorGetChild
+)
+
 //#define duckdb_validity_row_is_valid                   duckdb_ext_api.duckdb_validity_row_is_valid
 //#define duckdb_validity_set_row_validity               duckdb_ext_api.duckdb_validity_set_row_validity
 //#define duckdb_validity_set_row_invalid                duckdb_ext_api.duckdb_validity_set_row_invalid
@@ -530,23 +574,35 @@ var (
 //#define duckdb_table_function_supports_projection_pushdown                                                             \
 //	duckdb_ext_api.duckdb_table_function_supports_projection_pushdown
 //#define duckdb_register_table_function              duckdb_ext_api.duckdb_register_table_function
-//#define duckdb_bind_get_extra_info                  duckdb_ext_api.duckdb_bind_get_extra_info
-//#define duckdb_bind_add_result_column               duckdb_ext_api.duckdb_bind_add_result_column
-//#define duckdb_bind_get_parameter_count             duckdb_ext_api.duckdb_bind_get_parameter_count
-//#define duckdb_bind_get_parameter                   duckdb_ext_api.duckdb_bind_get_parameter
-//#define duckdb_bind_get_named_parameter             duckdb_ext_api.duckdb_bind_get_named_parameter
-//#define duckdb_bind_set_bind_data                   duckdb_ext_api.duckdb_bind_set_bind_data
-//#define duckdb_bind_set_cardinality                 duckdb_ext_api.duckdb_bind_set_cardinality
 
 var (
-	apiBindSetError = bindings.BindSetError
+	apiBindGetExtraInfo    = bindings.BindGetExtraInfo
+	apiBindAddResultColumn = bindings.BindAddResultColumn
+)
+
+//#define duckdb_bind_get_parameter_count             duckdb_ext_api.duckdb_bind_get_parameter_count
+
+var (
+	apiBindGetParameter      = bindings.BindGetParameter
+	apiBindGetNamedParameter = bindings.BindGetNamedParameter
+	apiBindSetBindData       = bindings.BindSetBindData
+	apiBindSetCardinality    = bindings.BindSetCardinality
+	apiBindSetError          = bindings.BindSetError
 )
 
 //#define duckdb_init_get_extra_info                  duckdb_ext_api.duckdb_init_get_extra_info
-//#define duckdb_init_get_bind_data                   duckdb_ext_api.duckdb_init_get_bind_data
+
+var (
+	apiInitGetBindData = bindings.InitGetBindData
+)
+
 //#define duckdb_init_set_init_data                   duckdb_ext_api.duckdb_init_set_init_data
-//#define duckdb_init_get_column_count                duckdb_ext_api.duckdb_init_get_column_count
-//#define duckdb_init_get_column_index                duckdb_ext_api.duckdb_init_get_column_index
+
+var (
+	apiInitGetColumnCount = bindings.InitGetColumnCount
+	apiInitGetColumnIndex = bindings.InitGetColumnIndex
+)
+
 //#define duckdb_init_set_max_threads                 duckdb_ext_api.duckdb_init_set_max_threads
 //#define duckdb_init_set_error                       duckdb_ext_api.duckdb_init_set_error
 //#define duckdb_function_get_extra_info              duckdb_ext_api.duckdb_function_get_extra_info
@@ -647,9 +703,17 @@ var (
 //#define duckdb_row_count                  duckdb_ext_api.duckdb_row_count
 //#define duckdb_column_data                duckdb_ext_api.duckdb_column_data
 //#define duckdb_nullmask_data              duckdb_ext_api.duckdb_nullmask_data
-//#define duckdb_result_get_chunk           duckdb_ext_api.duckdb_result_get_chunk
+
+var (
+	apiResultGetChunk = bindings.ResultGetChunk
+)
+
 //#define duckdb_result_is_streaming        duckdb_ext_api.duckdb_result_is_streaming
-//#define duckdb_result_chunk_count         duckdb_ext_api.duckdb_result_chunk_count
+
+var (
+	apiResultChunkCount = bindings.ResultChunkCount
+)
+
 //#define duckdb_value_boolean              duckdb_ext_api.duckdb_value_boolean
 //#define duckdb_value_int8                 duckdb_ext_api.duckdb_value_int8
 //#define duckdb_value_int16                duckdb_ext_api.duckdb_value_int16
@@ -724,11 +788,3 @@ var (
 
 //// Version unstable_new_append_functions
 //#define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
-
-// ------------------------------------------------------------------ //
-// Helper
-// ------------------------------------------------------------------ //
-
-var (
-	apiMallocLogicalTypeSlice = bindings.MallocLogicalTypeSlice
-)

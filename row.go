@@ -1,14 +1,10 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
-// Row represents one row in duckdb. It references the internal vectors.
+// Row represents one row in duckdb.
+// It references the internal vectors.
 type Row struct {
 	chunk      *DataChunk
-	r          C.idx_t
+	r          uint64
 	projection []int
 }
 

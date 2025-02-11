@@ -62,8 +62,8 @@ func (u *UUID) String() string {
 func hugeIntToUUID(hugeInt apiHugeInt) []byte {
 	// Flip the sign bit of the signed hugeint to transform it to UUID bytes.
 	var val [uuid_length]byte
-	binary.BigEndian.PutUint64(val[:8], uint64(hugeInt.Upper)^1<<63)
-	binary.BigEndian.PutUint64(val[8:], hugeInt.Lower)
+	binary.BigEndian.PutUint64(val[:8], uint64(apiHugeIntGetUpper(&hugeInt))^1<<63)
+	binary.BigEndian.PutUint64(val[8:], apiHugeIntGetLower(&hugeInt))
 	return val[:]
 }
 
@@ -72,15 +72,15 @@ func uuidToHugeInt(uuid UUID) apiHugeInt {
 	upper := binary.BigEndian.Uint64(uuid[:8])
 
 	// Flip the sign bit.
-	hugeInt.Upper = int64(upper ^ (1 << 63))
-	hugeInt.Lower = binary.BigEndian.Uint64(uuid[8:])
+	apiHugeIntSetUpper(&hugeInt, int64(upper^(1<<63)))
+	apiHugeIntSetLower(&hugeInt, binary.BigEndian.Uint64(uuid[8:]))
 	return hugeInt
 }
 
 func hugeIntToNative(hugeInt apiHugeInt) *big.Int {
-	i := big.NewInt(hugeInt.Upper)
+	i := big.NewInt(apiHugeIntGetUpper(&hugeInt))
 	i.Lsh(i, 64)
-	i.Add(i, new(big.Int).SetUint64(hugeInt.Lower))
+	i.Add(i, new(big.Int).SetUint64(apiHugeIntGetLower(&hugeInt)))
 	return i
 }
 
@@ -96,10 +96,10 @@ func hugeIntFromNative(i *big.Int) (apiHugeInt, error) {
 		return apiHugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
 	}
 
-	return apiHugeInt{
-		Lower: r.Uint64(),
-		Upper: q.Int64(),
-	}, nil
+	var hugeInt apiHugeInt
+	apiHugeIntSetUpper(&hugeInt, q.Int64())
+	apiHugeIntSetLower(&hugeInt, r.Uint64())
+	return hugeInt, nil
 }
 
 type Map map[any]any
@@ -129,11 +129,11 @@ type Interval struct {
 }
 
 func (i *Interval) getAPIInterval() apiInterval {
-	return apiInterval{
-		Months: i.Months,
-		Days:   i.Days,
-		Micros: i.Micros,
-	}
+	var interval apiInterval
+	apiIntervalSetMonths(&interval, i.Months)
+	apiIntervalSetDays(&interval, i.Days)
+	apiIntervalSetMicros(&interval, i.Micros)
+	return interval
 }
 
 // Use as the `Scanner` type for any composite types (maps, lists, structs)
@@ -242,7 +242,7 @@ func getAPITimestamp[T any](t Type, val T) (apiTimestamp, error) {
 		return ts, err
 	}
 
-	ts.Micros = ticks
+	apiTimestampSetMicros(&ts, ticks)
 	return ts, nil
 }
 
@@ -253,7 +253,7 @@ func getAPIDate[T any](val T) (apiDate, error) {
 		return date, err
 	}
 
-	date.Days = int32(ti.Unix() / secondsPerDay)
+	apiDateSetDays(&date, int32(ti.Unix()/secondsPerDay))
 	return date, nil
 }
 

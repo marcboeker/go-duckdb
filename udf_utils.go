@@ -25,12 +25,3 @@ func getPinned[T any](handle unsafe.Pointer) T {
 	h := *(*cgo.Handle)(handle)
 	return h.Value().(pinnedValue[T]).value
 }
-
-// Data deletion handlers.
-
-//export udf_delete_callback
-func udf_delete_callback(info unsafe.Pointer) {
-	h := (*cgo.Handle)(info)
-	h.Value().(unpinner).unpin()
-	h.Delete()
-}

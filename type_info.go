@@ -306,7 +306,7 @@ func (info *typeInfo) logicalMapType() apiLogicalType {
 
 func (info *typeInfo) logicalArrayType() apiLogicalType {
 	child := info.childTypes[0].logicalType()
-	logicalType := apiCreateArrayType(child, apiIdxT(info.arrayLength))
+	logicalType := apiCreateArrayType(child, info.arrayLength)
 	apiDestroyLogicalType(&child)
 	return logicalType
 }

@@ -3,25 +3,26 @@ package duckdb
 /*
 #include <duckdb.h>
 
-void table_udf_bind_row(duckdb_bind_info info);
-void table_udf_bind_chunk(duckdb_bind_info info);
-void table_udf_bind_parallel_row(duckdb_bind_info info);
-void table_udf_bind_parallel_chunk(duckdb_bind_info info);
+// For the function definitions see https://golang.org/issue/19837.
+// For the typedef's see https://golang.org/issue/19835.
 
-void table_udf_init(duckdb_init_info info);
-void table_udf_init_parallel(duckdb_init_info info);
-void table_udf_local_init(duckdb_init_info info);
+void table_udf_bind_row(void *);
+void table_udf_bind_chunk(void *);
+void table_udf_bind_parallel_row(void *);
+void table_udf_bind_parallel_chunk(void *);
+typedef void (*table_udf_bind_t)(void *);
 
-// See https://golang.org/issue/19837
-void table_udf_row_callback(duckdb_function_info, duckdb_data_chunk);
-void table_udf_chunk_callback(duckdb_function_info, duckdb_data_chunk);
+void table_udf_init(void *);
+void table_udf_init_parallel(void *);
+void table_udf_local_init(void *);
+typedef (*table_udf_init_t)(void *);
 
-// See https://golang.org/issue/19835.
-typedef void (*init)(duckdb_function_info);
-typedef void (*bind)(duckdb_function_info);
-typedef void (*callback)(duckdb_function_info, duckdb_data_chunk);
+void table_udf_row_callback(void *, void *);
+void table_udf_chunk_callback(void *, void *);
+typedef void (*table_udf_callback_t)(void *, void *, void *);
 
-void udf_delete_callback(void *);
+void table_udf_delete_callback(void *);
+typedef void (*table_udf_delete_callback_t)(void *);
 */
 import "C"
 
@@ -166,36 +167,38 @@ type (
 	}
 )
 
-func (tfd *tableFunctionData) setColumnCount(info C.duckdb_init_info) {
-	count := C.duckdb_init_get_column_count(info)
-	for i := 0; i < int(count); i++ {
-		srcPos := C.duckdb_init_get_column_index(info, C.idx_t(i))
-		tfd.projection[int(srcPos)] = i
+func (tfd *tableFunctionData) setColumnCount(info apiInitInfo) {
+	count := apiInitGetColumnCount(info)
+	for i := uint64(0); i < count; i++ {
+		srcPos := apiInitGetColumnIndex(info, i)
+		tfd.projection[int(srcPos)] = int(i)
 	}
 }
 
 //export table_udf_bind_row
-func table_udf_bind_row(info C.duckdb_bind_info) {
-	udfBindTyped[RowTableSource](info)
+func table_udf_bind_row(infoPtr unsafe.Pointer) {
+	udfBindTyped[RowTableSource](infoPtr)
 }
 
 //export table_udf_bind_chunk
-func table_udf_bind_chunk(info C.duckdb_bind_info) {
-	udfBindTyped[ChunkTableSource](info)
+func table_udf_bind_chunk(infoPtr unsafe.Pointer) {
+	udfBindTyped[ChunkTableSource](infoPtr)
 }
 
 //export table_udf_bind_parallel_row
-func table_udf_bind_parallel_row(info C.duckdb_bind_info) {
-	udfBindTyped[ParallelRowTableSource](info)
+func table_udf_bind_parallel_row(infoPtr unsafe.Pointer) {
+	udfBindTyped[ParallelRowTableSource](infoPtr)
 }
 
 //export table_udf_bind_parallel_chunk
-func table_udf_bind_parallel_chunk(info C.duckdb_bind_info) {
-	udfBindTyped[ParallelChunkTableSource](info)
+func table_udf_bind_parallel_chunk(infoPtr unsafe.Pointer) {
+	udfBindTyped[ParallelChunkTableSource](infoPtr)
 }
 
-func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
-	f := getPinned[tableFunction[T]](C.duckdb_bind_get_extra_info(info))
+func udfBindTyped[T tableSource](infoPtr unsafe.Pointer) {
+	info := apiBindInfo{Ptr: infoPtr}
+
+	f := getPinned[tableFunction[T]](apiBindGetExtraInfo(info))
 	config := f.Config
 
 	argCount := len(config.Arguments)
@@ -203,35 +206,32 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 	namedArgs := make(map[string]any)
 
 	for i, t := range config.Arguments {
-		value := C.duckdb_bind_get_parameter(info, C.idx_t(i))
 		var err error
+		value := apiBindGetParameter(info, uint64(i))
 		args[i], err = getValue(t, value)
-		C.duckdb_destroy_value(&value)
+		apiDestroyValue(&value)
 
 		if err != nil {
-			setBindError(info, err.Error())
+			apiBindSetError(info, err.Error())
 			return
 		}
 	}
 
 	for name, t := range config.NamedArguments {
-		argName := C.CString(name)
-		value := C.duckdb_bind_get_named_parameter(info, argName)
-		C.duckdb_free(unsafe.Pointer(argName))
-
 		var err error
+		value := apiBindGetNamedParameter(info, name)
 		namedArgs[name], err = getValue(t, value)
-		C.duckdb_destroy_value(&value)
+		apiDestroyValue(&value)
 
 		if err != nil {
-			setBindError(info, err.Error())
+			apiBindSetError(info, err.Error())
 			return
 		}
 	}
 
 	instance, err := f.BindArguments(namedArgs, args...)
 	if err != nil {
-		setBindError(info, err.Error())
+		apiBindSetError(info, err.Error())
 		return
 	}
 
@@ -243,22 +243,18 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 	for i, v := range columnInfos {
 		if v.T == nil {
-			setBindError(info, errTableUDFColumnTypeIsNil.Error())
+			apiBindSetError(info, errTableUDFColumnTypeIsNil.Error())
 			return
 		}
-
 		logicalType := v.T.logicalType()
-		name := C.CString(v.Name)
-		C.duckdb_bind_add_result_column(info, name, logicalType)
-		C.duckdb_destroy_logical_type(&logicalType)
-		C.duckdb_free(unsafe.Pointer(name))
-
+		apiBindAddResultColumn(info, v.Name, logicalType)
+		apiDestroyLogicalType(&logicalType)
 		instanceData.projection[i] = -1
 	}
 
 	cardinality := instance.Cardinality()
 	if cardinality != nil {
-		C.duckdb_bind_set_cardinality(info, C.idx_t(cardinality.Cardinality), C.bool(cardinality.Exact))
+		apiBindSetCardinality(info, uint64(cardinality.Cardinality), cardinality.Exact)
 	}
 
 	pinnedInstanceData := pinnedValue[tableFunctionData]{
@@ -268,18 +264,21 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 	h := cgo.NewHandle(pinnedInstanceData)
 	pinnedInstanceData.pinner.Pin(&h)
-	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(&h), C.duckdb_delete_callback_t(C.udf_delete_callback))
+	deleteCallbackPtr := unsafe.Pointer(C.table_udf_delete_callback_t(C.table_udf_delete_callback))
+	apiBindSetBindData(info, unsafe.Pointer(&h), deleteCallbackPtr)
 }
 
 //export table_udf_init
-func table_udf_init(info C.duckdb_init_info) {
-	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
+func table_udf_init(infoPtr unsafe.Pointer) {
+	info := apiInitInfo{Ptr: infoPtr}
+	instance := getPinned[tableFunctionData](apiInitGetBindData(info))
 	instance.setColumnCount(info)
 	instance.fun.(sequentialTableSource).Init()
 }
 
 //export table_udf_init_parallel
-func table_udf_init_parallel(info C.duckdb_init_info) {
+func table_udf_init_parallel(infoPtr unsafe.Pointer) {
+	info := apiInitInfo{Ptr: infoPtr}
 	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
 	instance.setColumnCount(info)
 	initData := instance.fun.(parallelTableSource).Init()
@@ -288,7 +287,8 @@ func table_udf_init_parallel(info C.duckdb_init_info) {
 }
 
 //export table_udf_local_init
-func table_udf_local_init(info C.duckdb_init_info) {
+func table_udf_local_init(infoPtr unsafe.Pointer) {
+	info := apiInitInfo{Ptr: infoPtr}
 	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
 	localState := pinnedValue[any]{
 		pinner: &runtime.Pinner{},
@@ -367,6 +367,13 @@ func table_udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_
 	if err != nil {
 		setFuncError(info, err.Error())
 	}
+}
+
+//export table_udf_delete_callback
+func table_udf_delete_callback(info unsafe.Pointer) {
+	h := (*cgo.Handle)(info)
+	h.Value().(unpinner).unpin()
+	h.Delete()
 }
 
 // RegisterTableUDF registers a user-defined table function.

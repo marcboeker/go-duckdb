@@ -13,17 +13,16 @@ import (
 )
 
 // fnGetVectorValue is the getter callback function for any (nested) vector.
-type fnGetVectorValue func(vec *vector, rowIdx C.idx_t) any
+type fnGetVectorValue func(vec *vector, rowIdx uint64) any
 
-func (vec *vector) getNull(rowIdx C.idx_t) bool {
-	mask := unsafe.Pointer(vec.mask)
-	if mask == nil {
+func (vec *vector) getNull(rowIdx uint64) bool {
+	if vec.mask == nil {
 		return false
 	}
 
 	entryIdx := rowIdx / 64
 	idxInEntry := rowIdx % 64
-	maskPtr := (*[1 << 31]C.uint64_t)(mask)
+	maskPtr := (*[1 << 31]C.uint64_t)(vec.mask)
 	isValid := maskPtr[entryIdx] & (C.uint64_t(1) << idxInEntry)
 	return uint64(isValid) == 0
 }
@@ -34,7 +33,7 @@ func getPrimitive[T any](vec *vector, rowIdx C.idx_t) T {
 }
 
 func (vec *vector) getTS(t Type, rowIdx C.idx_t) time.Time {
-	val := getPrimitive[C.duckdb_timestamp](vec, rowIdx)
+	val := getPrimitive[apiTimestamp](vec, rowIdx)
 	return getTS(t, val)
 }
 

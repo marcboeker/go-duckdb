@@ -103,7 +103,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	defer apiDestroyExtracted(&extractedStmts)
 
 	// Execute all statements without args, except the last one.
-	for i := apiIdxT(0); i < size-1; i++ {
+	for i := uint64(0); i < size-1; i++ {
 		extractedStmt, err := a.conn.prepareExtractedStmt(extractedStmts, i)
 		if err != nil {
 			return nil, err
@@ -175,7 +175,7 @@ func (a *Arrow) queryArrowSchema(res *apiArrow) (*arrow.Schema, error) {
 	}
 
 	state := apiQueryArrowSchema(*res, &arrowSchema)
-	if apiState(state) == apiError {
+	if apiState(state) == apiStateError {
 		return nil, errors.New("duckdb_query_arrow_schema")
 	}
 
@@ -202,7 +202,7 @@ func (a *Arrow) queryArrowArray(res *apiArrow, sc *arrow.Schema) (arrow.Record, 
 	}
 
 	state := apiQueryArrowArray(*res, &arrowArray)
-	if apiState(state) == apiError {
+	if apiState(state) == apiStateError {
 		return nil, errors.New("duckdb_query_arrow_array")
 	}
 
@@ -225,7 +225,7 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
 
 	var res apiArrow
 	state := apiExecutePreparedArrow(*s.preparedStmt, &res)
-	if apiState(state) == apiError {
+	if apiState(state) == apiStateError {
 		errMsg := apiQueryArrowError(res)
 		apiDestroyArrow(&res)
 		return nil, fmt.Errorf("duckdb_execute_prepared_arrow: %v", errMsg)
@@ -266,7 +266,7 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 	}
 
 	state := apiArrowScan(a.conn.apiConn, name, arrowStream)
-	if apiState(state) == apiError {
+	if apiState(state) == apiStateError {
 		release()
 		return nil, errors.New("duckdb_arrow_scan")
 	}

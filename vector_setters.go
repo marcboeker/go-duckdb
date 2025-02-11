@@ -17,7 +17,7 @@ import (
 const secondsPerDay = 24 * 60 * 60
 
 // fnSetVectorValue is the setter callback function for any (nested) vector.
-type fnSetVectorValue func(vec *vector, rowIdx C.idx_t, val any) error
+type fnSetVectorValue func(vec *vector, rowIdx uint64, val any) error
 
 func (vec *vector) setNull(rowIdx C.idx_t) {
 	C.duckdb_validity_set_row_invalid(vec.mask, rowIdx)
@@ -426,7 +426,7 @@ func setUUID[S any](vec *vector, rowIdx C.idx_t, val S) error {
 	return nil
 }
 
-func setVectorVal[S any](vec *vector, rowIdx C.idx_t, val S) error {
+func setVectorVal[S any](vec *vector, rowIdx uint64, val S) error {
 	name, inMap := unsupportedTypeToStringMap[vec.Type]
 	if inMap {
 		return unsupportedTypeError(name)
