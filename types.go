@@ -17,14 +17,14 @@ type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }
 
-const uuid_length = 16
+const uuidLength = 16
 
-type UUID [uuid_length]byte
+type UUID [uuidLength]byte
 
 func (u *UUID) Scan(v any) error {
 	switch val := v.(type) {
 	case []byte:
-		if len(val) != uuid_length {
+		if len(val) != uuidLength {
 			return u.Scan(string(val))
 		}
 		copy(u[:], val[:])
@@ -61,7 +61,7 @@ func (u *UUID) String() string {
 
 func hugeIntToUUID(hugeInt apiHugeInt) []byte {
 	// Flip the sign bit of the signed hugeint to transform it to UUID bytes.
-	var val [uuid_length]byte
+	var val [uuidLength]byte
 	binary.BigEndian.PutUint64(val[:8], uint64(apiHugeIntGetUpper(&hugeInt))^1<<63)
 	binary.BigEndian.PutUint64(val[8:], apiHugeIntGetLower(&hugeInt))
 	return val[:]

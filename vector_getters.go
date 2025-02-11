@@ -1,15 +1,9 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"encoding/json"
 	"math/big"
 	"time"
-	"unsafe"
 )
 
 // fnGetVectorValue is the getter callback function for any (nested) vector.
@@ -19,12 +13,7 @@ func (vec *vector) getNull(rowIdx uint64) bool {
 	if vec.maskPtr == nil {
 		return false
 	}
-
-	entryIdx := rowIdx / 64
-	idxInEntry := rowIdx % 64
-	maskPtr := (*[1 << 31]C.uint64_t)(vec.maskPtr)
-	isValid := maskPtr[entryIdx] & (C.uint64_t(1) << idxInEntry)
-	return uint64(isValid) == 0
+	return !apiValidityMaskValueIsValid(vec.maskPtr, rowIdx)
 }
 
 func getPrimitive[T any](vec *vector, rowIdx uint64) T {
@@ -117,21 +106,12 @@ func (vec *vector) getHugeint(rowIdx uint64) *big.Int {
 }
 
 func (vec *vector) getBytes(rowIdx uint64) any {
-	cStr := getPrimitive[duckdb_string_t](vec, rowIdx)
-
-	var blob []byte
-	if cStr.length <= stringInlineLength {
-		// Inlined data is stored from byte 4 to stringInlineLength + 4.
-		blob = C.GoBytes(unsafe.Pointer(&cStr.prefix), C.int(cStr.length))
-	} else {
-		// Any strings exceeding stringInlineLength are stored as a pointer in `ptr`.
-		blob = C.GoBytes(unsafe.Pointer(cStr.ptr), C.int(cStr.length))
-	}
-
+	apiStr := getPrimitive[apiStringT](vec, rowIdx)
+	str := apiStringTData(&apiStr)
 	if vec.Type == TYPE_VARCHAR {
-		return string(blob)
+		return str
 	}
-	return blob
+	return []byte(str)
 }
 
 func (vec *vector) getJSON(rowIdx uint64) any {
@@ -154,13 +134,9 @@ func (vec *vector) getDecimal(rowIdx uint64) Decimal {
 		v := getPrimitive[int64](vec, rowIdx)
 		val = big.NewInt(v)
 	case TYPE_HUGEINT:
-		v := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
-		val = hugeIntToNative(C.duckdb_hugeint{
-			lower: v.lower,
-			upper: v.upper,
-		})
+		v := getPrimitive[apiHugeInt](vec, rowIdx)
+		val = hugeIntToNative(v)
 	}
-
 	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
 
@@ -177,17 +153,16 @@ func (vec *vector) getEnum(rowIdx uint64) string {
 		idx = getPrimitive[uint64](vec, rowIdx)
 	}
 
-	logicalType := C.duckdb_vector_get_column_type(vec.duckdbVector)
-	defer C.duckdb_destroy_logical_type(&logicalType)
-
-	val := C.duckdb_enum_dictionary_value(logicalType, (C.idx_t)(idx))
-	defer C.duckdb_free(unsafe.Pointer(val))
-	return C.GoString(val)
+	logicalType := apiVectorGetColumnType(vec.apiVec)
+	defer apiDestroyLogicalType(&logicalType)
+	return apiEnumDictionaryValue(logicalType, idx)
 }
 
 func (vec *vector) getList(rowIdx uint64) []any {
-	entry := getPrimitive[duckdb_list_entry_t](vec, rowIdx)
-	return vec.getSliceChild(entry.offset, entry.length)
+	entry := getPrimitive[apiListEntry](vec, rowIdx)
+	offset := apiListEntryGetOffset(&entry)
+	length := apiListEntryGetLength(&entry)
+	return vec.getSliceChild(offset, length)
 }
 
 func (vec *vector) getStruct(rowIdx uint64) map[string]any {
@@ -214,7 +189,7 @@ func (vec *vector) getMap(rowIdx uint64) Map {
 }
 
 func (vec *vector) getArray(rowIdx uint64) []any {
-	length := C.idx_t(vec.arrayLength)
+	length := vec.arrayLength
 	return vec.getSliceChild(rowIdx*length, length)
 }
 
@@ -223,7 +198,7 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 	child := &vec.childVectors[0]
 
 	// Fill the slice with all child values.
-	for i := C.idx_t(0); i < length; i++ {
+	for i := uint64(0); i < length; i++ {
 		val := child.getFn(child, i+offset)
 		slice = append(slice, val)
 	}

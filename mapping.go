@@ -107,6 +107,8 @@ type (
 	apiTimestamp    = bindings.Timestamp
 	apiInterval     = bindings.Interval
 	apiHugeInt      = bindings.HugeInt
+	apiStringT      = bindings.StringT
+	apiListEntry    = bindings.ListEntry
 )
 
 var (
@@ -134,6 +136,10 @@ var (
 	apiHugeIntSetLower           = bindings.HugeIntSetLower
 	apiHugeIntGetUpper           = bindings.HugeIntGetUpper
 	apiHugeIntSetUpper           = bindings.HugeIntSetUpper
+	apiListEntryGetOffset        = bindings.ListEntryGetOffset
+	apiListEntrySetOffset        = bindings.ListEntrySetOffset
+	apiListEntryGetLength        = bindings.ListEntryGetLength
+	apiListEntrySetLength        = bindings.ListEntrySetLength
 )
 
 // ...
@@ -258,16 +264,12 @@ var (
 //#define duckdb_malloc                                  duckdb_ext_api.duckdb_malloc
 
 var (
-	apiFree       = bindings.Free
-	apiVectorSize = bindings.VectorSize
-)
-
-//#define duckdb_string_is_inlined                       duckdb_ext_api.duckdb_string_is_inlined
-//#define duckdb_string_t_length                         duckdb_ext_api.duckdb_string_t_length
-//#define duckdb_string_t_data                           duckdb_ext_api.duckdb_string_t_data
-
-var (
-	apiFromDate = bindings.FromDate
+	apiFree            = bindings.Free
+	apiVectorSize      = bindings.VectorSize
+	apiStringIsInlined = bindings.StringIsInlined
+	apiStringTLength   = bindings.StringTLength
+	apiStringTData     = bindings.StringTData
+	apiFromDate        = bindings.FromDate
 )
 
 //#define duckdb_to_date                                 duckdb_ext_api.duckdb_to_date
@@ -540,18 +542,14 @@ var (
 	apiVectorGetData                = bindings.VectorGetData
 	apiVectorGetValidity            = bindings.VectorGetValidity
 	apiVectorEnsureValidityWritable = bindings.VectorEnsureValidityWritable
-)
-
-//#define duckdb_vector_assign_string_element            duckdb_ext_api.duckdb_vector_assign_string_element
-//#define duckdb_vector_assign_string_element_len        duckdb_ext_api.duckdb_vector_assign_string_element_len
-
-var (
-	apiListVectorGetChild   = bindings.ListVectorGetChild
-	apiListVectorGetSize    = bindings.ListVectorGetSize
-	apiListVectorSetSize    = bindings.ListVectorSetSize
-	apiListVectorReserve    = bindings.ListVectorReserve
-	apiStructVectorGetChild = bindings.StructVectorGetChild
-	apiArrayVectorGetChild  = bindings.ArrayVectorGetChild
+	apiVectorAssignStringElement    = bindings.VectorAssignStringElement
+	apiVectorAssignStringElementLen = bindings.VectorAssignStringElementLen
+	apiListVectorGetChild           = bindings.ListVectorGetChild
+	apiListVectorGetSize            = bindings.ListVectorGetSize
+	apiListVectorSetSize            = bindings.ListVectorSetSize
+	apiListVectorReserve            = bindings.ListVectorReserve
+	apiStructVectorGetChild         = bindings.StructVectorGetChild
+	apiArrayVectorGetChild          = bindings.ArrayVectorGetChild
 )
 
 //#define duckdb_validity_row_is_valid                   duckdb_ext_api.duckdb_validity_row_is_valid
@@ -825,3 +823,7 @@ var (
 
 //// Version unstable_new_append_functions
 //#define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+var (
+	apiValidityMaskValueIsValid = bindings.ValidityMaskValueIsValid
+)

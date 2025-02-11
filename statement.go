@@ -226,7 +226,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (apiState, error) {
 	case int64:
 		return apiState(apiBindInt64(*s.preparedStmt, uint64(n+1), v)), nil
 	case int:
-		// FIXME: Should this be apiBindInt32?
+		// int is at least 32 bits.
 		return apiState(apiBindInt64(*s.preparedStmt, uint64(n+1), int64(v))), nil
 	case *big.Int:
 		return s.bindHugeint(v, n)
