@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"unsafe"
 )
 
 type StmtType apiStatementType
@@ -177,27 +176,27 @@ func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (apiState, error) 
 	}
 
 	if t == TYPE_TIME {
-		var ti C.duckdb_time
-		ti.micros = C.int64_t(ticks)
-		state := C.duckdb_bind_time(*s.stmt, C.idx_t(n+1), ti)
-		return state, nil
+		var ti apiTime
+		ti.Micros = ticks
+		state := apiBindTime(*s.preparedStmt, apiIdxT(n+1), ti)
+		return apiState(state), nil
 	}
 
 	// TYPE_TIME_TZ: The UTC offset is 0.
-	ti := C.duckdb_create_time_tz(C.int64_t(ticks), 0)
-	v := C.duckdb_create_time_tz_value(ti)
-	state := C.duckdb_bind_value(*s.stmt, C.idx_t(n+1), v)
-	C.duckdb_destroy_value(&v)
-	return state, nil
+	ti := apiCreateTimeTZ(ticks, 0)
+	v := apiCreateTimeTZValue(ti)
+	state := apiBindValue(*s.preparedStmt, apiIdxT(n+1), v)
+	apiDestroyValue(&v)
+	return apiState(state), nil
 }
 
-func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (apiState, error) {
 	t, err := s.ParamType(n + 1)
 	if err != nil {
-		return C.DuckDBError, err
+		return apiError, err
 	}
 	if name, ok := unsupportedTypeToStringMap[t]; ok {
-		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+		return apiError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
 
 	switch t {
@@ -213,9 +212,9 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (C.duckdb_state, e
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[t]
-		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+		return apiError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
-	return C.DuckDBError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+	return apiError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
 }
 
 func (s *Stmt) bindValue(val driver.NamedValue, n int) (apiState, error) {
@@ -270,9 +269,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 
 	// relaxed length check allow for unused parameters.
 	for i := 0; i < s.NumInput(); i++ {
-		cStr := C.duckdb_parameter_name(*s.stmt, C.idx_t(i+1))
-		name := C.GoString(cStr)
-		C.duckdb_free(unsafe.Pointer(cStr))
+		name := apiParameterName(*s.preparedStmt, apiIdxT(i+1))
 
 		// fallback on index position
 		arg := args[i]
@@ -292,8 +289,9 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 		}
 
 		state, err := s.bindValue(arg, i)
-		if state == C.DuckDBError {
-			err = errors.Join(err, duckdbError(C.duckdb_prepare_error(*s.stmt)))
+		if apiState(state) == apiError {
+			errMsg := apiPrepareError(*s.preparedStmt)
+			err = errors.Join(err, getDuckDBError(errMsg))
 			return errors.Join(errCouldNotBind, err)
 		}
 	}
@@ -314,9 +312,9 @@ func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_result(res)
+	defer apiDestroyResult(res)
 
-	ra := int64(C.duckdb_value_int64(res, 0, 0))
+	ra := apiValueInt64(*res, 0, 0)
 	return &result{ra}, nil
 }
 
@@ -384,7 +382,7 @@ func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
+func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*apiResult, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
 	}
@@ -397,7 +395,7 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	return s.executeBound(ctx)
 }
 
-func (s *Stmt) executeBound(ctx context.Context) (*C.duckdb_result, error) {
+func (s *Stmt) executeBound(ctx context.Context) (*apiResult, error) {
 	var pendingRes C.duckdb_pending_result
 	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
 		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))

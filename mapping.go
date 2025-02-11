@@ -98,8 +98,8 @@ const (
 // ------------------------------------------------------------------ //
 
 type (
-	apiIdxT      = bindings.IdxT
 	apiDate      = bindings.Date
+	apiTime      = bindings.Time
 	apiTimestamp = bindings.Timestamp
 	apiInterval  = bindings.Interval
 	apiHugeInt   = bindings.HugeInt
@@ -114,22 +114,14 @@ type (
 // type Column C.duckdb_column
 
 type (
-	apiVector = bindings.Vector
-)
-
-// type Result C.duckdb_result
-
-type (
+	apiVector              = bindings.Vector
+	apiResult              = bindings.Result
 	apiDatabase            = bindings.Database
 	apiConnection          = bindings.Connection
 	apiPreparedStatement   = bindings.PreparedStatement
 	apiExtractedStatements = bindings.ExtractedStatements
-)
-
-//type PendingResult *C.duckdb_pending_result
-
-type (
-	apiAppender = bindings.Appender
+	apiPendingResult       = bindings.PendingResult
+	apiAppender            = bindings.Appender
 )
 
 //type TableDescription *C.duckdb_table_description
@@ -210,7 +202,11 @@ var (
 )
 
 //#define duckdb_query                                   duckdb_ext_api.duckdb_query
-//#define duckdb_destroy_result                          duckdb_ext_api.duckdb_destroy_result
+
+var (
+	apiDestroyResult = bindings.DestroyResult
+)
+
 //#define duckdb_column_name                             duckdb_ext_api.duckdb_column_name
 //#define duckdb_column_type                             duckdb_ext_api.duckdb_column_type
 //#define duckdb_result_statement_type                   duckdb_ext_api.duckdb_result_statement_type
@@ -234,7 +230,11 @@ var (
 //#define duckdb_to_date                                 duckdb_ext_api.duckdb_to_date
 //#define duckdb_is_finite_date                          duckdb_ext_api.duckdb_is_finite_date
 //#define duckdb_from_time                               duckdb_ext_api.duckdb_from_time
-//#define duckdb_create_time_tz                          duckdb_ext_api.duckdb_create_time_tz
+
+var (
+	apiCreateTimeTZ = bindings.CreateTimeTZ
+)
+
 //#define duckdb_from_time_tz                            duckdb_ext_api.duckdb_from_time_tz
 //#define duckdb_to_time                                 duckdb_ext_api.duckdb_to_time
 //#define duckdb_from_timestamp                          duckdb_ext_api.duckdb_from_timestamp
@@ -264,9 +264,9 @@ var (
 
 var (
 	apiPreparedStatementType = bindings.PreparedStatementType
+	apiBindValue             = bindings.BindValue
 )
 
-//#define duckdb_bind_value                              duckdb_ext_api.duckdb_bind_value
 //#define duckdb_bind_parameter_index                    duckdb_ext_api.duckdb_bind_parameter_index
 
 var (
@@ -347,7 +347,11 @@ var (
 //#define duckdb_create_double                           duckdb_ext_api.duckdb_create_double
 //#define duckdb_create_date                             duckdb_ext_api.duckdb_create_date
 //#define duckdb_create_time                             duckdb_ext_api.duckdb_create_time
-//#define duckdb_create_time_tz_value                    duckdb_ext_api.duckdb_create_time_tz_value
+
+var (
+	apiCreateTimeTZValue = bindings.CreateTimeTZValue
+)
+
 //#define duckdb_create_timestamp                        duckdb_ext_api.duckdb_create_timestamp
 //#define duckdb_create_timestamp_tz                     duckdb_ext_api.duckdb_create_timestamp_tz
 //#define duckdb_create_timestamp_s                      duckdb_ext_api.duckdb_create_timestamp_s
@@ -651,6 +655,11 @@ var (
 //#define duckdb_value_int16                duckdb_ext_api.duckdb_value_int16
 //#define duckdb_value_int32                duckdb_ext_api.duckdb_value_int32
 //#define duckdb_value_int64                duckdb_ext_api.duckdb_value_int64
+
+var (
+	apiValueInt64 = bindings.ValueInt64
+)
+
 //#define duckdb_value_hugeint              duckdb_ext_api.duckdb_value_hugeint
 //#define duckdb_value_uhugeint             duckdb_ext_api.duckdb_value_uhugeint
 //#define duckdb_value_decimal              duckdb_ext_api.duckdb_value_decimal
