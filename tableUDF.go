@@ -135,6 +135,14 @@ type (
 		FillChunk(any, DataChunk) error
 	}
 
+	parallelChunkTSWrapper struct {
+		s ChunkTableSource
+	}
+
+	parallelRowTSWrapper struct {
+		s RowTableSource
+	}
+
 	// TableFunctionConfig contains any information passed to DuckDB when registering the table function.
 	TableFunctionConfig struct {
 		// The Arguments of the table function.
@@ -258,7 +266,7 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 	cardinality := instance.Cardinality()
 	if cardinality != nil {
-	C.duckdb_bind_set_cardinality(info, C.idx_t(cardinality.Cardinality), C.bool(cardinality.Exact))
+		C.duckdb_bind_set_cardinality(info, C.idx_t(cardinality.Cardinality), C.bool(cardinality.Exact))
 	}
 
 	pinnedInstanceData := pinnedValue[tableFunctionData]{
@@ -314,7 +322,7 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 		chunk:      &chunk,
 		projection: instance.projection,
 	}
-	maxSize :=  C.idx_t(GetDataChunkCapacity())
+	maxSize := C.idx_t(GetDataChunkCapacity())
 
 	switch fun := instance.fun.(type) {
 	case RowTableSource:
@@ -481,4 +489,54 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 		return nil
 	})
 	return err
+}
+
+// ParallelChunk wrapper
+
+func (s parallelChunkTSWrapper) ColumnInfos() []ColumnInfo {
+	return s.s.ColumnInfos()
+}
+
+func (s parallelChunkTSWrapper) Cardinality() *CardinalityInfo {
+	return s.s.Cardinality()
+}
+
+func (s parallelChunkTSWrapper) Init() ParallelTableSourceInfo {
+	s.s.Init()
+	return ParallelTableSourceInfo{
+		MaxThreads: 1,
+	}
+}
+
+func (s parallelChunkTSWrapper) NewLocalState() any {
+	return struct{}{}
+}
+
+func (s parallelChunkTSWrapper) FillChunk(ls any, chunk DataChunk) error {
+	return s.s.FillChunk(chunk)
+}
+
+// ParallelRow wrapper
+
+func (s parallelRowTSWrapper) ColumnInfos() []ColumnInfo {
+	return s.s.ColumnInfos()
+}
+
+func (s parallelRowTSWrapper) Cardinality() *CardinalityInfo {
+	return s.s.Cardinality()
+}
+
+func (s parallelRowTSWrapper) Init() ParallelTableSourceInfo {
+	s.s.Init()
+	return ParallelTableSourceInfo{
+		MaxThreads: 1,
+	}
+}
+
+func (s parallelRowTSWrapper) NewLocalState() any {
+	return struct{}{}
+}
+
+func (s parallelRowTSWrapper) FillRow(ls any, chunk Row) (bool, error) {
+	return s.s.FillRow(chunk)
 }
