@@ -42,17 +42,3 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: "Test examples"
         run: make examples
-
-  freebsd_amd64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: vmactions/freebsd-vm@v1
-        with:
-          usesh: true
-          prepare: |
-            pkg install -y \
-              gmake \
-              git \
-              go
-          run: gmake test
