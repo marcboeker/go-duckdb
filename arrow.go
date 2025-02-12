@@ -218,7 +218,6 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
 	if s.closed {
 		return nil, errClosedCon
 	}
-
 	if err := s.bind(args); err != nil {
 		return nil, err
 	}
@@ -228,9 +227,8 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
 	if apiState(state) == apiStateError {
 		errMsg := apiQueryArrowError(res)
 		apiDestroyArrow(&res)
-		return nil, fmt.Errorf("duckdb_execute_prepared_arrow: %v", errMsg)
+		return nil, fmt.Errorf("failed to execute the prepared arrow: %v", errMsg)
 	}
-
 	return &res, nil
 }
 
