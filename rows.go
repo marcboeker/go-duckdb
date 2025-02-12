@@ -1,10 +1,5 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"database/sql/driver"
 	"fmt"
@@ -13,7 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 // rows is a helper struct for scanning a duckdb result.
@@ -21,30 +15,30 @@ type rows struct {
 	// stmt is a pointer to the stmt of which we are scanning the result.
 	stmt *Stmt
 	// res is the result of stmt.
-	res C.duckdb_result
+	res apiResult
 	// chunk holds the currently active data chunk.
 	chunk DataChunk
 	// chunkCount is the number of chunks in the result.
-	chunkCount C.idx_t
+	chunkCount uint64
 	// chunkIdx is the chunk index in the result.
-	chunkIdx C.idx_t
+	chunkIdx uint64
 	// rowCount is the number of scanned rows.
 	rowCount int
 }
 
-func newRowsWithStmt(res C.duckdb_result, stmt *Stmt) *rows {
-	columnCount := C.duckdb_column_count(&res)
+func newRowsWithStmt(res apiResult, stmt *Stmt) *rows {
+	columnCount := apiColumnCount(&res)
 	r := rows{
 		res:        res,
 		stmt:       stmt,
 		chunk:      DataChunk{},
-		chunkCount: C.duckdb_result_chunk_count(res),
+		chunkCount: apiResultChunkCount(res),
 		chunkIdx:   0,
 		rowCount:   0,
 	}
 
-	for i := C.idx_t(0); i < columnCount; i++ {
-		columnName := C.GoString(C.duckdb_column_name(&res, i))
+	for i := uint64(0); i < columnCount; i++ {
+		columnName := apiColumnName(&res, i)
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
 	return &r
@@ -60,8 +54,8 @@ func (r *rows) Next(dst []driver.Value) error {
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
-		data := C.duckdb_result_get_chunk(r.res, r.chunkIdx)
-		if err := r.chunk.initFromDuckDataChunk(data, false); err != nil {
+		apiChunk := apiResultGetChunk(r.res, r.chunkIdx)
+		if err := r.chunk.initFromDuckDataChunk(apiChunk, false); err != nil {
 			return getError(err, nil)
 		}
 
@@ -83,7 +77,7 @@ func (r *rows) Next(dst []driver.Value) error {
 
 // ColumnTypeScanType implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
+	t := Type(apiColumnType(&r.res, uint64(index)))
 	switch t {
 	case TYPE_INVALID:
 		return nil
@@ -138,12 +132,12 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
+	t := Type(apiColumnType(&r.res, uint64(index)))
 	switch t {
 	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
 		// Only allocate the logical type if necessary.
-		logicalType := C.duckdb_column_logical_type(&r.res, C.idx_t(index))
-		defer C.duckdb_destroy_logical_type(&logicalType)
+		logicalType := apiColumnLogicalType(&r.res, uint64(index))
+		defer apiDestroyLogicalType(&logicalType)
 		return logicalTypeName(logicalType)
 	default:
 		return typeToStringMap[t]
@@ -152,7 +146,7 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 
 func (r *rows) Close() error {
 	r.chunk.close()
-	C.duckdb_destroy_result(&r.res)
+	apiDestroyResult(&r.res)
 
 	var err error
 	if r.stmt != nil {
@@ -165,8 +159,8 @@ func (r *rows) Close() error {
 	return err
 }
 
-func logicalTypeName(logicalType C.duckdb_logical_type) string {
-	t := Type(C.duckdb_get_type_id(logicalType))
+func logicalTypeName(logicalType apiLogicalType) string {
+	t := Type(apiGetTypeId(logicalType))
 	switch t {
 	case TYPE_DECIMAL:
 		return logicalTypeNameDecimal(logicalType)
@@ -186,54 +180,51 @@ func logicalTypeName(logicalType C.duckdb_logical_type) string {
 	}
 }
 
-func logicalTypeNameDecimal(logicalType C.duckdb_logical_type) string {
-	width := C.duckdb_decimal_width(logicalType)
-	scale := C.duckdb_decimal_scale(logicalType)
+func logicalTypeNameDecimal(logicalType apiLogicalType) string {
+	width := apiDecimalWidth(logicalType)
+	scale := apiDecimalScale(logicalType)
 	return fmt.Sprintf("DECIMAL(%d,%d)", int(width), int(scale))
 }
 
-func logicalTypeNameList(logicalType C.duckdb_logical_type) string {
-	childType := C.duckdb_list_type_child_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&childType)
+func logicalTypeNameList(logicalType apiLogicalType) string {
+	childType := apiListTypeChildType(logicalType)
+	defer apiDestroyLogicalType(&childType)
 	childName := logicalTypeName(childType)
 	return fmt.Sprintf("%s[]", childName)
 }
 
-func logicalTypeNameStruct(logicalType C.duckdb_logical_type) string {
-	count := int(C.duckdb_struct_type_child_count(logicalType))
+func logicalTypeNameStruct(logicalType apiLogicalType) string {
+	count := apiStructTypeChildCount(logicalType)
 	name := "STRUCT("
 
-	for i := 0; i < count; i++ {
-		ptrToChildName := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
-		childName := C.GoString(ptrToChildName)
-		childType := C.duckdb_struct_type_child_type(logicalType, C.idx_t(i))
+	for i := uint64(0); i < count; i++ {
+		childName := apiStructTypeChildName(logicalType, i)
+		childType := apiStructTypeChildType(logicalType, i)
 
 		// Add comma if not at the end of the list.
 		name += escapeStructFieldName(childName) + " " + logicalTypeName(childType)
 		if i != count-1 {
 			name += ", "
 		}
-
-		C.duckdb_free(unsafe.Pointer(ptrToChildName))
-		C.duckdb_destroy_logical_type(&childType)
+		apiDestroyLogicalType(&childType)
 	}
 	return name + ")"
 }
 
-func logicalTypeNameMap(logicalType C.duckdb_logical_type) string {
-	keyType := C.duckdb_map_type_key_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&keyType)
+func logicalTypeNameMap(logicalType apiLogicalType) string {
+	keyType := apiMapTypeKeyType(logicalType)
+	defer apiDestroyLogicalType(&keyType)
 
-	valueType := C.duckdb_map_type_value_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&valueType)
+	valueType := apiMapTypeValueType(logicalType)
+	defer apiDestroyLogicalType(&valueType)
 
 	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(keyType), logicalTypeName(valueType))
 }
 
-func logicalTypeNameArray(logicalType C.duckdb_logical_type) string {
-	size := C.duckdb_array_type_array_size(logicalType)
-	childType := C.duckdb_array_type_child_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&childType)
+func logicalTypeNameArray(logicalType apiLogicalType) string {
+	size := apiArrayTypeArraySize(logicalType)
+	childType := apiArrayTypeChildType(logicalType)
+	defer apiDestroyLogicalType(&childType)
 	childName := logicalTypeName(childType)
 	return fmt.Sprintf("%s[%d]", childName, int(size))
 }
