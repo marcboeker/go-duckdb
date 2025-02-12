@@ -7,7 +7,7 @@ require (
 	github.com/duckdb/duckdb-go-bindings v0.1.4
 	github.com/duckdb/duckdb-go-bindings/darwin_amd64 v0.1.1
 	github.com/duckdb/duckdb-go-bindings/darwin_arm64 v0.1.2
-	github.com/duckdb/duckdb-go-bindings/linux_amd64 v0.1.2
+	github.com/duckdb/duckdb-go-bindings/linux_amd64 v0.1.5
 	github.com/duckdb/duckdb-go-bindings/linux_arm64 v0.1.2
 	github.com/duckdb/duckdb-go-bindings/windows_amd64 v0.1.2
 	github.com/go-viper/mapstructure/v2 v2.2.1
