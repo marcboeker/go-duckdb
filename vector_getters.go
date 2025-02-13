@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"time"
 	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 )
 
 // fnGetVectorValue is the getter callback function for any (nested) vector.
@@ -92,13 +94,13 @@ func getTimeTZ(ti C.duckdb_time_tz) time.Time {
 	return time.Date(1, time.January, 1, hour, minute, sec, nanos, loc).UTC()
 }
 
-func (vec *vector) getInterval(rowIdx C.idx_t) Interval {
+func (vec *vector) getInterval(rowIdx C.idx_t) duckdbtypes.Interval {
 	interval := getPrimitive[C.duckdb_interval](vec, rowIdx)
 	return getInterval(interval)
 }
 
-func getInterval(interval C.duckdb_interval) Interval {
-	return Interval{
+func getInterval(interval C.duckdb_interval) duckdbtypes.Interval {
+	return duckdbtypes.Interval{
 		Days:   int32(interval.days),
 		Months: int32(interval.months),
 		Micros: int64(interval.micros),
@@ -135,7 +137,7 @@ func (vec *vector) getJSON(rowIdx C.idx_t) any {
 	return value
 }
 
-func (vec *vector) getDecimal(rowIdx C.idx_t) Decimal {
+func (vec *vector) getDecimal(rowIdx C.idx_t) duckdbtypes.Decimal {
 	var val *big.Int
 	switch vec.internalType {
 	case TYPE_SMALLINT:
@@ -155,7 +157,7 @@ func (vec *vector) getDecimal(rowIdx C.idx_t) Decimal {
 		})
 	}
 
-	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
+	return duckdbtypes.Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
 
 func (vec *vector) getEnum(rowIdx C.idx_t) string {
@@ -194,10 +196,10 @@ func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
 	return m
 }
 
-func (vec *vector) getMap(rowIdx C.idx_t) Map {
+func (vec *vector) getMap(rowIdx C.idx_t) duckdbtypes.Map {
 	list := vec.getList(rowIdx)
 
-	m := Map{}
+	m := duckdbtypes.Map{}
 	for i := 0; i < len(list); i++ {
 		mapItem := list[i].(map[string]any)
 		key := mapItem[mapKeysField()]

@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"math/big"
 	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 )
 
 type StmtType C.duckdb_statement_type
@@ -166,7 +168,7 @@ func (s *Stmt) bindBlob(val []byte, n int) (C.duckdb_state, error) {
 	return state, nil
 }
 
-func (s *Stmt) bindInterval(val Interval, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindInterval(val duckdbtypes.Interval, n int) (C.duckdb_state, error) {
 	v := C.duckdb_interval{
 		months: C.int32_t(val.Months),
 		days:   C.int32_t(val.Days),
@@ -258,7 +260,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (C.duckdb_state, error) {
 		return C.duckdb_bind_int64(*s.stmt, C.idx_t(n+1), C.int64_t(v)), nil
 	case *big.Int:
 		return s.bindHugeint(v, n)
-	case Decimal:
+	case duckdbtypes.Decimal:
 		// FIXME: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[TYPE_DECIMAL]
 		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
@@ -278,7 +280,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (C.duckdb_state, error) {
 		return s.bindString(v, n)
 	case []byte:
 		return s.bindBlob(v, n)
-	case Interval:
+	case duckdbtypes.Interval:
 		return s.bindInterval(v, n)
 	case nil:
 		return C.duckdb_bind_null(*s.stmt, C.idx_t(n+1)), nil
