@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/marcboeker/go-duckdb"
+	"github.com/marcboeker/go-duckdb/duckdbtypes"
 )
 
 var db *sql.DB
@@ -18,7 +18,7 @@ func main() {
 
 	check(db.Ping())
 
-	var jsonArray duckdb.Composite[[]any]
+	var jsonArray duckdbtypes.Composite[[]any]
 	row := db.QueryRow(`SELECT json_array('foo', 'bar');`)
 	check(row.Err())
 	check(row.Scan(&jsonArray))
@@ -26,7 +26,7 @@ func main() {
 	log.Printf("first element: %s \n", jsonArray.Get()[0])
 	log.Printf("second element: %s \n", jsonArray.Get()[1])
 
-	var jsonMap duckdb.Composite[map[string]any]
+	var jsonMap duckdbtypes.Composite[map[string]any]
 	row = db.QueryRow(`SELECT '{"family": "anatidae", "species": ["duck", "goose"], "coolness": 42.42}'::JSON;`)
 	check(row.Err())
 	check(row.Scan(&jsonMap))
