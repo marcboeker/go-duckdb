@@ -394,7 +394,7 @@ func TestDuckDBErrors(t *testing.T) {
 		},
 		{
 			tpl:    `SET external_threads=-1`,
-			errTyp: ErrorTypeSyntax,
+			errTyp: ErrorTypeInvalidInput,
 		},
 		{
 			tpl:    `CREATE UNIQUE INDEX idx ON duckdb_error_test(u_1)`,
