@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
+#        with:
+#          ref: ${{ github.head_ref }}
       - name: Duplicate Mappings
         shell: bash
         run: |
