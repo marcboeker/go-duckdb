@@ -1,0 +1,29 @@
+name: Duplicate Mappings
+on:
+  workflow_dispatch:
+    inputs:
+      source_mapping:
+        description: 'the input mapping file to duplicate'
+        required: true
+        default: 'mapping.go'
+jobs:
+  update-bindings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Duplicate Mappings
+        shell: bash
+        run: |
+          cp ${{ github.event.inputs.source_mapping }} mapping.go
+          sed -i '6s_.*_	bindings "github.com/duckdb/duckdb-go-bindings"_g' mapping.go
+#          cp ${{ github.event.inputs.source_mapping }} mapping_darwin_amd64.go
+#          cp ${{ github.event.inputs.source_mapping }} mapping_darwin_arm64.go
+#          cp ${{ github.event.inputs.source_mapping }} mapping_linux_amd64.go
+#          cp ${{ github.event.inputs.source_mapping }} mapping_linux_arm64.go
+#          cp ${{ github.event.inputs.source_mapping }} windows_amd64/bindings.go
+      - name: Push Duplicated Mappings
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: push duplicated mappings
