@@ -42,3 +42,22 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: "Test examples"
         run: make examples
+
+  test-arrow:
+    name: Test Arrow
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+        go: [ "1.23" ]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: "Run arrow tests"
+        run: go test -v -race -count=1 -tags=duckdb_arrow

@@ -3,7 +3,7 @@ on:
   push:
   pull_request:
 jobs:
-  update-bindings:
+  update-mappings:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
