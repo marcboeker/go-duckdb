@@ -45,6 +45,11 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (*Connector, error) {
 	var db C.duckdb_database
 
+	const inMemoryName = ":memory:"
+	if dsn == inMemoryName || strings.HasPrefix(dsn, inMemoryName+"?") {
+		dsn = dsn[len(inMemoryName):]
+	}
+
 	parsedDSN, err := url.Parse(dsn)
 	if err != nil {
 		return nil, getError(errParseDSN, err)
