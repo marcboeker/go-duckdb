@@ -33,7 +33,7 @@ func TestErrConnect(t *testing.T) {
 
 	t.Run(errConnect.Error(), func(t *testing.T) {
 		_, err := sql.Open("duckdb", "?readonly")
-		testError(t, err, errConnect.Error(), duckdbErrMsg)
+		testError(t, err, errConnect.Error())
 	})
 
 	t.Run(errSetConfig.Error(), func(t *testing.T) {
@@ -87,7 +87,7 @@ func TestErrAppender(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = NewAppenderFromConn(con, "", "does_not_exist")
-		testError(t, err, errAppenderCreation.Error(), duckdbErrMsg)
+		testError(t, err, errAppenderCreation.Error())
 		require.NoError(t, con.Close())
 		require.NoError(t, c.Close())
 	})
@@ -394,7 +394,7 @@ func TestDuckDBErrors(t *testing.T) {
 		},
 		{
 			tpl:    `SET external_threads=-1`,
-			errTyp: ErrorTypeSyntax,
+			errTyp: ErrorTypeInvalidInput,
 		},
 		{
 			tpl:    `CREATE UNIQUE INDEX idx ON duckdb_error_test(u_1)`,

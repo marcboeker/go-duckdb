@@ -39,6 +39,28 @@ func TestOpen(t *testing.T) {
 		require.Equal(t, int64(4), threads)
 		require.Equal(t, "read_write", accessMode)
 	})
+
+	t.Run(":memory:", func(t *testing.T) {
+		db, err := sql.Open("duckdb", ":memory:")
+		require.NoError(t, err)
+		defer db.Close()
+
+		// Are we really using in-memory DB or did we create a file named :memory: ?
+		checkIsMemory(t, db)
+	})
+
+	t.Run(":memory: with config", func(t *testing.T) {
+		db, err := sql.Open("duckdb", ":memory:?threads=4")
+		require.NoError(t, err)
+		defer db.Close()
+
+		checkIsMemory(t, db)
+
+		var threads int64
+		res := db.QueryRow("SELECT current_setting('threads')")
+		require.NoError(t, res.Scan(&threads))
+		require.Equal(t, int64(4), threads)
+	})
 }
 
 func TestConnectorBootQueries(t *testing.T) {
@@ -717,4 +739,11 @@ func checkErr(err error, msg string) {
 	if err != nil {
 		log.Fatalf(msg, err)
 	}
+}
+
+func checkIsMemory(t *testing.T, db *sql.DB) {
+	res, err := db.Query("select * from information_schema.schemata where catalog_name = 'memory'")
+	require.NoError(t, err)
+	defer res.Close()
+	require.True(t, res.Next())
 }

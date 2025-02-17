@@ -269,17 +269,11 @@ func TestPrepareQueryNamed(t *testing.T) {
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		paramType, err = stmt.ParamType(1)
-		// Will be fixed in the next release.
-		// https://github.com/duckdb/duckdb/pull/14952
-		// require.Equal(t, TYPE_VARCHAR, paramType)
-		require.Equal(t, TYPE_INVALID, paramType)
+		require.Equal(t, TYPE_VARCHAR, paramType)
 		require.NoError(t, err)
 
 		paramType, err = stmt.ParamType(2)
-		// Will be fixed in the next release.
-		// https://github.com/duckdb/duckdb/pull/14952
-		// require.Equal(t, TYPE_INTEGER, paramType)
-		require.Equal(t, TYPE_INVALID, paramType)
+		require.Equal(t, TYPE_INTEGER, paramType)
 		require.NoError(t, err)
 
 		paramType, err = stmt.ParamType(3)

@@ -1,10 +1,5 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"encoding/binary"
 	"encoding/hex"
@@ -22,14 +17,14 @@ type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }
 
-const uuid_length = 16
+const uuidLength = 16
 
-type UUID [uuid_length]byte
+type UUID [uuidLength]byte
 
 func (u *UUID) Scan(v any) error {
 	switch val := v.(type) {
 	case []byte:
-		if len(val) != uuid_length {
+		if len(val) != uuidLength {
 			return u.Scan(string(val))
 		}
 		copy(u[:], val[:])
@@ -64,32 +59,32 @@ func (u *UUID) String() string {
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
-func hugeIntToUUID(hi C.duckdb_hugeint) []byte {
+func hugeIntToUUID(hugeInt apiHugeInt) []byte {
 	// Flip the sign bit of the signed hugeint to transform it to UUID bytes.
-	var val [uuid_length]byte
-	binary.BigEndian.PutUint64(val[:8], uint64(hi.upper)^1<<63)
-	binary.BigEndian.PutUint64(val[8:], uint64(hi.lower))
+	var val [uuidLength]byte
+	binary.BigEndian.PutUint64(val[:8], uint64(apiHugeIntGetUpper(&hugeInt))^1<<63)
+	binary.BigEndian.PutUint64(val[8:], apiHugeIntGetLower(&hugeInt))
 	return val[:]
 }
 
-func uuidToHugeInt(uuid UUID) C.duckdb_hugeint {
-	var dt C.duckdb_hugeint
+func uuidToHugeInt(uuid UUID) apiHugeInt {
+	var hugeInt apiHugeInt
 	upper := binary.BigEndian.Uint64(uuid[:8])
-	// flip the sign bit
-	upper = upper ^ (1 << 63)
-	dt.upper = C.int64_t(upper)
-	dt.lower = C.uint64_t(binary.BigEndian.Uint64(uuid[8:]))
-	return dt
+
+	// Flip the sign bit.
+	apiHugeIntSetUpper(&hugeInt, int64(upper^(1<<63)))
+	apiHugeIntSetLower(&hugeInt, binary.BigEndian.Uint64(uuid[8:]))
+	return hugeInt
 }
 
-func hugeIntToNative(hi C.duckdb_hugeint) *big.Int {
-	i := big.NewInt(int64(hi.upper))
+func hugeIntToNative(hugeInt apiHugeInt) *big.Int {
+	i := big.NewInt(apiHugeIntGetUpper(&hugeInt))
 	i.Lsh(i, 64)
-	i.Add(i, new(big.Int).SetUint64(uint64(hi.lower)))
+	i.Add(i, new(big.Int).SetUint64(apiHugeIntGetLower(&hugeInt)))
 	return i
 }
 
-func hugeIntFromNative(i *big.Int) (C.duckdb_hugeint, error) {
+func hugeIntFromNative(i *big.Int) (apiHugeInt, error) {
 	d := big.NewInt(1)
 	d.Lsh(d, 64)
 
@@ -98,13 +93,13 @@ func hugeIntFromNative(i *big.Int) (C.duckdb_hugeint, error) {
 	q.DivMod(i, d, r)
 
 	if !q.IsInt64() {
-		return C.duckdb_hugeint{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
+		return apiHugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
 	}
 
-	return C.duckdb_hugeint{
-		lower: C.uint64_t(r.Uint64()),
-		upper: C.int64_t(q.Int64()),
-	}, nil
+	var hugeInt apiHugeInt
+	apiHugeIntSetUpper(&hugeInt, q.Int64())
+	apiHugeIntSetLower(&hugeInt, r.Uint64())
+	return hugeInt, nil
 }
 
 type Map map[any]any
@@ -131,6 +126,14 @@ type Interval struct {
 	Days   int32 `json:"days"`
 	Months int32 `json:"months"`
 	Micros int64 `json:"micros"`
+}
+
+func (i *Interval) getAPIInterval() apiInterval {
+	var interval apiInterval
+	apiIntervalSetMonths(&interval, i.Months)
+	apiIntervalSetDays(&interval, i.Days)
+	apiIntervalSetMicros(&interval, i.Micros)
+	return interval
 }
 
 // Use as the `Scanner` type for any composite types (maps, lists, structs)
@@ -164,7 +167,7 @@ func (d *Decimal) Float64() float64 {
 }
 
 func (d *Decimal) String() string {
-	// Get the sign, and return early if zero
+	// Get the sign, and return early, if zero.
 	if d.Value.Sign() == 0 {
 		return "0"
 	}
@@ -232,26 +235,25 @@ func getTSTicks[T any](t Type, val T) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getCTimestamp[T any](t Type, val T) (C.duckdb_timestamp, error) {
-	var ts C.duckdb_timestamp
+func getAPITimestamp[T any](t Type, val T) (apiTimestamp, error) {
+	var ts apiTimestamp
 	ticks, err := getTSTicks(t, val)
 	if err != nil {
 		return ts, err
 	}
 
-	ts.micros = C.int64_t(ticks)
+	apiTimestampSetMicros(&ts, ticks)
 	return ts, nil
 }
 
-func getCDate[T any](val T) (C.duckdb_date, error) {
-	var date C.duckdb_date
+func getAPIDate[T any](val T) (apiDate, error) {
+	var date apiDate
 	ti, err := castToTime(val)
 	if err != nil {
 		return date, err
 	}
 
-	days := int32(ti.Unix() / secondsPerDay)
-	date.days = C.int32_t(days)
+	apiDateSetDays(&date, int32(ti.Unix()/secondsPerDay))
 	return date, nil
 }
 

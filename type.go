@@ -1,51 +1,46 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 // Type wraps the corresponding DuckDB type enum.
-type Type C.duckdb_type
+type Type apiType
 
 const (
-	TYPE_INVALID      Type = C.DUCKDB_TYPE_INVALID
-	TYPE_BOOLEAN      Type = C.DUCKDB_TYPE_BOOLEAN
-	TYPE_TINYINT      Type = C.DUCKDB_TYPE_TINYINT
-	TYPE_SMALLINT     Type = C.DUCKDB_TYPE_SMALLINT
-	TYPE_INTEGER      Type = C.DUCKDB_TYPE_INTEGER
-	TYPE_BIGINT       Type = C.DUCKDB_TYPE_BIGINT
-	TYPE_UTINYINT     Type = C.DUCKDB_TYPE_UTINYINT
-	TYPE_USMALLINT    Type = C.DUCKDB_TYPE_USMALLINT
-	TYPE_UINTEGER     Type = C.DUCKDB_TYPE_UINTEGER
-	TYPE_UBIGINT      Type = C.DUCKDB_TYPE_UBIGINT
-	TYPE_FLOAT        Type = C.DUCKDB_TYPE_FLOAT
-	TYPE_DOUBLE       Type = C.DUCKDB_TYPE_DOUBLE
-	TYPE_TIMESTAMP    Type = C.DUCKDB_TYPE_TIMESTAMP
-	TYPE_DATE         Type = C.DUCKDB_TYPE_DATE
-	TYPE_TIME         Type = C.DUCKDB_TYPE_TIME
-	TYPE_INTERVAL     Type = C.DUCKDB_TYPE_INTERVAL
-	TYPE_HUGEINT      Type = C.DUCKDB_TYPE_HUGEINT
-	TYPE_UHUGEINT     Type = C.DUCKDB_TYPE_UHUGEINT
-	TYPE_VARCHAR      Type = C.DUCKDB_TYPE_VARCHAR
-	TYPE_BLOB         Type = C.DUCKDB_TYPE_BLOB
-	TYPE_DECIMAL      Type = C.DUCKDB_TYPE_DECIMAL
-	TYPE_TIMESTAMP_S  Type = C.DUCKDB_TYPE_TIMESTAMP_S
-	TYPE_TIMESTAMP_MS Type = C.DUCKDB_TYPE_TIMESTAMP_MS
-	TYPE_TIMESTAMP_NS Type = C.DUCKDB_TYPE_TIMESTAMP_NS
-	TYPE_ENUM         Type = C.DUCKDB_TYPE_ENUM
-	TYPE_LIST         Type = C.DUCKDB_TYPE_LIST
-	TYPE_STRUCT       Type = C.DUCKDB_TYPE_STRUCT
-	TYPE_MAP          Type = C.DUCKDB_TYPE_MAP
-	TYPE_ARRAY        Type = C.DUCKDB_TYPE_ARRAY
-	TYPE_UUID         Type = C.DUCKDB_TYPE_UUID
-	TYPE_UNION        Type = C.DUCKDB_TYPE_UNION
-	TYPE_BIT          Type = C.DUCKDB_TYPE_BIT
-	TYPE_TIME_TZ      Type = C.DUCKDB_TYPE_TIME_TZ
-	TYPE_TIMESTAMP_TZ Type = C.DUCKDB_TYPE_TIMESTAMP_TZ
-	TYPE_ANY          Type = C.DUCKDB_TYPE_ANY
-	TYPE_VARINT       Type = C.DUCKDB_TYPE_VARINT
-	TYPE_SQLNULL      Type = C.DUCKDB_TYPE_SQLNULL
+	TYPE_INVALID      = Type(apiTypeInvalid)
+	TYPE_BOOLEAN      = Type(apiTypeBoolean)
+	TYPE_TINYINT      = Type(apiTypeTinyInt)
+	TYPE_SMALLINT     = Type(apiTypeSmallInt)
+	TYPE_INTEGER      = Type(apiTypeInteger)
+	TYPE_BIGINT       = Type(apiTypeBigInt)
+	TYPE_UTINYINT     = Type(apiTypeUTinyInt)
+	TYPE_USMALLINT    = Type(apiTypeUSmallInt)
+	TYPE_UINTEGER     = Type(apiTypeUInteger)
+	TYPE_UBIGINT      = Type(apiTypeUBigInt)
+	TYPE_FLOAT        = Type(apiTypeFloat)
+	TYPE_DOUBLE       = Type(apiTypeDouble)
+	TYPE_TIMESTAMP    = Type(apiTypeTimestamp)
+	TYPE_DATE         = Type(apiTypeDate)
+	TYPE_TIME         = Type(apiTypeTime)
+	TYPE_INTERVAL     = Type(apiTypeInterval)
+	TYPE_HUGEINT      = Type(apiTypeHugeInt)
+	TYPE_UHUGEINT     = Type(apiTypeUHugeInt)
+	TYPE_VARCHAR      = Type(apiTypeVarchar)
+	TYPE_BLOB         = Type(apiTypeBlob)
+	TYPE_DECIMAL      = Type(apiTypeDecimal)
+	TYPE_TIMESTAMP_S  = Type(apiTypeTimestampS)
+	TYPE_TIMESTAMP_MS = Type(apiTypeTimestampMS)
+	TYPE_TIMESTAMP_NS = Type(apiTypeTimestampNS)
+	TYPE_ENUM         = Type(apiTypeEnum)
+	TYPE_LIST         = Type(apiTypeList)
+	TYPE_STRUCT       = Type(apiTypeStruct)
+	TYPE_MAP          = Type(apiTypeMap)
+	TYPE_ARRAY        = Type(apiTypeArray)
+	TYPE_UUID         = Type(apiTypeUUID)
+	TYPE_UNION        = Type(apiTypeUnion)
+	TYPE_BIT          = Type(apiTypeBit)
+	TYPE_TIME_TZ      = Type(apiTypeTimeTZ)
+	TYPE_TIMESTAMP_TZ = Type(apiTypeTimestampTZ)
+	TYPE_ANY          = Type(apiTypeAny)
+	TYPE_VARINT       = Type(apiTypeVarInt)
+	TYPE_SQLNULL      = Type(apiTypeSQLNull)
 )
 
 // FIXME: Implement support for these types.

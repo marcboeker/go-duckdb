@@ -13,7 +13,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest, macos-13]
+        os: [ubuntu-latest, macos-latest, windows-latest, macos-13, ubuntu-24.04-arm]
         go: ["1.23"]
       fail-fast: false
     steps:
@@ -30,7 +30,7 @@ jobs:
           retention-days: 1
 
   test_examples:
-    name: Test examples
+    name: Test Examples
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,16 +43,21 @@ jobs:
       - name: "Test examples"
         run: make examples
 
-  freebsd_amd64:
-    runs-on: ubuntu-latest
+  test-arrow:
+    name: Test Arrow
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+        go: [ "1.23" ]
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
-      - uses: vmactions/freebsd-vm@v1
+      - uses: actions/setup-go@v5
         with:
-          usesh: true
-          prepare: |
-            pkg install -y \
-              gmake \
-              git \
-              go
-          run: gmake test
+          go-version: ${{ matrix.go }}
+      - name: "Run arrow tests"
+        run: go test -v -race -count=1 -tags=duckdb_arrow

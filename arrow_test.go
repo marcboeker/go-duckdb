@@ -1,4 +1,4 @@
-//go:build !no_duckdb_arrow
+//go:build duckdb_arrow
 
 package duckdb
 
