@@ -24,8 +24,8 @@ func SetRowValue[T any](row Row, colIdx int, val T) error {
 	if projectedIdx < 0 || projectedIdx >= len(row.chunk.columns) {
 		return nil
 	}
-	vec := row.chunk.columns[projectedIdx]
-	return setVectorVal(&vec, row.r, val)
+	vec := &row.chunk.columns[projectedIdx]
+	return setVectorVal(vec, row.r, val)
 }
 
 // SetRowValue sets the value at colIdx to val. Returns an error on failure.
