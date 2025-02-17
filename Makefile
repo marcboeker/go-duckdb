@@ -94,3 +94,7 @@ deps.windows.amd64: duckdb
 		${AR} cr ../libduckdb_bundle.a *.obj
 
 	cp duckdb/build/release/libduckdb_bundle.a deps/windows_amd64/libduckdb.a
+
+duplicate.mapping:
+	cp mapping.go mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' mapping_${OS_ARCH}.go

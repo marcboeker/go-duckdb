@@ -10,8 +10,11 @@ jobs:
       - name: Duplicate Mappings
         shell: bash
         run: |
-          cp mapping.go mapping_darwin_amd64.go
-          sed -i '6s_.*_	bindings "github.com/duckdb/duckdb-go-bindings/darwin_amd64""_g' mapping.go
+          make duplicate.mapping OS_ARCH=darwin_amd64
+          make duplicate.mapping OS_ARCH=darwin_arm64
+          make duplicate.mapping OS_ARCH=linux_amd64
+          make duplicate.mapping OS_ARCH=linux_arm64
+          make duplicate.mapping OS_ARCH=windows_amd64
       - name: Push Duplicated Mappings
         uses: stefanzweifel/git-auto-commit-action@v5
         with:

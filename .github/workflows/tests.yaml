@@ -30,7 +30,7 @@ jobs:
           retention-days: 1
 
   test_examples:
-    name: Test examples
+    name: Test Examples
     runs-on: ubuntu-latest
     defaults:
       run:
