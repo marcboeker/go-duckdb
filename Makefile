@@ -101,3 +101,10 @@ duplicate.mapping:
   	sed -i '' 's:duckdb_use_lib:!duckdb_use_lib:g' mapping_${OS_ARCH}.go && \
   	sed -i '' 's:duckdb_use_static_lib:!duckdb_use_static_lib:g' mapping_${OS_ARCH}.go && \
   	sed -i '' 's:\|:\&:g' mapping_${OS_ARCH}.go
+
+duplicate.arrow.mapping:
+	cp arrow_mapping.go arrow_mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' arrow_mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:duckdb_use_lib:!duckdb_use_lib:g' arrow_mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:duckdb_use_static_lib:!duckdb_use_static_lib:g' arrow_mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:\|:\&:g' arrow_mapping_${OS_ARCH}.go

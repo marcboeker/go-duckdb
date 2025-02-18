@@ -160,10 +160,6 @@ type (
 	apiBindInfo            = bindings.BindInfo
 	apiInitInfo            = bindings.InitInfo
 	apiReplacementScanInfo = bindings.ReplacementScanInfo
-	apiArrow               = bindings.Arrow
-	apiArrowStream         = bindings.ArrowStream
-	apiArrowSchema         = bindings.ArrowSchema
-	apiArrowArray          = bindings.ArrowArray
 )
 
 // ------------------------------------------------------------------ //
@@ -353,13 +349,6 @@ var (
 	apiResultGetChunk                          = bindings.ResultGetChunk
 	apiResultChunkCount                        = bindings.ResultChunkCount
 	apiValueInt64                              = bindings.ValueInt64
-	apiQueryArrowSchema                        = bindings.QueryArrowSchema
-	apiQueryArrowArray                         = bindings.QueryArrowArray
-	apiArrowRowCount                           = bindings.ArrowRowCount
-	apiQueryArrowError                         = bindings.QueryArrowError
-	apiDestroyArrow                            = bindings.DestroyArrow
-	apiExecutePreparedArrow                    = bindings.ExecutePreparedArrow
-	apiArrowScan                               = bindings.ArrowScan
 	apiValidityMaskValueIsValid                = bindings.ValidityMaskValueIsValid
 )
 
