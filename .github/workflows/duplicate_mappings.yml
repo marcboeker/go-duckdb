@@ -1,7 +1,6 @@
 name: Duplicate Mappings
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 jobs:
   update-mappings:
     runs-on: macos-latest
