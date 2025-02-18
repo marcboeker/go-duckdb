@@ -97,4 +97,7 @@ deps.windows.amd64: duckdb
 
 duplicate.mapping:
 	cp mapping.go mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' mapping_${OS_ARCH}.go
+  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:duckdb_use_lib:!duckdb_use_lib:g' mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:duckdb_use_static_lib:!duckdb_use_static_lib:g' mapping_${OS_ARCH}.go && \
+  	sed -i '' 's:\|:\&:g' mapping_${OS_ARCH}.go
