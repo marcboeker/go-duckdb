@@ -9,7 +9,7 @@ require (
 	github.com/duckdb/duckdb-go-bindings/darwin_arm64 v0.1.10
 	github.com/duckdb/duckdb-go-bindings/linux_amd64 v0.1.11
 	github.com/duckdb/duckdb-go-bindings/linux_arm64 v0.1.4
-	github.com/duckdb/duckdb-go-bindings/windows_amd64 v0.1.11
+	github.com/duckdb/duckdb-go-bindings/windows_amd64 v0.1.12
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
