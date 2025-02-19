@@ -3,7 +3,7 @@
 package duckdb
 
 import (
-	bindings "github.com/duckdb/duckdb-go-bindings/darwin_amd64"
+	bindings "github.com/duckdb/duckdb-go-bindings/darwin-amd64"
 )
 
 // ------------------------------------------------------------------ //

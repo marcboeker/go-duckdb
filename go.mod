@@ -4,12 +4,12 @@ go 1.23.4
 
 require (
 	github.com/apache/arrow-go/v18 v18.1.0
-	github.com/duckdb/duckdb-go-bindings v0.1.4
-	github.com/duckdb/duckdb-go-bindings/darwin_amd64 v0.1.10
-	github.com/duckdb/duckdb-go-bindings/darwin_arm64 v0.1.10
-	github.com/duckdb/duckdb-go-bindings/linux_amd64 v0.1.11
-	github.com/duckdb/duckdb-go-bindings/linux_arm64 v0.1.4
-	github.com/duckdb/duckdb-go-bindings/windows_amd64 v0.1.12
+	github.com/duckdb/duckdb-go-bindings v0.1.5
+	github.com/duckdb/duckdb-go-bindings/darwin-amd64 v0.1.0
+	github.com/duckdb/duckdb-go-bindings/darwin-arm64 v0.1.0
+	github.com/duckdb/duckdb-go-bindings/linux-amd64 v0.1.0
+	github.com/duckdb/duckdb-go-bindings/linux-arm64 v0.1.0
+	github.com/duckdb/duckdb-go-bindings/windows-amd64 v0.1.0
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
