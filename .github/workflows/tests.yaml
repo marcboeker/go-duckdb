@@ -6,7 +6,7 @@ on:
 
 jobs:
   go_test:
-    name: Test
+    name: Main Tests
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -21,17 +21,22 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-      - name: "Run tests"
-        run: make test
+      - name: Run Main Tests
+        run: |
+          go test -v -race -count=1 .
       - uses: actions/upload-artifact@v4
         with:
-          name: test
+          name: Upload Tests
           path: go-duckdb.test.exe
           retention-days: 1
 
   test_examples:
     name: Test Examples
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go: [ "1.23" ]
     defaults:
       run:
         shell: bash
@@ -40,7 +45,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-      - name: "Test examples"
+      - name: Test Examples
         run: make examples
 
   test-arrow:
@@ -51,7 +56,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
         go: [ "1.23" ]
       fail-fast: false
     steps:
@@ -59,5 +64,5 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-      - name: "Run arrow tests"
+      - name: Run Arrow Tests
         run: go test -v -race -count=1 -tags=duckdb_arrow
