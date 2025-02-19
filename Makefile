@@ -1,38 +1,10 @@
-DUCKDB_REPO=https://github.com/duckdb/duckdb.git
-DUCKDB_BRANCH=v1.1.3
-
-examples:
+test.examples:
 	go run examples/appender/main.go
 	go run examples/json/main.go
 	go run examples/scalar_udf/main.go
 	go run examples/simple/main.go
 	go run examples/table_udf/main.go
 	go run examples/table_udf_parallel/main.go
-
-.PHONY: test
-test:
-	go test -v -race -count=1 .
-
-.PHONY: deps.header
-deps.header:
-	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
-	cp duckdb/src/include/duckdb.h duckdb.h
-
-.PHONY: duckdb
-duckdb:
-	rm -rf duckdb
-	git clone -b ${DUCKDB_BRANCH} --depth 1 ${DUCKDB_REPO}
-
-DUCKDB_COMMON_BUILD_FLAGS := BUILD_SHELL=0 BUILD_UNITTESTS=0 DUCKDB_PLATFORM=any ENABLE_EXTENSION_AUTOLOADING=1 ENABLE_EXTENSION_AUTOINSTALL=1 BUILD_EXTENSIONS="json"
-
-.PHONY: deps.freebsd.amd64
-deps.freebsd.amd64: duckdb
-	if [ "$(shell uname -s | tr '[:upper:]' '[:lower:]')" != "freebsd" ]; then echo "Error: must run build on freebsd"; false; fi
-	mkdir -p deps/freebsd_amd64
-
-	cd duckdb && \
-	CFLAGS="-O3" CXXFLAGS="-O3" ${DUCKDB_COMMON_BUILD_FLAGS} gmake bundle-library -j 2
-	cp duckdb/build/release/libduckdb_bundle.a deps/freebsd_amd64/libduckdb.a
 
 duplicate.mapping:
 	cp mapping.go mapping_${OS_ARCH}.go && \
