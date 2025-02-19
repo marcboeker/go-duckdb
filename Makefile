@@ -49,3 +49,9 @@ duplicate.arrow.mapping:
   	sed -i '' 's:\|:\&:g' arrow_mapping_${OS_ARCH}.go && \
   	sed -i '' 's:(!:!:g' arrow_mapping_${OS_ARCH}.go && \
   	sed -i '' 's:b):b:g' arrow_mapping_${OS_ARCH}.go
+
+test.dynamic.lib:
+	mkdir dynamic-dir && \
+	cd dynamic-dir && \
+	curl -OL https://github.com/duckdb/duckdb/releases/download/${VERSION}/${FILENAME}.zip && \
+	unzip ${FILENAME}.zip

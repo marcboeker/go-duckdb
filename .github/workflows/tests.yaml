@@ -24,11 +24,6 @@ jobs:
       - name: Run Main Tests
         run: |
           go test -v -race -count=1 .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Upload Tests
-          path: go-duckdb.test.exe
-          retention-days: 1
 
   test_examples:
     name: Test Examples
@@ -66,3 +61,35 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Run Arrow Tests
         run: go test -v -race -count=1 -tags=duckdb_arrow
+
+  test-dynamic-lib:
+    name: Dynamic Lib Tests
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      matrix:
+        include:
+          - os: "macos-13"
+            filename: "libduckdb-osx-universal"
+            filepath: "DYLD_LIBRARY_PATH"
+          - os: "macos-14"
+            filename: "libduckdb-osx-universal"
+            filepath: "DYLD_LIBRARY_PATH"
+          - os: "ubuntu-latest"
+            filename: "libduckdb-linux-amd64"
+            filepath: "LD_LIBRARY_PATH"
+          - os: "ubuntu-24.04-arm"
+            filename: "libduckdb-linux-aarch64"
+            filepath: "LD_LIBRARY_PATH"
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+      - name: Run Dynamic Lib Tests
+        run: |
+          make test.dynamic.lib FILENAME=${{ matrix.filename }}
+          CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L${SRCDIR}dynamic-dir/" ${{ matrix.filepath }}=${SRCDIR}dynamic-dir/ go test
