@@ -93,7 +93,6 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 	for i, f := range functions {
 		function, err := createScalarFunc(name, f)
 		if err != nil {
-			apiDestroyScalarFunction(&function)
 			apiDestroyScalarFunctionSet(&set)
 			return getError(errAPI, err)
 		}
@@ -254,9 +253,11 @@ func createScalarFunc(name string, f ScalarFunc) (apiScalarFunction, error) {
 	// Configure the scalar function.
 	config := f.Config()
 	if err := registerInputParams(config, function); err != nil {
+		apiDestroyScalarFunction(&function)
 		return function, err
 	}
 	if err := registerResultParams(config, function); err != nil {
+		apiDestroyScalarFunction(&function)
 		return function, err
 	}
 	if config.SpecialNullHandling {

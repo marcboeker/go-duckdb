@@ -373,9 +373,11 @@ func TestErrScalarUDF(t *testing.T) {
 
 	db, err := sql.Open("duckdb", "")
 	require.NoError(t, err)
+	defer closeDB(t, db)
 
 	c, err := db.Conn(context.Background())
 	require.NoError(t, err)
+	defer closeConn(t, c)
 
 	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
@@ -432,5 +434,12 @@ func TestErrScalarUDF(t *testing.T) {
 	var errClosedConUDF *simpleSUDF
 	err = RegisterScalarUDF(c, "closed_con", errClosedConUDF)
 	require.ErrorContains(t, err, sql.ErrConnDone.Error())
+}
+
+func closeDB(t *testing.T, db *sql.DB) {
 	require.NoError(t, db.Close())
+}
+
+func closeConn(t *testing.T, conn *sql.Conn) {
+	require.NoError(t, conn.Close())
 }

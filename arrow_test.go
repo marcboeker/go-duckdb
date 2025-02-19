@@ -1,5 +1,3 @@
-//go:build duckdb_arrow
-
 package duckdb
 
 import (
@@ -16,28 +14,27 @@ import (
 
 func TestArrow(t *testing.T) {
 	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
+	counters := &callCounters{}
+	defer verifyCounters(t, counters)
 
-	createFooTable(db, t)
+	db, _ := openDbWrapper(t, counters, false, ``)
+	defer closeDbWrapper(t, counters, db)
 
-	conn, err := db.Conn(context.Background())
-	require.NoError(t, err)
-	defer conn.Close()
+	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
+	conn := openConnWrapper(t, counters, db, context.Background())
+	defer closeConnWrapper(t, counters, conn)
 
 	t.Run("select series", func(t *testing.T) {
-		c, err := NewConnector("", nil)
-		require.NoError(t, err)
-		defer c.Close()
+		c := newConnectorWrapper(t, counters, ``, nil)
+		defer closeConnectorWrapper(t, counters, c)
 
-		conn, err := c.Connect(context.Background())
-		require.NoError(t, err)
-		defer conn.Close()
+		innerConn := openConnectorConnWrapper(t, counters, c)
+		defer closeDriverConnWrapper(t, counters, &innerConn)
 
-		ar, err := NewArrowFromConn(conn)
+		ar, err := NewArrowFromConn(innerConn)
 		require.NoError(t, err)
 
-		rdr, err := ar.QueryContext(context.Background(), "SELECT * FROM generate_series(1, 10)")
+		rdr, err := ar.QueryContext(context.Background(), `SELECT * FROM generate_series(1, 10)`)
 		require.NoError(t, err)
 		defer rdr.Release()
 
@@ -46,23 +43,20 @@ func TestArrow(t *testing.T) {
 			require.Equal(t, int64(10), rec.NumRows())
 			require.NoError(t, err)
 		}
-
 		require.NoError(t, rdr.Err())
 	})
 
 	t.Run("select long series", func(t *testing.T) {
-		c, err := NewConnector("", nil)
-		require.NoError(t, err)
-		defer c.Close()
+		c := newConnectorWrapper(t, counters, ``, nil)
+		defer closeConnectorWrapper(t, counters, c)
 
-		conn, err := c.Connect(context.Background())
-		require.NoError(t, err)
-		defer conn.Close()
+		innerConn := openConnectorConnWrapper(t, counters, c)
+		defer closeDriverConnWrapper(t, counters, &innerConn)
 
-		ar, err := NewArrowFromConn(conn)
+		ar, err := NewArrowFromConn(innerConn)
 		require.NoError(t, err)
 
-		rdr, err := ar.QueryContext(context.Background(), "SELECT * FROM generate_series(1, 10000)")
+		rdr, err := ar.QueryContext(context.Background(), `SELECT * FROM generate_series(1, 10000)`)
 		require.NoError(t, err)
 		defer rdr.Release()
 
@@ -71,24 +65,22 @@ func TestArrow(t *testing.T) {
 			rec := rdr.Record()
 			totalRows += rec.NumRows()
 		}
-
 		require.Equal(t, int64(10000), totalRows)
-
 		require.NoError(t, rdr.Err())
 	})
 
 	t.Run("query table and filter results", func(t *testing.T) {
-		err = conn.Raw(func(driverConn any) error {
-			conn, ok := driverConn.(driver.Conn)
+		err := conn.Raw(func(driverConn any) error {
+			innerConn, ok := driverConn.(driver.Conn)
 			require.True(t, ok)
 
-			ar, err := NewArrowFromConn(conn)
+			ar, err := NewArrowFromConn(innerConn)
 			require.NoError(t, err)
 
-			_, err = db.ExecContext(context.Background(), "INSERT INTO foo (bar, baz) VALUES ('lala', 2), ('dada', 3)")
+			_, err = db.ExecContext(context.Background(), `INSERT INTO foo (bar, baz) VALUES ('lala', 2), ('dada', 3)`)
 			require.NoError(t, err)
 
-			reader, err := ar.QueryContext(context.Background(), "SELECT bar, baz FROM foo WHERE baz > ?", 1)
+			reader, err := ar.QueryContext(context.Background(), `SELECT bar, baz FROM foo WHERE baz > ?`, 1)
 			require.NoError(t, err)
 			defer reader.Release()
 
@@ -106,13 +98,13 @@ func TestArrow(t *testing.T) {
 
 	t.Run("query error", func(t *testing.T) {
 		err := conn.Raw(func(driverConn any) error {
-			conn, ok := driverConn.(driver.Conn)
+			innerConn, ok := driverConn.(driver.Conn)
 			require.True(t, ok)
 
-			ar, err := NewArrowFromConn(conn)
+			ar, err := NewArrowFromConn(innerConn)
 			require.NoError(t, err)
 
-			_, err = ar.QueryContext(context.Background(), "SELECT bar")
+			_, err = ar.QueryContext(context.Background(), `SELECT bar`)
 			require.Error(t, err)
 			return nil
 		})
@@ -120,15 +112,14 @@ func TestArrow(t *testing.T) {
 	})
 
 	t.Run("register arrow stream", func(t *testing.T) {
-		err = conn.Raw(func(driverConn any) error {
-			conn, ok := driverConn.(driver.Conn)
+		err := conn.Raw(func(driverConn any) error {
+			innerConn, ok := driverConn.(driver.Conn)
 			require.True(t, ok)
 
-			ar, err := NewArrowFromConn(conn)
+			ar, err := NewArrowFromConn(innerConn)
 			require.NoError(t, err)
 
 			pool := memory.NewGoAllocator()
-
 			schema := arrow.NewSchema(
 				[]arrow.Field{
 					{Name: "f1_i32", Type: arrow.PrimitiveTypes.Int32},
@@ -163,7 +154,7 @@ func TestArrow(t *testing.T) {
 			defer tr.Release()
 
 			ctx := context.Background()
-			_, err = db.ExecContext(ctx, "CREATE TABLE conflicting (i int, f double, s varchar)")
+			_, err = db.ExecContext(ctx, `CREATE TABLE conflicting (i INT, f DOUBLE, s VARCHAR)`)
 			require.NoError(t, err)
 
 			release, err := ar.RegisterView(tr, "conflicting")
@@ -175,22 +166,20 @@ func TestArrow(t *testing.T) {
 			require.NotNil(t, release)
 			defer release()
 
-			_, err = db.ExecContext(context.Background(), "CREATE TABLE dst AS SELECT * FROM arrow_table")
+			_, err = db.ExecContext(ctx, `CREATE TABLE dst AS SELECT * FROM arrow_table`)
 			require.NoError(t, err)
 
-			// Query the table to verify the data
-			rows, err := db.QueryContext(context.Background(), "SELECT * FROM dst")
-			require.NoError(t, err)
-			defer rows.Close()
+			// Query the table to verify the data.
+			res := queryContextWrapper(t, counters, db, ctx, `SELECT * FROM dst`)
+			defer closeRowsWrapper(t, counters, res)
 
 			i := 0
-			for rows.Next() {
+			for res.Next() {
 				i++
 				var f1 sql.NullInt32
 				var f2 float64
 				var f3 string
-				err = rows.Scan(&f1, &f2, &f3)
-				require.NoError(t, err)
+				require.NoError(t, res.Scan(&f1, &f2, &f3))
 
 				if i == 9 {
 					require.False(t, f1.Valid)
@@ -201,9 +190,8 @@ func TestArrow(t *testing.T) {
 				require.Equal(t, float64(i), f2)
 				require.Equal(t, string(rune('a'+i-1)), f3)
 			}
-			require.NoError(t, rows.Err())
+			require.NoError(t, res.Err())
 			require.Equal(t, 20, i)
-
 			return nil
 		})
 		require.NoError(t, err)
@@ -211,21 +199,22 @@ func TestArrow(t *testing.T) {
 }
 
 func TestArrowClosedConn(t *testing.T) {
-	db := openDB(t)
-	defer db.Close()
+	t.Parallel()
+	counters := &callCounters{}
+	defer verifyCounters(t, counters)
 
-	conn, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	db, _ := openDbWrapper(t, counters, false, ``)
+	defer closeDbWrapper(t, counters, db)
 
-	err = conn.Raw(func(driverConn any) error {
-		conn, ok := driverConn.(driver.Conn)
+	conn := openConnWrapper(t, counters, db, context.Background())
+	err := conn.Raw(func(driverConn any) error {
+		innerConn, ok := driverConn.(driver.Conn)
 		require.True(t, ok)
 
-		ar, err := NewArrowFromConn(conn)
+		ar, err := NewArrowFromConn(innerConn)
 		require.NoError(t, err)
 
 		pool := memory.NewGoAllocator()
-
 		schema := arrow.NewSchema(
 			[]arrow.Field{
 				{Name: "f1", Type: arrow.PrimitiveTypes.Int64},
@@ -249,13 +238,11 @@ func TestArrowClosedConn(t *testing.T) {
 		tr := array.NewTableReader(tbl, 5)
 		defer tr.Release()
 
-		err = conn.Close()
-		require.NoError(t, err)
+		closeConnWrapper(t, counters, conn)
 
 		release, err := ar.RegisterView(tr, "arrow_table")
 		require.ErrorIs(t, err, errClosedCon)
 		require.Nil(t, release)
-
 		return driver.ErrBadConn
 	})
 	require.Error(t, err)

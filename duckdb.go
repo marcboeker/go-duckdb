@@ -60,6 +60,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 
 	state := apiOpenExt(connStr, &db, config, &errMsg)
 	if apiState(state) == apiStateError {
+		apiClose(&db)
 		return nil, getError(errConnect, getDuckDBError(errMsg))
 	}
 
