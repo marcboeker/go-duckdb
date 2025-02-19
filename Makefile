@@ -55,3 +55,10 @@ test.dynamic.lib:
 	cd dynamic-dir && \
 	curl -OL https://github.com/duckdb/duckdb/releases/download/${VERSION}/${FILENAME}.zip && \
 	unzip ${FILENAME}.zip
+
+test.static.lib.darwin.arm64:
+	mkdir static-dir && \
+	cd static-dir && \
+	curl -OL https://github.com/duckdb/duckdb/releases/download/v1.2.0/static-lib-osx-arm64.zip && \
+	unzip static-lib-osx-arm64.zip && \
+	cp libduckdb_bundle.a libduckdb.a
