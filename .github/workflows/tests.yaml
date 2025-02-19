@@ -91,5 +91,5 @@ jobs:
           go-version: 1.23
       - name: Run Dynamic Lib Tests
         run: |
-          make test.dynamic.lib FILENAME=${{ matrix.filename }}
+          make test.dynamic.lib FILENAME=${{ matrix.filename }} VERSION=v1.2.0
           CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L${SRCDIR}dynamic-dir/" ${{ matrix.filepath }}=${SRCDIR}dynamic-dir/ go test
