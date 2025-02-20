@@ -25,41 +25,37 @@ func testError(t *testing.T, actual error, contains ...string) {
 }
 
 func TestErrConnect(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
 	t.Run(errParseDSN.Error(), func(t *testing.T) {
-		db, err := openDbWrapper(t, counters, true, `:mem ory:`)
-		defer closeDbWrapper(t, counters, db)
+		db, err := sql.Open(`duckdb`, `:mem ory:`)
+		defer closeDbWrapper(t, db)
 		testError(t, err, errParseDSN.Error())
 	})
 
 	t.Run(errConnect.Error(), func(t *testing.T) {
-		db, err := openDbWrapper(t, counters, true, `?readonly`)
-		defer closeDbWrapper(t, counters, db)
+		db, err := sql.Open(`duckdb`, `?readonly`)
+		defer closeDbWrapper(t, db)
 		testError(t, err, errConnect.Error())
 	})
 
 	t.Run(errSetConfig.Error(), func(t *testing.T) {
-		db, err := openDbWrapper(t, counters, true, `?threads=NaN`)
-		defer closeDbWrapper(t, counters, db)
+		db, err := sql.Open(`duckdb`, `?threads=NaN`)
+		defer closeDbWrapper(t, db)
 		testError(t, err, errSetConfig.Error())
 	})
 
 	t.Run("local config option", func(t *testing.T) {
-		db, err := openDbWrapper(t, counters, true, `?schema=main`)
-		defer closeDbWrapper(t, counters, db)
+		db, err := sql.Open(`duckdb`, `?schema=main`)
+		defer closeDbWrapper(t, db)
 		testError(t, err, errSetConfig.Error())
 	})
 }
 
 func TestErrNestedMap(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
+	db := openDbWrapper(t, ``)
 
 	var m Map
 	err := db.QueryRow(`SELECT MAP([MAP([1], [1]), MAP([2], [2])], ['a', 'e'])`).Scan(&m)
@@ -68,134 +64,134 @@ func TestErrNestedMap(t *testing.T) {
 }
 
 func TestErrAppender(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
 	t.Run(errInvalidCon.Error(), func(t *testing.T) {
 		var conn driver.Conn
-		a, err := newAppenderWrapper(t, counters, true, &conn, "", "test")
-		defer closeAppenderWrapper(t, counters, false, a)
+		a, err := NewAppenderFromConn(conn, "", "test")
+		defer closeAppenderWrapper(t, a)
 		testError(t, err, errInvalidCon.Error())
 	})
 
 	t.Run(errClosedCon.Error(), func(t *testing.T) {
-		c := newConnectorWrapper(t, counters, ``, nil)
-		defer closeConnectorWrapper(t, counters, c)
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
 
-		conn := openConnectorConnWrapper(t, counters, c)
-		closeDriverConnWrapper(t, counters, &conn)
+		conn := openDriverConnWrapper(t, c)
+		closeDriverConnWrapper(t, &conn)
 
-		a, err := newAppenderWrapper(t, counters, true, &conn, "", "test")
-		defer closeAppenderWrapper(t, counters, false, a)
+		a, err := NewAppenderFromConn(conn, "", "test")
+		defer closeAppenderWrapper(t, a)
 		testError(t, err, errClosedCon.Error())
 	})
 
 	t.Run(errAppenderCreation.Error(), func(t *testing.T) {
-		c := newConnectorWrapper(t, counters, ``, nil)
-		defer closeConnectorWrapper(t, counters, c)
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
 
-		conn := openConnectorConnWrapper(t, counters, c)
-		defer closeDriverConnWrapper(t, counters, &conn)
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
 
-		a, err := newAppenderWrapper(t, counters, true, &conn, "", "does_not_exist")
-		defer closeAppenderWrapper(t, counters, false, a)
+		a, err := NewAppenderFromConn(conn, "", "does_not_exist")
+		defer closeAppenderWrapper(t, a)
 		testError(t, err, errAppenderCreation.Error())
 	})
 
 	t.Run(errAppenderDoubleClose.Error(), func(t *testing.T) {
-		c := newConnectorWrapper(t, counters, ``, nil)
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
 		_, err := sql.OpenDB(c).Exec(`CREATE TABLE tbl (i INTEGER)`)
 		require.NoError(t, err)
-		conn := openConnectorConnWrapper(t, counters, c)
 
-		a, _ := newAppenderWrapper(t, counters, false, &conn, "", "tbl")
-		cleanupAppender(t, counters, c, conn, a)
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
+
+		a, err := NewAppenderFromConn(conn, "", "tbl")
+		closeAppenderWrapper(t, a)
 
 		err = a.Close()
 		testError(t, err, errAppenderDoubleClose.Error())
 	})
 
 	t.Run(unsupportedTypeErrMsg, func(t *testing.T) {
-		c := newConnectorWrapper(t, counters, ``, nil)
-		defer closeConnectorWrapper(t, counters, c)
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
 
 		_, err := sql.OpenDB(c).Exec(`CREATE TABLE test (bit_col BIT)`)
 		require.NoError(t, err)
 
-		conn := openConnectorConnWrapper(t, counters, c)
-		defer closeDriverConnWrapper(t, counters, &conn)
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
 
-		a, err := newAppenderWrapper(t, counters, true, &conn, "", "test")
-		defer closeAppenderWrapper(t, counters, false, a)
+		a, err := NewAppenderFromConn(conn, "", "test")
+		defer closeAppenderWrapper(t, a)
 		testError(t, err, errAppenderCreation.Error(), unsupportedTypeErrMsg)
 	})
 
 	t.Run(columnCountErrMsg, func(t *testing.T) {
-		c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (a VARCHAR, b VARCHAR)`)
-		defer cleanupAppender(t, counters, c, conn, a)
+		c, conn, a := prepareAppender(t, `CREATE TABLE test (a VARCHAR, b VARCHAR)`)
+		defer cleanupAppender(t, c, conn, a)
 		err := a.AppendRow("hello")
 		testError(t, err, errAppenderAppendRow.Error(), columnCountErrMsg)
 	})
 
 	t.Run(errAppenderAppendAfterClose.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (str VARCHAR)`)
-		_ = closeAppenderWrapper(t, counters, false, a)
-		defer closeDriverConnWrapper(t, counters, &conn)
-		defer closeConnectorWrapper(t, counters, c)
+		c, conn, a := prepareAppender(t, `CREATE TABLE test (str VARCHAR)`)
+		closeAppenderWrapper(t, a)
+		defer closeDriverConnWrapper(t, &conn)
+		defer closeConnectorWrapper(t, c)
 
 		err := a.AppendRow("hello")
 		testError(t, err, errAppenderAppendAfterClose.Error())
 	})
 
 	t.Run(errAppenderFlush.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
-		defer closeDriverConnWrapper(t, counters, &conn)
-		defer closeConnectorWrapper(t, counters, c)
+		c, conn, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
+		defer closeDriverConnWrapper(t, &conn)
+		defer closeConnectorWrapper(t, c)
 
 		require.NoError(t, a.AppendRow(int32(1)))
 		require.NoError(t, a.AppendRow(int32(1)))
 		err := a.Flush()
 		testError(t, err, errAppenderFlush.Error())
 
-		err = closeAppenderWrapper(t, counters, true, a)
+		err = a.Close()
 		testError(t, err, errAppenderClose.Error())
 	})
 
 	t.Run(errAppenderClose.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
-		defer closeDriverConnWrapper(t, counters, &conn)
-		defer closeConnectorWrapper(t, counters, c)
+		c, conn, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
+		defer closeDriverConnWrapper(t, &conn)
+		defer closeConnectorWrapper(t, c)
 
 		require.NoError(t, a.AppendRow(int32(1)))
 		require.NoError(t, a.AppendRow(int32(1)))
 
-		err := closeAppenderWrapper(t, counters, true, a)
+		err := a.Close()
 		testError(t, err, errAppenderClose.Error())
 	})
 
 	t.Run(errUnsupportedMapKeyType.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
-		defer cleanupAppender(t, counters, c, conn, a)
+		c, conn, a := prepareAppender(t, `CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
+		defer cleanupAppender(t, c, conn, a)
 		err := a.AppendRow(nil)
 		testError(t, err, errAppenderAppendRow.Error(), errUnsupportedMapKeyType.Error())
 	})
 
 	t.Run(invalidInputErrMsg, func(t *testing.T) {
-		c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (col INT[3])`)
-		defer cleanupAppender(t, counters, c, conn, a)
+		c, conn, a := prepareAppender(t, `CREATE TABLE test (col INT[3])`)
+		defer cleanupAppender(t, c, conn, a)
 		err := a.AppendRow([]int32{1, 2})
 		testError(t, err, errAppenderAppendRow.Error(), invalidInputErrMsg)
 	})
 }
 
 func TestErrAppend(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	c, conn, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow("hello", "world")
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -204,12 +200,10 @@ func TestErrAppend(t *testing.T) {
 }
 
 func TestErrAppendDecimal(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (d DECIMAL(8, 2))`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	c, conn, a := prepareAppender(t, `CREATE TABLE test (d DECIMAL(8, 2))`)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow(Decimal{Width: 9, Scale: 2})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -218,27 +212,23 @@ func TestErrAppendDecimal(t *testing.T) {
 }
 
 func TestErrAppendEnum(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, testTypesEnumSQL+";"+`CREATE TABLE test (e my_enum)`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	c, conn, a := prepareAppender(t, testTypesEnumSQL+";"+`CREATE TABLE test (e my_enum)`)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow("3")
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
 }
 
 func TestErrAppendSimpleStruct(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `
+	c, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			simple_struct STRUCT(A INT, B VARCHAR)
 		)`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow(1)
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -270,42 +260,36 @@ func TestErrAppendSimpleStruct(t *testing.T) {
 }
 
 func TestErrAppendDuplicateStruct(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `
+	c, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			duplicate_struct STRUCT(Duplicate INT)
 		)`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow(duplicateKeyStruct{1, 2})
 	testError(t, err, errAppenderAppendRow.Error(), duplicateNameErrMsg)
 }
 
 func TestErrAppendStruct(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `
+	c, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			mix STRUCT(a STRUCT(L VARCHAR[]), B STRUCT(L INT[])[])
 		)`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow(simpleStruct{1, "hello"})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
 }
 
 func TestErrAppendList(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `CREATE TABLE test(intSlice INT[])`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	c, conn, a := prepareAppender(t, `CREATE TABLE test(intSlice INT[])`)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow([]string{"foo", "bar", "baz"})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -314,12 +298,10 @@ func TestErrAppendList(t *testing.T) {
 }
 
 func TestErrAppendStructWithList(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (struct_with_list STRUCT(L INT[]))`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	c, conn, a := prepareAppender(t, `CREATE TABLE test (struct_with_list STRUCT(L INT[]))`)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow([]int32{1, 2, 3})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -328,27 +310,23 @@ func TestErrAppendStructWithList(t *testing.T) {
 }
 
 func TestErrAppendNestedStruct(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `
+	c, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			wrapped_simple_struct STRUCT(a VARCHAR, B STRUCT(A INT, B VARCHAR)),
 		)`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow(simpleStruct{1, "hello"})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
 }
 
 func TestErrAppendNestedList(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, counters, `CREATE TABLE test(int_slice INT[][][])`)
-	defer cleanupAppender(t, counters, c, conn, a)
+	c, conn, a := prepareAppender(t, `CREATE TABLE test(int_slice INT[][][])`)
+	defer cleanupAppender(t, c, conn, a)
 
 	err := a.AppendRow([]int32{1, 2, 3})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -359,15 +337,13 @@ func TestErrAppendNestedList(t *testing.T) {
 }
 
 func TestErrAppenderTSConversion(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
 	testCases := []string{"TIMESTAMP_NS", "TIMESTAMP", "TIMESTAMPTZ"}
 	for _, tc := range testCases {
 		t.Run(tc+" conversion error", func(t *testing.T) {
-			c, conn, a := prepareAppender(t, counters, `CREATE TABLE test (t `+tc+`)`)
-			defer cleanupAppender(t, counters, c, conn, a)
+			c, conn, a := prepareAppender(t, `CREATE TABLE test (t `+tc+`)`)
+			defer cleanupAppender(t, c, conn, a)
 
 			tsLess := time.Date(-290407, time.January, 1, 15, 0o4, 5, 123456, time.UTC)
 			err := a.AppendRow(tsLess)
@@ -381,8 +357,6 @@ func TestErrAppenderTSConversion(t *testing.T) {
 }
 
 func TestErrAPISetValue(t *testing.T) {
-	t.Parallel()
-
 	var chunk DataChunk
 	err := chunk.SetValue(1, 42, "hello")
 	testError(t, err, errAPI.Error(), columnCountErrMsg)
@@ -391,15 +365,13 @@ func TestErrAPISetValue(t *testing.T) {
 }
 
 func TestDuckDBErrors(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, err := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	createTable(t, db, `CREATE TABLE duckdb_error_test(bar VARCHAR UNIQUE, baz INT32, u_1 UNION("string" VARCHAR))`)
-	_, err = db.Exec(`INSERT INTO duckdb_error_test(bar, baz) VALUES ('bar', 0)`)
+	_, err := db.Exec(`INSERT INTO duckdb_error_test(bar, baz) VALUES ('bar', 0)`)
 	require.NoError(t, err)
 
 	testCases := []struct {

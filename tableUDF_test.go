@@ -2,7 +2,6 @@ package duckdb
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"math/big"
 	"sync"
@@ -633,7 +632,7 @@ func (udf *chunkIncTableUDF) Cardinality() *CardinalityInfo {
 }
 
 func TestTableUDF(t *testing.T) {
-	t.Parallel()
+	defer apiVerifyAllocationCounters()
 
 	for _, udf := range rowTableUDFs {
 		t.Run(udf.name, func(t *testing.T) {
@@ -655,17 +654,18 @@ func TestTableUDF(t *testing.T) {
 }
 
 func singleTableUDF[T TableFunction](t *testing.T, fun tableUDFTest[T]) {
-	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	require.NoError(t, err)
+	db := openDbWrapper(t, `?access_mode=READ_WRITE`)
+	defer closeDbWrapper(t, db)
 
-	con, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
-	err = RegisterTableUDF(con, fun.name, fun.udf.GetFunction())
+	err := RegisterTableUDF(conn, fun.name, fun.udf.GetFunction())
 	require.NoError(t, err)
 
 	res, err := db.QueryContext(context.Background(), fmt.Sprintf(fun.query, fun.name))
 	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
 
 	values := fun.udf.GetTypes()
 	args := make([]interface{}, len(values))
@@ -676,105 +676,89 @@ func singleTableUDF[T TableFunction](t *testing.T, fun tableUDFTest[T]) {
 	count := 0
 	for r := 0; res.Next(); r++ {
 		require.NoError(t, res.Scan(args...))
-
 		for i, value := range values {
 			expected := fun.udf.GetValue(r, i)
 			require.Equal(t, expected, value, "incorrect value")
 		}
 		count++
 	}
-
 	require.Equal(t, count, fun.resultCount, "result count did not match the expected count")
-	require.NoError(t, res.Close())
-	require.NoError(t, con.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestErrTableUDF(t *testing.T) {
-	t.Parallel()
+	defer apiVerifyAllocationCounters()
 
-	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	require.NoError(t, err)
+	db := openDbWrapper(t, `?access_mode=READ_WRITE`)
+	defer closeDbWrapper(t, db)
 
-	con, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	// Empty name.
 	var emptyNameUDF incTableUDF
-	err = RegisterTableUDF(con, "", emptyNameUDF.GetFunction())
+	err := RegisterTableUDF(conn, "", emptyNameUDF.GetFunction())
 	testError(t, err, errAPI.Error(), errTableUDFCreate.Error(), errTableUDFNoName.Error())
 
 	// FIXME: add more error tests.
-
-	require.NoError(t, con.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestErrTableUDFUnsupportedType(t *testing.T) {
-	t.Parallel()
+	defer apiVerifyAllocationCounters()
 
 	for _, udf := range unsupportedTypeUDFs {
 		t.Run(udf.name, func(t *testing.T) {
-			db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
+			db := openDbWrapper(t, `?access_mode=READ_WRITE`)
+			conn := openConnWrapper(t, db, context.Background())
+
+			err := RegisterTableUDF(conn, udf.name, udf.udf.GetFunction())
 			require.NoError(t, err)
 
-			con, err := db.Conn(context.Background())
-			require.NoError(t, err)
-
-			err = RegisterTableUDF(con, udf.name, udf.udf.GetFunction())
-			require.NoError(t, err)
-
-			_, err = db.QueryContext(context.Background(), fmt.Sprintf(udf.query, udf.name))
+			res, err := db.QueryContext(context.Background(), fmt.Sprintf(udf.query, udf.name))
 			require.Contains(t, err.Error(), unsupportedTypeErrMsg)
 
-			require.NoError(t, con.Close())
-			require.NoError(t, db.Close())
+			closeRowsWrapper(t, res)
+			closeConnWrapper(t, conn)
+			closeDbWrapper(t, db)
 		})
 	}
 }
 
 func BenchmarkRowTableUDF(b *testing.B) {
 	b.StopTimer()
-	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	require.NoError(b, err)
+	db := openDbWrapper(b, `?access_mode=READ_WRITE`)
+	defer closeDbWrapper(b, db)
 
-	con, err := db.Conn(context.Background())
-	require.NoError(b, err)
+	conn := openConnWrapper(b, db, context.Background())
+	defer closeConnWrapper(b, conn)
 
 	var fun incTableUDF
-	err = RegisterTableUDF(con, "whoo", fun.GetFunction())
+	err := RegisterTableUDF(conn, "whoo", fun.GetFunction())
 	require.NoError(b, err)
 
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
 		res, errQuery := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
 		require.NoError(b, errQuery)
-		require.NoError(b, res.Close())
+		closeRowsWrapper(b, res)
 	}
-
-	require.NoError(b, con.Close())
-	require.NoError(b, db.Close())
 }
 
 func BenchmarkChunkTableUDF(b *testing.B) {
 	b.StopTimer()
-	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	require.NoError(b, err)
+	db := openDbWrapper(b, `?access_mode=READ_WRITE`)
+	defer closeDbWrapper(b, db)
 
-	con, err := db.Conn(context.Background())
-	require.NoError(b, err)
+	conn := openConnWrapper(b, db, context.Background())
+	defer closeConnWrapper(b, conn)
 
 	var fun chunkIncTableUDF
-	err = RegisterTableUDF(con, "whoo", fun.GetFunction())
+	err := RegisterTableUDF(conn, "whoo", fun.GetFunction())
 	require.NoError(b, err)
 
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {
 		res, errQuery := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
 		require.NoError(b, errQuery)
-		require.NoError(b, res.Close())
+		closeRowsWrapper(b, res)
 	}
-
-	require.NoError(b, con.Close())
-	require.NoError(b, db.Close())
 }

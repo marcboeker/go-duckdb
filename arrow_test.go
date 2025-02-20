@@ -1,3 +1,5 @@
+//go:build duckdb_arrow
+
 package duckdb
 
 import (
@@ -13,23 +15,21 @@ import (
 )
 
 func TestArrow(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
-	conn := openConnWrapper(t, counters, db, context.Background())
-	defer closeConnWrapper(t, counters, conn)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	t.Run("select series", func(t *testing.T) {
-		c := newConnectorWrapper(t, counters, ``, nil)
-		defer closeConnectorWrapper(t, counters, c)
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
 
-		innerConn := openConnectorConnWrapper(t, counters, c)
-		defer closeDriverConnWrapper(t, counters, &innerConn)
+		innerConn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &innerConn)
 
 		ar, err := NewArrowFromConn(innerConn)
 		require.NoError(t, err)
@@ -47,11 +47,11 @@ func TestArrow(t *testing.T) {
 	})
 
 	t.Run("select long series", func(t *testing.T) {
-		c := newConnectorWrapper(t, counters, ``, nil)
-		defer closeConnectorWrapper(t, counters, c)
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
 
-		innerConn := openConnectorConnWrapper(t, counters, c)
-		defer closeDriverConnWrapper(t, counters, &innerConn)
+		innerConn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &innerConn)
 
 		ar, err := NewArrowFromConn(innerConn)
 		require.NoError(t, err)
@@ -170,8 +170,9 @@ func TestArrow(t *testing.T) {
 			require.NoError(t, err)
 
 			// Query the table to verify the data.
-			res := queryContextWrapper(t, counters, db, ctx, `SELECT * FROM dst`)
-			defer closeRowsWrapper(t, counters, res)
+			res, err := db.QueryContext(ctx, `SELECT * FROM dst`)
+			require.NoError(t, err)
+			defer closeRowsWrapper(t, res)
 
 			i := 0
 			for res.Next() {
@@ -199,14 +200,12 @@ func TestArrow(t *testing.T) {
 }
 
 func TestArrowClosedConn(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	conn := openConnWrapper(t, counters, db, context.Background())
+	conn := openConnWrapper(t, db, context.Background())
 	err := conn.Raw(func(driverConn any) error {
 		innerConn, ok := driverConn.(driver.Conn)
 		require.True(t, ok)
@@ -238,7 +237,7 @@ func TestArrowClosedConn(t *testing.T) {
 		tr := array.NewTableReader(tbl, 5)
 		defer tr.Release()
 
-		closeConnWrapper(t, counters, conn)
+		closeConnWrapper(t, conn)
 
 		release, err := ar.RegisterView(tr, "arrow_table")
 		require.ErrorIs(t, err, errClosedCon)

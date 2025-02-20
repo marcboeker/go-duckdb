@@ -9,12 +9,10 @@ import (
 )
 
 func TestOpenSQLite(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, `sqlite:testdata/pets.sqlite`)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, `sqlite:testdata/pets.sqlite`)
+	defer closeDbWrapper(t, db)
 
 	var species string
 	res := db.QueryRow(`SELECT species FROM pets WHERE id = 1`)

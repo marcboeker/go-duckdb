@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"os"
 	"reflect"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,136 +17,87 @@ import (
 )
 
 /* ------------------------------------------ */
-/* ----------- Test Call Counters ----------- */
+/* -------- Open and Close Wrappers --------- */
 /* ------------------------------------------ */
 
-type callCounters struct {
-	openDbCalls       atomic.Int64
-	openConnCalls     atomic.Int64
-	openRowsCalls     atomic.Int64
-	openAppenderCalls atomic.Int64
-}
-
-func verifyCounters[T require.TestingT](t T, c *callCounters) {
-	require.Equal(t, 0, c.openDbCalls.Load())
-	require.Equal(t, 0, c.openConnCalls.Load())
-	require.Equal(t, 0, c.openRowsCalls.Load())
-	require.Equal(t, 0, c.openAppenderCalls.Load())
-}
-
-func openDbWrapper[T require.TestingT](t T, counters *callCounters, mustFail bool, dsn string) (*sql.DB, error) {
-	counters.openDbCalls.Add(1)
+func openDbWrapper[T require.TestingT](t T, dsn string) *sql.DB {
 	db, err := sql.Open(`duckdb`, dsn)
-	if !mustFail {
-		require.NoError(t, err)
-		require.NoError(t, db.Ping())
-	}
-	return db, err
+	require.NoError(t, err)
+	require.NoError(t, db.Ping())
+	return db
 }
 
-func closeDbWrapper[T require.TestingT](t T, counters *callCounters, db *sql.DB) {
+func closeDbWrapper[T require.TestingT](t T, db *sql.DB) {
 	if db == nil {
 		return
 	}
-	counters.openDbCalls.Add(-1)
 	require.NoError(t, db.Close())
 }
 
-func newConnectorWrapper[T require.TestingT](t T, counters *callCounters, dsn string, connInitFn func(execer driver.ExecerContext) error) *Connector {
-	counters.openDbCalls.Add(1)
+func newConnectorWrapper[T require.TestingT](t T, dsn string, connInitFn func(execer driver.ExecerContext) error) *Connector {
 	c, err := NewConnector(dsn, connInitFn)
 	require.NoError(t, err)
 	return c
 }
 
-func closeConnectorWrapper[T require.TestingT](t T, counters *callCounters, c *Connector) {
+func closeConnectorWrapper[T require.TestingT](t T, c *Connector) {
 	if c == nil {
 		return
 	}
-	counters.openDbCalls.Add(-1)
 	require.NoError(t, c.Close())
 }
 
-func openConnWrapper[T require.TestingT](t T, counters *callCounters, db *sql.DB, ctx context.Context) *sql.Conn {
-	counters.openConnCalls.Add(1)
+func openConnWrapper[T require.TestingT](t T, db *sql.DB, ctx context.Context) *sql.Conn {
 	conn, err := db.Conn(ctx)
 	require.NoError(t, err)
 	return conn
 }
 
-func openConnectorConnWrapper[T require.TestingT](t T, counters *callCounters, c *Connector) driver.Conn {
-	counters.openConnCalls.Add(1)
+func closeConnWrapper[T require.TestingT](t T, conn *sql.Conn) {
+	if conn == nil {
+		return
+	}
+	require.NoError(t, conn.Close())
+}
+
+func openDriverConnWrapper[T require.TestingT](t T, c *Connector) driver.Conn {
 	conn, err := c.Connect(context.Background())
 	require.NoError(t, err)
 	return conn
 }
 
-func closeConnWrapper[T require.TestingT](t T, counters *callCounters, conn *sql.Conn) {
+func closeDriverConnWrapper[T require.TestingT](t T, conn *driver.Conn) {
 	if conn == nil {
 		return
 	}
-	counters.openConnCalls.Add(-1)
-	require.NoError(t, conn.Close())
-}
-
-func closeDriverConnWrapper[T require.TestingT](t T, counters *callCounters, conn *driver.Conn) {
-	if conn == nil {
-		return
-	}
-	counters.openConnCalls.Add(-1)
 	require.NoError(t, (*conn).Close())
 }
 
-func queryWrapper[T require.TestingT](t T, counters *callCounters, mustFail bool, db *sql.DB, query string, args ...interface{}) (*sql.Rows, error) {
-	counters.openRowsCalls.Add(1)
-	res, err := db.Query(query, args...)
-	if !mustFail {
-		require.NoError(t, err)
-	}
-	return res, err
-}
-
-func queryContextWrapper[T require.TestingT](t T, counters *callCounters, db *sql.DB, ctx context.Context, query string, args ...interface{}) *sql.Rows {
-	counters.openRowsCalls.Add(1)
-	res, err := db.QueryContext(ctx, query, args...)
-	require.NoError(t, err)
-	return res
-}
-
-func closeRowsWrapper[T require.TestingT](t T, counters *callCounters, res *sql.Rows) {
-	if res == nil {
+func closeRowsWrapper[T require.TestingT](t T, r *sql.Rows) {
+	if r == nil {
 		return
 	}
-	counters.openRowsCalls.Add(-1)
-	require.NoError(t, res.Close())
+	require.NoError(t, r.Close())
 }
 
-func queryContextConnWrapper[T require.TestingT](t T, counters *callCounters, conn *sql.Conn, ctx context.Context, query string, args ...interface{}) *sql.Rows {
-	counters.openRowsCalls.Add(1)
-	res, err := conn.QueryContext(ctx, query, args...)
-	require.NoError(t, err)
-	return res
+func closePreparedWrapper[T require.TestingT](t T, stmt *sql.Stmt) {
+	if stmt == nil {
+		return
+	}
+	require.NoError(t, stmt.Close())
 }
 
-func newAppenderWrapper[T require.TestingT](t T, counters *callCounters, mustFail bool, conn *driver.Conn, schema string, table string) (*Appender, error) {
-	counters.openAppenderCalls.Add(1)
+func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema string, table string) *Appender {
 	a, err := NewAppenderFromConn(*conn, schema, table)
-	if !mustFail {
-		require.NoError(t, err)
-	}
-	return a, err
+	require.NoError(t, err)
+	return a
 }
 
-func closeAppenderWrapper[T require.TestingT](t T, counters *callCounters, mustFail bool, a *Appender) error {
+func closeAppenderWrapper[T require.TestingT](t T, a *Appender) {
 	if a == nil {
-		return nil
+		return
 	}
-	counters.openAppenderCalls.Add(-1)
-	err := a.Close()
-	if !mustFail {
-		require.NoError(t, err)
-	}
-	return err
+	require.NoError(t, a.Close())
 }
 
 /* ------------------------------------------ */
@@ -166,9 +116,10 @@ func checkErr(err error, msg string) {
 	}
 }
 
-func checkIsMemory(t *testing.T, counters *callCounters, db *sql.DB) {
-	res, _ := queryWrapper(t, counters, false, db, `SELECT * FROM information_schema.schemata WHERE catalog_name = 'memory'`)
-	defer closeRowsWrapper(t, counters, res)
+func checkIsMemory(t *testing.T, db *sql.DB) {
+	res, err := db.Query(`SELECT * FROM information_schema.schemata WHERE catalog_name = 'memory'`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
 	require.True(t, res.Next())
 }
 
@@ -177,19 +128,17 @@ func checkIsMemory(t *testing.T, counters *callCounters, db *sql.DB) {
 /* ------------------------------------------ */
 
 func TestOpen(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
 	t.Run("without config", func(t *testing.T) {
-		db, _ := openDbWrapper(t, counters, false, ``)
-		defer closeDbWrapper(t, counters, db)
+		db := openDbWrapper(t, ``)
+		defer closeDbWrapper(t, db)
 		require.NotNil(t, db)
 	})
 
 	t.Run("with config", func(t *testing.T) {
-		db, _ := openDbWrapper(t, counters, false, `?access_mode=read_write&threads=4`)
-		defer closeDbWrapper(t, counters, db)
+		db := openDbWrapper(t, `?access_mode=read_write&threads=4`)
+		defer closeDbWrapper(t, db)
 
 		var (
 			accessMode string
@@ -202,17 +151,17 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run(":memory:", func(t *testing.T) {
-		db, _ := openDbWrapper(t, counters, false, `:memory:`)
-		defer closeDbWrapper(t, counters, db)
+		db := openDbWrapper(t, `:memory:`)
+		defer closeDbWrapper(t, db)
 		// Verify that we are using an in-memory DB.
-		checkIsMemory(t, counters, db)
+		checkIsMemory(t, db)
 	})
 
 	t.Run(":memory: with config", func(t *testing.T) {
-		db, _ := openDbWrapper(t, counters, false, `:memory:?threads=4`)
-		defer closeDbWrapper(t, counters, db)
+		db := openDbWrapper(t, `:memory:?threads=4`)
+		defer closeDbWrapper(t, db)
 		// Verify that we are using an in-memory DB.
-		checkIsMemory(t, counters, db)
+		checkIsMemory(t, db)
 
 		var threads int64
 		r := db.QueryRow(`SELECT current_setting('threads')`)
@@ -222,15 +171,13 @@ func TestOpen(t *testing.T) {
 }
 
 func TestConnectorBootQueries(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
 	t.Run("README connector example", func(t *testing.T) {
-		db, _ := openDbWrapper(t, counters, false, `foo.db`)
-		closeDbWrapper(t, counters, db)
+		db := openDbWrapper(t, `foo.db`)
+		closeDbWrapper(t, db)
 
-		c := newConnectorWrapper(t, counters, `foo.db?access_mode=read_only&threads=4`, func(execer driver.ExecerContext) error {
+		c := newConnectorWrapper(t, `foo.db?access_mode=read_only&threads=4`, func(execer driver.ExecerContext) error {
 			bootQueries := []string{
 				`SET schema=main`,
 				`SET search_path=main`,
@@ -241,23 +188,18 @@ func TestConnectorBootQueries(t *testing.T) {
 			}
 			return nil
 		})
-
+		defer closeConnectorWrapper(t, c)
 		db = sql.OpenDB(c)
-		closeConnectorWrapper(t, counters, c)
 		require.NoError(t, os.Remove(`foo.db`))
 	})
 }
 
 func TestConnector_Close(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
-
-	c := newConnectorWrapper(t, counters, ``, nil)
-
+	defer apiVerifyAllocationCounters()
+	c := newConnectorWrapper(t, ``, nil)
 	// Multiple close calls must not cause panics or errors.
-	closeConnectorWrapper(t, counters, c)
-	require.NoError(t, c.Close())
+	closeConnectorWrapper(t, c)
+	closeConnectorWrapper(t, c)
 }
 
 func ExampleNewConnector() {
@@ -299,20 +241,20 @@ func ExampleNewConnector() {
 }
 
 func TestConnPool(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	db.SetMaxOpenConns(2)
 	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 
 	// Get two separate connections and ensure that they're consistent.
 	ctx := context.Background()
-	conn1 := openConnWrapper(t, counters, db, ctx)
-	conn2 := openConnWrapper(t, counters, db, ctx)
+	conn1 := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn1)
+	conn2 := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn2)
 
 	res, err := conn1.ExecContext(ctx, `INSERT INTO foo VALUES ('lala', ?), ('lalo', ?)`, 12345, 1234)
 	require.NoError(t, err)
@@ -320,34 +262,33 @@ func TestConnPool(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(2), ra)
 
-	r := queryContextConnWrapper(t, counters, conn1, ctx, `SELECT bar FROM foo LIMIT 1`)
+	r, err := conn1.QueryContext(ctx, `SELECT bar FROM foo LIMIT 1`)
+	require.NoError(t, err)
 	require.True(t, r.Next())
-	closeRowsWrapper(t, counters, r)
+	closeRowsWrapper(t, r)
 
-	r = queryContextConnWrapper(t, counters, conn2, ctx, `SELECT bar FROM foo LIMIT 1`)
+	r, err = conn2.QueryContext(ctx, `SELECT bar FROM foo LIMIT 1`)
+	require.NoError(t, err)
 	require.True(t, r.Next())
-	closeRowsWrapper(t, counters, r)
-
-	closeConnWrapper(t, counters, conn1)
-	closeConnWrapper(t, counters, conn2)
+	closeRowsWrapper(t, r)
 }
 
 func TestConnInit(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	c := newConnectorWrapper(t, counters, ``, func(execer driver.ExecerContext) error {
+	c := newConnectorWrapper(t, ``, func(execer driver.ExecerContext) error {
 		return nil
 	})
+	defer closeConnectorWrapper(t, c)
 	db := sql.OpenDB(c)
 	db.SetMaxOpenConns(2)
-	defer closeConnectorWrapper(t, counters, c)
 
 	// Get two separate connections and ensure that they're consistent.
 	ctx := context.Background()
-	conn1 := openConnWrapper(t, counters, db, ctx)
-	conn2 := openConnWrapper(t, counters, db, ctx)
+	conn1 := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn1)
+	conn2 := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn2)
 
 	res, err := conn1.ExecContext(context.Background(), `CREATE TABLE example (j JSON)`)
 	require.NoError(t, err)
@@ -361,36 +302,29 @@ func TestConnInit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(1), ra)
 
-	r := queryContextConnWrapper(t, counters, conn1, ctx, `SELECT json_valid(j) FROM example`)
+	r, err := conn1.QueryContext(ctx, `SELECT json_valid(j) FROM example`)
+	require.NoError(t, err)
 	require.True(t, r.Next())
-	closeRowsWrapper(t, counters, r)
+	closeRowsWrapper(t, r)
 
-	r = queryContextConnWrapper(t, counters, conn2, ctx, `SELECT json_valid(j) FROM example`)
+	r, err = conn2.QueryContext(ctx, `SELECT json_valid(j) FROM example`)
+	require.NoError(t, err)
 	require.True(t, r.Next())
-	closeRowsWrapper(t, counters, r)
-
-	closeConnWrapper(t, counters, conn1)
-	closeConnWrapper(t, counters, conn2)
+	closeRowsWrapper(t, r)
 }
 
 func TestExec(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
-
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	defer apiVerifyAllocationCounters()
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 }
 
 func TestQuery(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
-
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 
 	t.Run("simple", func(t *testing.T) {
@@ -400,8 +334,9 @@ func TestQuery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, int64(2), ra)
 
-		r, _ := queryWrapper(t, counters, false, db, `SELECT bar, baz FROM foo WHERE baz > ?`, 12344)
-		defer closeRowsWrapper(t, counters, r)
+		r, err := db.Query(`SELECT bar, baz FROM foo WHERE baz > ?`, 12344)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
 
 		found := false
 		for r.Next() {
@@ -425,8 +360,9 @@ func TestQuery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, int64(100000), ra)
 
-		r, _ := queryWrapper(t, counters, false, db, `SELECT i FROM integers ORDER BY i ASC`)
-		defer closeRowsWrapper(t, counters, r)
+		r, err := db.Query(`SELECT i FROM integers ORDER BY i ASC`)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
 
 		expected := 0
 		for r.Next() {
@@ -438,15 +374,15 @@ func TestQuery(t *testing.T) {
 	})
 
 	t.Run("wrong syntax", func(t *testing.T) {
-		r, err := queryWrapper(t, counters, true, db, `SELECT * FROM tbl col = ?`, 1)
-		defer closeRowsWrapper(t, counters, r)
+		r, err := db.Query(`SELECT * FROM tbl col = ?`, 1)
 		require.Error(t, err)
+		defer closeRowsWrapper(t, r)
 	})
 
 	t.Run("missing parameter", func(t *testing.T) {
-		r, err := queryWrapper(t, counters, true, db, `SELECT ?`)
-		defer closeRowsWrapper(t, counters, r)
+		r, err := db.Query(`SELECT ?`)
 		require.Error(t, err)
+		defer closeRowsWrapper(t, r)
 	})
 
 	t.Run("select NULL", func(t *testing.T) {
@@ -457,12 +393,10 @@ func TestQuery(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("SELECT an empty JSON", func(t *testing.T) {
 		var res Composite[map[string]any]
@@ -491,23 +425,21 @@ func TestJSON(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	r, _ := queryWrapper(t, counters, false, db, `SELECT 1 WHERE 1 = 0`)
-	defer closeRowsWrapper(t, counters, r)
+	r, err := db.Query(`SELECT 1 WHERE 1 = 0`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, r)
+
 	require.False(t, r.Next())
 	require.NoError(t, r.Err())
 }
 
 func TestTypeNamesAndScanTypes(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
 	tests := []struct {
 		sql      string
@@ -695,13 +627,14 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		},
 	}
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	for _, test := range tests {
 		t.Run(test.typeName, func(t *testing.T) {
-			r, _ := queryWrapper(t, counters, false, db, test.sql)
-			defer closeRowsWrapper(t, counters, r)
+			r, err := db.Query(test.sql)
+			require.NoError(t, err)
+			defer closeRowsWrapper(t, r)
 
 			cols, err := r.ColumnTypes()
 			require.NoError(t, err)
@@ -718,12 +651,10 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 }
 
 func TestMultipleStatements(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	// Test an empty query.
 	_, err := db.Exec(``)
@@ -753,8 +684,8 @@ func TestMultipleStatements(t *testing.T) {
 	require.Contains(t, err.Error(), "incorrect argument count for command: have 0 want 1")
 
 	ctx := context.Background()
-	conn := openConnWrapper(t, counters, db, ctx)
-	defer closeConnWrapper(t, counters, conn)
+	conn := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn)
 
 	res, err := conn.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS foo1(bar VARCHAR, baz INTEGER); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)`, 12345, 1234)
 	require.NoError(t, err)
@@ -762,22 +693,24 @@ func TestMultipleStatements(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(2), ra)
 
-	r := queryContextConnWrapper(t, counters, conn, ctx, `SELECT bar FROM foo1 LIMIT1`)
-	require.True(t, r.Next())
-	closeRowsWrapper(t, counters, r)
+	r, err := conn.QueryContext(ctx, `SELECT bar FROM foo1 LIMIT1`)
+	require.NoError(t, err)
+	closeRowsWrapper(t, r)
 
 	// args are only applied to the last statement.
 	_, err = conn.ExecContext(ctx, `INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?); INSERT INTO foo1 VALUES ('lala', ?), ('lalo', ?)`, 12345, 1234)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "incorrect argument count for command: have 0 want 2")
 
-	r = queryContextConnWrapper(t, counters, conn, ctx, `CREATE TABLE foo2(bar VARCHAR, baz INTEGER); INSERT INTO foo2 VALUES ('lala', 12345); SELECT bar FROM foo2 LIMIT 1`)
+	r, err = conn.QueryContext(ctx, `CREATE TABLE foo2(bar VARCHAR, baz INTEGER); INSERT INTO foo2 VALUES ('lala', 12345); SELECT bar FROM foo2 LIMIT 1`)
+	require.NoError(t, err)
+
 	var bar string
 	require.True(t, r.Next())
 	require.NoError(t, r.Scan(&bar))
 	require.Equal(t, "lala", bar)
 	require.False(t, r.Next())
-	closeRowsWrapper(t, counters, r)
+	closeRowsWrapper(t, r)
 
 	// SELECT with ExecContext also works, but we don't get the result.
 	res, err = conn.ExecContext(ctx, `CREATE TABLE foo3(bar VARCHAR, baz INTEGER); INSERT INTO foo3 VALUES ('lala', 12345); SELECT bar FROM foo3 LIMIT 1`)
@@ -787,33 +720,34 @@ func TestMultipleStatements(t *testing.T) {
 	require.Equal(t, int64(0), ra)
 
 	// Multiple SELECT, but we get results only for the last one.
-	r = queryContextConnWrapper(t, counters, conn, ctx, `INSERT INTO foo3 VALUES ('lalo', 1234); SELECT bar FROM foo3 WHERE baz = 12345; SELECT bar FROM foo3 WHERE baz = $1`, 1234)
+	r, err = conn.QueryContext(ctx, `INSERT INTO foo3 VALUES ('lalo', 1234); SELECT bar FROM foo3 WHERE baz = 12345; SELECT bar FROM foo3 WHERE baz = $1`, 1234)
+	require.NoError(t, err)
 	require.True(t, r.Next())
+
 	require.NoError(t, r.Scan(&bar))
 	require.Equal(t, "lalo", bar)
 	require.False(t, r.Next())
-	closeRowsWrapper(t, counters, r)
+	closeRowsWrapper(t, r)
 
 	// Test the json extension.
-	r = queryContextConnWrapper(t, counters, conn, ctx, `CREATE TABLE example (id int, j JSON);
+	r, err = conn.QueryContext(ctx, `CREATE TABLE example (id int, j JSON);
 		INSERT INTO example VALUES(123, ' { "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }');
 		SELECT j->'$.family' FROM example WHERE id=$1`, 123)
+	require.NoError(t, err)
 	require.True(t, r.Next())
 
 	var family string
 	require.NoError(t, r.Scan(&family))
 	require.Equal(t, "anatidae", family)
 	require.False(t, r.Next())
-	closeRowsWrapper(t, counters, r)
+	closeRowsWrapper(t, r)
 }
 
 func TestParquetExtension(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	_, err := db.Exec(`CREATE TABLE users (id INT, name VARCHAR, age INT)`)
 	require.NoError(t, err)
@@ -838,12 +772,10 @@ func TestParquetExtension(t *testing.T) {
 }
 
 func TestQueryTimeout(t *testing.T) {
-	t.Parallel()
-	counters := &callCounters{}
-	defer verifyCounters(t, counters)
+	defer apiVerifyAllocationCounters()
 
-	db, _ := openDbWrapper(t, counters, false, ``)
-	defer closeDbWrapper(t, counters, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*250)
 	defer cancel()

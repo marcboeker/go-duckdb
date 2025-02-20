@@ -169,17 +169,16 @@ func (*errExecSUDF) Executor() ScalarFuncExecutor {
 }
 
 func TestSimpleScalarUDF(t *testing.T) {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
+	defer apiVerifyAllocationCounters()
 
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	var udf *simpleSUDF
-	err = RegisterScalarUDF(c, "my_sum", udf)
+	err := RegisterScalarUDF(conn, "my_sum", udf)
 	require.NoError(t, err)
 
 	var sum *int
@@ -194,27 +193,23 @@ func TestSimpleScalarUDF(t *testing.T) {
 	row = db.QueryRow(`SELECT my_sum(42, NULL) AS sum`)
 	require.NoError(t, row.Scan(&sum))
 	require.Equal(t, (*int)(nil), sum)
-
-	require.NoError(t, c.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestConstantScalarUDF(t *testing.T) {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
+	defer apiVerifyAllocationCounters()
 
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	var udf *constantSUDF
-	err = RegisterScalarUDF(c, "constant_one", udf)
+	err := RegisterScalarUDF(conn, "constant_one", udf)
 	require.NoError(t, err)
 
 	var otherUDF *otherConstantSUDF
-	err = RegisterScalarUDF(c, "other_constant_one", otherUDF)
+	err = RegisterScalarUDF(conn, "other_constant_one", otherUDF)
 	require.NoError(t, err)
 
 	var one int
@@ -225,27 +220,23 @@ func TestConstantScalarUDF(t *testing.T) {
 	row = db.QueryRow(`SELECT other_constant_one() AS one`)
 	require.NoError(t, row.Scan(&one))
 	require.Equal(t, 1, one)
-
-	require.NoError(t, c.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
+	defer apiVerifyAllocationCounters()
+
 	typeInfos := getTypeInfos(t, false)
 	for _, info := range typeInfos {
 		currentInfo = info.TypeInfo
 
-		db, err := sql.Open("duckdb", "")
-		require.NoError(t, err)
+		db := openDbWrapper(t, ``)
+		conn := openConnWrapper(t, db, context.Background())
 
-		c, err := db.Conn(context.Background())
-		require.NoError(t, err)
-
-		_, err = c.ExecContext(context.Background(), `CREATE TYPE greeting AS ENUM ('hello', 'world')`)
+		_, err := conn.ExecContext(context.Background(), `CREATE TYPE greeting AS ENUM ('hello', 'world')`)
 		require.NoError(t, err)
 
 		var udf *typesSUDF
-		err = RegisterScalarUDF(c, "my_identity", udf)
+		err = RegisterScalarUDF(conn, "my_identity", udf)
 		require.NoError(t, err)
 
 		var res string
@@ -257,24 +248,23 @@ func TestAllTypesScalarUDF(t *testing.T) {
 			require.NotEqual(t, "", res, "uuid empty")
 		}
 
-		require.NoError(t, c.Close())
-		require.NoError(t, db.Close())
+		closeConnWrapper(t, conn)
+		closeDbWrapper(t, db)
 	}
 }
 
 func TestScalarUDFSet(t *testing.T) {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
+	defer apiVerifyAllocationCounters()
 
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	var udf1 *simpleSUDF
 	var udf2 *typesSUDF
-	err = RegisterScalarUDFSet(c, "my_addition", udf1, udf2)
+	err := RegisterScalarUDFSet(conn, "my_addition", udf1, udf2)
 	require.NoError(t, err)
 
 	var sum int
@@ -285,23 +275,19 @@ func TestScalarUDFSet(t *testing.T) {
 	row = db.QueryRow(`SELECT my_addition(42) AS sum`)
 	require.NoError(t, row.Scan(&sum))
 	require.Equal(t, 42, sum)
-
-	require.NoError(t, c.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestVariadicScalarUDF(t *testing.T) {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
+	defer apiVerifyAllocationCounters()
 
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	var udf *variadicSUDF
-	err = RegisterScalarUDF(c, "my_variadic_sum", udf)
+	err := RegisterScalarUDF(conn, "my_variadic_sum", udf)
 	require.NoError(t, err)
 
 	var sum *int
@@ -324,23 +310,19 @@ func TestVariadicScalarUDF(t *testing.T) {
 	row = db.QueryRow(`SELECT my_variadic_sum() AS msg`)
 	require.NoError(t, row.Scan(&sum))
 	require.Equal(t, 0, *sum)
-
-	require.NoError(t, c.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestANYScalarUDF(t *testing.T) {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
+	defer apiVerifyAllocationCounters()
 
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	var udf *anyTypeSUDF
-	err = RegisterScalarUDF(c, "my_null_count", udf)
+	err := RegisterScalarUDF(conn, "my_null_count", udf)
 	require.NoError(t, err)
 
 	var count int
@@ -363,51 +345,42 @@ func TestANYScalarUDF(t *testing.T) {
 	row = db.QueryRow(`SELECT my_null_count() AS msg`)
 	require.NoError(t, row.Scan(&count))
 	require.Equal(t, 0, count)
-
-	require.NoError(t, c.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestErrScalarUDF(t *testing.T) {
-	t.Parallel()
+	defer apiVerifyAllocationCounters()
 
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
-	defer closeDB(t, db)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
-	defer closeConn(t, c)
-
-	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
 
 	// Empty name.
 	var emptyNameUDF *simpleSUDF
-	err = RegisterScalarUDF(c, "", emptyNameUDF)
+	err := RegisterScalarUDF(conn, "", emptyNameUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoName.Error())
 
 	// Invalid executor.
 	var errExecutorUDF *errExecutorSUDF
-	err = RegisterScalarUDF(c, "err_executor_is_nil", errExecutorUDF)
+	err = RegisterScalarUDF(conn, "err_executor_is_nil", errExecutorUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoExecutor.Error())
 
 	// Invalid input parameter.
 	var errInputNilUDF *errInputNilSUDF
-	err = RegisterScalarUDF(c, "err_input_type_is_nil", errInputNilUDF)
+	err = RegisterScalarUDF(conn, "err_input_type_is_nil", errInputNilUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFInputTypeIsNil.Error())
 
 	// Invalid result parameters.
 	var errResultNil *errResultNilSUDF
-	err = RegisterScalarUDF(c, "err_result_type_is_nil", errResultNil)
+	err = RegisterScalarUDF(conn, "err_result_type_is_nil", errResultNil)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFResultTypeIsNil.Error())
 	var errResultAny *errResultAnySUDF
-	err = RegisterScalarUDF(c, "err_result_type_is_any", errResultAny)
+	err = RegisterScalarUDF(conn, "err_result_type_is_any", errResultAny)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFResultTypeIsANY.Error())
 
 	// Error during execution.
 	var errExecUDF *errExecSUDF
-	err = RegisterScalarUDF(c, "err_exec", errExecUDF)
+	err = RegisterScalarUDF(conn, "err_exec", errExecUDF)
 	require.NoError(t, err)
 	row := db.QueryRow(`SELECT err_exec(10, 10) AS res`)
 	testError(t, row.Err(), errAPI.Error())
@@ -415,31 +388,23 @@ func TestErrScalarUDF(t *testing.T) {
 	// Register the same scalar function a second time.
 	// Since RegisterScalarUDF takes ownership of udf, we are now passing nil.
 	var udf *simpleSUDF
-	err = RegisterScalarUDF(c, "my_sum", udf)
+	err = RegisterScalarUDF(conn, "my_sum", udf)
 	require.NoError(t, err)
-	err = RegisterScalarUDF(c, "my_sum", udf)
+	err = RegisterScalarUDF(conn, "my_sum", udf)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error())
 
 	// Register a scalar function whose name already exists.
 	var errDuplicateUDF *simpleSUDF
-	err = RegisterScalarUDF(c, "my_sum", errDuplicateUDF)
+	err = RegisterScalarUDF(conn, "my_sum", errDuplicateUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error())
 
 	// Register a scalar function that is nil.
-	err = RegisterScalarUDF(c, "my_sum", nil)
+	err = RegisterScalarUDF(conn, "my_sum", nil)
 	testError(t, err, errAPI.Error(), errScalarUDFIsNil.Error())
-	require.NoError(t, c.Close())
 
 	// Test registering the scalar function on a closed connection.
+	closeConnWrapper(t, conn)
 	var errClosedConUDF *simpleSUDF
-	err = RegisterScalarUDF(c, "closed_con", errClosedConUDF)
+	err = RegisterScalarUDF(conn, "closed_con", errClosedConUDF)
 	require.ErrorContains(t, err, sql.ErrConnDone.Error())
-}
-
-func closeDB(t *testing.T, db *sql.DB) {
-	require.NoError(t, db.Close())
-}
-
-func closeConn(t *testing.T, conn *sql.Conn) {
-	require.NoError(t, conn.Close())
 }
