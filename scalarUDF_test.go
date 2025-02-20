@@ -177,8 +177,12 @@ func TestSimpleScalarUDF(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
 	var udf *simpleSUDF
-	err := RegisterScalarUDF(conn, "my_sum", udf)
+	err = RegisterScalarUDF(conn, "my_sum", udf)
 	require.NoError(t, err)
 
 	var sum *int
@@ -204,8 +208,12 @@ func TestConstantScalarUDF(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
 	var udf *constantSUDF
-	err := RegisterScalarUDF(conn, "constant_one", udf)
+	err = RegisterScalarUDF(conn, "constant_one", udf)
 	require.NoError(t, err)
 
 	var otherUDF *otherConstantSUDF
@@ -262,9 +270,13 @@ func TestScalarUDFSet(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
 	var udf1 *simpleSUDF
 	var udf2 *typesSUDF
-	err := RegisterScalarUDFSet(conn, "my_addition", udf1, udf2)
+	err = RegisterScalarUDFSet(conn, "my_addition", udf1, udf2)
 	require.NoError(t, err)
 
 	var sum int
@@ -286,8 +298,12 @@ func TestVariadicScalarUDF(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
 	var udf *variadicSUDF
-	err := RegisterScalarUDF(conn, "my_variadic_sum", udf)
+	err = RegisterScalarUDF(conn, "my_variadic_sum", udf)
 	require.NoError(t, err)
 
 	var sum *int
@@ -321,8 +337,12 @@ func TestANYScalarUDF(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
 	var udf *anyTypeSUDF
-	err := RegisterScalarUDF(conn, "my_null_count", udf)
+	err = RegisterScalarUDF(conn, "my_null_count", udf)
 	require.NoError(t, err)
 
 	var count int
@@ -355,9 +375,13 @@ func TestErrScalarUDF(t *testing.T) {
 
 	conn := openConnWrapper(t, db, context.Background())
 
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
 	// Empty name.
 	var emptyNameUDF *simpleSUDF
-	err := RegisterScalarUDF(conn, "", emptyNameUDF)
+	err = RegisterScalarUDF(conn, "", emptyNameUDF)
 	testError(t, err, errAPI.Error(), errScalarUDFCreate.Error(), errScalarUDFNoName.Error())
 
 	// Invalid executor.

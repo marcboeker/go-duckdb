@@ -297,8 +297,8 @@ func TestTypes(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
 	expectedRows := testTypesGenerateRows(t, 3)
-	c, conn, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
+	defer cleanupAppender(t, c, db, conn, a)
 	actualRows := testTypes(t, c, a, expectedRows)
 
 	for i := range actualRows {
@@ -314,8 +314,8 @@ var benchmarkTypesResult []testTypesRow
 
 func BenchmarkTypes(b *testing.B) {
 	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
-	c, conn, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
-	defer cleanupAppender(b, c, conn, a)
+	c, db, conn, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
+	defer cleanupAppender(b, c, db, conn, a)
 
 	var r []testTypesRow
 	b.ResetTimer()
@@ -733,7 +733,7 @@ func TestENUMs(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
-	closeDbWrapper(t, db)
+	defer closeDbWrapper(t, db)
 
 	type environment string
 	const (

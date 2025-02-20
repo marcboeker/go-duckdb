@@ -71,6 +71,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 }
 
 type Connector struct {
+	closed     bool
 	db         apiDatabase
 	connInitFn func(execer driver.ExecerContext) error
 }
@@ -99,7 +100,11 @@ func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 }
 
 func (c *Connector) Close() error {
+	if c.closed {
+		return nil
+	}
 	apiClose(&c.db)
+	c.closed = true
 	return nil
 }
 

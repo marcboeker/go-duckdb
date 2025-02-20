@@ -118,38 +118,41 @@ func randInt(lo int64, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
 }
 
-func prepareAppender[T require.TestingT](t T, query string) (*Connector, driver.Conn, *Appender) {
+func prepareAppender[T require.TestingT](t T, query string) (*Connector, *sql.DB, driver.Conn, *Appender) {
 	c := newConnectorWrapper(t, ``, nil)
-	_, err := sql.OpenDB(c).Exec(query)
+
+	db := sql.OpenDB(c)
+	_, err := db.Exec(query)
 	require.NoError(t, err)
 
 	conn := openDriverConnWrapper(t, c)
 	a := newAppenderWrapper(t, &conn, "", "test")
-	return c, conn, a
+	return c, db, conn, a
 }
 
-func cleanupAppender[T require.TestingT](t T, c *Connector, conn driver.Conn, a *Appender) {
+func cleanupAppender[T require.TestingT](t T, c *Connector, db *sql.DB, conn driver.Conn, a *Appender) {
 	closeAppenderWrapper(t, a)
 	closeDriverConnWrapper(t, &conn)
+	closeDbWrapper(t, db)
 	closeConnectorWrapper(t, c)
 }
 
 func TestAppenderClose(t *testing.T) {
 	defer apiVerifyAllocationCounters()
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (i INTEGER)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (i INTEGER)`)
+	defer cleanupAppender(t, c, db, conn, a)
 	require.NoError(t, a.AppendRow(int32(42)))
 }
 
 func TestAppendChunks(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			id BIGINT,
 			uint8 UTINYINT
 	  	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	// Test appending a few data chunks.
 	rowCount := GetDataChunkCapacity() * 5
@@ -166,7 +169,6 @@ func TestAppendChunks(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT * FROM test ORDER BY id`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -184,12 +186,12 @@ func TestAppendChunks(t *testing.T) {
 func TestAppenderList(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		string_list VARCHAR[],
 		int_list INTEGER[]
 	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	rowsToAppend := make([]nestedDataRow, 10)
 	for i := 0; i < 10; i++ {
@@ -203,7 +205,6 @@ func TestAppenderList(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT * FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -222,8 +223,8 @@ func TestAppenderList(t *testing.T) {
 func TestAppenderArray(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (string_array VARCHAR[3])`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (string_array VARCHAR[3])`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	count := 10
 	expected := Composite[[3]string]{[3]string{"a", "b", "c"}}
@@ -234,7 +235,6 @@ func TestAppenderArray(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT * FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -252,15 +252,14 @@ func TestAppenderArray(t *testing.T) {
 func TestAppenderNested(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, createNestedDataTableSQL)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, createNestedDataTableSQL)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	const rowCount = 1000
 	rowsToAppend := prepareNestedData(rowCount)
 	appendNestedData(t, a, rowsToAppend)
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT * FROM test ORDER BY id`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -309,8 +308,8 @@ func TestAppenderNested(t *testing.T) {
 func TestAppenderNullList(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (int_slice VARCHAR[][][])`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (int_slice VARCHAR[][][])`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	require.NoError(t, a.AppendRow([][][]string{{{}}}))
 	require.NoError(t, a.AppendRow([][][]string{{{"1", "2", "3"}, {"4", "5", "6"}}}))
@@ -321,7 +320,6 @@ func TestAppenderNullList(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT int_slice FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -353,18 +351,17 @@ func TestAppenderNullList(t *testing.T) {
 func TestAppenderNullStruct(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		simple_struct STRUCT(a INT, B VARCHAR)
 	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	require.NoError(t, a.AppendRow(simpleStruct{1, "hello"}))
 	require.NoError(t, a.AppendRow(nil))
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT simple_struct FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -386,7 +383,7 @@ func TestAppenderNullStruct(t *testing.T) {
 func TestAppenderNestedNullStruct(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		double_wrapped_struct STRUCT(
 				X VARCHAR,
@@ -399,7 +396,7 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 				)
 			)
 	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	require.NoError(t, a.AppendRow(doubleWrappedStruct{
 		"so much nesting",
@@ -419,7 +416,6 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT double_wrapped_struct FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -440,8 +436,8 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 func TestAppenderNullIntAndString(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	require.NoError(t, a.AppendRow(int64(32), "hello"))
 	require.NoError(t, a.AppendRow(nil, nil))
@@ -451,7 +447,6 @@ func TestAppenderNullIntAndString(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT * FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -482,8 +477,8 @@ func TestAppenderNullIntAndString(t *testing.T) {
 func TestAppenderUUID(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (id UUID)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (id UUID)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	id := UUID(uuid.New())
 	otherId := UUID(uuid.New())
@@ -494,7 +489,6 @@ func TestAppenderUUID(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT id FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -518,17 +512,14 @@ func TestAppenderUUID(t *testing.T) {
 	}
 }
 
-func newAppenderHugeIntTest[T numericType](val T, c *Connector, a *Appender) func(t *testing.T) {
+func newAppenderHugeIntTest[T numericType](val T, c *Connector, db *sql.DB, a *Appender) func(t *testing.T) {
 	return func(t *testing.T) {
 		typeName := reflect.TypeOf(val).String()
 		require.NoError(t, a.AppendRow(val, typeName))
 		require.NoError(t, a.Flush())
 
 		// Verify results.
-		db := sql.OpenDB(c)
-		res, err := db.QueryContext(context.Background(), `SELECT val FROM test WHERE id == '%s'`, typeName)
-		require.NoError(t, err)
-		defer closeRowsWrapper(t, res)
+		res := db.QueryRowContext(context.Background(), `SELECT val FROM test WHERE id == ?`, typeName)
 
 		var r *big.Int
 		require.NoError(t, res.Scan(&r))
@@ -539,20 +530,20 @@ func newAppenderHugeIntTest[T numericType](val T, c *Connector, a *Appender) fun
 func TestAppenderHugeInt(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (val HUGEINT, id VARCHAR)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (val HUGEINT, id VARCHAR)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	tests := map[string]func(t *testing.T){
-		"int8":    newAppenderHugeIntTest[int8](1, c, a),
-		"int16":   newAppenderHugeIntTest[int16](2, c, a),
-		"int32":   newAppenderHugeIntTest[int32](3, c, a),
-		"int64":   newAppenderHugeIntTest[int64](4, c, a),
-		"uint8":   newAppenderHugeIntTest[uint8](5, c, a),
-		"uint16":  newAppenderHugeIntTest[uint16](6, c, a),
-		"uint32":  newAppenderHugeIntTest[uint32](7, c, a),
-		"uint64":  newAppenderHugeIntTest[uint64](8, c, a),
-		"float32": newAppenderHugeIntTest[float32](9, c, a),
-		"float64": newAppenderHugeIntTest[float64](10, c, a),
+		"int8":    newAppenderHugeIntTest[int8](1, c, db, a),
+		"int16":   newAppenderHugeIntTest[int16](2, c, db, a),
+		"int32":   newAppenderHugeIntTest[int32](3, c, db, a),
+		"int64":   newAppenderHugeIntTest[int64](4, c, db, a),
+		"uint8":   newAppenderHugeIntTest[uint8](5, c, db, a),
+		"uint16":  newAppenderHugeIntTest[uint16](6, c, db, a),
+		"uint32":  newAppenderHugeIntTest[uint32](7, c, db, a),
+		"uint64":  newAppenderHugeIntTest[uint64](8, c, db, a),
+		"float32": newAppenderHugeIntTest[float32](9, c, db, a),
+		"float64": newAppenderHugeIntTest[float64](10, c, db, a),
 	}
 	for name, test := range tests {
 		t.Run(name, test)
@@ -562,18 +553,15 @@ func TestAppenderHugeInt(t *testing.T) {
 func TestAppenderTsNs(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP_NS)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP_NS)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	ts := time.Date(2022, time.January, 1, 12, 0, 33, 242, time.UTC)
 	require.NoError(t, a.AppendRow(ts))
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
-	res, err := db.QueryContext(context.Background(), `SELECT timestamp FROM test`)
-	require.NoError(t, err)
-	defer closeRowsWrapper(t, res)
+	res := db.QueryRowContext(context.Background(), `SELECT timestamp FROM test`)
 
 	var r time.Time
 	require.NoError(t, res.Scan(&r))
@@ -583,18 +571,15 @@ func TestAppenderTsNs(t *testing.T) {
 func TestAppenderDate(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (date DATE)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (date DATE)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123, time.UTC)
 	require.NoError(t, a.AppendRow(ts))
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
-	res, err := db.QueryContext(context.Background(), `SELECT date FROM test`)
-	require.NoError(t, err)
-	defer closeRowsWrapper(t, res)
+	res := db.QueryRowContext(context.Background(), `SELECT date FROM test`)
 
 	var r time.Time
 	require.NoError(t, res.Scan(&r))
@@ -606,18 +591,15 @@ func TestAppenderDate(t *testing.T) {
 func TestAppenderTime(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (time TIME)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (time TIME)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123000, time.UTC)
 	require.NoError(t, a.AppendRow(ts))
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
-	res, err := db.QueryContext(context.Background(), `SELECT time FROM test`)
-	require.NoError(t, err)
-	defer closeRowsWrapper(t, res)
+	res := db.QueryRowContext(context.Background(), `SELECT time FROM test`)
 
 	var r time.Time
 	require.NoError(t, res.Scan(&r))
@@ -628,8 +610,8 @@ func TestAppenderTime(t *testing.T) {
 func TestAppenderTimeTZ(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (time TIMETZ)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (time TIMETZ)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123000, loc)
@@ -637,10 +619,7 @@ func TestAppenderTimeTZ(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
-	res, err := db.QueryContext(context.Background(), `SELECT time FROM test`)
-	require.NoError(t, err)
-	defer closeRowsWrapper(t, res)
+	res := db.QueryRowContext(context.Background(), `SELECT time FROM test`)
 
 	var r time.Time
 	require.NoError(t, res.Scan(&r))
@@ -651,8 +630,8 @@ func TestAppenderTimeTZ(t *testing.T) {
 func TestAppenderBlob(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	data := []byte{0x01, 0x02, 0x00, 0x03, 0x04}
 	require.NoError(t, a.AppendRow(data))
@@ -663,7 +642,6 @@ func TestAppenderBlob(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT data FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -681,11 +659,11 @@ func TestAppenderBlob(t *testing.T) {
 func TestAppenderBlobTinyInt(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data UTINYINT[]
 	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	require.NoError(t, a.AppendRow(nil))
 
@@ -696,7 +674,6 @@ func TestAppenderBlobTinyInt(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT CASE WHEN data IS NULL THEN 'NULL' ELSE data::VARCHAR END FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -721,11 +698,11 @@ func TestAppenderBlobTinyInt(t *testing.T) {
 func TestAppenderUint8SliceTinyInt(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data UTINYINT[]
 	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	require.NoError(t, a.AppendRow(nil))
 	require.NoError(t, a.AppendRow([]uint8{0x01, 0x00, 0x03, 0x04, 8, 9, 7, 6, 5, 4, 3, 2, 1, 0}))
@@ -733,7 +710,6 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT CASE WHEN data IS NULL THEN 'NULL' ELSE data::VARCHAR END FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -757,11 +733,11 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 func TestAppenderDecimal(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data DECIMAL(4,3)
 	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	require.NoError(t, a.AppendRow(nil))
 	require.NoError(t, a.AppendRow(Decimal{Width: uint8(4), Value: big.NewInt(1), Scale: 3}))
@@ -769,7 +745,6 @@ func TestAppenderDecimal(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT CASE WHEN data IS NULL THEN 'NULL' ELSE data::VARCHAR END FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -813,14 +788,14 @@ var jsonResults = [][]string{
 func TestAppenderWithJSON(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 		    c1 UBIGINT,
 			l1 TINYINT[],
 			s1 STRUCT(a INTEGER, b VARCHAR[]),
 		    l2 STRUCT(a STRUCT(a FLOAT[])[])[]              
 	  	)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	for _, jsonInput := range jsonInputs {
 		var jsonData map[string]interface{}
@@ -832,7 +807,6 @@ func TestAppenderWithJSON(t *testing.T) {
 	require.NoError(t, a.Flush())
 
 	// Verify results.
-	db := sql.OpenDB(c)
 	res, err := db.QueryContext(context.Background(), `SELECT * FROM test`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
@@ -857,8 +831,8 @@ func TestAppenderWithJSON(t *testing.T) {
 }
 
 func BenchmarkAppenderNested(b *testing.B) {
-	c, conn, a := prepareAppender(b, createNestedDataTableSQL)
-	defer cleanupAppender(b, c, conn, a)
+	c, db, conn, a := prepareAppender(b, createNestedDataTableSQL)
+	defer cleanupAppender(b, c, db, conn, a)
 
 	const rowCount = 600
 	rowsToAppend := prepareNestedData(rowCount)
@@ -980,8 +954,8 @@ func benchmarkAppenderSingle[T any](v T) func(*testing.B) {
 		defer apiVerifyAllocationCounters()
 
 		tableSQL := fmt.Sprintf(createSingleTableSQL, types[reflect.TypeFor[T]()])
-		c, conn, a := prepareAppender(b, tableSQL)
-		defer cleanupAppender(b, c, conn, a)
+		c, db, conn, a := prepareAppender(b, tableSQL)
+		defer cleanupAppender(b, c, db, conn, a)
 
 		const rowsToAppend = 2048
 		var vec = [rowsToAppend]T{}

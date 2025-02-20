@@ -130,16 +130,17 @@ func TestErrAppender(t *testing.T) {
 	})
 
 	t.Run(columnCountErrMsg, func(t *testing.T) {
-		c, conn, a := prepareAppender(t, `CREATE TABLE test (a VARCHAR, b VARCHAR)`)
-		defer cleanupAppender(t, c, conn, a)
+		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (a VARCHAR, b VARCHAR)`)
+		defer cleanupAppender(t, c, db, conn, a)
 		err := a.AppendRow("hello")
 		testError(t, err, errAppenderAppendRow.Error(), columnCountErrMsg)
 	})
 
 	t.Run(errAppenderAppendAfterClose.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, `CREATE TABLE test (str VARCHAR)`)
+		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (str VARCHAR)`)
 		closeAppenderWrapper(t, a)
 		defer closeDriverConnWrapper(t, &conn)
+		defer closeDbWrapper(t, db)
 		defer closeConnectorWrapper(t, c)
 
 		err := a.AppendRow("hello")
@@ -147,8 +148,9 @@ func TestErrAppender(t *testing.T) {
 	})
 
 	t.Run(errAppenderFlush.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
+		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
 		defer closeDriverConnWrapper(t, &conn)
+		defer closeDbWrapper(t, db)
 		defer closeConnectorWrapper(t, c)
 
 		require.NoError(t, a.AppendRow(int32(1)))
@@ -161,8 +163,9 @@ func TestErrAppender(t *testing.T) {
 	})
 
 	t.Run(errAppenderClose.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
+		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (c1 INTEGER PRIMARY KEY)`)
 		defer closeDriverConnWrapper(t, &conn)
+		defer closeDbWrapper(t, db)
 		defer closeConnectorWrapper(t, c)
 
 		require.NoError(t, a.AppendRow(int32(1)))
@@ -173,15 +176,15 @@ func TestErrAppender(t *testing.T) {
 	})
 
 	t.Run(errUnsupportedMapKeyType.Error(), func(t *testing.T) {
-		c, conn, a := prepareAppender(t, `CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
-		defer cleanupAppender(t, c, conn, a)
+		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
+		defer cleanupAppender(t, c, db, conn, a)
 		err := a.AppendRow(nil)
 		testError(t, err, errAppenderAppendRow.Error(), errUnsupportedMapKeyType.Error())
 	})
 
 	t.Run(invalidInputErrMsg, func(t *testing.T) {
-		c, conn, a := prepareAppender(t, `CREATE TABLE test (col INT[3])`)
-		defer cleanupAppender(t, c, conn, a)
+		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (col INT[3])`)
+		defer cleanupAppender(t, c, db, conn, a)
 		err := a.AppendRow([]int32{1, 2})
 		testError(t, err, errAppenderAppendRow.Error(), invalidInputErrMsg)
 	})
@@ -190,8 +193,8 @@ func TestErrAppender(t *testing.T) {
 func TestErrAppend(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow("hello", "world")
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -202,8 +205,8 @@ func TestErrAppend(t *testing.T) {
 func TestErrAppendDecimal(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (d DECIMAL(8, 2))`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (d DECIMAL(8, 2))`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow(Decimal{Width: 9, Scale: 2})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -214,8 +217,8 @@ func TestErrAppendDecimal(t *testing.T) {
 func TestErrAppendEnum(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, testTypesEnumSQL+";"+`CREATE TABLE test (e my_enum)`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, testTypesEnumSQL+";"+`CREATE TABLE test (e my_enum)`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow("3")
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -224,11 +227,11 @@ func TestErrAppendEnum(t *testing.T) {
 func TestErrAppendSimpleStruct(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			simple_struct STRUCT(A INT, B VARCHAR)
 		)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow(1)
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -262,11 +265,11 @@ func TestErrAppendSimpleStruct(t *testing.T) {
 func TestErrAppendDuplicateStruct(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			duplicate_struct STRUCT(Duplicate INT)
 		)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow(duplicateKeyStruct{1, 2})
 	testError(t, err, errAppenderAppendRow.Error(), duplicateNameErrMsg)
@@ -275,11 +278,11 @@ func TestErrAppendDuplicateStruct(t *testing.T) {
 func TestErrAppendStruct(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			mix STRUCT(a STRUCT(L VARCHAR[]), B STRUCT(L INT[])[])
 		)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow(simpleStruct{1, "hello"})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -288,8 +291,8 @@ func TestErrAppendStruct(t *testing.T) {
 func TestErrAppendList(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test(intSlice INT[])`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test(intSlice INT[])`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow([]string{"foo", "bar", "baz"})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -300,8 +303,8 @@ func TestErrAppendList(t *testing.T) {
 func TestErrAppendStructWithList(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test (struct_with_list STRUCT(L INT[]))`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (struct_with_list STRUCT(L INT[]))`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow([]int32{1, 2, 3})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -312,11 +315,11 @@ func TestErrAppendStructWithList(t *testing.T) {
 func TestErrAppendNestedStruct(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `
+	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			wrapped_simple_struct STRUCT(a VARCHAR, B STRUCT(A INT, B VARCHAR)),
 		)`)
-	defer cleanupAppender(t, c, conn, a)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow(simpleStruct{1, "hello"})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -325,8 +328,8 @@ func TestErrAppendNestedStruct(t *testing.T) {
 func TestErrAppendNestedList(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
-	c, conn, a := prepareAppender(t, `CREATE TABLE test(int_slice INT[][][])`)
-	defer cleanupAppender(t, c, conn, a)
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test(int_slice INT[][][])`)
+	defer cleanupAppender(t, c, db, conn, a)
 
 	err := a.AppendRow([]int32{1, 2, 3})
 	testError(t, err, errAppenderAppendRow.Error(), castErrMsg)
@@ -342,8 +345,8 @@ func TestErrAppenderTSConversion(t *testing.T) {
 	testCases := []string{"TIMESTAMP_NS", "TIMESTAMP", "TIMESTAMPTZ"}
 	for _, tc := range testCases {
 		t.Run(tc+" conversion error", func(t *testing.T) {
-			c, conn, a := prepareAppender(t, `CREATE TABLE test (t `+tc+`)`)
-			defer cleanupAppender(t, c, conn, a)
+			c, db, conn, a := prepareAppender(t, `CREATE TABLE test (t `+tc+`)`)
+			defer cleanupAppender(t, c, db, conn, a)
 
 			tsLess := time.Date(-290407, time.January, 1, 15, 0o4, 5, 123456, time.UTC)
 			err := a.AppendRow(tsLess)

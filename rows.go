@@ -18,6 +18,8 @@ type rows struct {
 	res apiResult
 	// chunk holds the currently active data chunk.
 	chunk DataChunk
+	// closeChunk is true after the first iteration of Next.
+	closeChunk bool
 	// chunkCount is the number of chunks in the result.
 	chunkCount uint64
 	// chunkIdx is the chunk index in the result.
@@ -50,11 +52,15 @@ func (r *rows) Columns() []string {
 
 func (r *rows) Next(dst []driver.Value) error {
 	for r.rowCount == r.chunk.size {
-		r.chunk.close()
+		if r.closeChunk {
+			r.chunk.close()
+			r.closeChunk = false
+		}
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
 		apiChunk := apiResultGetChunk(r.res, r.chunkIdx)
+		r.closeChunk = true
 		if err := r.chunk.initFromDuckDataChunk(apiChunk, false); err != nil {
 			return getError(err, nil)
 		}
@@ -145,7 +151,9 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 }
 
 func (r *rows) Close() error {
-	r.chunk.close()
+	if r.closeChunk {
+		r.chunk.close()
+	}
 	apiDestroyResult(&r.res)
 
 	var err error

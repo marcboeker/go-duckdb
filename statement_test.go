@@ -62,25 +62,24 @@ func TestPrepareQuery(t *testing.T) {
 		r, innerErr := stmt.QueryBound(context.Background())
 		require.Nil(t, r)
 		require.ErrorIs(t, innerErr, errNotBound)
-		require.NoError(t, r.Close())
 
 		innerErr = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
 		require.NoError(t, innerErr)
 
+		// Don't immediately close the rows to trigger an active rows error.
 		r, innerErr = stmt.QueryBound(context.Background())
 		require.NoError(t, innerErr)
 		require.NotNil(t, r)
-		require.NoError(t, r.Close())
 
-		r, innerErr = stmt.QueryBound(context.Background())
+		badRows, innerErr := stmt.QueryBound(context.Background())
 		require.ErrorIs(t, innerErr, errActiveRows)
-		require.Nil(t, r)
-		require.NoError(t, r.Close())
+		require.Nil(t, badRows)
 
 		badResults, innerErr := stmt.ExecBound(context.Background())
 		require.ErrorIs(t, innerErr, errActiveRows)
 		require.Nil(t, badResults)
 
+		require.NoError(t, r.Close())
 		require.NoError(t, stmt.Close())
 
 		stmtType, innerErr = stmt.StatementType()

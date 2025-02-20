@@ -281,6 +281,7 @@ func TestConnInit(t *testing.T) {
 	})
 	defer closeConnectorWrapper(t, c)
 	db := sql.OpenDB(c)
+	defer closeDbWrapper(t, db)
 	db.SetMaxOpenConns(2)
 
 	// Get two separate connections and ensure that they're consistent.
@@ -290,13 +291,13 @@ func TestConnInit(t *testing.T) {
 	conn2 := openConnWrapper(t, db, ctx)
 	defer closeConnWrapper(t, conn2)
 
-	res, err := conn1.ExecContext(context.Background(), `CREATE TABLE example (j JSON)`)
+	res, err := conn1.ExecContext(ctx, `CREATE TABLE example (j JSON)`)
 	require.NoError(t, err)
 	ra, err := res.RowsAffected()
 	require.NoError(t, err)
 	require.Equal(t, int64(0), ra)
 
-	res, err = conn2.ExecContext(context.Background(), `INSERT INTO example VALUES(' { \"family\": \"anatidae\", \"species\": [ \"duck\", \"goose\", \"swan\", null ] }')`)
+	res, err = conn2.ExecContext(ctx, `INSERT INTO example VALUES(' { "family": "anatidae", "species": [ "duck", "goose", "swan", null ] }')`)
 	require.NoError(t, err)
 	ra, err = res.RowsAffected()
 	require.NoError(t, err)
