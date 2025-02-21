@@ -110,12 +110,6 @@ func createTable(t *testing.T, db *sql.DB, query string) {
 	require.NotNil(t, res)
 }
 
-func checkErr(err error, msg string) {
-	if err != nil {
-		log.Fatalf(msg, err)
-	}
-}
-
 func checkIsMemory(t *testing.T, db *sql.DB) {
 	res, err := db.Query(`SELECT * FROM information_schema.schemata WHERE catalog_name = 'memory'`)
 	require.NoError(t, err)
@@ -190,6 +184,7 @@ func TestConnectorBootQueries(t *testing.T) {
 		})
 		defer closeConnectorWrapper(t, c)
 		db = sql.OpenDB(c)
+		closeDbWrapper(t, db)
 		require.NoError(t, os.Remove(`foo.db`))
 	})
 }
@@ -221,19 +216,26 @@ func ExampleNewConnector() {
 	if err != nil {
 		log.Fatalf("failed to create a new duckdb connector: %s", err)
 	}
+	defer func() {
+		if err = c.Close(); err != nil {
+			log.Fatalf("failed to close the connector: %s", err)
+		}
+	}()
 
 	db := sql.OpenDB(c)
+	defer func() {
+		if err = db.Close(); err != nil {
+			log.Fatalf("failed to close the database: %s", err)
+		}
+		if err = os.Remove("duck.db"); err != nil {
+			log.Fatalf("failed to remove the database file: %s", err)
+		}
+	}()
+
 	var value string
 	row := db.QueryRow(`SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'`)
 	if row.Scan(&value) != nil {
 		log.Fatalf("failed to scan row: %s", err)
-	}
-
-	if err = c.Close(); err != nil {
-		log.Fatalf("failed to close the connector: %s", err)
-	}
-	if err = os.Remove("duck.db"); err != nil {
-		log.Fatalf("failed to remove the database file: %s", err)
 	}
 
 	fmt.Printf("The memory_limit is %s.", value)
@@ -793,31 +795,34 @@ func TestQueryTimeout(t *testing.T) {
 func Example_simpleConnection() {
 	// Connect to DuckDB using '[database/sql.Open]'.
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
-	checkErr(err, "failed to open connection to duckdb: %s")
-	defer db.Close()
+	defer func() {
+		if err = db.Close(); err != nil {
+			log.Fatalf("failed to close the database: %s", err)
+		}
+	}()
+	if err != nil {
+		log.Fatalf("failed to open connection to duckdb: %s", err)
+	}
 
 	ctx := context.Background()
 
 	createStmt := `CREATE table users(name VARCHAR, age INTEGER)`
 	_, err = db.ExecContext(ctx, createStmt)
-	checkErr(err, "failed to create table: %s")
+	if err != nil {
+		log.Fatalf("failed to create table: %s", err)
+	}
 
-	insertStmt := `INSERT INTO users(name, age) VALUES (?, ?);`
+	insertStmt := `INSERT INTO users(name, age) VALUES (?, ?)`
 	res, err := db.ExecContext(ctx, insertStmt, "Marc", 30)
-	checkErr(err, "failed to insert users: %s")
+	if err != nil {
+		log.Fatalf("failed to insert users: %s", err)
+	}
 
 	rowsAffected, err := res.RowsAffected()
-	checkErr(err, "failed to get number of rows affected")
+	if err != nil {
+		log.Fatal("failed to get number of rows affected")
+	}
+
 	fmt.Printf("Inserted %d row(s) into users table", rowsAffected)
 	// Output: Inserted 1 row(s) into users table
 }
-
-//func openDB(t *testing.T) *sql.DB {
-//	db, err := sql.Open("duckdb", "")
-//	require.NoError(t, err)
-//	require.NoError(t, db.Ping())
-//	return db
-//}
-
-// TODO: remove
-// foo table `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`

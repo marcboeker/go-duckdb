@@ -56,11 +56,11 @@ func TestErrNestedMap(t *testing.T) {
 	defer apiVerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	var m Map
 	err := db.QueryRow(`SELECT MAP([MAP([1], [1]), MAP([2], [2])], ['a', 'e'])`).Scan(&m)
 	testError(t, err, errUnsupportedMapKeyType.Error())
-	require.NoError(t, db.Close())
 }
 
 func TestErrAppender(t *testing.T) {
@@ -102,15 +102,16 @@ func TestErrAppender(t *testing.T) {
 		defer closeConnectorWrapper(t, c)
 
 		db := sql.OpenDB(c)
+		defer closeDbWrapper(t, db)
 		_, err := db.Exec(`CREATE TABLE tbl (i INTEGER)`)
 		require.NoError(t, err)
-		defer closeDbWrapper(t, db)
 
 		conn := openDriverConnWrapper(t, c)
 		defer closeDriverConnWrapper(t, &conn)
 
 		a, err := NewAppenderFromConn(conn, "", "tbl")
 		closeAppenderWrapper(t, a)
+		require.NoError(t, err)
 
 		err = a.Close()
 		testError(t, err, errAppenderDoubleClose.Error())
