@@ -294,7 +294,7 @@ func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []
 }
 
 func TestTypes(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	expectedRows := testTypesGenerateRows(t, 3)
 	c, db, conn, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
@@ -336,7 +336,7 @@ func compareDecimal(t *testing.T, want Decimal, got Decimal) {
 }
 
 func TestDecimal(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -449,7 +449,7 @@ func TestDecimal(t *testing.T) {
 }
 
 func TestDecimalString(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	testCases := []struct {
 		input    Decimal
@@ -594,7 +594,7 @@ func TestDecimalString(t *testing.T) {
 }
 
 func TestBlob(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -606,7 +606,7 @@ func TestBlob(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -622,7 +622,7 @@ func TestList(t *testing.T) {
 }
 
 func TestUUID(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -662,7 +662,7 @@ func TestUUID(t *testing.T) {
 }
 
 func TestUUIDScanError(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -677,7 +677,7 @@ func TestUUIDScanError(t *testing.T) {
 }
 
 func TestDate(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -707,7 +707,7 @@ func TestDate(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -730,7 +730,7 @@ func TestTime(t *testing.T) {
 }
 
 func TestENUMs(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -769,7 +769,7 @@ func TestENUMs(t *testing.T) {
 }
 
 func TestHugeInt(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -815,7 +815,7 @@ func TestHugeInt(t *testing.T) {
 }
 
 func TestTimestampTZ(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -840,7 +840,7 @@ func TestTimestampTZ(t *testing.T) {
 }
 
 func TestBoolean(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -860,7 +860,7 @@ func TestBoolean(t *testing.T) {
 }
 
 func TestTimestamp(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -884,7 +884,7 @@ func TestTimestamp(t *testing.T) {
 }
 
 func TestInterval(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -926,7 +926,7 @@ func TestInterval(t *testing.T) {
 }
 
 func TestArray(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -951,7 +951,7 @@ func TestArray(t *testing.T) {
 }
 
 func TestJSONType(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)

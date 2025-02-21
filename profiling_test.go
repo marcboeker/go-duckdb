@@ -8,7 +8,7 @@ import (
 )
 
 func TestProfiling(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -37,7 +37,7 @@ func TestProfiling(t *testing.T) {
 }
 
 func TestErrProfiling(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)

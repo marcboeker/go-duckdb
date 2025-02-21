@@ -11,7 +11,7 @@ import (
 )
 
 func TestPrepareQuery(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -99,7 +99,7 @@ func TestPrepareQuery(t *testing.T) {
 }
 
 func TestPrepareQueryPositional(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -205,7 +205,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 }
 
 func TestPrepareQueryNamed(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -314,7 +314,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 }
 
 func TestUninitializedStmt(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	stmt := &Stmt{}
 
@@ -339,7 +339,7 @@ func TestUninitializedStmt(t *testing.T) {
 }
 
 func TestPrepareWithError(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -377,7 +377,7 @@ func TestPrepareWithError(t *testing.T) {
 }
 
 func TestPreparePivot(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)

@@ -122,7 +122,7 @@ func checkIsMemory(t *testing.T, db *sql.DB) {
 /* ------------------------------------------ */
 
 func TestOpen(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	t.Run("without config", func(t *testing.T) {
 		db := openDbWrapper(t, ``)
@@ -165,7 +165,7 @@ func TestOpen(t *testing.T) {
 }
 
 func TestConnectorBootQueries(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	t.Run("README connector example", func(t *testing.T) {
 		db := openDbWrapper(t, `foo.db`)
@@ -190,7 +190,7 @@ func TestConnectorBootQueries(t *testing.T) {
 }
 
 func TestConnector_Close(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 	c := newConnectorWrapper(t, ``, nil)
 	// Multiple close calls must not cause panics or errors.
 	closeConnectorWrapper(t, c)
@@ -243,7 +243,7 @@ func ExampleNewConnector() {
 }
 
 func TestConnPool(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -276,7 +276,7 @@ func TestConnPool(t *testing.T) {
 }
 
 func TestConnInit(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	c := newConnectorWrapper(t, ``, func(execer driver.ExecerContext) error {
 		return nil
@@ -317,14 +317,14 @@ func TestConnInit(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 }
 
 func TestQuery(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -396,7 +396,7 @@ func TestQuery(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -428,7 +428,7 @@ func TestJSON(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -442,7 +442,7 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestTypeNamesAndScanTypes(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	tests := []struct {
 		sql      string
@@ -654,7 +654,7 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 }
 
 func TestMultipleStatements(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -747,7 +747,7 @@ func TestMultipleStatements(t *testing.T) {
 }
 
 func TestParquetExtension(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -775,7 +775,7 @@ func TestParquetExtension(t *testing.T) {
 }
 
 func TestQueryTimeout(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)

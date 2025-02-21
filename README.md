@@ -70,22 +70,21 @@ That way, you can perform initialization steps in a callback function before ope
 Here's an example that configures some parameters when opening a database with `sql.OpenDB(connector)`.
 
 ```go
-connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
+c, err := duckdb.NewConnector(t, `/path/to/foo.db?access_mode=read_only&threads=4`, func(execer driver.ExecerContext) error {
     bootQueries := []string{
-        "SET schema=main",
-        "SET search_path=main",
+        `SET schema=main`,
+        `SET search_path=main`,
     }
-
     for _, query := range bootQueries {
         _, err = execer.ExecContext(context.Background(), query, nil)
         if err != nil {
-			return err
+            return err
         }
     }
     return nil
 })
-
-db := sql.OpenDB(connector)
+defer c.Close()
+db := sql.OpenDB(c)
 defer db.Close()
 ```
 
@@ -193,10 +192,14 @@ rows.Close()
 appender, err := NewAppenderFromConn(conn, "", "test")
 defer appender.Close()
 
-// If not passed to sql.OpenDB.
-connector, err := NewConnector("", nil)
-defer connector.Close()
+// Optional, if passed to sql.OpenDB.
+c, err := NewConnector("", nil)
+defer c.Close()
 ```
+
+To verify your memory allocations, you can call `duckdb.VerifyAllocationCounters()` together with `-tags=debug_bindings`.
+`VerifyAllocationCounters` panics, if there are any open allocation.
+I.e., if `Close()` was not yet called for a resource.
 
 ## DuckDB Appender API
 
@@ -204,10 +207,10 @@ If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/append
 See `examples/appender.go` for a complete example.
 
 ```go
-connector, err := duckdb.NewConnector("test.db", nil)
-defer connector.Close()
+c, err := duckdb.NewConnector("test.db", nil)
+defer c.Close()
 
-conn, err := connector.Connect(context.Background())
+conn, err := c.Connect(context.Background())
 defer conn.Close()
 
 // Obtain an appender from the connection.
@@ -234,18 +237,20 @@ Please refer to the [DuckDB documentation](https://duckdb.org/docs/dev/profiling
 
 ```Go
 db, err := sql.Open("duckdb", "")
-con, err := db.Conn(context.Background())
+defer db.Close()
 
-_, err = con.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
-_, err = con.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
+conn, err := db.Conn(context.Background())
+defer conn.Close()
 
-res, err := con.QueryContext(context.Background(), `SELECT 42`)
-info, err := GetProfilingInfo(con)
-err = res.Close()
+_, err = conn.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
+_, err = conn.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
 
-_, err = con.ExecContext(context.Background(), `PRAGMA disable_profiling`)
-err = con.Close()
-err = db.Close()
+res, err := conn.QueryContext(context.Background(), `SELECT 42`)
+defer res.Close()
+
+info, err := GetProfilingInfo(conn)
+
+_, err = conn.ExecContext(context.Background(), `PRAGMA disable_profiling`)
 ```
 
 ## DuckDB Apache Arrow Interface
@@ -260,10 +265,10 @@ go build -tags="duckdb_arrow"
 You can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
 
 ```go
-connector, err := duckdb.NewConnector("", nil)
-defer connector.Close()
+c, err := duckdb.NewConnector("", nil)
+defer c.Close()
 
-conn, err := connector.Connect(context.Background())
+conn, err := c.Connect(context.Background())
 defer conn.Close()
 
 // Obtain the Arrow from the connection.

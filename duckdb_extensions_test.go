@@ -9,7 +9,7 @@ import (
 )
 
 func TestOpenSQLite(t *testing.T) {
-	defer apiVerifyAllocationCounters()
+	defer VerifyAllocationCounters()
 
 	db := openDbWrapper(t, `sqlite:testdata/pets.sqlite`)
 	defer closeDbWrapper(t, db)

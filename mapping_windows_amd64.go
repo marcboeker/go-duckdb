@@ -360,4 +360,4 @@ func apiCreateLogicalType(t apiType) apiLogicalType {
 // Memory Safety
 // ------------------------------------------------------------------ //
 
-var apiVerifyAllocationCounters = bindings.VerifyAllocationCounters
+var VerifyAllocationCounters = bindings.VerifyAllocationCounters
