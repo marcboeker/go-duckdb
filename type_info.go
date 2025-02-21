@@ -280,7 +280,7 @@ func (info *typeInfo) logicalListType() apiLogicalType {
 
 func (info *typeInfo) logicalStructType() apiLogicalType {
 	var types []apiLogicalType
-	defer destroyLogicalTypes(types)
+	defer destroyLogicalTypes(&types)
 
 	var names []string
 	for _, entry := range info.structEntries {
@@ -308,8 +308,8 @@ func funcName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
-func destroyLogicalTypes(types []apiLogicalType) {
-	for _, t := range types {
+func destroyLogicalTypes(types *[]apiLogicalType) {
+	for _, t := range *types {
 		apiDestroyLogicalType(&t)
 	}
 }
