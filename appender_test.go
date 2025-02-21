@@ -958,7 +958,7 @@ func benchmarkAppenderSingle[T any](v T) func(*testing.B) {
 		defer cleanupAppender(b, c, db, conn, a)
 
 		const rowsToAppend = 2048
-		var vec = [rowsToAppend]T{}
+		vec := [rowsToAppend]T{}
 		for i := 0; i < 2048; i++ {
 			vec[i] = v
 		}
