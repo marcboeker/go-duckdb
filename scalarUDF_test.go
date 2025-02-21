@@ -235,29 +235,31 @@ func TestAllTypesScalarUDF(t *testing.T) {
 
 	typeInfos := getTypeInfos(t, false)
 	for _, info := range typeInfos {
-		currentInfo = info.TypeInfo
+		func() {
+			currentInfo = info.TypeInfo
 
-		db := openDbWrapper(t, ``)
-		conn := openConnWrapper(t, db, context.Background())
+			db := openDbWrapper(t, ``)
+			defer closeDbWrapper(t, db)
 
-		_, err := conn.ExecContext(context.Background(), `CREATE TYPE greeting AS ENUM ('hello', 'world')`)
-		require.NoError(t, err)
+			conn := openConnWrapper(t, db, context.Background())
+			defer closeConnWrapper(t, conn)
 
-		var udf *typesSUDF
-		err = RegisterScalarUDF(conn, "my_identity", udf)
-		require.NoError(t, err)
+			_, err := conn.ExecContext(context.Background(), `CREATE TYPE greeting AS ENUM ('hello', 'world')`)
+			require.NoError(t, err)
 
-		var res string
-		row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s)::VARCHAR AS res`, info.input))
-		require.NoError(t, row.Scan(&res))
-		if info.TypeInfo.InternalType() != TYPE_UUID {
-			require.Equal(t, info.output, res, `output does not match expected output, input: %s`, info.input)
-		} else {
-			require.NotEqual(t, "", res, "uuid empty")
-		}
+			var udf *typesSUDF
+			err = RegisterScalarUDF(conn, "my_identity", udf)
+			require.NoError(t, err)
 
-		closeConnWrapper(t, conn)
-		closeDbWrapper(t, db)
+			var res string
+			row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s)::VARCHAR AS res`, info.input))
+			require.NoError(t, row.Scan(&res))
+			if info.TypeInfo.InternalType() != TYPE_UUID {
+				require.Equal(t, info.output, res, `output does not match expected output, input: %s`, info.input)
+			} else {
+				require.NotEqual(t, "", res, "uuid empty")
+			}
+		}()
 	}
 }
 
@@ -374,6 +376,7 @@ func TestErrScalarUDF(t *testing.T) {
 	defer closeDbWrapper(t, db)
 
 	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
 	var err error
 	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
@@ -425,9 +428,21 @@ func TestErrScalarUDF(t *testing.T) {
 	// Register a scalar function that is nil.
 	err = RegisterScalarUDF(conn, "my_sum", nil)
 	testError(t, err, errAPI.Error(), errScalarUDFIsNil.Error())
+}
 
-	// Test registering the scalar function on a closed connection.
+func TestErrScalarUDFClosedConn(t *testing.T) {
+	defer apiVerifyAllocationCounters()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+
+	conn := openConnWrapper(t, db, context.Background())
 	closeConnWrapper(t, conn)
+
 	var errClosedConUDF *simpleSUDF
 	err = RegisterScalarUDF(conn, "closed_con", errClosedConUDF)
 	require.ErrorContains(t, err, sql.ErrConnDone.Error())

@@ -66,12 +66,12 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 	if err != nil {
 		return getError(errAPI, err)
 	}
+	defer apiDestroyScalarFunction(&function)
 
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err = c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
 		state := apiRegisterScalarFunction(conn.apiConn, function)
-		apiDestroyScalarFunction(&function)
 		if apiState(state) == apiStateError {
 			return getError(errAPI, errScalarUDFCreate)
 		}

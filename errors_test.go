@@ -101,8 +101,10 @@ func TestErrAppender(t *testing.T) {
 		c := newConnectorWrapper(t, ``, nil)
 		defer closeConnectorWrapper(t, c)
 
-		_, err := sql.OpenDB(c).Exec(`CREATE TABLE tbl (i INTEGER)`)
+		db := sql.OpenDB(c)
+		_, err := db.Exec(`CREATE TABLE tbl (i INTEGER)`)
 		require.NoError(t, err)
+		defer closeDbWrapper(t, db)
 
 		conn := openDriverConnWrapper(t, c)
 		defer closeDriverConnWrapper(t, &conn)
@@ -118,8 +120,10 @@ func TestErrAppender(t *testing.T) {
 		c := newConnectorWrapper(t, ``, nil)
 		defer closeConnectorWrapper(t, c)
 
-		_, err := sql.OpenDB(c).Exec(`CREATE TABLE test (bit_col BIT)`)
+		db := sql.OpenDB(c)
+		_, err := db.Exec(`CREATE TABLE test (bit_col BIT)`)
 		require.NoError(t, err)
+		defer closeDbWrapper(t, db)
 
 		conn := openDriverConnWrapper(t, c)
 		defer closeDriverConnWrapper(t, &conn)

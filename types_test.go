@@ -200,7 +200,7 @@ func testTypesReset[T require.TestingT](t T, c *Connector) {
 	require.NoError(t, err)
 }
 
-func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows []testTypesRow) []testTypesRow {
+func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []testTypesRow) []testTypesRow {
 	// Append the rows. We cannot append Composite types.
 	for i := 0; i < len(expectedRows); i++ {
 		r := &expectedRows[i]
@@ -242,7 +242,7 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 	}
 	require.NoError(t, a.Flush())
 
-	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test ORDER BY Smallint_col`)
+	res, err := db.QueryContext(context.Background(), `SELECT * FROM test ORDER BY Smallint_col`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
 
@@ -299,7 +299,7 @@ func TestTypes(t *testing.T) {
 	expectedRows := testTypesGenerateRows(t, 3)
 	c, db, conn, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
 	defer cleanupAppender(t, c, db, conn, a)
-	actualRows := testTypes(t, c, a, expectedRows)
+	actualRows := testTypes(t, db, a, expectedRows)
 
 	for i := range actualRows {
 		expectedRows[i].toUTC()
@@ -320,7 +320,7 @@ func BenchmarkTypes(b *testing.B) {
 	var r []testTypesRow
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		r = testTypes(b, c, a, expectedRows)
+		r = testTypes(b, db, a, expectedRows)
 		testTypesReset(b, c)
 	}
 	b.StopTimer()

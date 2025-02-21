@@ -237,7 +237,7 @@ func TestArrowClosedConn(t *testing.T) {
 		tr := array.NewTableReader(tbl, 5)
 		defer tr.Release()
 
-		closeConnWrapper(t, conn)
+		closeDriverConnWrapper(t, &innerConn)
 
 		release, err := ar.RegisterView(tr, "arrow_table")
 		require.ErrorIs(t, err, errClosedCon)

@@ -23,6 +23,8 @@ func TestReplacementScan(t *testing.T) {
 	})
 
 	db := sql.OpenDB(c)
+	defer closeDbWrapper(t, db)
+
 	res, err := db.Query("SELECT * FROM any_table")
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)

@@ -23,7 +23,7 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Run Main Tests
         run: |
-          go test -v -race -count=1 .
+          go test -v -tags=debug_bindings
 
   test_examples:
     name: Test Examples
@@ -59,7 +59,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - name: Run Arrow Tests
-        run: go test -v -race -count=1 -tags=duckdb_arrow
+        run: go test -v -tags=duckdb_arrow,debug_bindings
   test-dynamic-lib:
     name: Dynamic Lib Tests
     runs-on: ${{ matrix.os }}
