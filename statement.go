@@ -406,7 +406,7 @@ func (s *Stmt) executeBound(ctx context.Context) (*apiResult, error) {
 	go func() {
 		select {
 		case <-ctx.Done():
-			apiInterrupt(s.conn.apiConn)
+			apiInterrupt(s.conn.conn)
 			close(bgDoneCh)
 			return
 		case <-mainDoneCh:

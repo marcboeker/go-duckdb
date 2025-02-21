@@ -8,7 +8,7 @@ Current DuckDB version: `v1.2.0`.
 [![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb)
 
 ```diff
-! go-duckdb recently moved to v2.0.0 to support DuckDB v1.2.0.
+! Starting with v2.0.0, go-duckdb supports DuckDB v1.2.0.
 ! Breaking changes are:
 ! - Drops pre-built FreeBSD support.
 ! - The Arrow dependency is now opt-in via -tags=duckdb_arrow
@@ -192,8 +192,8 @@ rows.Close()
 appender, err := NewAppenderFromConn(conn, "", "test")
 defer appender.Close()
 
-// Optional, if passed to sql.OpenDB.
 c, err := NewConnector("", nil)
+// Optional, if passed to sql.OpenDB.
 defer c.Close()
 ```
 
@@ -256,6 +256,7 @@ _, err = conn.ExecContext(context.Background(), `PRAGMA disable_profiling`)
 ## DuckDB Apache Arrow Interface
 
 The [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface) is a heavy dependency.
+Starting with `v2`, the DuckDB Arrow Interface is opt-in instead of opt-out.
 If you want to use it, you can enable it by passing `-tags=duckdb_arrow` to `go build`.
 
 ```sh

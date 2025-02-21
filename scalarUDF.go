@@ -71,7 +71,7 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err = c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		state := apiRegisterScalarFunction(conn.apiConn, function)
+		state := apiRegisterScalarFunction(conn.conn, function)
 		if apiState(state) == apiStateError {
 			return getError(errAPI, errScalarUDFCreate)
 		}
@@ -108,7 +108,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 	// Register the function set on the underlying driver connection exposed by c.Raw.
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		state := apiRegisterScalarFunctionSet(conn.apiConn, set)
+		state := apiRegisterScalarFunctionSet(conn.conn, set)
 		apiDestroyScalarFunctionSet(&set)
 		if apiState(state) == apiStateError {
 			return getError(errAPI, errScalarUDFCreateSet)

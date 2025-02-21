@@ -81,22 +81,19 @@ func (*Connector) Driver() driver.Driver {
 }
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-	var apiConn apiConnection
-
-	state := apiConnect(c.db, &apiConn)
+	var newConn apiConnection
+	state := apiConnect(c.db, &newConn)
 	if apiState(state) == apiStateError {
 		return nil, getError(errConnect, nil)
 	}
 
-	con := &Conn{apiConn: apiConn}
-
+	conn := &Conn{conn: newConn}
 	if c.connInitFn != nil {
-		if err := c.connInitFn(con); err != nil {
+		if err := c.connInitFn(conn); err != nil {
 			return nil, err
 		}
 	}
-
-	return con, nil
+	return conn, nil
 }
 
 func (c *Connector) Close() error {

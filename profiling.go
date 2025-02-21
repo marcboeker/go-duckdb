@@ -21,7 +21,7 @@ func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		profilingInfo := apiGetProfilingInfo(conn.apiConn)
+		profilingInfo := apiGetProfilingInfo(conn.conn)
 		if profilingInfo.Ptr == nil {
 			return getError(errProfilingInfoEmpty, nil)
 		}

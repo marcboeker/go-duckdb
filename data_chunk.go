@@ -8,7 +8,7 @@ import (
 // DataChunk storage of a DuckDB table.
 type DataChunk struct {
 	// data holds the underlying duckdb data chunk.
-	apiChunk apiDataChunk
+	chunk apiDataChunk
 	// columns is a helper slice providing direct access to all columns.
 	columns []vector
 	// columnNames holds the column names, if known.
@@ -21,7 +21,7 @@ var GetDataChunkCapacity = sync.OnceValue[int](func() int { return int(apiVector
 
 // GetSize returns the internal size of the data chunk.
 func (chunk *DataChunk) GetSize() int {
-	chunk.size = int(apiDataChunkGetSize(chunk.apiChunk))
+	chunk.size = int(apiDataChunkGetSize(chunk.chunk))
 	return chunk.size
 }
 
@@ -30,7 +30,7 @@ func (chunk *DataChunk) SetSize(size int) error {
 	if size > GetDataChunkCapacity() {
 		return getError(errAPI, errVectorSize)
 	}
-	apiDataChunkSetSize(chunk.apiChunk, uint64(size))
+	apiDataChunkSetSize(chunk.chunk, uint64(size))
 	return nil
 }
 
@@ -83,12 +83,12 @@ func (chunk *DataChunk) initFromTypes(types []apiLogicalType, writable bool) err
 		return err
 	}
 
-	chunk.apiChunk = apiCreateDataChunk(types)
-	apiDataChunkSetSize(chunk.apiChunk, uint64(GetDataChunkCapacity()))
+	chunk.chunk = apiCreateDataChunk(types)
+	apiDataChunkSetSize(chunk.chunk, uint64(GetDataChunkCapacity()))
 
 	// Initialize the vectors and their child vectors.
 	for i := 0; i < columnCount; i++ {
-		v := apiDataChunkGetVector(chunk.apiChunk, uint64(i))
+		v := apiDataChunkGetVector(chunk.chunk, uint64(i))
 		chunk.columns[i].initVectors(v, writable)
 	}
 	return nil
@@ -97,7 +97,7 @@ func (chunk *DataChunk) initFromTypes(types []apiLogicalType, writable bool) err
 func (chunk *DataChunk) initFromDuckDataChunk(apiChunk apiDataChunk, writable bool) error {
 	columnCount := int(apiDataChunkGetColumnCount(apiChunk))
 	chunk.columns = make([]vector, columnCount)
-	chunk.apiChunk = apiChunk
+	chunk.chunk = apiChunk
 
 	var err error
 	for i := 0; i < columnCount; i++ {
@@ -137,5 +137,5 @@ func (chunk *DataChunk) initFromDuckVector(vec apiVector, writable bool) error {
 }
 
 func (chunk *DataChunk) close() {
-	apiDestroyDataChunk(&chunk.apiChunk)
+	apiDestroyDataChunk(&chunk.chunk)
 }

@@ -11,13 +11,13 @@ import (
 // Conn holds a connection to a DuckDB database.
 // It implements the driver.Conn interface.
 type Conn struct {
-	apiConn apiConnection
-	closed  bool
-	tx      bool
+	conn   apiConnection
+	closed bool
+	tx     bool
 }
 
 // CheckNamedValue implements the driver.NamedValueChecker interface.
-func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
+func (conn *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
 	case *big.Int, Interval:
 		return nil
@@ -27,8 +27,8 @@ func (c *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 
 // ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
 // It implements the driver.ExecerContext interface.
-func (c *Conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	prepared, err := c.prepareStmts(ctx, query)
+func (conn *Conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	prepared, err := conn.prepareStmts(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -49,8 +49,8 @@ func (c *Conn) ExecContext(ctx context.Context, query string, args []driver.Name
 
 // QueryContext executes a query that may return rows, such as a SELECT.
 // It implements the driver.QueryerContext interface.
-func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	prepared, err := c.prepareStmts(ctx, query)
+func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	prepared, err := conn.prepareStmts(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -71,18 +71,18 @@ func (c *Conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 
 // PrepareContext returns a prepared statement, bound to this connection.
 // It implements the driver.ConnPrepareContext interface.
-func (c *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
-	return c.prepareStmts(ctx, query)
+func (conn *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	return conn.prepareStmts(ctx, query)
 }
 
 // Prepare returns a prepared statement, bound to this connection.
 // It implements the driver.Conn interface.
-func (c *Conn) Prepare(query string) (driver.Stmt, error) {
-	if c.closed {
+func (conn *Conn) Prepare(query string) (driver.Stmt, error) {
+	if conn.closed {
 		return nil, errors.Join(errPrepare, errClosedCon)
 	}
 
-	extractedStmts, count, err := c.extractStmts(query)
+	extractedStmts, count, err := conn.extractStmts(query)
 	if err != nil {
 		return nil, err
 	}
@@ -91,18 +91,18 @@ func (c *Conn) Prepare(query string) (driver.Stmt, error) {
 	if count != 1 {
 		return nil, errors.Join(errPrepare, errMissingPrepareContext)
 	}
-	return c.prepareExtractedStmt(extractedStmts, 0)
+	return conn.prepareExtractedStmt(extractedStmts, 0)
 }
 
 // Begin is deprecated: Use BeginTx instead.
-func (c *Conn) Begin() (driver.Tx, error) {
-	return c.BeginTx(context.Background(), driver.TxOptions{})
+func (conn *Conn) Begin() (driver.Tx, error) {
+	return conn.BeginTx(context.Background(), driver.TxOptions{})
 }
 
 // BeginTx starts and returns a new transaction.
 // It implements the driver.ConnBeginTx interface.
-func (c *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	if c.tx {
+func (conn *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	if conn.tx {
 		return nil, errors.Join(errBeginTx, errMultipleTx)
 	}
 
@@ -116,29 +116,29 @@ func (c *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 		return nil, errors.Join(errBeginTx, errIsolationLevelNotSupported)
 	}
 
-	if _, err := c.ExecContext(ctx, `BEGIN TRANSACTION`, nil); err != nil {
+	if _, err := conn.ExecContext(ctx, `BEGIN TRANSACTION`, nil); err != nil {
 		return nil, err
 	}
 
-	c.tx = true
-	return &tx{c}, nil
+	conn.tx = true
+	return &tx{conn}, nil
 }
 
 // Close closes the connection to the database.
 // It implements the driver.Conn interface.
-func (c *Conn) Close() error {
-	if c.closed {
+func (conn *Conn) Close() error {
+	if conn.closed {
 		return errClosedCon
 	}
-	c.closed = true
-	apiDisconnect(&c.apiConn)
+	conn.closed = true
+	apiDisconnect(&conn.conn)
 	return nil
 }
 
-func (c *Conn) extractStmts(query string) (apiExtractedStatements, uint64, error) {
+func (conn *Conn) extractStmts(query string) (apiExtractedStatements, uint64, error) {
 	var extractedStmts apiExtractedStatements
 
-	count := apiExtractStatements(c.apiConn, query, &extractedStmts)
+	count := apiExtractStatements(conn.conn, query, &extractedStmts)
 	if count == 0 {
 		errMsg := apiExtractStatementsError(extractedStmts)
 		apiDestroyExtracted(&extractedStmts)
@@ -150,9 +150,9 @@ func (c *Conn) extractStmts(query string) (apiExtractedStatements, uint64, error
 	return extractedStmts, count, nil
 }
 
-func (c *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i uint64) (*Stmt, error) {
+func (conn *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i uint64) (*Stmt, error) {
 	var preparedStmt apiPreparedStatement
-	state := apiPrepareExtractedStatement(c.apiConn, extractedStmts, i, &preparedStmt)
+	state := apiPrepareExtractedStatement(conn.conn, extractedStmts, i, &preparedStmt)
 
 	if apiState(state) == apiStateError {
 		err := getDuckDBError(apiPrepareError(preparedStmt))
@@ -160,22 +160,22 @@ func (c *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i uin
 		return nil, err
 	}
 
-	return &Stmt{conn: c, preparedStmt: &preparedStmt}, nil
+	return &Stmt{conn: conn, preparedStmt: &preparedStmt}, nil
 }
 
-func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
-	if c.closed {
+func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
+	if conn.closed {
 		return nil, errClosedCon
 	}
 
-	extractedStmts, count, errExtract := c.extractStmts(query)
+	extractedStmts, count, errExtract := conn.extractStmts(query)
 	if errExtract != nil {
 		return nil, errExtract
 	}
 	defer apiDestroyExtracted(&extractedStmts)
 
 	for i := uint64(0); i < count-1; i++ {
-		preparedStmt, err := c.prepareExtractedStmt(extractedStmts, i)
+		preparedStmt, err := conn.prepareExtractedStmt(extractedStmts, i)
 		if err != nil {
 			return nil, err
 		}
@@ -190,5 +190,5 @@ func (c *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
 			return nil, closeErr
 		}
 	}
-	return c.prepareExtractedStmt(extractedStmts, count-1)
+	return conn.prepareExtractedStmt(extractedStmts, count-1)
 }

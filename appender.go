@@ -32,7 +32,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	}
 
 	var appender apiAppender
-	state := apiAppenderCreate(conn.apiConn, schema, table, &appender)
+	state := apiAppenderCreate(conn.conn, schema, table, &appender)
 	if apiState(state) == apiStateError {
 		err := getDuckDBError(apiAppenderError(appender))
 		apiAppenderDestroy(&appender)
@@ -177,7 +177,7 @@ func (a *Appender) appendDataChunks() error {
 			break
 		}
 
-		state := apiAppendDataChunk(a.appender, chunk.apiChunk)
+		state := apiAppendDataChunk(a.appender, chunk.chunk)
 		if apiState(state) == apiStateError {
 			err = getDuckDBError(apiAppenderError(a.appender))
 			break

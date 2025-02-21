@@ -274,43 +274,42 @@ func (info *typeInfo) logicalType() apiLogicalType {
 
 func (info *typeInfo) logicalListType() apiLogicalType {
 	child := info.childTypes[0].logicalType()
-	logicalType := apiCreateListType(child)
-	apiDestroyLogicalType(&child)
-	return logicalType
+	defer apiDestroyLogicalType(&child)
+	return apiCreateListType(child)
 }
 
 func (info *typeInfo) logicalStructType() apiLogicalType {
 	var types []apiLogicalType
+	defer destroyLogicalTypes(types)
+
 	var names []string
 	for _, entry := range info.structEntries {
 		types = append(types, entry.Info().logicalType())
 		names = append(names, entry.Name())
 	}
-
-	logicalType := apiCreateStructType(types, names)
-	for _, t := range types {
-		apiDestroyLogicalType(&t)
-	}
-	return logicalType
+	return apiCreateStructType(types, names)
 }
 
 func (info *typeInfo) logicalMapType() apiLogicalType {
 	key := info.childTypes[0].logicalType()
+	defer apiDestroyLogicalType(&key)
 	value := info.childTypes[1].logicalType()
-	logicalType := apiCreateMapType(key, value)
-
-	apiDestroyLogicalType(&key)
-	apiDestroyLogicalType(&value)
-	return logicalType
+	defer apiDestroyLogicalType(&value)
+	return apiCreateMapType(key, value)
 }
 
 func (info *typeInfo) logicalArrayType() apiLogicalType {
 	child := info.childTypes[0].logicalType()
-	logicalType := apiCreateArrayType(child, info.arrayLength)
-	apiDestroyLogicalType(&child)
-	return logicalType
+	defer apiDestroyLogicalType(&child)
+	return apiCreateArrayType(child, info.arrayLength)
 }
 
 func funcName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func destroyLogicalTypes(types []apiLogicalType) {
+	for _, t := range types {
+		apiDestroyLogicalType(&t)
+	}
 }

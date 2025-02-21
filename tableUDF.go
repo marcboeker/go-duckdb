@@ -502,7 +502,7 @@ func RegisterTableUDF[TFT TableFunction](conn *sql.Conn, name string, f TFT) err
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err := conn.Raw(func(driverConn any) error {
 		c := driverConn.(*Conn)
-		state := apiRegisterTableFunction(c.apiConn, function)
+		state := apiRegisterTableFunction(c.conn, function)
 		apiDestroyTableFunction(&function)
 		if apiState(state) == apiStateError {
 			return getError(errAPI, errTableUDFCreate)
