@@ -8,7 +8,7 @@ import (
 // vector storage of a DuckDB column.
 type vector struct {
 	// The underlying DuckDB vector.
-	apiVec apiVector
+	vec apiVector
 	// The underlying data ptr.
 	dataPtr unsafe.Pointer
 	// The vector's validity mask.
@@ -106,40 +106,40 @@ func (vec *vector) init(logicalType apiLogicalType, colIdx int) error {
 }
 
 func (vec *vector) resizeListVector(newLength uint64) {
-	apiListVectorReserve(vec.apiVec, newLength)
-	apiListVectorSetSize(vec.apiVec, newLength)
+	apiListVectorReserve(vec.vec, newLength)
+	apiListVectorSetSize(vec.vec, newLength)
 	vec.resetChildData()
 }
 
 func (vec *vector) resetChildData() {
 	for i := range vec.childVectors {
-		vec.childVectors[i].dataPtr = apiVectorGetData(vec.childVectors[i].apiVec)
+		vec.childVectors[i].dataPtr = apiVectorGetData(vec.childVectors[i].vec)
 		vec.childVectors[i].resetChildData()
 	}
 }
 
-func (vec *vector) initVectors(apiVec apiVector, writable bool) {
-	vec.apiVec = apiVec
-	vec.dataPtr = apiVectorGetData(apiVec)
+func (vec *vector) initVectors(v apiVector, writable bool) {
+	vec.vec = v
+	vec.dataPtr = apiVectorGetData(v)
 	if writable {
-		apiVectorEnsureValidityWritable(apiVec)
+		apiVectorEnsureValidityWritable(v)
 	}
-	vec.maskPtr = apiVectorGetValidity(apiVec)
-	vec.getChildVectors(apiVec, writable)
+	vec.maskPtr = apiVectorGetValidity(v)
+	vec.getChildVectors(v, writable)
 }
 
-func (vec *vector) getChildVectors(apiVec apiVector, writable bool) {
+func (vec *vector) getChildVectors(v apiVector, writable bool) {
 	switch vec.Type {
 	case TYPE_LIST, TYPE_MAP:
-		child := apiListVectorGetChild(apiVec)
+		child := apiListVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
-			child := apiStructVectorGetChild(apiVec, uint64(i))
+			child := apiStructVectorGetChild(v, uint64(i))
 			vec.childVectors[i].initVectors(child, writable)
 		}
 	case TYPE_ARRAY:
-		child := apiArrayVectorGetChild(apiVec)
+		child := apiArrayVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
 	}
 }

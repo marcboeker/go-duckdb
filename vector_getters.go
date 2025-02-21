@@ -153,7 +153,7 @@ func (vec *vector) getEnum(rowIdx uint64) string {
 		idx = getPrimitive[uint64](vec, rowIdx)
 	}
 
-	logicalType := apiVectorGetColumnType(vec.apiVec)
+	logicalType := apiVectorGetColumnType(vec.vec)
 	defer apiDestroyLogicalType(&logicalType)
 	return apiEnumDictionaryValue(logicalType, idx)
 }

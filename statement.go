@@ -1,6 +1,5 @@
 package duckdb
 
-import "C"
 import (
 	"context"
 	"database/sql/driver"

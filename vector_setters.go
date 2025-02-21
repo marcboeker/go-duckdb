@@ -207,9 +207,9 @@ func setHugeint[S any](vec *vector, rowIdx uint64, val S) error {
 func setBytes[S any](vec *vector, rowIdx uint64, val S) error {
 	switch v := any(val).(type) {
 	case string:
-		apiVectorAssignStringElement(vec.apiVec, rowIdx, v)
+		apiVectorAssignStringElement(vec.vec, rowIdx, v)
 	case []byte:
-		apiVectorAssignStringElementLen(vec.apiVec, rowIdx, v, uint64(len(v)))
+		apiVectorAssignStringElementLen(vec.vec, rowIdx, v, uint64(len(v)))
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.String.String())
 	}
@@ -271,7 +271,7 @@ func setList[S any](vec *vector, rowIdx uint64, val S) error {
 	}
 
 	// Set the offset and length of the list vector using the current size of the child vector.
-	childVectorSize := apiListVectorGetSize(vec.apiVec)
+	childVectorSize := apiListVectorGetSize(vec.vec)
 	var listEntry apiListEntry
 	apiListEntrySetOffset(&listEntry, childVectorSize)
 	apiListEntrySetLength(&listEntry, uint64(len(list)))
