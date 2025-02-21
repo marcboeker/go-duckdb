@@ -263,7 +263,7 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 		Ptr: unsafe.Pointer(stream),
 	}
 
-	state := apiArrowScan(a.conn.apiConn, name, arrowStream)
+	state := apiArrowScan(a.conn.conn, name, arrowStream)
 	if apiState(state) == apiStateError {
 		release()
 		return nil, errors.New("duckdb_arrow_scan")
