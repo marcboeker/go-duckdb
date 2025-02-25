@@ -3,21 +3,17 @@
 package duckdb
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestOpenSQLite(t *testing.T) {
-	t.Parallel()
-
-	db, err := sql.Open("duckdb", "sqlite:testdata/pets.sqlite")
-	require.NoError(t, err)
+	db := openDbWrapper(t, `sqlite:testdata/pets.sqlite`)
+	defer closeDbWrapper(t, db)
 
 	var species string
-	res := db.QueryRow("SELECT species FROM pets WHERE id=1")
+	res := db.QueryRow(`SELECT species FROM pets WHERE id = 1`)
 	require.NoError(t, res.Scan(&species))
 	require.Equal(t, "Gopher", species)
-	require.NoError(t, db.Close())
 }

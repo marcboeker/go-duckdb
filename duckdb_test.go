@@ -60,6 +60,19 @@ func closeConnWrapper[T require.TestingT](t T, conn *sql.Conn) {
 	require.NoError(t, conn.Close())
 }
 
+func openDriverConnWrapper[T require.TestingT](t T, c *Connector) driver.Conn {
+	conn, err := c.Connect(context.Background())
+	require.NoError(t, err)
+	return conn
+}
+
+func closeDriverConnWrapper[T require.TestingT](t T, conn *driver.Conn) {
+	if conn == nil {
+		return
+	}
+	require.NoError(t, (*conn).Close())
+}
+
 func closeRowsWrapper[T require.TestingT](t T, r *sql.Rows) {
 	if r == nil {
 		return
