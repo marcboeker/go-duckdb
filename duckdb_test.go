@@ -16,9 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-/* ------------------------------------------ */
-/* -------- Open and Close Wrappers --------- */
-/* ------------------------------------------ */
+/* ---------- Open and Close Wrappers ---------- */
 
 func openDbWrapper[T require.TestingT](t T, dsn string) *sql.DB {
 	db, err := sql.Open(`duckdb`, dsn)
@@ -80,9 +78,20 @@ func closeRowsWrapper[T require.TestingT](t T, r *sql.Rows) {
 	require.NoError(t, r.Close())
 }
 
-/* ------------------------------------------ */
-/* -------------- Test Helpers -------------- */
-/* ------------------------------------------ */
+func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema string, table string) *Appender {
+	a, err := NewAppenderFromConn(*conn, schema, table)
+	require.NoError(t, err)
+	return a
+}
+
+func closeAppenderWrapper[T require.TestingT](t T, a *Appender) {
+	if a == nil {
+		return
+	}
+	require.NoError(t, a.Close())
+}
+
+/* ---------- Test Helpers ---------- */
 
 func createTable(t *testing.T, db *sql.DB, query string) {
 	res, err := db.Exec(query)
@@ -108,9 +117,7 @@ func openDB(t *testing.T) *sql.DB {
 	return db
 }
 
-/* ------------------------------------------ */
-/* ------------------ Tests ----------------- */
-/* ------------------------------------------ */
+/* ---------- Tests ---------- */
 
 func TestOpen(t *testing.T) {
 	t.Run("without config", func(t *testing.T) {
