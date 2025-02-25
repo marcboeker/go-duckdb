@@ -348,7 +348,7 @@ func TestErrAPISetValue(t *testing.T) {
 
 func TestDuckDBErrors(t *testing.T) {
 	db := openDB(t)
-	createTable(db, t, `CREATE TABLE duckdb_error_test(bar VARCHAR UNIQUE, baz INT32, u_1 UNION("string" VARCHAR))`)
+	createTable(t, db, `CREATE TABLE duckdb_error_test(bar VARCHAR UNIQUE, baz INT32, u_1 UNION("string" VARCHAR))`)
 	_, err := db.Exec(`INSERT INTO duckdb_error_test(bar, baz) VALUES ('bar', 0)`)
 	require.NoError(t, err)
 

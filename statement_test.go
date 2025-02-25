@@ -384,7 +384,7 @@ func TestPrepareWithError(t *testing.T) {
 func TestPreparePivot(t *testing.T) {
 	db := openDB(t)
 	ctx := context.Background()
-	createTable(db, t, `CREATE OR REPLACE TABLE cities(country VARCHAR, name VARCHAR, year INT, population INT)`)
+	createTable(t, db, `CREATE OR REPLACE TABLE cities(country VARCHAR, name VARCHAR, year INT, population INT)`)
 	_, err := db.ExecContext(ctx, `INSERT INTO cities VALUES ('NL', 'Netherlands', '2020', '42')`)
 	require.NoError(t, err)
 
