@@ -67,17 +67,6 @@ func closeRowsWrapper[T require.TestingT](t T, r *sql.Rows) {
 	require.NoError(t, r.Close())
 }
 
-func createFooTable(db *sql.DB, t *testing.T) {
-	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
-}
-
-func openDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
-	require.NoError(t, db.Ping())
-	return db
-}
-
 /* ------------------------------------------ */
 /* -------------- Test Helpers -------------- */
 /* ------------------------------------------ */
@@ -93,6 +82,17 @@ func checkIsMemory(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
 	require.True(t, res.Next())
+}
+
+func createFooTable(db *sql.DB, t *testing.T) {
+	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
+}
+
+func openDB(t *testing.T) *sql.DB {
+	db, err := sql.Open("duckdb", "")
+	require.NoError(t, err)
+	require.NoError(t, db.Ping())
+	return db
 }
 
 /* ------------------------------------------ */
@@ -134,8 +134,8 @@ func TestOpen(t *testing.T) {
 		checkIsMemory(t, db)
 
 		var threads int64
-		r := db.QueryRow(`SELECT current_setting('threads')`)
-		require.NoError(t, r.Scan(&threads))
+		res := db.QueryRow(`SELECT current_setting('threads')`)
+		require.NoError(t, res.Scan(&threads))
 		require.Equal(t, int64(4), threads)
 	})
 }
@@ -144,6 +144,9 @@ func TestConnectorBootQueries(t *testing.T) {
 	t.Run("README connector example", func(t *testing.T) {
 		db := openDbWrapper(t, `foo.db`)
 		closeDbWrapper(t, db)
+		defer func() {
+			require.NoError(t, os.Remove(`foo.db`))
+		}()
 
 		c := newConnectorWrapper(t, `foo.db?access_mode=read_only&threads=4`, func(execer driver.ExecerContext) error {
 			bootQueries := []string{
@@ -158,8 +161,7 @@ func TestConnectorBootQueries(t *testing.T) {
 		})
 		defer closeConnectorWrapper(t, c)
 		db = sql.OpenDB(c)
-		closeDbWrapper(t, db)
-		require.NoError(t, os.Remove(`foo.db`))
+		defer closeDbWrapper(t, db)
 	})
 }
 
