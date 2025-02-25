@@ -295,7 +295,7 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 func TestTypes(t *testing.T) {
 	t.Parallel()
 	expectedRows := testTypesGenerateRows(t, 3)
-	c, con, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
+	c, db, con, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
 	actualRows := testTypes(t, c, a, expectedRows)
 
 	for i := range actualRows {
@@ -304,7 +304,7 @@ func TestTypes(t *testing.T) {
 	}
 
 	require.Equal(t, len(expectedRows), len(actualRows))
-	cleanupAppender(t, c, con, a)
+	cleanupAppender(t, c, db, con, a)
 }
 
 // NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
@@ -313,7 +313,7 @@ var benchmarkTypesResult []testTypesRow
 
 func BenchmarkTypes(b *testing.B) {
 	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
-	c, con, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
+	c, db, con, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
 
 	var r []testTypesRow
 	b.ResetTimer()
@@ -325,7 +325,7 @@ func BenchmarkTypes(b *testing.B) {
 
 	// Ensure that the compiler does not eliminate the line by storing the result.
 	benchmarkTypesResult = r
-	cleanupAppender(b, c, con, a)
+	cleanupAppender(b, c, db, con, a)
 }
 
 func compareDecimal(t *testing.T, want Decimal, got Decimal) {
