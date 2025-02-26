@@ -6,6 +6,7 @@ package duckdb
 import "C"
 
 import (
+	"errors"
 	"reflect"
 	"runtime"
 	"unsafe"
@@ -105,6 +106,8 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
 	case TYPE_ARRAY:
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewArrayInfo)))
+	case TYPE_UNION:
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewUnionInfo)))
 	case TYPE_SQLNULL:
 		return nil, getError(errAPI, unsupportedTypeError(typeToStringMap[t]))
 	}
@@ -251,6 +254,38 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 		childTypes:   make([]TypeInfo, 1),
 	}
 	info.childTypes[0] = childInfo
+	return info, nil
+}
+
+// NewUnionInfo returns union type information.
+// memberTypes contains the type information of the union members.
+// memberNames contains the names of the union members.
+func NewUnionInfo(memberTypes []TypeInfo, memberNames []string) (TypeInfo, error) {
+	if len(memberTypes) == 0 {
+		return nil, getError(errAPI, errors.New("union type must have at least one member"))
+	}
+	if len(memberTypes) != len(memberNames) {
+		return nil, getError(errAPI, errors.New("member types and names must have same length"))
+	}
+
+	// Check for duplicate names
+	m := map[string]bool{}
+	for _, name := range memberNames {
+		if name == "" {
+			return nil, getError(errAPI, errEmptyName)
+		}
+		if m[name] {
+			return nil, getError(errAPI, duplicateNameError(name))
+		}
+		m[name] = true
+	}
+
+	info := &typeInfo{
+		baseTypeInfo: baseTypeInfo{Type: TYPE_UNION},
+		childTypes:   memberTypes,
+		// Store member names
+		enumNames: memberNames, // We can reuse the enumNames field for union member names
+	}
 	return info, nil
 }
 

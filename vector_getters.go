@@ -223,3 +223,33 @@ func (vec *vector) getSliceChild(offset C.idx_t, length C.idx_t) []any {
 	}
 	return slice
 }
+
+func (vec *vector) getUnion(rowIdx C.idx_t) any {
+	tagVector := C.duckdb_struct_vector_get_child(vec.duckdbVector, 0)
+	if tagVector == nil {
+		return nil
+	}
+
+	tagData := C.duckdb_vector_get_data(tagVector)
+	if tagData == nil {
+		return nil
+	}
+
+	tags := (*[1 << 31]int8)(tagData)
+	tag := tags[rowIdx]
+
+	memberVector := C.duckdb_struct_vector_get_child(vec.duckdbVector, C.idx_t(tag+1))
+	if memberVector == nil {
+		return nil
+	}
+
+	tempVec := vector{
+		duckdbVector:   memberVector,
+		ptr:            C.duckdb_vector_get_data(memberVector),
+		mask:           C.duckdb_vector_get_validity(memberVector),
+		vectorTypeInfo: vec.childVectors[tag].vectorTypeInfo,
+		getFn:          vec.childVectors[tag].getFn,
+	}
+
+	return tempVec.getFn(&tempVec, rowIdx)
+}
