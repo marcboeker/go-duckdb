@@ -78,6 +78,13 @@ func closeRowsWrapper[T require.TestingT](t T, r *sql.Rows) {
 	require.NoError(t, r.Close())
 }
 
+func closePreparedWrapper[T require.TestingT](t T, stmt *sql.Stmt) {
+	if stmt == nil {
+		return
+	}
+	require.NoError(t, stmt.Close())
+}
+
 func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema string, table string) *Appender {
 	a, err := NewAppenderFromConn(*conn, schema, table)
 	require.NoError(t, err)
@@ -104,10 +111,6 @@ func checkIsMemory(t *testing.T, db *sql.DB) {
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
 	require.True(t, res.Next())
-}
-
-func createFooTable(db *sql.DB, t *testing.T) {
-	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 }
 
 func openDB(t *testing.T) *sql.DB {
