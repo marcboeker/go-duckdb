@@ -113,13 +113,6 @@ func checkIsMemory(t *testing.T, db *sql.DB) {
 	require.True(t, res.Next())
 }
 
-func openDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
-	require.NoError(t, db.Ping())
-	return db
-}
-
 /* ---------- Tests ---------- */
 
 func TestOpen(t *testing.T) {
