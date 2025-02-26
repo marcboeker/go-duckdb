@@ -167,7 +167,7 @@ type (
 
 func (tfd *tableFunctionData) setColumnCount(info apiInitInfo) {
 	count := apiInitGetColumnCount(info)
-	for i := uint64(0); i < count; i++ {
+	for i := apiIdxT(0); i < count; i++ {
 		srcPos := apiInitGetColumnIndex(info, i)
 		tfd.projection[int(srcPos)] = int(i)
 	}
@@ -205,7 +205,7 @@ func udfBindTyped[T tableSource](infoPtr unsafe.Pointer) {
 
 	for i, t := range config.Arguments {
 		var err error
-		value := apiBindGetParameter(info, uint64(i))
+		value := apiBindGetParameter(info, apiIdxT(i))
 		args[i], err = getValue(t, value)
 		apiDestroyValue(&value)
 
@@ -252,7 +252,7 @@ func udfBindTyped[T tableSource](infoPtr unsafe.Pointer) {
 
 	cardinality := instance.Cardinality()
 	if cardinality != nil {
-		apiBindSetCardinality(info, uint64(cardinality.Cardinality), cardinality.Exact)
+		apiBindSetCardinality(info, apiIdxT(cardinality.Cardinality), cardinality.Exact)
 	}
 
 	pinnedInstanceData := pinnedValue[tableFunctionData]{
@@ -281,7 +281,7 @@ func table_udf_init_parallel(infoPtr unsafe.Pointer) {
 	instance.setColumnCount(info)
 	initData := instance.fun.(parallelTableSource).Init()
 	maxThreads := initData.MaxThreads
-	apiInitSetMaxThreads(info, uint64(maxThreads))
+	apiInitSetMaxThreads(info, apiIdxT(maxThreads))
 }
 
 //export table_udf_local_init
@@ -316,7 +316,7 @@ func table_udf_row_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
 		chunk:      &chunk,
 		projection: instance.projection,
 	}
-	maxSize := uint64(GetDataChunkCapacity())
+	maxSize := apiIdxT(GetDataChunkCapacity())
 
 	switch fun := instance.fun.(type) {
 	case RowTableSource:
@@ -504,7 +504,7 @@ func RegisterTableUDF[TFT TableFunction](conn *sql.Conn, name string, f TFT) err
 		c := driverConn.(*Conn)
 		state := apiRegisterTableFunction(c.conn, function)
 		apiDestroyTableFunction(&function)
-		if apiState(state) == apiStateError {
+		if state == apiStateError {
 			return getError(errAPI, errTableUDFCreate)
 		}
 		return nil

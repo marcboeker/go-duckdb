@@ -33,7 +33,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 
 	var appender apiAppender
 	state := apiAppenderCreate(conn.conn, schema, table, &appender)
-	if apiState(state) == apiStateError {
+	if state == apiStateError {
 		err := getDuckDBError(apiAppenderError(appender))
 		apiAppenderDestroy(&appender)
 		return nil, getError(errAppenderCreation, err)
@@ -49,7 +49,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 
 	// Get the column types.
 	columnCount := apiAppenderColumnCount(appender)
-	for i := uint64(0); i < columnCount; i++ {
+	for i := apiIdxT(0); i < columnCount; i++ {
 		colType := apiAppenderColumnType(appender, i)
 		a.types = append(a.types, colType)
 
@@ -73,9 +73,7 @@ func (a *Appender) Flush() error {
 	if err := a.appendDataChunks(); err != nil {
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
-
-	state := apiAppenderFlush(a.appender)
-	if apiState(state) == apiStateError {
+	if apiAppenderFlush(a.appender) == apiStateError {
 		err := getDuckDBError(apiAppenderError(a.appender))
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
@@ -95,16 +93,14 @@ func (a *Appender) Close() error {
 
 	// We flush before closing to get a meaningful error message.
 	var errFlush error
-	state := apiAppenderFlush(a.appender)
-	if apiState(state) == apiStateError {
+	if apiAppenderFlush(a.appender) == apiStateError {
 		errFlush = getDuckDBError(apiAppenderError(a.appender))
 	}
 
 	// Destroy all appender data and the appender.
 	destroyTypeSlice(a.types)
 	var errClose error
-	state = apiAppenderDestroy(&a.appender)
-	if apiState(state) == apiStateError {
+	if apiAppenderDestroy(&a.appender) == apiStateError {
 		errClose = errAppenderClose
 	}
 
@@ -176,9 +172,7 @@ func (a *Appender) appendDataChunks() error {
 		if err = chunk.SetSize(size); err != nil {
 			break
 		}
-
-		state := apiAppendDataChunk(a.appender, chunk.chunk)
-		if apiState(state) == apiStateError {
+		if apiAppendDataChunk(a.appender, chunk.chunk) == apiStateError {
 			err = getDuckDBError(apiAppenderError(a.appender))
 			break
 		}

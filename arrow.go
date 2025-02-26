@@ -173,9 +173,7 @@ func (a *Arrow) queryArrowSchema(res *apiArrow) (*arrow.Schema, error) {
 	arrowSchema := apiArrowSchema{
 		Ptr: unsafe.Pointer(&schema),
 	}
-
-	state := apiQueryArrowSchema(*res, &arrowSchema)
-	if apiState(state) == apiStateError {
+	if apiQueryArrowSchema(*res, &arrowSchema) == apiStateError {
 		return nil, errors.New("duckdb_query_arrow_schema")
 	}
 
@@ -200,9 +198,7 @@ func (a *Arrow) queryArrowArray(res *apiArrow, sc *arrow.Schema) (arrow.Record, 
 	arrowArray := apiArrowArray{
 		Ptr: unsafe.Pointer(&arr),
 	}
-
-	state := apiQueryArrowArray(*res, &arrowArray)
-	if apiState(state) == apiStateError {
+	if apiQueryArrowArray(*res, &arrowArray) == apiStateError {
 		return nil, errors.New("duckdb_query_arrow_array")
 	}
 
@@ -223,8 +219,7 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
 	}
 
 	var res apiArrow
-	state := apiExecutePreparedArrow(*s.preparedStmt, &res)
-	if apiState(state) == apiStateError {
+	if apiExecutePreparedArrow(*s.preparedStmt, &res) == apiStateError {
 		errMsg := apiQueryArrowError(res)
 		apiDestroyArrow(&res)
 		return nil, fmt.Errorf("failed to execute the prepared arrow: %v", errMsg)
@@ -262,9 +257,7 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 	arrowStream := apiArrowStream{
 		Ptr: unsafe.Pointer(stream),
 	}
-
-	state := apiArrowScan(a.conn.conn, name, arrowStream)
-	if apiState(state) == apiStateError {
+	if apiArrowScan(a.conn.conn, name, arrowStream) == apiStateError {
 		release()
 		return nil, errors.New("duckdb_arrow_scan")
 	}

@@ -4,7 +4,7 @@ package duckdb
 // It references the internal vectors.
 type Row struct {
 	chunk      *DataChunk
-	r          uint64
+	r          apiIdxT
 	projection []int
 }
 

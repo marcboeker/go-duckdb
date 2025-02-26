@@ -135,7 +135,7 @@ func (conn *Conn) Close() error {
 	return nil
 }
 
-func (conn *Conn) extractStmts(query string) (apiExtractedStatements, uint64, error) {
+func (conn *Conn) extractStmts(query string) (apiExtractedStatements, apiIdxT, error) {
 	var extractedStmts apiExtractedStatements
 
 	count := apiExtractStatements(conn.conn, query, &extractedStmts)
@@ -150,16 +150,14 @@ func (conn *Conn) extractStmts(query string) (apiExtractedStatements, uint64, er
 	return extractedStmts, count, nil
 }
 
-func (conn *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i uint64) (*Stmt, error) {
+func (conn *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i apiIdxT) (*Stmt, error) {
 	var preparedStmt apiPreparedStatement
 	state := apiPrepareExtractedStatement(conn.conn, extractedStmts, i, &preparedStmt)
-
-	if apiState(state) == apiStateError {
+	if state == apiStateError {
 		err := getDuckDBError(apiPrepareError(preparedStmt))
 		apiDestroyPrepare(&preparedStmt)
 		return nil, err
 	}
-
 	return &Stmt{conn: conn, preparedStmt: &preparedStmt}, nil
 }
 
@@ -174,7 +172,7 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 	}
 	defer apiDestroyExtracted(&extractedStmts)
 
-	for i := uint64(0); i < count-1; i++ {
+	for i := apiIdxT(0); i < count-1; i++ {
 		preparedStmt, err := conn.prepareExtractedStmt(extractedStmts, i)
 		if err != nil {
 			return nil, err

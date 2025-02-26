@@ -2,93 +2,89 @@
 
 package duckdb
 
-import (
-	bindings "github.com/duckdb/duckdb-go-bindings/linux-amd64"
-)
-
 // ------------------------------------------------------------------ //
 // Enums
 // ------------------------------------------------------------------ //
 
-type apiType bindings.Type
+type apiType = bindings.Type
 
 const (
-	apiTypeInvalid     = apiType(bindings.TypeInvalid)
-	apiTypeBoolean     = apiType(bindings.TypeBoolean)
-	apiTypeTinyInt     = apiType(bindings.TypeTinyInt)
-	apiTypeSmallInt    = apiType(bindings.TypeSmallInt)
-	apiTypeInteger     = apiType(bindings.TypeInteger)
-	apiTypeBigInt      = apiType(bindings.TypeBigInt)
-	apiTypeUTinyInt    = apiType(bindings.TypeUTinyInt)
-	apiTypeUSmallInt   = apiType(bindings.TypeUSmallInt)
-	apiTypeUInteger    = apiType(bindings.TypeUInteger)
-	apiTypeUBigInt     = apiType(bindings.TypeUBigInt)
-	apiTypeFloat       = apiType(bindings.TypeFloat)
-	apiTypeDouble      = apiType(bindings.TypeDouble)
-	apiTypeTimestamp   = apiType(bindings.TypeTimestamp)
-	apiTypeDate        = apiType(bindings.TypeDate)
-	apiTypeTime        = apiType(bindings.TypeTime)
-	apiTypeInterval    = apiType(bindings.TypeInterval)
-	apiTypeHugeInt     = apiType(bindings.TypeHugeInt)
-	apiTypeUHugeInt    = apiType(bindings.TypeUHugeInt)
-	apiTypeVarchar     = apiType(bindings.TypeVarchar)
-	apiTypeBlob        = apiType(bindings.TypeBlob)
-	apiTypeDecimal     = apiType(bindings.TypeDecimal)
-	apiTypeTimestampS  = apiType(bindings.TypeTimestampS)
-	apiTypeTimestampMS = apiType(bindings.TypeTimestampMS)
-	apiTypeTimestampNS = apiType(bindings.TypeTimestampNS)
-	apiTypeEnum        = apiType(bindings.TypeEnum)
-	apiTypeList        = apiType(bindings.TypeList)
-	apiTypeStruct      = apiType(bindings.TypeStruct)
-	apiTypeMap         = apiType(bindings.TypeMap)
-	apiTypeArray       = apiType(bindings.TypeArray)
-	apiTypeUUID        = apiType(bindings.TypeUUID)
-	apiTypeUnion       = apiType(bindings.TypeUnion)
-	apiTypeBit         = apiType(bindings.TypeBit)
-	apiTypeTimeTZ      = apiType(bindings.TypeTimeTZ)
-	apiTypeTimestampTZ = apiType(bindings.TypeTimestampTZ)
-	apiTypeAny         = apiType(bindings.TypeAny)
-	apiTypeVarInt      = apiType(bindings.TypeVarInt)
-	apiTypeSQLNull     = apiType(bindings.TypeSQLNull)
+	apiTypeInvalid     = bindings.TypeInvalid
+	apiTypeBoolean     = bindings.TypeBoolean
+	apiTypeTinyInt     = bindings.TypeTinyInt
+	apiTypeSmallInt    = bindings.TypeSmallInt
+	apiTypeInteger     = bindings.TypeInteger
+	apiTypeBigInt      = bindings.TypeBigInt
+	apiTypeUTinyInt    = bindings.TypeUTinyInt
+	apiTypeUSmallInt   = bindings.TypeUSmallInt
+	apiTypeUInteger    = bindings.TypeUInteger
+	apiTypeUBigInt     = bindings.TypeUBigInt
+	apiTypeFloat       = bindings.TypeFloat
+	apiTypeDouble      = bindings.TypeDouble
+	apiTypeTimestamp   = bindings.TypeTimestamp
+	apiTypeDate        = bindings.TypeDate
+	apiTypeTime        = bindings.TypeTime
+	apiTypeInterval    = bindings.TypeInterval
+	apiTypeHugeInt     = bindings.TypeHugeInt
+	apiTypeUHugeInt    = bindings.TypeUHugeInt
+	apiTypeVarchar     = bindings.TypeVarchar
+	apiTypeBlob        = bindings.TypeBlob
+	apiTypeDecimal     = bindings.TypeDecimal
+	apiTypeTimestampS  = bindings.TypeTimestampS
+	apiTypeTimestampMS = bindings.TypeTimestampMS
+	apiTypeTimestampNS = bindings.TypeTimestampNS
+	apiTypeEnum        = bindings.TypeEnum
+	apiTypeList        = bindings.TypeList
+	apiTypeStruct      = bindings.TypeStruct
+	apiTypeMap         = bindings.TypeMap
+	apiTypeArray       = bindings.TypeArray
+	apiTypeUUID        = bindings.TypeUUID
+	apiTypeUnion       = bindings.TypeUnion
+	apiTypeBit         = bindings.TypeBit
+	apiTypeTimeTZ      = bindings.TypeTimeTZ
+	apiTypeTimestampTZ = bindings.TypeTimestampTZ
+	apiTypeAny         = bindings.TypeAny
+	apiTypeVarInt      = bindings.TypeVarInt
+	apiTypeSQLNull     = bindings.TypeSQLNull
 )
 
-type apiState bindings.State
+type apiState = bindings.State
 
 const (
-	apiStateError = apiState(bindings.StateError)
+	apiStateError = bindings.StateError
 )
 
-type apiStatementType bindings.StatementType
+type apiStatementType = bindings.StatementType
 
 const (
-	apiStatementTypeInvalid     = apiStatementType(bindings.StatementTypeInvalid)
-	apiStatementTypeSelect      = apiStatementType(bindings.StatementTypeSelect)
-	apiStatementTypeInsert      = apiStatementType(bindings.StatementTypeInsert)
-	apiStatementTypeUpdate      = apiStatementType(bindings.StatementTypeUpdate)
-	apiStatementTypeExplain     = apiStatementType(bindings.StatementTypeExplain)
-	apiStatementTypeDelete      = apiStatementType(bindings.StatementTypeDelete)
-	apiStatementTypePrepare     = apiStatementType(bindings.StatementTypePrepare)
-	apiStatementTypeCreate      = apiStatementType(bindings.StatementTypeCreate)
-	apiStatementTypeExecute     = apiStatementType(bindings.StatementTypeExecute)
-	apiStatementTypeAlter       = apiStatementType(bindings.StatementTypeAlter)
-	apiStatementTypeTransaction = apiStatementType(bindings.StatementTypeTransaction)
-	apiStatementTypeCopy        = apiStatementType(bindings.StatementTypeCopy)
-	apiStatementTypeAnalyze     = apiStatementType(bindings.StatementTypeAnalyze)
-	apiStatementTypeVariableSet = apiStatementType(bindings.StatementTypeVariableSet)
-	apiStatementTypeCreateFunc  = apiStatementType(bindings.StatementTypeCreateFunc)
-	apiStatementTypeDrop        = apiStatementType(bindings.StatementTypeDrop)
-	apiStatementTypeExport      = apiStatementType(bindings.StatementTypeExport)
-	apiStatementTypePragma      = apiStatementType(bindings.StatementTypePragma)
-	apiStatementTypeVacuum      = apiStatementType(bindings.StatementTypeVacuum)
-	apiStatementTypeCall        = apiStatementType(bindings.StatementTypeCall)
-	apiStatementTypeSet         = apiStatementType(bindings.StatementTypeSet)
-	apiStatementTypeLoad        = apiStatementType(bindings.StatementTypeLoad)
-	apiStatementTypeRelation    = apiStatementType(bindings.StatementTypeRelation)
-	apiStatementTypeExtension   = apiStatementType(bindings.StatementTypeExtension)
-	apiStatementTypeLogicalPlan = apiStatementType(bindings.StatementTypeLogicalPlan)
-	apiStatementTypeAttach      = apiStatementType(bindings.StatementTypeAttach)
-	apiStatementTypeDetach      = apiStatementType(bindings.StatementTypeDetach)
-	apiStatementTypeMulti       = apiStatementType(bindings.StatementTypeMulti)
+	apiStatementTypeInvalid     = bindings.StatementTypeInvalid
+	apiStatementTypeSelect      = bindings.StatementTypeSelect
+	apiStatementTypeInsert      = bindings.StatementTypeInsert
+	apiStatementTypeUpdate      = bindings.StatementTypeUpdate
+	apiStatementTypeExplain     = bindings.StatementTypeExplain
+	apiStatementTypeDelete      = bindings.StatementTypeDelete
+	apiStatementTypePrepare     = bindings.StatementTypePrepare
+	apiStatementTypeCreate      = bindings.StatementTypeCreate
+	apiStatementTypeExecute     = bindings.StatementTypeExecute
+	apiStatementTypeAlter       = bindings.StatementTypeAlter
+	apiStatementTypeTransaction = bindings.StatementTypeTransaction
+	apiStatementTypeCopy        = bindings.StatementTypeCopy
+	apiStatementTypeAnalyze     = bindings.StatementTypeAnalyze
+	apiStatementTypeVariableSet = bindings.StatementTypeVariableSet
+	apiStatementTypeCreateFunc  = bindings.StatementTypeCreateFunc
+	apiStatementTypeDrop        = bindings.StatementTypeDrop
+	apiStatementTypeExport      = bindings.StatementTypeExport
+	apiStatementTypePragma      = bindings.StatementTypePragma
+	apiStatementTypeVacuum      = bindings.StatementTypeVacuum
+	apiStatementTypeCall        = bindings.StatementTypeCall
+	apiStatementTypeSet         = bindings.StatementTypeSet
+	apiStatementTypeLoad        = bindings.StatementTypeLoad
+	apiStatementTypeRelation    = bindings.StatementTypeRelation
+	apiStatementTypeExtension   = bindings.StatementTypeExtension
+	apiStatementTypeLogicalPlan = bindings.StatementTypeLogicalPlan
+	apiStatementTypeAttach      = bindings.StatementTypeAttach
+	apiStatementTypeDetach      = bindings.StatementTypeDetach
+	apiStatementTypeMulti       = bindings.StatementTypeMulti
 )
 
 // ------------------------------------------------------------------ //
@@ -96,6 +92,7 @@ const (
 // ------------------------------------------------------------------ //
 
 type (
+	apiIdxT      = bindings.IdxT
 	apiDate      = bindings.Date
 	apiTime      = bindings.Time
 	apiTimeTZ    = bindings.TimeTZ
@@ -245,6 +242,7 @@ var (
 	apiGetMapSize                              = bindings.GetMapSize
 	apiGetMapKey                               = bindings.GetMapKey
 	apiGetMapValue                             = bindings.GetMapValue
+	apiCreateLogicalType                       = bindings.CreateLogicalType
 	apiLogicalTypeGetAlias                     = bindings.LogicalTypeGetAlias
 	apiCreateListType                          = bindings.CreateListType
 	apiCreateArrayType                         = bindings.CreateArrayType
@@ -351,7 +349,3 @@ var (
 	apiValueInt64                              = bindings.ValueInt64
 	apiValidityMaskValueIsValid                = bindings.ValidityMaskValueIsValid
 )
-
-func apiCreateLogicalType(t apiType) apiLogicalType {
-	return bindings.CreateLogicalType(bindings.Type(t))
-}

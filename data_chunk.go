@@ -30,7 +30,7 @@ func (chunk *DataChunk) SetSize(size int) error {
 	if size > GetDataChunkCapacity() {
 		return getError(errAPI, errVectorSize)
 	}
-	apiDataChunkSetSize(chunk.chunk, uint64(size))
+	apiDataChunkSetSize(chunk.chunk, apiIdxT(size))
 	return nil
 }
 
@@ -41,7 +41,7 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 	}
 
 	column := &chunk.columns[colIdx]
-	return column.getFn(column, uint64(rowIdx)), nil
+	return column.getFn(column, apiIdxT(rowIdx)), nil
 }
 
 // SetValue writes a single value to a column in a data chunk.
@@ -53,7 +53,7 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	}
 
 	column := &chunk.columns[colIdx]
-	return column.setFn(column, uint64(rowIdx), val)
+	return column.setFn(column, apiIdxT(rowIdx), val)
 }
 
 // SetChunkValue writes a single value to a column in a data chunk.
@@ -64,7 +64,7 @@ func SetChunkValue[T any](chunk DataChunk, colIdx int, rowIdx int, val T) error 
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
-	return setVectorVal(&chunk.columns[colIdx], uint64(rowIdx), val)
+	return setVectorVal(&chunk.columns[colIdx], apiIdxT(rowIdx), val)
 }
 
 func (chunk *DataChunk) initFromTypes(types []apiLogicalType, writable bool) error {
@@ -84,28 +84,28 @@ func (chunk *DataChunk) initFromTypes(types []apiLogicalType, writable bool) err
 	}
 
 	chunk.chunk = apiCreateDataChunk(types)
-	apiDataChunkSetSize(chunk.chunk, uint64(GetDataChunkCapacity()))
+	apiDataChunkSetSize(chunk.chunk, apiIdxT(GetDataChunkCapacity()))
 
 	// Initialize the vectors and their child vectors.
 	for i := 0; i < columnCount; i++ {
-		v := apiDataChunkGetVector(chunk.chunk, uint64(i))
+		v := apiDataChunkGetVector(chunk.chunk, apiIdxT(i))
 		chunk.columns[i].initVectors(v, writable)
 	}
 	return nil
 }
 
 func (chunk *DataChunk) initFromDuckDataChunk(apiChunk apiDataChunk, writable bool) error {
-	columnCount := int(apiDataChunkGetColumnCount(apiChunk))
+	columnCount := apiDataChunkGetColumnCount(apiChunk)
 	chunk.columns = make([]vector, columnCount)
 	chunk.chunk = apiChunk
 
 	var err error
-	for i := 0; i < columnCount; i++ {
-		vec := apiDataChunkGetVector(apiChunk, uint64(i))
+	for i := apiIdxT(0); i < columnCount; i++ {
+		vec := apiDataChunkGetVector(apiChunk, i)
 
 		// Initialize the callback functions to read and write values.
 		logicalType := apiVectorGetColumnType(vec)
-		err = chunk.columns[i].init(logicalType, i)
+		err = chunk.columns[i].init(logicalType, int(i))
 		apiDestroyLogicalType(&logicalType)
 		if err != nil {
 			break

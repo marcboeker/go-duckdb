@@ -7,21 +7,21 @@ import (
 )
 
 // fnGetVectorValue is the getter callback function for any (nested) vector.
-type fnGetVectorValue func(vec *vector, rowIdx uint64) any
+type fnGetVectorValue func(vec *vector, rowIdx apiIdxT) any
 
-func (vec *vector) getNull(rowIdx uint64) bool {
+func (vec *vector) getNull(rowIdx apiIdxT) bool {
 	if vec.maskPtr == nil {
 		return false
 	}
 	return !apiValidityMaskValueIsValid(vec.maskPtr, rowIdx)
 }
 
-func getPrimitive[T any](vec *vector, rowIdx uint64) T {
+func getPrimitive[T any](vec *vector, rowIdx apiIdxT) T {
 	xs := (*[1 << 31]T)(vec.dataPtr)
 	return xs[rowIdx]
 }
 
-func (vec *vector) getTS(t Type, rowIdx uint64) time.Time {
+func (vec *vector) getTS(t Type, rowIdx apiIdxT) time.Time {
 	val := getPrimitive[apiTimestamp](vec, rowIdx)
 	return getTS(t, val)
 }
@@ -42,7 +42,7 @@ func getTS(t Type, ts apiTimestamp) time.Time {
 	return time.Time{}
 }
 
-func (vec *vector) getDate(rowIdx uint64) time.Time {
+func (vec *vector) getDate(rowIdx apiIdxT) time.Time {
 	date := getPrimitive[apiDate](vec, rowIdx)
 	return getDate(date)
 }
@@ -55,7 +55,7 @@ func getDate(date apiDate) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
-func (vec *vector) getTime(rowIdx uint64) time.Time {
+func (vec *vector) getTime(rowIdx apiIdxT) time.Time {
 	switch vec.Type {
 	case TYPE_TIME:
 		val := getPrimitive[apiTime](vec, rowIdx)
@@ -87,7 +87,7 @@ func getTimeTZ(ti apiTimeTZ) time.Time {
 	return time.Date(1, time.January, 1, hour, minute, sec, nanos, loc).UTC()
 }
 
-func (vec *vector) getInterval(rowIdx uint64) Interval {
+func (vec *vector) getInterval(rowIdx apiIdxT) Interval {
 	interval := getPrimitive[apiInterval](vec, rowIdx)
 	return getInterval(interval)
 }
@@ -100,12 +100,12 @@ func getInterval(interval apiInterval) Interval {
 	}
 }
 
-func (vec *vector) getHugeint(rowIdx uint64) *big.Int {
+func (vec *vector) getHugeint(rowIdx apiIdxT) *big.Int {
 	hugeInt := getPrimitive[apiHugeInt](vec, rowIdx)
 	return hugeIntToNative(hugeInt)
 }
 
-func (vec *vector) getBytes(rowIdx uint64) any {
+func (vec *vector) getBytes(rowIdx apiIdxT) any {
 	apiStr := getPrimitive[apiStringT](vec, rowIdx)
 	str := apiStringTData(&apiStr)
 	if vec.Type == TYPE_VARCHAR {
@@ -114,14 +114,14 @@ func (vec *vector) getBytes(rowIdx uint64) any {
 	return []byte(str)
 }
 
-func (vec *vector) getJSON(rowIdx uint64) any {
+func (vec *vector) getJSON(rowIdx apiIdxT) any {
 	bytes := vec.getBytes(rowIdx).(string)
 	var value any
 	_ = json.Unmarshal([]byte(bytes), &value)
 	return value
 }
 
-func (vec *vector) getDecimal(rowIdx uint64) Decimal {
+func (vec *vector) getDecimal(rowIdx apiIdxT) Decimal {
 	var val *big.Int
 	switch vec.internalType {
 	case TYPE_SMALLINT:
@@ -140,17 +140,17 @@ func (vec *vector) getDecimal(rowIdx uint64) Decimal {
 	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
 
-func (vec *vector) getEnum(rowIdx uint64) string {
-	var idx uint64
+func (vec *vector) getEnum(rowIdx apiIdxT) string {
+	var idx apiIdxT
 	switch vec.internalType {
 	case TYPE_UTINYINT:
-		idx = uint64(getPrimitive[uint8](vec, rowIdx))
+		idx = apiIdxT(getPrimitive[uint8](vec, rowIdx))
 	case TYPE_USMALLINT:
-		idx = uint64(getPrimitive[uint16](vec, rowIdx))
+		idx = apiIdxT(getPrimitive[uint16](vec, rowIdx))
 	case TYPE_UINTEGER:
-		idx = uint64(getPrimitive[uint32](vec, rowIdx))
+		idx = apiIdxT(getPrimitive[uint32](vec, rowIdx))
 	case TYPE_UBIGINT:
-		idx = getPrimitive[uint64](vec, rowIdx)
+		idx = apiIdxT(getPrimitive[uint64](vec, rowIdx))
 	}
 
 	logicalType := apiVectorGetColumnType(vec.vec)
@@ -158,14 +158,14 @@ func (vec *vector) getEnum(rowIdx uint64) string {
 	return apiEnumDictionaryValue(logicalType, idx)
 }
 
-func (vec *vector) getList(rowIdx uint64) []any {
+func (vec *vector) getList(rowIdx apiIdxT) []any {
 	entry := getPrimitive[apiListEntry](vec, rowIdx)
 	offset := apiListEntryGetOffset(&entry)
 	length := apiListEntryGetLength(&entry)
 	return vec.getSliceChild(offset, length)
 }
 
-func (vec *vector) getStruct(rowIdx uint64) map[string]any {
+func (vec *vector) getStruct(rowIdx apiIdxT) map[string]any {
 	m := map[string]any{}
 	for i := 0; i < len(vec.childVectors); i++ {
 		child := &vec.childVectors[i]
@@ -175,7 +175,7 @@ func (vec *vector) getStruct(rowIdx uint64) map[string]any {
 	return m
 }
 
-func (vec *vector) getMap(rowIdx uint64) Map {
+func (vec *vector) getMap(rowIdx apiIdxT) Map {
 	list := vec.getList(rowIdx)
 
 	m := Map{}
@@ -188,9 +188,9 @@ func (vec *vector) getMap(rowIdx uint64) Map {
 	return m
 }
 
-func (vec *vector) getArray(rowIdx uint64) []any {
-	length := vec.arrayLength
-	return vec.getSliceChild(rowIdx*length, length)
+func (vec *vector) getArray(rowIdx apiIdxT) []any {
+	length := uint64(vec.arrayLength)
+	return vec.getSliceChild(uint64(rowIdx)*length, length)
 }
 
 func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
@@ -199,7 +199,7 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 
 	// Fill the slice with all child values.
 	for i := uint64(0); i < length; i++ {
-		val := child.getFn(child, i+offset)
+		val := child.getFn(child, apiIdxT(i+offset))
 		slice = append(slice, val)
 	}
 	return slice

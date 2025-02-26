@@ -57,9 +57,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 
 	connStr := getConnString(dsn)
 	var errMsg string
-
-	state := apiOpenExt(connStr, &db, config, &errMsg)
-	if apiState(state) == apiStateError {
+	if apiOpenExt(connStr, &db, config, &errMsg) == apiStateError {
 		apiClose(&db)
 		return nil, getError(errConnect, getDuckDBError(errMsg))
 	}
@@ -82,8 +80,7 @@ func (*Connector) Driver() driver.Driver {
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 	var newConn apiConnection
-	state := apiConnect(c.db, &newConn)
-	if apiState(state) == apiStateError {
+	if apiConnect(c.db, &newConn) == apiStateError {
 		return nil, getError(errConnect, nil)
 	}
 
@@ -115,9 +112,7 @@ func getConnString(dsn string) string {
 
 func prepareConfig(parsedDSN *url.URL) (apiConfig, error) {
 	var config apiConfig
-
-	state := apiCreateConfig(&config)
-	if apiState(state) == apiStateError {
+	if apiCreateConfig(&config) == apiStateError {
 		apiDestroyConfig(&config)
 		return config, getError(errCreateConfig, nil)
 	}
@@ -144,8 +139,7 @@ func prepareConfig(parsedDSN *url.URL) (apiConfig, error) {
 }
 
 func setConfigOption(config apiConfig, name string, option string) error {
-	state := apiSetConfig(config, name, option)
-	if apiState(state) == apiStateError {
+	if apiSetConfig(config, name, option) == apiStateError {
 		apiDestroyConfig(&config)
 		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))
 	}

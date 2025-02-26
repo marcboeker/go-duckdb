@@ -11,9 +11,9 @@ import (
 const secondsPerDay = 24 * 60 * 60
 
 // fnSetVectorValue is the setter callback function for any (nested) vector.
-type fnSetVectorValue func(vec *vector, rowIdx uint64, val any) error
+type fnSetVectorValue func(vec *vector, rowIdx apiIdxT, val any) error
 
-func (vec *vector) setNull(rowIdx uint64) {
+func (vec *vector) setNull(rowIdx apiIdxT) {
 	apiValiditySetRowInvalid(vec.maskPtr, rowIdx)
 	if vec.Type == TYPE_STRUCT {
 		for i := 0; i < len(vec.childVectors); i++ {
@@ -22,12 +22,12 @@ func (vec *vector) setNull(rowIdx uint64) {
 	}
 }
 
-func setPrimitive[T any](vec *vector, rowIdx uint64, v T) {
+func setPrimitive[T any](vec *vector, rowIdx apiIdxT, v T) {
 	xs := (*[1 << 31]T)(vec.dataPtr)
 	xs[rowIdx] = v
 }
 
-func setNumeric[S any, T numericType](vec *vector, rowIdx uint64, val S) error {
+func setNumeric[S any, T numericType](vec *vector, rowIdx apiIdxT, val S) error {
 	var fv T
 	switch v := any(val).(type) {
 	case uint8:
@@ -70,7 +70,7 @@ func setNumeric[S any, T numericType](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setBool[S any](vec *vector, rowIdx uint64, val S) error {
+func setBool[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	var b bool
 	switch v := any(val).(type) {
 	case bool:
@@ -82,7 +82,7 @@ func setBool[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setTS[S any](vec *vector, rowIdx uint64, val S) error {
+func setTS[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	ts, err := getAPITimestamp(vec.Type, val)
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func setTS[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setDate[S any](vec *vector, rowIdx uint64, val S) error {
+func setDate[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	date, err := getAPIDate(val)
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func setDate[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setTime[S any](vec *vector, rowIdx uint64, val S) error {
+func setTime[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	ticks, err := getTimeTicks(val)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func setTime[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setInterval[S any](vec *vector, rowIdx uint64, val S) error {
+func setInterval[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	var i Interval
 	switch v := any(val).(type) {
 	case Interval:
@@ -135,7 +135,7 @@ func setInterval[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setHugeint[S any](vec *vector, rowIdx uint64, val S) error {
+func setHugeint[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	var err error
 	var fv apiHugeInt
 	switch v := any(val).(type) {
@@ -204,19 +204,19 @@ func setHugeint[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setBytes[S any](vec *vector, rowIdx uint64, val S) error {
+func setBytes[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	switch v := any(val).(type) {
 	case string:
 		apiVectorAssignStringElement(vec.vec, rowIdx, v)
 	case []byte:
-		apiVectorAssignStringElementLen(vec.vec, rowIdx, v, uint64(len(v)))
+		apiVectorAssignStringElementLen(vec.vec, rowIdx, v, apiIdxT(len(v)))
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.String.String())
 	}
 	return nil
 }
 
-func setJSON[S any](vec *vector, rowIdx uint64, val S) error {
+func setJSON[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	bytes, err := json.Marshal(val)
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func setJSON[S any](vec *vector, rowIdx uint64, val S) error {
 	return setBytes(vec, rowIdx, bytes)
 }
 
-func setDecimal[S any](vec *vector, rowIdx uint64, val S) error {
+func setDecimal[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	switch vec.internalType {
 	case TYPE_SMALLINT:
 		return setNumeric[S, int16](vec, rowIdx, val)
@@ -238,7 +238,7 @@ func setDecimal[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setEnum[S any](vec *vector, rowIdx uint64, val S) error {
+func setEnum[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	var str string
 	switch v := any(val).(type) {
 	case string:
@@ -264,7 +264,7 @@ func setEnum[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setList[S any](vec *vector, rowIdx uint64, val S) error {
+func setList[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	list, err := extractSlice(vec, val)
 	if err != nil {
 		return err
@@ -273,16 +273,16 @@ func setList[S any](vec *vector, rowIdx uint64, val S) error {
 	// Set the offset and length of the list vector using the current size of the child vector.
 	childVectorSize := apiListVectorGetSize(vec.vec)
 	var listEntry apiListEntry
-	apiListEntrySetOffset(&listEntry, childVectorSize)
+	apiListEntrySetOffset(&listEntry, uint64(childVectorSize))
 	apiListEntrySetLength(&listEntry, uint64(len(list)))
 	setPrimitive(vec, rowIdx, listEntry)
 
-	newLength := uint64(len(list)) + childVectorSize
+	newLength := apiIdxT(len(list)) + childVectorSize
 	vec.resizeListVector(newLength)
 	return setSliceChildren(vec, list, childVectorSize)
 }
 
-func setStruct[S any](vec *vector, rowIdx uint64, val S) error {
+func setStruct[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	var m map[string]any
 	switch v := any(val).(type) {
 	case map[string]any:
@@ -330,7 +330,7 @@ func setStruct[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setMap[S any](vec *vector, rowIdx uint64, val S) error {
+func setMap[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	var m Map
 	switch v := any(val).(type) {
 	case Map:
@@ -350,7 +350,7 @@ func setMap[S any](vec *vector, rowIdx uint64, val S) error {
 	return setList(vec, rowIdx, list)
 }
 
-func setArray[S any](vec *vector, rowIdx uint64, val S) error {
+func setArray[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	array, err := extractSlice(vec, val)
 	if err != nil {
 		return err
@@ -388,11 +388,10 @@ func extractSlice[S any](vec *vector, val S) ([]any, error) {
 	return s, nil
 }
 
-func setSliceChildren(vec *vector, s []any, offset uint64) error {
+func setSliceChildren(vec *vector, s []any, offset apiIdxT) error {
 	childVector := &vec.childVectors[0]
-
 	for i, entry := range s {
-		rowIdx := uint64(i) + offset
+		rowIdx := apiIdxT(i) + offset
 		err := childVector.setFn(childVector, rowIdx, entry)
 		if err != nil {
 			return err
@@ -401,7 +400,7 @@ func setSliceChildren(vec *vector, s []any, offset uint64) error {
 	return nil
 }
 
-func setUUID[S any](vec *vector, rowIdx uint64, val S) error {
+func setUUID[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	var uuid UUID
 	switch v := any(val).(type) {
 	case UUID:
@@ -423,7 +422,7 @@ func setUUID[S any](vec *vector, rowIdx uint64, val S) error {
 	return nil
 }
 
-func setVectorVal[S any](vec *vector, rowIdx uint64, val S) error {
+func setVectorVal[S any](vec *vector, rowIdx apiIdxT, val S) error {
 	name, inMap := unsupportedTypeToStringMap[vec.Type]
 	if inMap {
 		return unsupportedTypeError(name)

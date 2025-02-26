@@ -46,7 +46,7 @@ type baseTypeInfo struct {
 	structEntries []StructEntry
 	decimalWidth  uint8
 	decimalScale  uint8
-	arrayLength   uint64
+	arrayLength   apiIdxT
 	// The internal type for ENUM and DECIMAL values.
 	internalType Type
 }
@@ -241,7 +241,7 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 	}
 
 	info := &typeInfo{
-		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: size},
+		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: apiIdxT(size)},
 		childTypes:   make([]TypeInfo, 1),
 	}
 	info.childTypes[0] = childInfo
@@ -254,8 +254,7 @@ func (info *typeInfo) logicalType() apiLogicalType {
 		TYPE_UINTEGER, TYPE_UBIGINT, TYPE_FLOAT, TYPE_DOUBLE, TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS,
 		TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ, TYPE_DATE, TYPE_TIME, TYPE_TIME_TZ, TYPE_INTERVAL, TYPE_HUGEINT, TYPE_VARCHAR,
 		TYPE_BLOB, TYPE_UUID, TYPE_ANY:
-		t := apiType(info.Type)
-		return apiCreateLogicalType(t)
+		return apiCreateLogicalType(info.Type)
 	case TYPE_DECIMAL:
 		return apiCreateDecimalType(info.decimalWidth, info.decimalScale)
 	case TYPE_ENUM:

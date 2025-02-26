@@ -38,7 +38,7 @@ func (vec *vector) init(logicalType apiLogicalType, colIdx int) error {
 	t := Type(apiGetTypeId(logicalType))
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap {
-		return addIndexToError(unsupportedTypeError(name), colIdx)
+		return addIndexToError(unsupportedTypeError(name), int(colIdx))
 	}
 
 	alias := apiLogicalTypeGetAlias(logicalType)
@@ -105,7 +105,7 @@ func (vec *vector) init(logicalType apiLogicalType, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) resizeListVector(newLength uint64) {
+func (vec *vector) resizeListVector(newLength apiIdxT) {
 	apiListVectorReserve(vec.vec, newLength)
 	apiListVectorSetSize(vec.vec, newLength)
 	vec.resetChildData()
@@ -135,7 +135,7 @@ func (vec *vector) getChildVectors(v apiVector, writable bool) {
 		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
-			child := apiStructVectorGetChild(v, uint64(i))
+			child := apiStructVectorGetChild(v, apiIdxT(i))
 			vec.childVectors[i].initVectors(child, writable)
 		}
 	case TYPE_ARRAY:
@@ -145,13 +145,13 @@ func (vec *vector) getChildVectors(v apiVector, writable bool) {
 }
 
 func initBool(vec *vector) {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return getPrimitive[bool](vec, rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -162,13 +162,13 @@ func initBool(vec *vector) {
 }
 
 func initNumeric[T numericType](vec *vector, t Type) {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return getPrimitive[T](vec, rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -179,13 +179,13 @@ func initNumeric[T numericType](vec *vector, t Type) {
 }
 
 func (vec *vector) initTS(t Type) {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getTS(t, rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -196,13 +196,13 @@ func (vec *vector) initTS(t Type) {
 }
 
 func (vec *vector) initDate() {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getDate(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -213,13 +213,13 @@ func (vec *vector) initDate() {
 }
 
 func (vec *vector) initTime(t Type) {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getTime(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -230,13 +230,13 @@ func (vec *vector) initTime(t Type) {
 }
 
 func (vec *vector) initInterval() {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getInterval(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -247,13 +247,13 @@ func (vec *vector) initInterval() {
 }
 
 func (vec *vector) initHugeint() {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getHugeint(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -264,13 +264,13 @@ func (vec *vector) initHugeint() {
 }
 
 func (vec *vector) initBytes(t Type) {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getBytes(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -281,13 +281,13 @@ func (vec *vector) initBytes(t Type) {
 }
 
 func (vec *vector) initJSON() {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getJSON(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -304,13 +304,13 @@ func (vec *vector) initDecimal(logicalType apiLogicalType, colIdx int) error {
 	t := Type(apiDecimalInternalType(logicalType))
 	switch t {
 	case TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_HUGEINT:
-		vec.getFn = func(vec *vector, rowIdx uint64) any {
+		vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 			if vec.getNull(rowIdx) {
 				return nil
 			}
 			return vec.getDecimal(rowIdx)
 		}
-		vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+		vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 			if val == nil {
 				vec.setNull(rowIdx)
 				return nil
@@ -332,20 +332,20 @@ func (vec *vector) initEnum(logicalType apiLogicalType, colIdx int) error {
 	vec.dict = make(map[string]uint32)
 
 	for i := uint32(0); i < dictSize; i++ {
-		str := apiEnumDictionaryValue(logicalType, uint64(i))
+		str := apiEnumDictionaryValue(logicalType, apiIdxT(i))
 		vec.dict[str] = i
 	}
 
 	t := Type(apiEnumInternalType(logicalType))
 	switch t {
 	case TYPE_UTINYINT, TYPE_USMALLINT, TYPE_UINTEGER, TYPE_UBIGINT:
-		vec.getFn = func(vec *vector, rowIdx uint64) any {
+		vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 			if vec.getNull(rowIdx) {
 				return nil
 			}
 			return vec.getEnum(rowIdx)
 		}
-		vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+		vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 			if val == nil {
 				vec.setNull(rowIdx)
 				return nil
@@ -373,13 +373,13 @@ func (vec *vector) initList(logicalType apiLogicalType, colIdx int) error {
 		return err
 	}
 
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getList(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -391,10 +391,10 @@ func (vec *vector) initList(logicalType apiLogicalType, colIdx int) error {
 }
 
 func (vec *vector) initStruct(logicalType apiLogicalType, colIdx int) error {
-	childCount := int(apiStructTypeChildCount(logicalType))
+	childCount := apiStructTypeChildCount(logicalType)
 	var structEntries []StructEntry
-	for i := 0; i < childCount; i++ {
-		name := apiStructTypeChildName(logicalType, uint64(i))
+	for i := apiIdxT(0); i < childCount; i++ {
+		name := apiStructTypeChildName(logicalType, i)
 		entry, err := NewStructEntry(nil, name)
 		structEntries = append(structEntries, entry)
 		if err != nil {
@@ -406,23 +406,22 @@ func (vec *vector) initStruct(logicalType apiLogicalType, colIdx int) error {
 	vec.structEntries = structEntries
 
 	// Recurse into the children.
-	for i := 0; i < childCount; i++ {
-		childType := apiStructTypeChildType(logicalType, uint64(i))
+	for i := apiIdxT(0); i < childCount; i++ {
+		childType := apiStructTypeChildType(logicalType, i)
 		err := vec.childVectors[i].init(childType, colIdx)
 		apiDestroyLogicalType(&childType)
-
 		if err != nil {
 			return err
 		}
 	}
 
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getStruct(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -458,13 +457,13 @@ func (vec *vector) initMap(logicalType apiLogicalType, colIdx int) error {
 		return addIndexToError(errUnsupportedMapKeyType, colIdx)
 	}
 
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getMap(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -489,13 +488,13 @@ func (vec *vector) initArray(logicalType apiLogicalType, colIdx int) error {
 		return err
 	}
 
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getArray(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -507,14 +506,14 @@ func (vec *vector) initArray(logicalType apiLogicalType, colIdx int) error {
 }
 
 func (vec *vector) initUUID() {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		hugeInt := getPrimitive[apiHugeInt](vec, rowIdx)
 		return hugeIntToUUID(hugeInt)
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		if val == nil || val == (*UUID)(nil) {
 			vec.setNull(rowIdx)
 			return nil
@@ -525,10 +524,10 @@ func (vec *vector) initUUID() {
 }
 
 func (vec *vector) initSQLNull() {
-	vec.getFn = func(vec *vector, rowIdx uint64) any {
+	vec.getFn = func(vec *vector, rowIdx apiIdxT) any {
 		return nil
 	}
-	vec.setFn = func(vec *vector, rowIdx uint64, val any) error {
+	vec.setFn = func(vec *vector, rowIdx apiIdxT, val any) error {
 		return errSetSQLNULLValue
 	}
 	vec.Type = TYPE_SQLNULL

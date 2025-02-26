@@ -21,9 +21,9 @@ type rows struct {
 	// closeChunk is true after the first iteration of Next.
 	closeChunk bool
 	// chunkCount is the number of chunks in the result.
-	chunkCount uint64
+	chunkCount apiIdxT
 	// chunkIdx is the chunk index in the result.
-	chunkIdx uint64
+	chunkIdx apiIdxT
 	// rowCount is the number of scanned rows.
 	rowCount int
 }
@@ -39,8 +39,8 @@ func newRowsWithStmt(res apiResult, stmt *Stmt) *rows {
 		rowCount:   0,
 	}
 
-	for i := uint64(0); i < columnCount; i++ {
-		columnName := apiColumnName(&res, i)
+	for i := apiIdxT(0); i < columnCount; i++ {
+		columnName := apiColumnName(&res, apiIdxT(i))
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
 	return &r
@@ -83,7 +83,7 @@ func (r *rows) Next(dst []driver.Value) error {
 
 // ColumnTypeScanType implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	t := Type(apiColumnType(&r.res, uint64(index)))
+	t := Type(apiColumnType(&r.res, apiIdxT(index)))
 	switch t {
 	case TYPE_INVALID:
 		return nil
@@ -138,11 +138,11 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	t := Type(apiColumnType(&r.res, uint64(index)))
+	t := Type(apiColumnType(&r.res, apiIdxT(index)))
 	switch t {
 	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
 		// Only allocate the logical type if necessary.
-		logicalType := apiColumnLogicalType(&r.res, uint64(index))
+		logicalType := apiColumnLogicalType(&r.res, apiIdxT(index))
 		defer apiDestroyLogicalType(&logicalType)
 		return logicalTypeName(logicalType)
 	default:
@@ -205,7 +205,7 @@ func logicalTypeNameStruct(logicalType apiLogicalType) string {
 	count := apiStructTypeChildCount(logicalType)
 	name := "STRUCT("
 
-	for i := uint64(0); i < count; i++ {
+	for i := apiIdxT(0); i < count; i++ {
 		childName := apiStructTypeChildName(logicalType, i)
 		childType := apiStructTypeChildType(logicalType, i)
 

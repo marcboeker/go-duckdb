@@ -1,46 +1,46 @@
 package duckdb
 
 // Type wraps the corresponding DuckDB type enum.
-type Type apiType
+type Type = apiType
 
 const (
-	TYPE_INVALID      = Type(apiTypeInvalid)
-	TYPE_BOOLEAN      = Type(apiTypeBoolean)
-	TYPE_TINYINT      = Type(apiTypeTinyInt)
-	TYPE_SMALLINT     = Type(apiTypeSmallInt)
-	TYPE_INTEGER      = Type(apiTypeInteger)
-	TYPE_BIGINT       = Type(apiTypeBigInt)
-	TYPE_UTINYINT     = Type(apiTypeUTinyInt)
-	TYPE_USMALLINT    = Type(apiTypeUSmallInt)
-	TYPE_UINTEGER     = Type(apiTypeUInteger)
-	TYPE_UBIGINT      = Type(apiTypeUBigInt)
-	TYPE_FLOAT        = Type(apiTypeFloat)
-	TYPE_DOUBLE       = Type(apiTypeDouble)
-	TYPE_TIMESTAMP    = Type(apiTypeTimestamp)
-	TYPE_DATE         = Type(apiTypeDate)
-	TYPE_TIME         = Type(apiTypeTime)
-	TYPE_INTERVAL     = Type(apiTypeInterval)
-	TYPE_HUGEINT      = Type(apiTypeHugeInt)
-	TYPE_UHUGEINT     = Type(apiTypeUHugeInt)
-	TYPE_VARCHAR      = Type(apiTypeVarchar)
-	TYPE_BLOB         = Type(apiTypeBlob)
-	TYPE_DECIMAL      = Type(apiTypeDecimal)
-	TYPE_TIMESTAMP_S  = Type(apiTypeTimestampS)
-	TYPE_TIMESTAMP_MS = Type(apiTypeTimestampMS)
-	TYPE_TIMESTAMP_NS = Type(apiTypeTimestampNS)
-	TYPE_ENUM         = Type(apiTypeEnum)
-	TYPE_LIST         = Type(apiTypeList)
-	TYPE_STRUCT       = Type(apiTypeStruct)
-	TYPE_MAP          = Type(apiTypeMap)
-	TYPE_ARRAY        = Type(apiTypeArray)
-	TYPE_UUID         = Type(apiTypeUUID)
-	TYPE_UNION        = Type(apiTypeUnion)
-	TYPE_BIT          = Type(apiTypeBit)
-	TYPE_TIME_TZ      = Type(apiTypeTimeTZ)
-	TYPE_TIMESTAMP_TZ = Type(apiTypeTimestampTZ)
-	TYPE_ANY          = Type(apiTypeAny)
-	TYPE_VARINT       = Type(apiTypeVarInt)
-	TYPE_SQLNULL      = Type(apiTypeSQLNull)
+	TYPE_INVALID      = apiTypeInvalid
+	TYPE_BOOLEAN      = apiTypeBoolean
+	TYPE_TINYINT      = apiTypeTinyInt
+	TYPE_SMALLINT     = apiTypeSmallInt
+	TYPE_INTEGER      = apiTypeInteger
+	TYPE_BIGINT       = apiTypeBigInt
+	TYPE_UTINYINT     = apiTypeUTinyInt
+	TYPE_USMALLINT    = apiTypeUSmallInt
+	TYPE_UINTEGER     = apiTypeUInteger
+	TYPE_UBIGINT      = apiTypeUBigInt
+	TYPE_FLOAT        = apiTypeFloat
+	TYPE_DOUBLE       = apiTypeDouble
+	TYPE_TIMESTAMP    = apiTypeTimestamp
+	TYPE_DATE         = apiTypeDate
+	TYPE_TIME         = apiTypeTime
+	TYPE_INTERVAL     = apiTypeInterval
+	TYPE_HUGEINT      = apiTypeHugeInt
+	TYPE_UHUGEINT     = apiTypeUHugeInt
+	TYPE_VARCHAR      = apiTypeVarchar
+	TYPE_BLOB         = apiTypeBlob
+	TYPE_DECIMAL      = apiTypeDecimal
+	TYPE_TIMESTAMP_S  = apiTypeTimestampS
+	TYPE_TIMESTAMP_MS = apiTypeTimestampMS
+	TYPE_TIMESTAMP_NS = apiTypeTimestampNS
+	TYPE_ENUM         = apiTypeEnum
+	TYPE_LIST         = apiTypeList
+	TYPE_STRUCT       = apiTypeStruct
+	TYPE_MAP          = apiTypeMap
+	TYPE_ARRAY        = apiTypeArray
+	TYPE_UUID         = apiTypeUUID
+	TYPE_UNION        = apiTypeUnion
+	TYPE_BIT          = apiTypeBit
+	TYPE_TIME_TZ      = apiTypeTimeTZ
+	TYPE_TIMESTAMP_TZ = apiTypeTimestampTZ
+	TYPE_ANY          = apiTypeAny
+	TYPE_VARINT       = apiTypeVarInt
+	TYPE_SQLNULL      = apiTypeSQLNull
 )
 
 // FIXME: Implement support for these types.

@@ -38,7 +38,7 @@ func (info *ProfilingInfo) getMetrics(profilingInfo apiProfilingInfo) {
 	count := apiGetMapSize(m)
 	info.Metrics = make(map[string]string, count)
 
-	for i := uint64(0); i < count; i++ {
+	for i := apiIdxT(0); i < count; i++ {
 		key := apiGetMapKey(m, i)
 		value := apiGetMapValue(m, i)
 
@@ -52,7 +52,7 @@ func (info *ProfilingInfo) getMetrics(profilingInfo apiProfilingInfo) {
 	apiDestroyValue(&m)
 
 	childCount := apiProfilingInfoGetChildCount(profilingInfo)
-	for i := uint64(0); i < childCount; i++ {
+	for i := apiIdxT(0); i < childCount; i++ {
 		profilingInfoChild := apiProfilingInfoGetChild(profilingInfo, i)
 		childInfo := ProfilingInfo{}
 		childInfo.getMetrics(profilingInfoChild)
