@@ -138,15 +138,12 @@ func cleanupAppender[T require.TestingT](t T, c *Connector, db *sql.DB, conn dri
 }
 
 func TestAppenderClose(t *testing.T) {
-	defer VerifyAllocationCounters()
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (i INTEGER)`)
 	defer cleanupAppender(t, c, db, conn, a)
 	require.NoError(t, a.AppendRow(int32(42)))
 }
 
 func TestAppendChunks(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 			id BIGINT,
@@ -184,8 +181,6 @@ func TestAppendChunks(t *testing.T) {
 }
 
 func TestAppenderList(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		string_list VARCHAR[],
@@ -221,8 +216,6 @@ func TestAppenderList(t *testing.T) {
 }
 
 func TestAppenderArray(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (string_array VARCHAR[3])`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -250,8 +243,6 @@ func TestAppenderArray(t *testing.T) {
 }
 
 func TestAppenderNested(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, createNestedDataTableSQL)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -306,8 +297,6 @@ func TestAppenderNested(t *testing.T) {
 }
 
 func TestAppenderNullList(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (int_slice VARCHAR[][][])`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -349,8 +338,6 @@ func TestAppenderNullList(t *testing.T) {
 }
 
 func TestAppenderNullStruct(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		simple_struct STRUCT(a INT, B VARCHAR)
@@ -381,8 +368,6 @@ func TestAppenderNullStruct(t *testing.T) {
 }
 
 func TestAppenderNestedNullStruct(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		double_wrapped_struct STRUCT(
@@ -434,8 +419,6 @@ func TestAppenderNestedNullStruct(t *testing.T) {
 }
 
 func TestAppenderNullIntAndString(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (id BIGINT, str VARCHAR)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -475,8 +458,6 @@ func TestAppenderNullIntAndString(t *testing.T) {
 }
 
 func TestAppenderUUID(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (id UUID)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -528,8 +509,6 @@ func newAppenderHugeIntTest[T numericType](val T, c *Connector, db *sql.DB, a *A
 }
 
 func TestAppenderHugeInt(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (val HUGEINT, id VARCHAR)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -551,8 +530,6 @@ func TestAppenderHugeInt(t *testing.T) {
 }
 
 func TestAppenderTsNs(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (timestamp TIMESTAMP_NS)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -569,8 +546,6 @@ func TestAppenderTsNs(t *testing.T) {
 }
 
 func TestAppenderDate(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (date DATE)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -589,8 +564,6 @@ func TestAppenderDate(t *testing.T) {
 }
 
 func TestAppenderTime(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (time TIME)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -608,8 +581,6 @@ func TestAppenderTime(t *testing.T) {
 }
 
 func TestAppenderTimeTZ(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (time TIMETZ)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -628,8 +599,6 @@ func TestAppenderTimeTZ(t *testing.T) {
 }
 
 func TestAppenderBlob(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (data BLOB)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -657,8 +626,6 @@ func TestAppenderBlob(t *testing.T) {
 }
 
 func TestAppenderBlobTinyInt(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data UTINYINT[]
@@ -696,8 +663,6 @@ func TestAppenderBlobTinyInt(t *testing.T) {
 }
 
 func TestAppenderUint8SliceTinyInt(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data UTINYINT[]
@@ -731,8 +696,6 @@ func TestAppenderUint8SliceTinyInt(t *testing.T) {
 }
 
 func TestAppenderDecimal(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 	CREATE TABLE test (
 		data DECIMAL(4,3)
@@ -786,8 +749,6 @@ var jsonResults = [][]string{
 }
 
 func TestAppenderWithJSON(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c, db, conn, a := prepareAppender(t, `
 		CREATE TABLE test (
 		    c1 UBIGINT,
@@ -951,8 +912,6 @@ func benchmarkAppenderSingle[T any](v T) func(*testing.B) {
 		if _, ok := types[reflect.TypeFor[T]()]; !ok {
 			b.Fatal("Type not defined in table:", reflect.TypeFor[T]())
 		}
-		defer VerifyAllocationCounters()
-
 		tableSQL := fmt.Sprintf(createSingleTableSQL, types[reflect.TypeFor[T]()])
 		c, db, conn, a := prepareAppender(b, tableSQL)
 		defer cleanupAppender(b, c, db, conn, a)

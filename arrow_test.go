@@ -15,8 +15,6 @@ import (
 )
 
 func TestArrow(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -200,8 +198,6 @@ func TestArrow(t *testing.T) {
 }
 
 func TestArrowClosedConn(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 

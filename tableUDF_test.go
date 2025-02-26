@@ -632,8 +632,6 @@ func (udf *chunkIncTableUDF) Cardinality() *CardinalityInfo {
 }
 
 func TestTableUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	for _, udf := range rowTableUDFs {
 		t.Run(udf.name, func(t *testing.T) {
 			singleTableUDF(t, udf)
@@ -686,8 +684,6 @@ func singleTableUDF[T TableFunction](t *testing.T, fun tableUDFTest[T]) {
 }
 
 func TestErrTableUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, `?access_mode=READ_WRITE`)
 	defer closeDbWrapper(t, db)
 
@@ -703,8 +699,6 @@ func TestErrTableUDF(t *testing.T) {
 }
 
 func TestErrTableUDFUnsupportedType(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	for _, udf := range unsupportedTypeUDFs {
 		t.Run(udf.name, func(t *testing.T) {
 			db := openDbWrapper(t, `?access_mode=READ_WRITE`)

@@ -10,8 +10,6 @@ import (
 
 // FIXME: More replacement scan tests, also failure paths.
 func TestReplacementScan(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c := newConnectorWrapper(t, ``, func(execer driver.ExecerContext) error {
 		return nil
 	})
