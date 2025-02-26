@@ -355,9 +355,3 @@ var (
 func apiCreateLogicalType(t apiType) apiLogicalType {
 	return bindings.CreateLogicalType(bindings.Type(t))
 }
-
-// ------------------------------------------------------------------ //
-// Memory Safety
-// ------------------------------------------------------------------ //
-
-var VerifyAllocationCounters = bindings.VerifyAllocationCounters

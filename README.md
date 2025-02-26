@@ -197,10 +197,6 @@ c, err := NewConnector("", nil)
 defer c.Close()
 ```
 
-To verify your memory allocations, you can call `duckdb.VerifyAllocationCounters()` together with `-tags=debug_bindings`.
-`VerifyAllocationCounters` panics, if there are any open allocation.
-I.e., if `Close()` was not yet called for a resource.
-
 ## DuckDB Appender API
 
 If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/appender.html), you can obtain a new `Appender` by passing a DuckDB connection to `NewAppenderFromConn()`.
