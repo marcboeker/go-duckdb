@@ -4,12 +4,12 @@ go 1.23.4
 
 require (
 	github.com/apache/arrow-go/v18 v18.1.0
-	github.com/duckdb/duckdb-go-bindings v0.1.7
-	github.com/duckdb/duckdb-go-bindings/darwin-amd64 v0.1.2
-	github.com/duckdb/duckdb-go-bindings/darwin-arm64 v0.1.2
-	github.com/duckdb/duckdb-go-bindings/linux-amd64 v0.1.2
-	github.com/duckdb/duckdb-go-bindings/linux-arm64 v0.1.2
-	github.com/duckdb/duckdb-go-bindings/windows-amd64 v0.1.2
+	github.com/duckdb/duckdb-go-bindings v0.1.9
+	github.com/duckdb/duckdb-go-bindings/darwin-amd64 v0.1.4
+	github.com/duckdb/duckdb-go-bindings/darwin-arm64 v0.1.4
+	github.com/duckdb/duckdb-go-bindings/linux-amd64 v0.1.4
+	github.com/duckdb/duckdb-go-bindings/linux-arm64 v0.1.4
+	github.com/duckdb/duckdb-go-bindings/windows-amd64 v0.1.4
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
@@ -34,5 +34,3 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/duckdb/duckdb-go-bindings/darwin-arm64 => ../duckdb-go-bindings/darwin-arm64
