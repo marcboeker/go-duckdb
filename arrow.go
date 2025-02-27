@@ -103,7 +103,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	defer apiDestroyExtracted(&extractedStmts)
 
 	// Execute all statements without args, except the last one.
-	for i := uint64(0); i < size-1; i++ {
+	for i := apiIdxT(0); i < size-1; i++ {
 		extractedStmt, err := a.conn.prepareExtractedStmt(extractedStmts, i)
 		if err != nil {
 			return nil, err
