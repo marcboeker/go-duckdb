@@ -65,6 +65,9 @@ import (
 	"fmt"
 	"unsafe"
 
+	am "github.com/marcboeker/go-duckdb/arrow-mapping"
+	m "github.com/marcboeker/go-duckdb/mapping"
+
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/cdata"
@@ -100,10 +103,10 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	if errExtract != nil {
 		return nil, errExtract
 	}
-	defer apiDestroyExtracted(&extractedStmts)
+	defer m.DestroyExtracted(&extractedStmts)
 
 	// Execute all statements without args, except the last one.
-	for i := apiIdxT(0); i < size-1; i++ {
+	for i := m.IdxT(0); i < size-m.IdxT(1); i++ {
 		extractedStmt, err := a.conn.prepareExtractedStmt(extractedStmts, i)
 		if err != nil {
 			return nil, err
@@ -118,7 +121,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	}
 
 	// Prepare and execute the last statement with args.
-	stmt, err := a.conn.prepareExtractedStmt(extractedStmts, size-1)
+	stmt, err := a.conn.prepareExtractedStmt(extractedStmts, size-m.IdxT(1))
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +131,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyArrow(res)
+	defer am.DestroyArrow(res)
 
 	sc, err := a.queryArrowSchema(res)
 	if err != nil {
@@ -142,7 +145,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		}
 	}()
 
-	rowCount := uint64(apiArrowRowCount(*res))
+	rowCount := uint64(am.ArrowRowCount(*res))
 	var retrievedRows uint64
 	for retrievedRows < rowCount {
 		select {
@@ -163,17 +166,17 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 }
 
 // queryArrowSchema fetches the internal arrow schema from the arrow result.
-func (a *Arrow) queryArrowSchema(res *apiArrow) (*arrow.Schema, error) {
+func (a *Arrow) queryArrowSchema(res *am.Arrow) (*arrow.Schema, error) {
 	schema := C.calloc(1, C.sizeof_struct_ArrowSchema)
 	defer func() {
 		cdata.ReleaseCArrowSchema((*cdata.CArrowSchema)(schema))
 		C.free(schema)
 	}()
 
-	arrowSchema := apiArrowSchema{
+	arrowSchema := am.ArrowSchema{
 		Ptr: unsafe.Pointer(&schema),
 	}
-	if apiQueryArrowSchema(*res, &arrowSchema) == apiStateError {
+	if am.QueryArrowSchema(*res, &arrowSchema) == m.StateError {
 		return nil, errors.New("duckdb_query_arrow_schema")
 	}
 
@@ -188,17 +191,17 @@ func (a *Arrow) queryArrowSchema(res *apiArrow) (*arrow.Schema, error) {
 //
 // This function can be called multiple time to get next chunks,
 // which will free the previous out_array.
-func (a *Arrow) queryArrowArray(res *apiArrow, sc *arrow.Schema) (arrow.Record, error) {
+func (a *Arrow) queryArrowArray(res *am.Arrow, sc *arrow.Schema) (arrow.Record, error) {
 	arr := C.calloc(1, C.sizeof_struct_ArrowArray)
 	defer func() {
 		cdata.ReleaseCArrowArray((*cdata.CArrowArray)(arr))
 		C.free(arr)
 	}()
 
-	arrowArray := apiArrowArray{
+	arrowArray := am.ArrowArray{
 		Ptr: unsafe.Pointer(&arr),
 	}
-	if apiQueryArrowArray(*res, &arrowArray) == apiStateError {
+	if am.QueryArrowArray(*res, &arrowArray) == m.StateError {
 		return nil, errors.New("duckdb_query_arrow_array")
 	}
 
@@ -210,7 +213,7 @@ func (a *Arrow) queryArrowArray(res *apiArrow, sc *arrow.Schema) (arrow.Record, 
 	return rec, nil
 }
 
-func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
+func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*am.Arrow, error) {
 	if s.closed {
 		return nil, errClosedCon
 	}
@@ -218,10 +221,10 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
 		return nil, err
 	}
 
-	var res apiArrow
-	if apiExecutePreparedArrow(*s.preparedStmt, &res) == apiStateError {
-		errMsg := apiQueryArrowError(res)
-		apiDestroyArrow(&res)
+	var res am.Arrow
+	if am.ExecutePreparedArrow(*s.preparedStmt, &res) == m.StateError {
+		errMsg := am.QueryArrowError(res)
+		am.DestroyArrow(&res)
 		return nil, fmt.Errorf("failed to execute the prepared arrow: %v", errMsg)
 	}
 	return &res, nil
@@ -254,10 +257,10 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 	}
 	cdata.ExportRecordReader(reader, (*cdata.CArrowArrayStream)(stream))
 
-	arrowStream := apiArrowStream{
+	arrowStream := am.ArrowStream{
 		Ptr: unsafe.Pointer(stream),
 	}
-	if apiArrowScan(a.conn.conn, name, arrowStream) == apiStateError {
+	if am.ArrowScan(a.conn.conn, name, arrowStream) == m.StateError {
 		release()
 		return nil, errors.New("duckdb_arrow_scan")
 	}

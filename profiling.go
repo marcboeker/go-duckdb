@@ -2,6 +2,8 @@ package duckdb
 
 import (
 	"database/sql"
+
+	m "github.com/marcboeker/go-duckdb/mapping"
 )
 
 // ProfilingInfo is a recursive type containing metrics for each node in DuckDB's query plan.
@@ -21,7 +23,7 @@ func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		profilingInfo := apiGetProfilingInfo(conn.conn)
+		profilingInfo := m.GetProfilingInfo(conn.conn)
 		if profilingInfo.Ptr == nil {
 			return getError(errProfilingInfoEmpty, nil)
 		}
@@ -33,27 +35,27 @@ func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	return info, err
 }
 
-func (info *ProfilingInfo) getMetrics(profilingInfo apiProfilingInfo) {
-	m := apiProfilingInfoGetMetrics(profilingInfo)
-	count := apiGetMapSize(m)
+func (info *ProfilingInfo) getMetrics(profilingInfo m.ProfilingInfo) {
+	metricsMap := m.ProfilingInfoGetMetrics(profilingInfo)
+	count := m.GetMapSize(metricsMap)
 	info.Metrics = make(map[string]string, count)
 
-	for i := apiIdxT(0); i < count; i++ {
-		key := apiGetMapKey(m, i)
-		value := apiGetMapValue(m, i)
+	for i := m.IdxT(0); i < count; i++ {
+		key := m.GetMapKey(metricsMap, i)
+		value := m.GetMapValue(metricsMap, i)
 
-		keyStr := apiGetVarchar(key)
-		valueStr := apiGetVarchar(value)
+		keyStr := m.GetVarchar(key)
+		valueStr := m.GetVarchar(value)
 		info.Metrics[keyStr] = valueStr
 
-		apiDestroyValue(&key)
-		apiDestroyValue(&value)
+		m.DestroyValue(&key)
+		m.DestroyValue(&value)
 	}
-	apiDestroyValue(&m)
+	m.DestroyValue(&metricsMap)
 
-	childCount := apiProfilingInfoGetChildCount(profilingInfo)
-	for i := apiIdxT(0); i < childCount; i++ {
-		profilingInfoChild := apiProfilingInfoGetChild(profilingInfo, i)
+	childCount := m.ProfilingInfoGetChildCount(profilingInfo)
+	for i := m.IdxT(0); i < childCount; i++ {
+		profilingInfoChild := m.ProfilingInfoGetChild(profilingInfo, i)
 		childInfo := ProfilingInfo{}
 		childInfo.getMetrics(profilingInfoChild)
 		info.Children = append(info.Children, childInfo)

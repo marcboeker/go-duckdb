@@ -6,12 +6,14 @@ import (
 	"database/sql/driver"
 	"errors"
 	"math/big"
+
+	m "github.com/marcboeker/go-duckdb/mapping"
 )
 
 // Conn holds a connection to a DuckDB database.
 // It implements the driver.Conn interface.
 type Conn struct {
-	conn   apiConnection
+	conn   m.Connection
 	closed bool
 	tx     bool
 }
@@ -86,7 +88,7 @@ func (conn *Conn) Prepare(query string) (driver.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyExtracted(&extractedStmts)
+	defer m.DestroyExtracted(&extractedStmts)
 
 	if count != 1 {
 		return nil, errors.Join(errPrepare, errMissingPrepareContext)
@@ -131,17 +133,17 @@ func (conn *Conn) Close() error {
 		return errClosedCon
 	}
 	conn.closed = true
-	apiDisconnect(&conn.conn)
+	m.Disconnect(&conn.conn)
 	return nil
 }
 
-func (conn *Conn) extractStmts(query string) (apiExtractedStatements, apiIdxT, error) {
-	var extractedStmts apiExtractedStatements
+func (conn *Conn) extractStmts(query string) (m.ExtractedStatements, m.IdxT, error) {
+	var extractedStmts m.ExtractedStatements
 
-	count := apiExtractStatements(conn.conn, query, &extractedStmts)
+	count := m.ExtractStatements(conn.conn, query, &extractedStmts)
 	if count == 0 {
-		errMsg := apiExtractStatementsError(extractedStmts)
-		apiDestroyExtracted(&extractedStmts)
+		errMsg := m.ExtractStatementsError(extractedStmts)
+		m.DestroyExtracted(&extractedStmts)
 		if errMsg != "" {
 			return extractedStmts, 0, getDuckDBError(errMsg)
 		}
@@ -150,12 +152,12 @@ func (conn *Conn) extractStmts(query string) (apiExtractedStatements, apiIdxT, e
 	return extractedStmts, count, nil
 }
 
-func (conn *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i apiIdxT) (*Stmt, error) {
-	var preparedStmt apiPreparedStatement
-	state := apiPrepareExtractedStatement(conn.conn, extractedStmts, i, &preparedStmt)
-	if state == apiStateError {
-		err := getDuckDBError(apiPrepareError(preparedStmt))
-		apiDestroyPrepare(&preparedStmt)
+func (conn *Conn) prepareExtractedStmt(extractedStmts m.ExtractedStatements, i m.IdxT) (*Stmt, error) {
+	var preparedStmt m.PreparedStatement
+	state := m.PrepareExtractedStatement(conn.conn, extractedStmts, i, &preparedStmt)
+	if state == m.StateError {
+		err := getDuckDBError(m.PrepareError(preparedStmt))
+		m.DestroyPrepare(&preparedStmt)
 		return nil, err
 	}
 	return &Stmt{conn: conn, preparedStmt: &preparedStmt}, nil
@@ -170,9 +172,9 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 	if errExtract != nil {
 		return nil, errExtract
 	}
-	defer apiDestroyExtracted(&extractedStmts)
+	defer m.DestroyExtracted(&extractedStmts)
 
-	for i := apiIdxT(0); i < count-1; i++ {
+	for i := m.IdxT(0); i < count-1; i++ {
 		preparedStmt, err := conn.prepareExtractedStmt(extractedStmts, i)
 		if err != nil {
 			return nil, err

@@ -1,46 +1,50 @@
 package duckdb
 
+import (
+	m "github.com/marcboeker/go-duckdb/mapping"
+)
+
 // Type wraps the corresponding DuckDB type enum.
-type Type = apiType
+type Type = m.Type
 
 const (
-	TYPE_INVALID      = apiTypeInvalid
-	TYPE_BOOLEAN      = apiTypeBoolean
-	TYPE_TINYINT      = apiTypeTinyInt
-	TYPE_SMALLINT     = apiTypeSmallInt
-	TYPE_INTEGER      = apiTypeInteger
-	TYPE_BIGINT       = apiTypeBigInt
-	TYPE_UTINYINT     = apiTypeUTinyInt
-	TYPE_USMALLINT    = apiTypeUSmallInt
-	TYPE_UINTEGER     = apiTypeUInteger
-	TYPE_UBIGINT      = apiTypeUBigInt
-	TYPE_FLOAT        = apiTypeFloat
-	TYPE_DOUBLE       = apiTypeDouble
-	TYPE_TIMESTAMP    = apiTypeTimestamp
-	TYPE_DATE         = apiTypeDate
-	TYPE_TIME         = apiTypeTime
-	TYPE_INTERVAL     = apiTypeInterval
-	TYPE_HUGEINT      = apiTypeHugeInt
-	TYPE_UHUGEINT     = apiTypeUHugeInt
-	TYPE_VARCHAR      = apiTypeVarchar
-	TYPE_BLOB         = apiTypeBlob
-	TYPE_DECIMAL      = apiTypeDecimal
-	TYPE_TIMESTAMP_S  = apiTypeTimestampS
-	TYPE_TIMESTAMP_MS = apiTypeTimestampMS
-	TYPE_TIMESTAMP_NS = apiTypeTimestampNS
-	TYPE_ENUM         = apiTypeEnum
-	TYPE_LIST         = apiTypeList
-	TYPE_STRUCT       = apiTypeStruct
-	TYPE_MAP          = apiTypeMap
-	TYPE_ARRAY        = apiTypeArray
-	TYPE_UUID         = apiTypeUUID
-	TYPE_UNION        = apiTypeUnion
-	TYPE_BIT          = apiTypeBit
-	TYPE_TIME_TZ      = apiTypeTimeTZ
-	TYPE_TIMESTAMP_TZ = apiTypeTimestampTZ
-	TYPE_ANY          = apiTypeAny
-	TYPE_VARINT       = apiTypeVarInt
-	TYPE_SQLNULL      = apiTypeSQLNull
+	TYPE_INVALID      = m.TypeInvalid
+	TYPE_BOOLEAN      = m.TypeBoolean
+	TYPE_TINYINT      = m.TypeTinyInt
+	TYPE_SMALLINT     = m.TypeSmallInt
+	TYPE_INTEGER      = m.TypeInteger
+	TYPE_BIGINT       = m.TypeBigInt
+	TYPE_UTINYINT     = m.TypeUTinyInt
+	TYPE_USMALLINT    = m.TypeUSmallInt
+	TYPE_UINTEGER     = m.TypeUInteger
+	TYPE_UBIGINT      = m.TypeUBigInt
+	TYPE_FLOAT        = m.TypeFloat
+	TYPE_DOUBLE       = m.TypeDouble
+	TYPE_TIMESTAMP    = m.TypeTimestamp
+	TYPE_DATE         = m.TypeDate
+	TYPE_TIME         = m.TypeTime
+	TYPE_INTERVAL     = m.TypeInterval
+	TYPE_HUGEINT      = m.TypeHugeInt
+	TYPE_UHUGEINT     = m.TypeUHugeInt
+	TYPE_VARCHAR      = m.TypeVarchar
+	TYPE_BLOB         = m.TypeBlob
+	TYPE_DECIMAL      = m.TypeDecimal
+	TYPE_TIMESTAMP_S  = m.TypeTimestampS
+	TYPE_TIMESTAMP_MS = m.TypeTimestampMS
+	TYPE_TIMESTAMP_NS = m.TypeTimestampNS
+	TYPE_ENUM         = m.TypeEnum
+	TYPE_LIST         = m.TypeList
+	TYPE_STRUCT       = m.TypeStruct
+	TYPE_MAP          = m.TypeMap
+	TYPE_ARRAY        = m.TypeArray
+	TYPE_UUID         = m.TypeUUID
+	TYPE_UNION        = m.TypeUnion
+	TYPE_BIT          = m.TypeBit
+	TYPE_TIME_TZ      = m.TypeTimeTZ
+	TYPE_TIMESTAMP_TZ = m.TypeTimestampTZ
+	TYPE_ANY          = m.TypeAny
+	TYPE_VARINT       = m.TypeVarInt
+	TYPE_SQLNULL      = m.TypeSQLNull
 )
 
 // FIXME: Implement support for these types.

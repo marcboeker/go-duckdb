@@ -1,10 +1,14 @@
 package duckdb
 
+import (
+	m "github.com/marcboeker/go-duckdb/mapping"
+)
+
 // Row represents one row in duckdb.
 // It references the internal vectors.
 type Row struct {
 	chunk      *DataChunk
-	r          apiIdxT
+	r          m.IdxT
 	projection []int
 }
 

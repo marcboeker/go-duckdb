@@ -15,6 +15,8 @@ import (
 	"runtime"
 	"runtime/cgo"
 	"unsafe"
+
+	m "github.com/marcboeker/go-duckdb/mapping"
 )
 
 // ScalarFuncConfig contains the fields to configure a user-defined scalar function.
@@ -66,13 +68,13 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 	if err != nil {
 		return getError(errAPI, err)
 	}
-	defer apiDestroyScalarFunction(&function)
+	defer m.DestroyScalarFunction(&function)
 
 	// Register the function on the underlying driver connection exposed by c.Raw.
 	err = c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		state := apiRegisterScalarFunction(conn.conn, function)
-		if state == apiStateError {
+		state := m.RegisterScalarFunction(conn.conn, function)
+		if state == m.StateError {
 			return getError(errAPI, errScalarUDFCreate)
 		}
 		return nil
@@ -87,20 +89,20 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 // name is the function name of each function in the set.
 // functions contains all ScalarFunc functions of the scalar function set.
 func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) error {
-	set := apiCreateScalarFunctionSet(name)
+	set := m.CreateScalarFunctionSet(name)
 
 	// Create each function and add it to the set.
 	for i, f := range functions {
 		function, err := createScalarFunc(name, f)
 		if err != nil {
-			apiDestroyScalarFunctionSet(&set)
+			m.DestroyScalarFunctionSet(&set)
 			return getError(errAPI, err)
 		}
 
-		state := apiAddScalarFunctionToSet(set, function)
-		apiDestroyScalarFunction(&function)
-		if state == apiStateError {
-			apiDestroyScalarFunctionSet(&set)
+		state := m.AddScalarFunctionToSet(set, function)
+		m.DestroyScalarFunction(&function)
+		if state == m.StateError {
+			m.DestroyScalarFunctionSet(&set)
 			return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
 		}
 	}
@@ -108,9 +110,9 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 	// Register the function set on the underlying driver connection exposed by c.Raw.
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		state := apiRegisterScalarFunctionSet(conn.conn, set)
-		apiDestroyScalarFunctionSet(&set)
-		if state == apiStateError {
+		state := m.RegisterScalarFunctionSet(conn.conn, set)
+		m.DestroyScalarFunctionSet(&set)
+		if state == m.StateError {
 			return getError(errAPI, errScalarUDFCreateSet)
 		}
 		return nil
@@ -120,24 +122,24 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 //export scalar_udf_callback
 func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
-	functionInfo := apiFunctionInfo{Ptr: functionInfoPtr}
-	input := apiDataChunk{Ptr: inputPtr}
-	output := apiVector{Ptr: outputPtr}
+	functionInfo := m.FunctionInfo{Ptr: functionInfoPtr}
+	input := m.DataChunk{Ptr: inputPtr}
+	output := m.Vector{Ptr: outputPtr}
 
-	extraInfo := apiScalarFunctionGetExtraInfo(functionInfo)
+	extraInfo := m.ScalarFunctionGetExtraInfo(functionInfo)
 	function := getPinned[ScalarFunc](extraInfo)
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
 	if err := inputChunk.initFromDuckDataChunk(input, false); err != nil {
-		apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+		m.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 		return
 	}
 
 	// Initialize the output chunk.
 	var outputChunk DataChunk
 	if err := outputChunk.initFromDuckVector(output, true); err != nil {
-		apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+		m.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 		return
 	}
 
@@ -155,14 +157,14 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 		// Get each column value.
 		for colIdx := 0; colIdx < columnCount; colIdx++ {
 			if values[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
-				apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+				m.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 				return
 			}
 
 			// NULL handling.
 			if nullInNullOut && values[colIdx] == nil {
 				if err = outputChunk.SetValue(0, rowIdx, nil); err != nil {
-					apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+					m.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 					return
 				}
 				nullRow = true
@@ -176,13 +178,13 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 		// Execute the function.
 		var val any
 		if val, err = executor.RowExecutor(values); err != nil {
-			apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+			m.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 			return
 		}
 
 		// Write the result to the output chunk.
 		if err = outputChunk.SetValue(0, rowIdx, val); err != nil {
-			apiScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+			m.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 			return
 		}
 	}
@@ -195,12 +197,12 @@ func scalar_udf_delete_callback(info unsafe.Pointer) {
 	h.Delete()
 }
 
-func registerInputParams(config ScalarFuncConfig, f apiScalarFunction) error {
+func registerInputParams(config ScalarFuncConfig, f m.ScalarFunction) error {
 	// Set variadic input parameters.
 	if config.VariadicTypeInfo != nil {
 		t := config.VariadicTypeInfo.logicalType()
-		apiScalarFunctionSetVarargs(f, t)
-		apiDestroyLogicalType(&t)
+		m.ScalarFunctionSetVarargs(f, t)
+		m.DestroyLogicalType(&t)
 	}
 
 	// Early-out, if the function does not take any (non-variadic) parameters.
@@ -217,13 +219,13 @@ func registerInputParams(config ScalarFuncConfig, f apiScalarFunction) error {
 			return addIndexToError(errScalarUDFInputTypeIsNil, i)
 		}
 		t := info.logicalType()
-		apiScalarFunctionAddParameter(f, t)
-		apiDestroyLogicalType(&t)
+		m.ScalarFunctionAddParameter(f, t)
+		m.DestroyLogicalType(&t)
 	}
 	return nil
 }
 
-func registerResultParams(config ScalarFuncConfig, f apiScalarFunction) error {
+func registerResultParams(config ScalarFuncConfig, f m.ScalarFunction) error {
 	if config.ResultTypeInfo == nil {
 		return errScalarUDFResultTypeIsNil
 	}
@@ -231,45 +233,45 @@ func registerResultParams(config ScalarFuncConfig, f apiScalarFunction) error {
 		return errScalarUDFResultTypeIsANY
 	}
 	t := config.ResultTypeInfo.logicalType()
-	apiScalarFunctionSetReturnType(f, t)
-	apiDestroyLogicalType(&t)
+	m.ScalarFunctionSetReturnType(f, t)
+	m.DestroyLogicalType(&t)
 	return nil
 }
 
-func createScalarFunc(name string, f ScalarFunc) (apiScalarFunction, error) {
+func createScalarFunc(name string, f ScalarFunc) (m.ScalarFunction, error) {
 	if name == "" {
-		return apiScalarFunction{}, errScalarUDFNoName
+		return m.ScalarFunction{}, errScalarUDFNoName
 	}
 	if f == nil {
-		return apiScalarFunction{}, errScalarUDFIsNil
+		return m.ScalarFunction{}, errScalarUDFIsNil
 	}
 	if f.Executor().RowExecutor == nil {
-		return apiScalarFunction{}, errScalarUDFNoExecutor
+		return m.ScalarFunction{}, errScalarUDFNoExecutor
 	}
 
-	function := apiCreateScalarFunction()
-	apiScalarFunctionSetName(function, name)
+	function := m.CreateScalarFunction()
+	m.ScalarFunctionSetName(function, name)
 
 	// Configure the scalar function.
 	config := f.Config()
 	if err := registerInputParams(config, function); err != nil {
-		apiDestroyScalarFunction(&function)
+		m.DestroyScalarFunction(&function)
 		return function, err
 	}
 	if err := registerResultParams(config, function); err != nil {
-		apiDestroyScalarFunction(&function)
+		m.DestroyScalarFunction(&function)
 		return function, err
 	}
 	if config.SpecialNullHandling {
-		apiScalarFunctionSetSpecialHandling(function)
+		m.ScalarFunctionSetSpecialHandling(function)
 	}
 	if config.Volatile {
-		apiScalarFunctionSetVolatile(function)
+		m.ScalarFunctionSetVolatile(function)
 	}
 
 	// Set the function callback.
 	callbackPtr := unsafe.Pointer(C.scalar_udf_callback_t(C.scalar_udf_callback))
-	apiScalarFunctionSetFunction(function, callbackPtr)
+	m.ScalarFunctionSetFunction(function, callbackPtr)
 
 	// Pin the ScalarFunc f.
 	value := pinnedValue[ScalarFunc]{
@@ -281,6 +283,6 @@ func createScalarFunc(name string, f ScalarFunc) (apiScalarFunction, error) {
 
 	// Set the execution data, which is the ScalarFunc f.
 	deleteCallbackPtr := unsafe.Pointer(C.scalar_udf_delete_callback_t(C.scalar_udf_delete_callback))
-	apiScalarFunctionSetExtraInfo(function, unsafe.Pointer(&h), deleteCallbackPtr)
+	m.ScalarFunctionSetExtraInfo(function, unsafe.Pointer(&h), deleteCallbackPtr)
 	return function, nil
 }

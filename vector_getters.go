@@ -4,124 +4,126 @@ import (
 	"encoding/json"
 	"math/big"
 	"time"
+
+	m "github.com/marcboeker/go-duckdb/mapping"
 )
 
 // fnGetVectorValue is the getter callback function for any (nested) vector.
-type fnGetVectorValue func(vec *vector, rowIdx apiIdxT) any
+type fnGetVectorValue func(vec *vector, rowIdx m.IdxT) any
 
-func (vec *vector) getNull(rowIdx apiIdxT) bool {
+func (vec *vector) getNull(rowIdx m.IdxT) bool {
 	if vec.maskPtr == nil {
 		return false
 	}
-	return !apiValidityMaskValueIsValid(vec.maskPtr, rowIdx)
+	return !m.ValidityMaskValueIsValid(vec.maskPtr, rowIdx)
 }
 
-func getPrimitive[T any](vec *vector, rowIdx apiIdxT) T {
+func getPrimitive[T any](vec *vector, rowIdx m.IdxT) T {
 	xs := (*[1 << 31]T)(vec.dataPtr)
 	return xs[rowIdx]
 }
 
-func (vec *vector) getTS(t Type, rowIdx apiIdxT) time.Time {
-	val := getPrimitive[apiTimestamp](vec, rowIdx)
+func (vec *vector) getTS(t Type, rowIdx m.IdxT) time.Time {
+	val := getPrimitive[m.Timestamp](vec, rowIdx)
 	return getTS(t, val)
 }
 
-func getTS(t Type, ts apiTimestamp) time.Time {
+func getTS(t Type, ts m.Timestamp) time.Time {
 	switch t {
 	case TYPE_TIMESTAMP:
-		return time.UnixMicro(apiTimestampGetMicros(&ts)).UTC()
+		return time.UnixMicro(m.TimestampGetMicros(&ts)).UTC()
 	case TYPE_TIMESTAMP_S:
-		return time.Unix(apiTimestampGetMicros(&ts), 0).UTC()
+		return time.Unix(m.TimestampGetMicros(&ts), 0).UTC()
 	case TYPE_TIMESTAMP_MS:
-		return time.UnixMilli(apiTimestampGetMicros(&ts)).UTC()
+		return time.UnixMilli(m.TimestampGetMicros(&ts)).UTC()
 	case TYPE_TIMESTAMP_NS:
-		return time.Unix(0, apiTimestampGetMicros(&ts)).UTC()
+		return time.Unix(0, m.TimestampGetMicros(&ts)).UTC()
 	case TYPE_TIMESTAMP_TZ:
-		return time.UnixMicro(apiTimestampGetMicros(&ts)).UTC()
+		return time.UnixMicro(m.TimestampGetMicros(&ts)).UTC()
 	}
 	return time.Time{}
 }
 
-func (vec *vector) getDate(rowIdx apiIdxT) time.Time {
-	date := getPrimitive[apiDate](vec, rowIdx)
+func (vec *vector) getDate(rowIdx m.IdxT) time.Time {
+	date := getPrimitive[m.Date](vec, rowIdx)
 	return getDate(date)
 }
 
-func getDate(date apiDate) time.Time {
-	d := apiFromDate(date)
-	year := int(apiDateStructGetYear(&d))
-	month := time.Month(apiDateStructGetMonth(&d))
-	day := int(apiDateStructGetDay(&d))
+func getDate(date m.Date) time.Time {
+	d := m.FromDate(date)
+	year := int(m.DateStructGetYear(&d))
+	month := time.Month(m.DateStructGetMonth(&d))
+	day := int(m.DateStructGetDay(&d))
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
-func (vec *vector) getTime(rowIdx apiIdxT) time.Time {
+func (vec *vector) getTime(rowIdx m.IdxT) time.Time {
 	switch vec.Type {
 	case TYPE_TIME:
-		val := getPrimitive[apiTime](vec, rowIdx)
+		val := getPrimitive[m.Time](vec, rowIdx)
 		return getTime(val)
 	case TYPE_TIME_TZ:
-		ti := getPrimitive[apiTimeTZ](vec, rowIdx)
+		ti := getPrimitive[m.TimeTZ](vec, rowIdx)
 		return getTimeTZ(ti)
 	}
 	return time.Time{}
 }
 
-func getTime(ti apiTime) time.Time {
-	micros := apiTimeGetMicros(&ti)
+func getTime(ti m.Time) time.Time {
+	micros := m.TimeGetMicros(&ti)
 	unix := time.UnixMicro(micros).UTC()
 	return time.Date(1, time.January, 1, unix.Hour(), unix.Minute(), unix.Second(), unix.Nanosecond(), time.UTC)
 }
 
-func getTimeTZ(ti apiTimeTZ) time.Time {
-	timeTZStruct := apiFromTimeTZ(ti)
-	timeStruct := apiTimeTZStructGetTimeStruct(&timeTZStruct)
-	offset := apiTimeTZStructGetOffset(&timeTZStruct)
+func getTimeTZ(ti m.TimeTZ) time.Time {
+	timeTZStruct := m.FromTimeTZ(ti)
+	timeStruct := m.TimeTZStructGetTimeStruct(&timeTZStruct)
+	offset := m.TimeTZStructGetOffset(&timeTZStruct)
 
 	// TIMETZ has microsecond precision.
-	nanos := int(apiTimeStructGetMicros(&timeStruct)) * 1000
-	hour := int(apiTimeStructGetHour(&timeStruct))
-	minute := int(apiTimeStructGetMinute(&timeStruct))
-	sec := int(apiTimeStructGetSecond(&timeStruct))
+	nanos := int(m.TimeStructGetMicros(&timeStruct)) * 1000
+	hour := int(m.TimeStructGetHour(&timeStruct))
+	minute := int(m.TimeStructGetMinute(&timeStruct))
+	sec := int(m.TimeStructGetSecond(&timeStruct))
 	loc := time.FixedZone("", int(offset))
 	return time.Date(1, time.January, 1, hour, minute, sec, nanos, loc).UTC()
 }
 
-func (vec *vector) getInterval(rowIdx apiIdxT) Interval {
-	interval := getPrimitive[apiInterval](vec, rowIdx)
+func (vec *vector) getInterval(rowIdx m.IdxT) Interval {
+	interval := getPrimitive[m.Interval](vec, rowIdx)
 	return getInterval(interval)
 }
 
-func getInterval(interval apiInterval) Interval {
+func getInterval(interval m.Interval) Interval {
 	return Interval{
-		Days:   apiIntervalGetDays(&interval),
-		Months: apiIntervalGetMonths(&interval),
-		Micros: apiIntervalGetMicros(&interval),
+		Days:   m.IntervalGetDays(&interval),
+		Months: m.IntervalGetMonths(&interval),
+		Micros: m.IntervalGetMicros(&interval),
 	}
 }
 
-func (vec *vector) getHugeint(rowIdx apiIdxT) *big.Int {
-	hugeInt := getPrimitive[apiHugeInt](vec, rowIdx)
+func (vec *vector) getHugeint(rowIdx m.IdxT) *big.Int {
+	hugeInt := getPrimitive[m.HugeInt](vec, rowIdx)
 	return hugeIntToNative(hugeInt)
 }
 
-func (vec *vector) getBytes(rowIdx apiIdxT) any {
-	apiStr := getPrimitive[apiStringT](vec, rowIdx)
-	str := apiStringTData(&apiStr)
+func (vec *vector) getBytes(rowIdx m.IdxT) any {
+	apiStr := getPrimitive[m.StringT](vec, rowIdx)
+	str := m.StringTData(&apiStr)
 	if vec.Type == TYPE_VARCHAR {
 		return str
 	}
 	return []byte(str)
 }
 
-func (vec *vector) getJSON(rowIdx apiIdxT) any {
+func (vec *vector) getJSON(rowIdx m.IdxT) any {
 	bytes := vec.getBytes(rowIdx).(string)
 	var value any
 	_ = json.Unmarshal([]byte(bytes), &value)
 	return value
 }
 
-func (vec *vector) getDecimal(rowIdx apiIdxT) Decimal {
+func (vec *vector) getDecimal(rowIdx m.IdxT) Decimal {
 	var val *big.Int
 	switch vec.internalType {
 	case TYPE_SMALLINT:
@@ -134,38 +136,38 @@ func (vec *vector) getDecimal(rowIdx apiIdxT) Decimal {
 		v := getPrimitive[int64](vec, rowIdx)
 		val = big.NewInt(v)
 	case TYPE_HUGEINT:
-		v := getPrimitive[apiHugeInt](vec, rowIdx)
+		v := getPrimitive[m.HugeInt](vec, rowIdx)
 		val = hugeIntToNative(v)
 	}
 	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
 
-func (vec *vector) getEnum(rowIdx apiIdxT) string {
-	var idx apiIdxT
+func (vec *vector) getEnum(rowIdx m.IdxT) string {
+	var idx m.IdxT
 	switch vec.internalType {
 	case TYPE_UTINYINT:
-		idx = apiIdxT(getPrimitive[uint8](vec, rowIdx))
+		idx = m.IdxT(getPrimitive[uint8](vec, rowIdx))
 	case TYPE_USMALLINT:
-		idx = apiIdxT(getPrimitive[uint16](vec, rowIdx))
+		idx = m.IdxT(getPrimitive[uint16](vec, rowIdx))
 	case TYPE_UINTEGER:
-		idx = apiIdxT(getPrimitive[uint32](vec, rowIdx))
+		idx = m.IdxT(getPrimitive[uint32](vec, rowIdx))
 	case TYPE_UBIGINT:
-		idx = apiIdxT(getPrimitive[uint64](vec, rowIdx))
+		idx = m.IdxT(getPrimitive[uint64](vec, rowIdx))
 	}
 
-	logicalType := apiVectorGetColumnType(vec.vec)
-	defer apiDestroyLogicalType(&logicalType)
-	return apiEnumDictionaryValue(logicalType, idx)
+	logicalType := m.VectorGetColumnType(vec.vec)
+	defer m.DestroyLogicalType(&logicalType)
+	return m.EnumDictionaryValue(logicalType, idx)
 }
 
-func (vec *vector) getList(rowIdx apiIdxT) []any {
-	entry := getPrimitive[apiListEntry](vec, rowIdx)
-	offset := apiListEntryGetOffset(&entry)
-	length := apiListEntryGetLength(&entry)
+func (vec *vector) getList(rowIdx m.IdxT) []any {
+	entry := getPrimitive[m.ListEntry](vec, rowIdx)
+	offset := m.ListEntryGetOffset(&entry)
+	length := m.ListEntryGetLength(&entry)
 	return vec.getSliceChild(offset, length)
 }
 
-func (vec *vector) getStruct(rowIdx apiIdxT) map[string]any {
+func (vec *vector) getStruct(rowIdx m.IdxT) map[string]any {
 	m := map[string]any{}
 	for i := 0; i < len(vec.childVectors); i++ {
 		child := &vec.childVectors[i]
@@ -175,7 +177,7 @@ func (vec *vector) getStruct(rowIdx apiIdxT) map[string]any {
 	return m
 }
 
-func (vec *vector) getMap(rowIdx apiIdxT) Map {
+func (vec *vector) getMap(rowIdx m.IdxT) Map {
 	list := vec.getList(rowIdx)
 
 	m := Map{}
@@ -188,7 +190,7 @@ func (vec *vector) getMap(rowIdx apiIdxT) Map {
 	return m
 }
 
-func (vec *vector) getArray(rowIdx apiIdxT) []any {
+func (vec *vector) getArray(rowIdx m.IdxT) []any {
 	length := uint64(vec.arrayLength)
 	return vec.getSliceChild(uint64(rowIdx)*length, length)
 }
@@ -199,7 +201,7 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 
 	// Fill the slice with all child values.
 	for i := uint64(0); i < length; i++ {
-		val := child.getFn(child, apiIdxT(i+offset))
+		val := child.getFn(child, m.IdxT(i+offset))
 		slice = append(slice, val)
 	}
 	return slice

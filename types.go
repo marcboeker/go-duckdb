@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	m "github.com/marcboeker/go-duckdb/mapping"
+
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 )
@@ -59,32 +61,32 @@ func (u *UUID) String() string {
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
-func hugeIntToUUID(hugeInt apiHugeInt) []byte {
+func hugeIntToUUID(hugeInt m.HugeInt) []byte {
 	// Flip the sign bit of the signed hugeint to transform it to UUID bytes.
 	var val [uuidLength]byte
-	binary.BigEndian.PutUint64(val[:8], uint64(apiHugeIntGetUpper(&hugeInt))^1<<63)
-	binary.BigEndian.PutUint64(val[8:], apiHugeIntGetLower(&hugeInt))
+	binary.BigEndian.PutUint64(val[:8], uint64(m.HugeIntGetUpper(&hugeInt))^1<<63)
+	binary.BigEndian.PutUint64(val[8:], m.HugeIntGetLower(&hugeInt))
 	return val[:]
 }
 
-func uuidToHugeInt(uuid UUID) apiHugeInt {
-	var hugeInt apiHugeInt
+func uuidToHugeInt(uuid UUID) m.HugeInt {
+	var hugeInt m.HugeInt
 	upper := binary.BigEndian.Uint64(uuid[:8])
 
 	// Flip the sign bit.
-	apiHugeIntSetUpper(&hugeInt, int64(upper^(1<<63)))
-	apiHugeIntSetLower(&hugeInt, binary.BigEndian.Uint64(uuid[8:]))
+	m.HugeIntSetUpper(&hugeInt, int64(upper^(1<<63)))
+	m.HugeIntSetLower(&hugeInt, binary.BigEndian.Uint64(uuid[8:]))
 	return hugeInt
 }
 
-func hugeIntToNative(hugeInt apiHugeInt) *big.Int {
-	i := big.NewInt(apiHugeIntGetUpper(&hugeInt))
+func hugeIntToNative(hugeInt m.HugeInt) *big.Int {
+	i := big.NewInt(m.HugeIntGetUpper(&hugeInt))
 	i.Lsh(i, 64)
-	i.Add(i, new(big.Int).SetUint64(apiHugeIntGetLower(&hugeInt)))
+	i.Add(i, new(big.Int).SetUint64(m.HugeIntGetLower(&hugeInt)))
 	return i
 }
 
-func hugeIntFromNative(i *big.Int) (apiHugeInt, error) {
+func hugeIntFromNative(i *big.Int) (m.HugeInt, error) {
 	d := big.NewInt(1)
 	d.Lsh(d, 64)
 
@@ -93,12 +95,12 @@ func hugeIntFromNative(i *big.Int) (apiHugeInt, error) {
 	q.DivMod(i, d, r)
 
 	if !q.IsInt64() {
-		return apiHugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
+		return m.HugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
 	}
 
-	var hugeInt apiHugeInt
-	apiHugeIntSetUpper(&hugeInt, q.Int64())
-	apiHugeIntSetLower(&hugeInt, r.Uint64())
+	var hugeInt m.HugeInt
+	m.HugeIntSetUpper(&hugeInt, q.Int64())
+	m.HugeIntSetLower(&hugeInt, r.Uint64())
 	return hugeInt, nil
 }
 
@@ -128,11 +130,11 @@ type Interval struct {
 	Micros int64 `json:"micros"`
 }
 
-func (i *Interval) getAPIInterval() apiInterval {
-	var interval apiInterval
-	apiIntervalSetMonths(&interval, i.Months)
-	apiIntervalSetDays(&interval, i.Days)
-	apiIntervalSetMicros(&interval, i.Micros)
+func (i *Interval) getAPIInterval() m.Interval {
+	var interval m.Interval
+	m.IntervalSetMonths(&interval, i.Months)
+	m.IntervalSetDays(&interval, i.Days)
+	m.IntervalSetMicros(&interval, i.Micros)
 	return interval
 }
 
@@ -235,25 +237,25 @@ func getTSTicks[T any](t Type, val T) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getAPITimestamp[T any](t Type, val T) (apiTimestamp, error) {
-	var ts apiTimestamp
+func getAPITimestamp[T any](t Type, val T) (m.Timestamp, error) {
+	var ts m.Timestamp
 	ticks, err := getTSTicks(t, val)
 	if err != nil {
 		return ts, err
 	}
 
-	apiTimestampSetMicros(&ts, ticks)
+	m.TimestampSetMicros(&ts, ticks)
 	return ts, nil
 }
 
-func getAPIDate[T any](val T) (apiDate, error) {
-	var date apiDate
+func getAPIDate[T any](val T) (m.Date, error) {
+	var date m.Date
 	ti, err := castToTime(val)
 	if err != nil {
 		return date, err
 	}
 
-	apiDateSetDays(&date, int32(ti.Unix()/secondsPerDay))
+	m.DateSetDays(&date, int32(ti.Unix()/secondsPerDay))
 	return date, nil
 }
 

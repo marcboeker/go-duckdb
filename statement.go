@@ -6,45 +6,47 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	m "github.com/marcboeker/go-duckdb/mapping"
 )
 
-type StmtType apiStatementType
+type StmtType m.StatementType
 
 const (
-	STATEMENT_TYPE_INVALID      = StmtType(apiStatementTypeInvalid)
-	STATEMENT_TYPE_SELECT       = StmtType(apiStatementTypeSelect)
-	STATEMENT_TYPE_INSERT       = StmtType(apiStatementTypeInsert)
-	STATEMENT_TYPE_UPDATE       = StmtType(apiStatementTypeUpdate)
-	STATEMENT_TYPE_EXPLAIN      = StmtType(apiStatementTypeExplain)
-	STATEMENT_TYPE_DELETE       = StmtType(apiStatementTypeDelete)
-	STATEMENT_TYPE_PREPARE      = StmtType(apiStatementTypePrepare)
-	STATEMENT_TYPE_CREATE       = StmtType(apiStatementTypeCreate)
-	STATEMENT_TYPE_EXECUTE      = StmtType(apiStatementTypeExecute)
-	STATEMENT_TYPE_ALTER        = StmtType(apiStatementTypeAlter)
-	STATEMENT_TYPE_TRANSACTION  = StmtType(apiStatementTypeTransaction)
-	STATEMENT_TYPE_COPY         = StmtType(apiStatementTypeCopy)
-	STATEMENT_TYPE_ANALYZE      = StmtType(apiStatementTypeAnalyze)
-	STATEMENT_TYPE_VARIABLE_SET = StmtType(apiStatementTypeVariableSet)
-	STATEMENT_TYPE_CREATE_FUNC  = StmtType(apiStatementTypeCreateFunc)
-	STATEMENT_TYPE_DROP         = StmtType(apiStatementTypeDrop)
-	STATEMENT_TYPE_EXPORT       = StmtType(apiStatementTypeExport)
-	STATEMENT_TYPE_PRAGMA       = StmtType(apiStatementTypePragma)
-	STATEMENT_TYPE_VACUUM       = StmtType(apiStatementTypeVacuum)
-	STATEMENT_TYPE_CALL         = StmtType(apiStatementTypeCall)
-	STATEMENT_TYPE_SET          = StmtType(apiStatementTypeSet)
-	STATEMENT_TYPE_LOAD         = StmtType(apiStatementTypeLoad)
-	STATEMENT_TYPE_RELATION     = StmtType(apiStatementTypeRelation)
-	STATEMENT_TYPE_EXTENSION    = StmtType(apiStatementTypeExtension)
-	STATEMENT_TYPE_LOGICAL_PLAN = StmtType(apiStatementTypeLogicalPlan)
-	STATEMENT_TYPE_ATTACH       = StmtType(apiStatementTypeAttach)
-	STATEMENT_TYPE_DETACH       = StmtType(apiStatementTypeDetach)
-	STATEMENT_TYPE_MULTI        = StmtType(apiStatementTypeMulti)
+	STATEMENT_TYPE_INVALID      = StmtType(m.StatementTypeInvalid)
+	STATEMENT_TYPE_SELECT       = StmtType(m.StatementTypeSelect)
+	STATEMENT_TYPE_INSERT       = StmtType(m.StatementTypeInsert)
+	STATEMENT_TYPE_UPDATE       = StmtType(m.StatementTypeUpdate)
+	STATEMENT_TYPE_EXPLAIN      = StmtType(m.StatementTypeExplain)
+	STATEMENT_TYPE_DELETE       = StmtType(m.StatementTypeDelete)
+	STATEMENT_TYPE_PREPARE      = StmtType(m.StatementTypePrepare)
+	STATEMENT_TYPE_CREATE       = StmtType(m.StatementTypeCreate)
+	STATEMENT_TYPE_EXECUTE      = StmtType(m.StatementTypeExecute)
+	STATEMENT_TYPE_ALTER        = StmtType(m.StatementTypeAlter)
+	STATEMENT_TYPE_TRANSACTION  = StmtType(m.StatementTypeTransaction)
+	STATEMENT_TYPE_COPY         = StmtType(m.StatementTypeCopy)
+	STATEMENT_TYPE_ANALYZE      = StmtType(m.StatementTypeAnalyze)
+	STATEMENT_TYPE_VARIABLE_SET = StmtType(m.StatementTypeVariableSet)
+	STATEMENT_TYPE_CREATE_FUNC  = StmtType(m.StatementTypeCreateFunc)
+	STATEMENT_TYPE_DROP         = StmtType(m.StatementTypeDrop)
+	STATEMENT_TYPE_EXPORT       = StmtType(m.StatementTypeExport)
+	STATEMENT_TYPE_PRAGMA       = StmtType(m.StatementTypePragma)
+	STATEMENT_TYPE_VACUUM       = StmtType(m.StatementTypeVacuum)
+	STATEMENT_TYPE_CALL         = StmtType(m.StatementTypeCall)
+	STATEMENT_TYPE_SET          = StmtType(m.StatementTypeSet)
+	STATEMENT_TYPE_LOAD         = StmtType(m.StatementTypeLoad)
+	STATEMENT_TYPE_RELATION     = StmtType(m.StatementTypeRelation)
+	STATEMENT_TYPE_EXTENSION    = StmtType(m.StatementTypeExtension)
+	STATEMENT_TYPE_LOGICAL_PLAN = StmtType(m.StatementTypeLogicalPlan)
+	STATEMENT_TYPE_ATTACH       = StmtType(m.StatementTypeAttach)
+	STATEMENT_TYPE_DETACH       = StmtType(m.StatementTypeDetach)
+	STATEMENT_TYPE_MULTI        = StmtType(m.StatementTypeMulti)
 )
 
 // Stmt implements the driver.Stmt interface.
 type Stmt struct {
 	conn             *Conn
-	preparedStmt     *apiPreparedStatement
+	preparedStmt     *m.PreparedStatement
 	closeOnRowsClose bool
 	bound            bool
 	closed           bool
@@ -62,7 +64,7 @@ func (s *Stmt) Close() error {
 	}
 
 	s.closed = true
-	apiDestroyPrepare(s.preparedStmt)
+	m.DestroyPrepare(s.preparedStmt)
 	return nil
 }
 
@@ -72,7 +74,7 @@ func (s *Stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	count := apiNParams(*s.preparedStmt)
+	count := m.NParams(*s.preparedStmt)
 	return int(count)
 }
 
@@ -85,12 +87,12 @@ func (s *Stmt) ParamName(n int) (string, error) {
 		return "", errUninitializedStmt
 	}
 
-	count := apiNParams(*s.preparedStmt)
+	count := m.NParams(*s.preparedStmt)
 	if n == 0 || n > int(count) {
 		return "", getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	name := apiParameterName(*s.preparedStmt, apiIdxT(n))
+	name := m.ParameterName(*s.preparedStmt, m.IdxT(n))
 	return name, nil
 }
 
@@ -103,12 +105,12 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 		return TYPE_INVALID, errUninitializedStmt
 	}
 
-	count := apiNParams(*s.preparedStmt)
+	count := m.NParams(*s.preparedStmt)
 	if n == 0 || n > int(count) {
 		return TYPE_INVALID, getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	t := apiParamType(*s.preparedStmt, apiIdxT(n))
+	t := m.ParamType(*s.preparedStmt, m.IdxT(n))
 	return Type(t), nil
 }
 
@@ -121,7 +123,7 @@ func (s *Stmt) StatementType() (StmtType, error) {
 		return STATEMENT_TYPE_INVALID, errUninitializedStmt
 	}
 
-	t := apiPreparedStatementType(*s.preparedStmt)
+	t := m.PreparedStatementType(*s.preparedStmt)
 	return StmtType(t), nil
 }
 
@@ -137,61 +139,61 @@ func (s *Stmt) Bind(args []driver.NamedValue) error {
 	return s.bind(args)
 }
 
-func (s *Stmt) bindHugeint(val *big.Int, n int) (apiState, error) {
+func (s *Stmt) bindHugeint(val *big.Int, n int) (m.State, error) {
 	hugeint, err := hugeIntFromNative(val)
 	if err != nil {
-		return apiStateError, err
+		return m.StateError, err
 	}
-	state := apiBindHugeInt(*s.preparedStmt, apiIdxT(n+1), hugeint)
+	state := m.BindHugeInt(*s.preparedStmt, m.IdxT(n+1), hugeint)
 	return state, nil
 }
 
-func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (apiState, error) {
+func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (m.State, error) {
 	ts, err := getAPITimestamp(t, val.Value)
 	if err != nil {
-		return apiStateError, err
+		return m.StateError, err
 	}
-	state := apiBindTimestamp(*s.preparedStmt, apiIdxT(n+1), ts)
+	state := m.BindTimestamp(*s.preparedStmt, m.IdxT(n+1), ts)
 	return state, nil
 }
 
-func (s *Stmt) bindDate(val driver.NamedValue, n int) (apiState, error) {
+func (s *Stmt) bindDate(val driver.NamedValue, n int) (m.State, error) {
 	date, err := getAPIDate(val.Value)
 	if err != nil {
-		return apiStateError, err
+		return m.StateError, err
 	}
-	state := apiBindDate(*s.preparedStmt, apiIdxT(n+1), date)
+	state := m.BindDate(*s.preparedStmt, m.IdxT(n+1), date)
 	return state, nil
 }
 
-func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (apiState, error) {
+func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (m.State, error) {
 	ticks, err := getTimeTicks(val.Value)
 	if err != nil {
-		return apiStateError, err
+		return m.StateError, err
 	}
 
 	if t == TYPE_TIME {
-		var ti apiTime
-		apiTimeSetMicros(&ti, ticks)
-		state := apiBindTime(*s.preparedStmt, apiIdxT(n+1), ti)
+		var ti m.Time
+		m.TimeSetMicros(&ti, ticks)
+		state := m.BindTime(*s.preparedStmt, m.IdxT(n+1), ti)
 		return state, nil
 	}
 
 	// TYPE_TIME_TZ: The UTC offset is 0.
-	ti := apiCreateTimeTZ(ticks, 0)
-	v := apiCreateTimeTZValue(ti)
-	state := apiBindValue(*s.preparedStmt, apiIdxT(n+1), v)
-	apiDestroyValue(&v)
+	ti := m.CreateTimeTZ(ticks, 0)
+	v := m.CreateTimeTZValue(ti)
+	state := m.BindValue(*s.preparedStmt, m.IdxT(n+1), v)
+	m.DestroyValue(&v)
 	return state, nil
 }
 
-func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (apiState, error) {
+func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (m.State, error) {
 	t, err := s.ParamType(n + 1)
 	if err != nil {
-		return apiStateError, err
+		return m.StateError, err
 	}
 	if name, ok := unsupportedTypeToStringMap[t]; ok {
-		return apiStateError, addIndexToError(unsupportedTypeError(name), n+1)
+		return m.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
 
 	switch t {
@@ -207,52 +209,52 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (apiState, error) 
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[t]
-		return apiStateError, addIndexToError(unsupportedTypeError(name), n+1)
+		return m.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
-	return apiStateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+	return m.StateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
 }
 
-func (s *Stmt) bindValue(val driver.NamedValue, n int) (apiState, error) {
+func (s *Stmt) bindValue(val driver.NamedValue, n int) (m.State, error) {
 	switch v := val.Value.(type) {
 	case bool:
-		return apiBindBoolean(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindBoolean(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case int8:
-		return apiBindInt8(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindInt8(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case int16:
-		return apiBindInt16(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindInt16(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case int32:
-		return apiBindInt32(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindInt32(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case int64:
-		return apiBindInt64(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindInt64(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case int:
 		// int is at least 32 bits.
-		return apiBindInt64(*s.preparedStmt, apiIdxT(n+1), int64(v)), nil
+		return m.BindInt64(*s.preparedStmt, m.IdxT(n+1), int64(v)), nil
 	case *big.Int:
 		return s.bindHugeint(v, n)
 	case Decimal:
 		// FIXME: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[TYPE_DECIMAL]
-		return apiStateError, addIndexToError(unsupportedTypeError(name), n+1)
+		return m.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	case uint8:
-		return apiBindUInt8(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindUInt8(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case uint16:
-		return apiBindUInt16(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindUInt16(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case uint32:
-		return apiBindUInt32(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindUInt32(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case uint64:
-		return apiBindUInt64(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindUInt64(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case float32:
-		return apiBindFloat(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindFloat(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case float64:
-		return apiBindDouble(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindDouble(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case string:
-		return apiBindVarchar(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindVarchar(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case []byte:
-		return apiBindBlob(*s.preparedStmt, apiIdxT(n+1), v), nil
+		return m.BindBlob(*s.preparedStmt, m.IdxT(n+1), v), nil
 	case Interval:
-		return apiBindInterval(*s.preparedStmt, apiIdxT(n+1), v.getAPIInterval()), nil
+		return m.BindInterval(*s.preparedStmt, m.IdxT(n+1), v.getAPIInterval()), nil
 	case nil:
-		return apiBindNull(*s.preparedStmt, apiIdxT(n+1)), nil
+		return m.BindNull(*s.preparedStmt, m.IdxT(n+1)), nil
 	}
 	return s.bindComplexValue(val, n)
 }
@@ -264,7 +266,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 
 	// relaxed length check allow for unused parameters.
 	for i := 0; i < s.NumInput(); i++ {
-		name := apiParameterName(*s.preparedStmt, apiIdxT(i+1))
+		name := m.ParameterName(*s.preparedStmt, m.IdxT(i+1))
 
 		// fallback on index position
 		arg := args[i]
@@ -284,8 +286,8 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 		}
 
 		state, err := s.bindValue(arg, i)
-		if state == apiStateError {
-			errMsg := apiPrepareError(*s.preparedStmt)
+		if state == m.StateError {
+			errMsg := m.PrepareError(*s.preparedStmt)
 			err = errors.Join(err, getDuckDBError(errMsg))
 			return errors.Join(errCouldNotBind, err)
 		}
@@ -307,9 +309,9 @@ func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyResult(res)
+	defer m.DestroyResult(res)
 
-	ra := apiValueInt64(res, 0, 0)
+	ra := m.ValueInt64(res, 0, 0)
 	return &result{ra}, nil
 }
 
@@ -331,9 +333,9 @@ func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyResult(res)
+	defer m.DestroyResult(res)
 
-	ra := apiValueInt64(res, 0, 0)
+	ra := m.ValueInt64(res, 0, 0)
 	return &result{ra}, nil
 }
 
@@ -377,7 +379,7 @@ func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*apiResult, error) {
+func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*m.Result, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
 	}
@@ -390,21 +392,21 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*apiResul
 	return s.executeBound(ctx)
 }
 
-func (s *Stmt) executeBound(ctx context.Context) (*apiResult, error) {
-	var pendingRes apiPendingResult
-	if apiPendingPrepared(*s.preparedStmt, &pendingRes) == apiStateError {
-		dbErr := getDuckDBError(apiPendingError(pendingRes))
-		apiDestroyPending(&pendingRes)
+func (s *Stmt) executeBound(ctx context.Context) (*m.Result, error) {
+	var pendingRes m.PendingResult
+	if m.PendingPrepared(*s.preparedStmt, &pendingRes) == m.StateError {
+		dbErr := getDuckDBError(m.PendingError(pendingRes))
+		m.DestroyPending(&pendingRes)
 		return nil, dbErr
 	}
-	defer apiDestroyPending(&pendingRes)
+	defer m.DestroyPending(&pendingRes)
 
 	mainDoneCh := make(chan struct{})
 	bgDoneCh := make(chan struct{})
 	go func() {
 		select {
 		case <-ctx.Done():
-			apiInterrupt(s.conn.conn)
+			m.Interrupt(s.conn.conn)
 			close(bgDoneCh)
 			return
 		case <-mainDoneCh:
@@ -413,21 +415,21 @@ func (s *Stmt) executeBound(ctx context.Context) (*apiResult, error) {
 		}
 	}()
 
-	var res apiResult
-	state := apiExecutePending(pendingRes, &res)
+	var res m.Result
+	state := m.ExecutePending(pendingRes, &res)
 	close(mainDoneCh)
 	// also wait for background goroutine to finish
 	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
 	// it can cancel that query so need to wait for it to finish as well
 	<-bgDoneCh
-	if state == apiStateError {
+	if state == m.StateError {
 		if ctx.Err() != nil {
-			apiDestroyResult(&res)
+			m.DestroyResult(&res)
 			return nil, ctx.Err()
 		}
 
-		err := getDuckDBError(apiResultError(&res))
-		apiDestroyResult(&res)
+		err := getDuckDBError(m.ResultError(&res))
+		m.DestroyResult(&res)
 		return nil, err
 	}
 	return &res, nil
