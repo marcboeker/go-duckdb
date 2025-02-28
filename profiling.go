@@ -32,6 +32,7 @@ func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 		info.getMetrics(profilingInfo)
 		return nil
 	})
+
 	return info, err
 }
 

@@ -45,6 +45,7 @@ func newRowsWithStmt(res mapping.Result, stmt *Stmt) *rows {
 		columnName := mapping.ColumnName(&res, mapping.IdxT(i))
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
+
 	return &r
 }
 
@@ -78,8 +79,8 @@ func (r *rows) Next(dst []driver.Value) error {
 			return err
 		}
 	}
-
 	r.rowCount++
+
 	return nil
 }
 
@@ -166,6 +167,7 @@ func (r *rows) Close() error {
 		}
 		r.stmt = nil
 	}
+
 	return err
 }
 
@@ -218,6 +220,7 @@ func logicalTypeNameStruct(logicalType mapping.LogicalType) string {
 		}
 		mapping.DestroyLogicalType(&childType)
 	}
+
 	return name + ")"
 }
 
@@ -236,6 +239,7 @@ func logicalTypeNameArray(logicalType mapping.LogicalType) string {
 	childType := mapping.ArrayTypeChildType(logicalType)
 	defer mapping.DestroyLogicalType(&childType)
 	childName := logicalTypeName(childType)
+
 	return fmt.Sprintf("%s[%d]", childName, int(size))
 }
 
