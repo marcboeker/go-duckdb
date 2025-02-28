@@ -70,7 +70,7 @@ That way, you can perform initialization steps in a callback function before ope
 Here's an example that configures some parameters when opening a database with `sql.OpenDB(connector)`.
 
 ```go
-c, err := duckdb.NewConnector(t, "/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
+c, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
     bootQueries := []string{
         `SET schema=main`,
         `SET search_path=main`,

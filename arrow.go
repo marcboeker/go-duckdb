@@ -85,10 +85,10 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	if !ok {
 		return nil, fmt.Errorf("not a duckdb driver connection")
 	}
-
 	if conn.closed {
 		return nil, errClosedCon
 	}
+
 	return &Arrow{conn: conn}, nil
 }
 
@@ -99,15 +99,15 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		return nil, errClosedCon
 	}
 
-	extractedStmts, size, errExtract := a.conn.extractStmts(query)
+	stmts, size, errExtract := a.conn.extractStmts(query)
 	if errExtract != nil {
 		return nil, errExtract
 	}
-	defer mapping.DestroyExtracted(&extractedStmts)
+	defer mapping.DestroyExtracted(stmts)
 
 	// Execute all statements without args, except the last one.
 	for i := mapping.IdxT(0); i < size-mapping.IdxT(1); i++ {
-		extractedStmt, err := a.conn.prepareExtractedStmt(extractedStmts, i)
+		extractedStmt, err := a.conn.prepareExtractedStmt(*stmts, i)
 		if err != nil {
 			return nil, err
 		}
@@ -121,7 +121,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	}
 
 	// Prepare and execute the last statement with args.
-	stmt, err := a.conn.prepareExtractedStmt(extractedStmts, size-mapping.IdxT(1))
+	stmt, err := a.conn.prepareExtractedStmt(*stmts, size-mapping.IdxT(1))
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +162,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		recs = append(recs, rec)
 		retrievedRows += uint64(rec.NumRows())
 	}
+
 	return array.NewRecordReader(sc, recs)
 }
 
@@ -184,6 +185,7 @@ func (a *Arrow) queryArrowSchema(res *arrowmapping.Arrow) (*arrow.Schema, error)
 	if err != nil {
 		return nil, fmt.Errorf("%w: ImportCArrowSchema", err)
 	}
+
 	return sc, nil
 }
 
@@ -227,6 +229,7 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*arrowmapping.Arrow,
 		arrowmapping.DestroyArrow(&res)
 		return nil, fmt.Errorf("failed to execute the prepared arrow: %v", errMsg)
 	}
+
 	return &res, nil
 }
 
@@ -239,6 +242,7 @@ func (a *Arrow) anyArgsToNamedArgs(args []any) []driver.NamedValue {
 	for i, arg := range args {
 		values[i] = arg
 	}
+
 	return argsToNamedArgs(values)
 }
 
@@ -248,8 +252,6 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 	if a.conn.closed {
 		return nil, errClosedCon
 	}
-
-	// duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow);
 
 	stream := C.calloc(1, C.sizeof_struct_ArrowArrayStream)
 	release = func() {
@@ -264,5 +266,6 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 		release()
 		return nil, errors.New("duckdb_arrow_scan")
 	}
+
 	return release, nil
 }

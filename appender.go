@@ -65,6 +65,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 			return nil, getError(errAppenderCreation, err)
 		}
 	}
+
 	return a, nil
 }
 
@@ -79,6 +80,7 @@ func (a *Appender) Flush() error {
 		err := getDuckDBError(mapping.AppenderError(a.appender))
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
+
 	return nil
 }
 
@@ -110,6 +112,7 @@ func (a *Appender) Close() error {
 	if err != nil {
 		return getError(invalidatedAppenderError(err), nil)
 	}
+
 	return nil
 }
 
@@ -123,6 +126,7 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	if err != nil {
 		return getError(errAppenderAppendRow, err)
 	}
+
 	return nil
 }
 
@@ -132,6 +136,7 @@ func (a *Appender) addDataChunk() error {
 		return err
 	}
 	a.chunks = append(a.chunks, chunk)
+
 	return nil
 }
 
@@ -157,8 +162,8 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 			return err
 		}
 	}
-
 	a.rowCount++
+
 	return nil
 }
 
@@ -183,9 +188,9 @@ func (a *Appender) appendDataChunks() error {
 	for _, chunk := range a.chunks {
 		chunk.close()
 	}
-
 	a.chunks = a.chunks[:0]
 	a.rowCount = 0
+
 	return err
 }
 
