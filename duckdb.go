@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	m "github.com/marcboeker/go-duckdb/mapping"
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 func init() {
@@ -39,7 +39,7 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 // The user must close the Connector, if it is not passed to the sql.OpenDB function.
 // Otherwise, sql.DB closes the Connector when calling sql.DB.Close().
 func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (*Connector, error) {
-	var db m.Database
+	var db mapping.Database
 
 	const inMemoryName = ":memory:"
 	if dsn == inMemoryName || strings.HasPrefix(dsn, inMemoryName+"?") {
@@ -55,12 +55,12 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	if err != nil {
 		return nil, err
 	}
-	defer m.DestroyConfig(&config)
+	defer mapping.DestroyConfig(&config)
 
 	connStr := getConnString(dsn)
 	var errMsg string
-	if m.OpenExt(connStr, &db, config, &errMsg) == m.StateError {
-		m.Close(&db)
+	if mapping.OpenExt(connStr, &db, config, &errMsg) == mapping.StateError {
+		mapping.Close(&db)
 		return nil, getError(errConnect, getDuckDBError(errMsg))
 	}
 
@@ -72,7 +72,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 
 type Connector struct {
 	closed     bool
-	db         m.Database
+	db         mapping.Database
 	connInitFn func(execer driver.ExecerContext) error
 }
 
@@ -81,8 +81,8 @@ func (*Connector) Driver() driver.Driver {
 }
 
 func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-	var newConn m.Connection
-	if m.Connect(c.db, &newConn) == m.StateError {
+	var newConn mapping.Connection
+	if mapping.Connect(c.db, &newConn) == mapping.StateError {
 		return nil, getError(errConnect, nil)
 	}
 
@@ -99,7 +99,7 @@ func (c *Connector) Close() error {
 	if c.closed {
 		return nil
 	}
-	m.Close(&c.db)
+	mapping.Close(&c.db)
 	c.closed = true
 	return nil
 }
@@ -112,10 +112,10 @@ func getConnString(dsn string) string {
 	return dsn[0:idx]
 }
 
-func prepareConfig(parsedDSN *url.URL) (m.Config, error) {
-	var config m.Config
-	if m.CreateConfig(&config) == m.StateError {
-		m.DestroyConfig(&config)
+func prepareConfig(parsedDSN *url.URL) (mapping.Config, error) {
+	var config mapping.Config
+	if mapping.CreateConfig(&config) == mapping.StateError {
+		mapping.DestroyConfig(&config)
 		return config, getError(errCreateConfig, nil)
 	}
 
@@ -140,9 +140,9 @@ func prepareConfig(parsedDSN *url.URL) (m.Config, error) {
 	return config, nil
 }
 
-func setConfigOption(config m.Config, name string, option string) error {
-	if m.SetConfig(config, name, option) == m.StateError {
-		m.DestroyConfig(&config)
+func setConfigOption(config mapping.Config, name string, option string) error {
+	if mapping.SetConfig(config, name, option) == mapping.StateError {
+		mapping.DestroyConfig(&config)
 		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))
 	}
 	return nil

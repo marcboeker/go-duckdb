@@ -3,7 +3,7 @@ package duckdb
 import (
 	"database/sql"
 
-	m "github.com/marcboeker/go-duckdb/mapping"
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // ProfilingInfo is a recursive type containing metrics for each node in DuckDB's query plan.
@@ -23,7 +23,7 @@ func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	info := ProfilingInfo{}
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		profilingInfo := m.GetProfilingInfo(conn.conn)
+		profilingInfo := mapping.GetProfilingInfo(conn.conn)
 		if profilingInfo.Ptr == nil {
 			return getError(errProfilingInfoEmpty, nil)
 		}
@@ -35,27 +35,27 @@ func GetProfilingInfo(c *sql.Conn) (ProfilingInfo, error) {
 	return info, err
 }
 
-func (info *ProfilingInfo) getMetrics(profilingInfo m.ProfilingInfo) {
-	metricsMap := m.ProfilingInfoGetMetrics(profilingInfo)
-	count := m.GetMapSize(metricsMap)
+func (info *ProfilingInfo) getMetrics(profilingInfo mapping.ProfilingInfo) {
+	metricsMap := mapping.ProfilingInfoGetMetrics(profilingInfo)
+	count := mapping.GetMapSize(metricsMap)
 	info.Metrics = make(map[string]string, count)
 
-	for i := m.IdxT(0); i < count; i++ {
-		key := m.GetMapKey(metricsMap, i)
-		value := m.GetMapValue(metricsMap, i)
+	for i := mapping.IdxT(0); i < count; i++ {
+		key := mapping.GetMapKey(metricsMap, i)
+		value := mapping.GetMapValue(metricsMap, i)
 
-		keyStr := m.GetVarchar(key)
-		valueStr := m.GetVarchar(value)
+		keyStr := mapping.GetVarchar(key)
+		valueStr := mapping.GetVarchar(value)
 		info.Metrics[keyStr] = valueStr
 
-		m.DestroyValue(&key)
-		m.DestroyValue(&value)
+		mapping.DestroyValue(&key)
+		mapping.DestroyValue(&value)
 	}
-	m.DestroyValue(&metricsMap)
+	mapping.DestroyValue(&metricsMap)
 
-	childCount := m.ProfilingInfoGetChildCount(profilingInfo)
-	for i := m.IdxT(0); i < childCount; i++ {
-		profilingInfoChild := m.ProfilingInfoGetChild(profilingInfo, i)
+	childCount := mapping.ProfilingInfoGetChildCount(profilingInfo)
+	for i := mapping.IdxT(0); i < childCount; i++ {
+		profilingInfoChild := mapping.ProfilingInfoGetChild(profilingInfo, i)
 		childInfo := ProfilingInfo{}
 		childInfo.getMetrics(profilingInfoChild)
 		info.Children = append(info.Children, childInfo)

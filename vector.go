@@ -4,13 +4,13 @@ import (
 	"reflect"
 	"unsafe"
 
-	m "github.com/marcboeker/go-duckdb/mapping"
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // vector storage of a DuckDB column.
 type vector struct {
 	// The underlying DuckDB vector.
-	vec m.Vector
+	vec mapping.Vector
 	// The underlying data ptr.
 	dataPtr unsafe.Pointer
 	// The vector's validity mask.
@@ -36,14 +36,14 @@ func (*vector) canNil(val reflect.Value) bool {
 	}
 }
 
-func (vec *vector) init(logicalType m.LogicalType, colIdx int) error {
-	t := Type(m.GetTypeId(logicalType))
+func (vec *vector) init(logicalType mapping.LogicalType, colIdx int) error {
+	t := Type(mapping.GetTypeId(logicalType))
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap {
 		return addIndexToError(unsupportedTypeError(name), int(colIdx))
 	}
 
-	alias := m.LogicalTypeGetAlias(logicalType)
+	alias := mapping.LogicalTypeGetAlias(logicalType)
 	switch alias {
 	case aliasJSON:
 		vec.initJSON()
@@ -107,53 +107,53 @@ func (vec *vector) init(logicalType m.LogicalType, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) resizeListVector(newLength m.IdxT) {
-	m.ListVectorReserve(vec.vec, newLength)
-	m.ListVectorSetSize(vec.vec, newLength)
+func (vec *vector) resizeListVector(newLength mapping.IdxT) {
+	mapping.ListVectorReserve(vec.vec, newLength)
+	mapping.ListVectorSetSize(vec.vec, newLength)
 	vec.resetChildData()
 }
 
 func (vec *vector) resetChildData() {
 	for i := range vec.childVectors {
-		vec.childVectors[i].dataPtr = m.VectorGetData(vec.childVectors[i].vec)
+		vec.childVectors[i].dataPtr = mapping.VectorGetData(vec.childVectors[i].vec)
 		vec.childVectors[i].resetChildData()
 	}
 }
 
-func (vec *vector) initVectors(v m.Vector, writable bool) {
+func (vec *vector) initVectors(v mapping.Vector, writable bool) {
 	vec.vec = v
-	vec.dataPtr = m.VectorGetData(v)
+	vec.dataPtr = mapping.VectorGetData(v)
 	if writable {
-		m.VectorEnsureValidityWritable(v)
+		mapping.VectorEnsureValidityWritable(v)
 	}
-	vec.maskPtr = m.VectorGetValidity(v)
+	vec.maskPtr = mapping.VectorGetValidity(v)
 	vec.getChildVectors(v, writable)
 }
 
-func (vec *vector) getChildVectors(v m.Vector, writable bool) {
+func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 	switch vec.Type {
 	case TYPE_LIST, TYPE_MAP:
-		child := m.ListVectorGetChild(v)
+		child := mapping.ListVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
-			child := m.StructVectorGetChild(v, m.IdxT(i))
+			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
 			vec.childVectors[i].initVectors(child, writable)
 		}
 	case TYPE_ARRAY:
-		child := m.ArrayVectorGetChild(v)
+		child := mapping.ArrayVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
 	}
 }
 
 func initBool(vec *vector) {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return getPrimitive[bool](vec, rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -164,13 +164,13 @@ func initBool(vec *vector) {
 }
 
 func initNumeric[T numericType](vec *vector, t Type) {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return getPrimitive[T](vec, rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -181,13 +181,13 @@ func initNumeric[T numericType](vec *vector, t Type) {
 }
 
 func (vec *vector) initTS(t Type) {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getTS(t, rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -198,13 +198,13 @@ func (vec *vector) initTS(t Type) {
 }
 
 func (vec *vector) initDate() {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getDate(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -215,13 +215,13 @@ func (vec *vector) initDate() {
 }
 
 func (vec *vector) initTime(t Type) {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getTime(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -232,13 +232,13 @@ func (vec *vector) initTime(t Type) {
 }
 
 func (vec *vector) initInterval() {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getInterval(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -249,13 +249,13 @@ func (vec *vector) initInterval() {
 }
 
 func (vec *vector) initHugeint() {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getHugeint(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -266,13 +266,13 @@ func (vec *vector) initHugeint() {
 }
 
 func (vec *vector) initBytes(t Type) {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getBytes(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -283,13 +283,13 @@ func (vec *vector) initBytes(t Type) {
 }
 
 func (vec *vector) initJSON() {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getJSON(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -299,20 +299,20 @@ func (vec *vector) initJSON() {
 	vec.Type = TYPE_VARCHAR
 }
 
-func (vec *vector) initDecimal(logicalType m.LogicalType, colIdx int) error {
-	vec.decimalWidth = m.DecimalWidth(logicalType)
-	vec.decimalScale = m.DecimalScale(logicalType)
+func (vec *vector) initDecimal(logicalType mapping.LogicalType, colIdx int) error {
+	vec.decimalWidth = mapping.DecimalWidth(logicalType)
+	vec.decimalScale = mapping.DecimalScale(logicalType)
 
-	t := Type(m.DecimalInternalType(logicalType))
+	t := Type(mapping.DecimalInternalType(logicalType))
 	switch t {
 	case TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_HUGEINT:
-		vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+		vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 			if vec.getNull(rowIdx) {
 				return nil
 			}
 			return vec.getDecimal(rowIdx)
 		}
-		vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+		vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 			if val == nil {
 				vec.setNull(rowIdx)
 				return nil
@@ -328,26 +328,26 @@ func (vec *vector) initDecimal(logicalType m.LogicalType, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) initEnum(logicalType m.LogicalType, colIdx int) error {
+func (vec *vector) initEnum(logicalType mapping.LogicalType, colIdx int) error {
 	// Initialize the dictionary.
-	dictSize := m.EnumDictionarySize(logicalType)
+	dictSize := mapping.EnumDictionarySize(logicalType)
 	vec.dict = make(map[string]uint32)
 
 	for i := uint32(0); i < dictSize; i++ {
-		str := m.EnumDictionaryValue(logicalType, m.IdxT(i))
+		str := mapping.EnumDictionaryValue(logicalType, mapping.IdxT(i))
 		vec.dict[str] = i
 	}
 
-	t := Type(m.EnumInternalType(logicalType))
+	t := Type(mapping.EnumInternalType(logicalType))
 	switch t {
 	case TYPE_UTINYINT, TYPE_USMALLINT, TYPE_UINTEGER, TYPE_UBIGINT:
-		vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+		vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 			if vec.getNull(rowIdx) {
 				return nil
 			}
 			return vec.getEnum(rowIdx)
 		}
-		vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+		vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 			if val == nil {
 				vec.setNull(rowIdx)
 				return nil
@@ -363,10 +363,10 @@ func (vec *vector) initEnum(logicalType m.LogicalType, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) initList(logicalType m.LogicalType, colIdx int) error {
+func (vec *vector) initList(logicalType mapping.LogicalType, colIdx int) error {
 	// Get the child vector type.
-	childType := m.ListTypeChildType(logicalType)
-	defer m.DestroyLogicalType(&childType)
+	childType := mapping.ListTypeChildType(logicalType)
+	defer mapping.DestroyLogicalType(&childType)
 
 	// Recurse into the child.
 	vec.childVectors = make([]vector, 1)
@@ -375,13 +375,13 @@ func (vec *vector) initList(logicalType m.LogicalType, colIdx int) error {
 		return err
 	}
 
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getList(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -392,11 +392,11 @@ func (vec *vector) initList(logicalType m.LogicalType, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) initStruct(logicalType m.LogicalType, colIdx int) error {
-	childCount := m.StructTypeChildCount(logicalType)
+func (vec *vector) initStruct(logicalType mapping.LogicalType, colIdx int) error {
+	childCount := mapping.StructTypeChildCount(logicalType)
 	var structEntries []StructEntry
-	for i := m.IdxT(0); i < childCount; i++ {
-		name := m.StructTypeChildName(logicalType, i)
+	for i := mapping.IdxT(0); i < childCount; i++ {
+		name := mapping.StructTypeChildName(logicalType, i)
 		entry, err := NewStructEntry(nil, name)
 		structEntries = append(structEntries, entry)
 		if err != nil {
@@ -408,22 +408,22 @@ func (vec *vector) initStruct(logicalType m.LogicalType, colIdx int) error {
 	vec.structEntries = structEntries
 
 	// Recurse into the children.
-	for i := m.IdxT(0); i < childCount; i++ {
-		childType := m.StructTypeChildType(logicalType, i)
+	for i := mapping.IdxT(0); i < childCount; i++ {
+		childType := mapping.StructTypeChildType(logicalType, i)
 		err := vec.childVectors[i].init(childType, colIdx)
-		m.DestroyLogicalType(&childType)
+		mapping.DestroyLogicalType(&childType)
 		if err != nil {
 			return err
 		}
 	}
 
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getStruct(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -434,12 +434,12 @@ func (vec *vector) initStruct(logicalType m.LogicalType, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) initMap(logicalType m.LogicalType, colIdx int) error {
+func (vec *vector) initMap(logicalType mapping.LogicalType, colIdx int) error {
 	// A MAP is a LIST of STRUCT values. Each STRUCT holds two children: a key and a value.
 
 	// Get the child vector type.
-	childType := m.ListTypeChildType(logicalType)
-	defer m.DestroyLogicalType(&childType)
+	childType := mapping.ListTypeChildType(logicalType)
+	defer mapping.DestroyLogicalType(&childType)
 
 	// Recurse into the child.
 	vec.childVectors = make([]vector, 1)
@@ -450,22 +450,22 @@ func (vec *vector) initMap(logicalType m.LogicalType, colIdx int) error {
 
 	// DuckDB supports more MAP key types than Go, which only supports comparable types.
 	// We ensure that the key type itself is comparable.
-	keyType := m.MapTypeKeyType(logicalType)
-	defer m.DestroyLogicalType(&keyType)
+	keyType := mapping.MapTypeKeyType(logicalType)
+	defer mapping.DestroyLogicalType(&keyType)
 
-	t := Type(m.GetTypeId(keyType))
+	t := Type(mapping.GetTypeId(keyType))
 	switch t {
 	case TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
 		return addIndexToError(errUnsupportedMapKeyType, colIdx)
 	}
 
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getMap(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -476,12 +476,12 @@ func (vec *vector) initMap(logicalType m.LogicalType, colIdx int) error {
 	return nil
 }
 
-func (vec *vector) initArray(logicalType m.LogicalType, colIdx int) error {
-	vec.arrayLength = m.ArrayTypeArraySize(logicalType)
+func (vec *vector) initArray(logicalType mapping.LogicalType, colIdx int) error {
+	vec.arrayLength = mapping.ArrayTypeArraySize(logicalType)
 
 	// Get the child vector type.
-	childType := m.ArrayTypeChildType(logicalType)
-	defer m.DestroyLogicalType(&childType)
+	childType := mapping.ArrayTypeChildType(logicalType)
+	defer mapping.DestroyLogicalType(&childType)
 
 	// Recurse into the child.
 	vec.childVectors = make([]vector, 1)
@@ -490,13 +490,13 @@ func (vec *vector) initArray(logicalType m.LogicalType, colIdx int) error {
 		return err
 	}
 
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getArray(rowIdx)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil {
 			vec.setNull(rowIdx)
 			return nil
@@ -508,14 +508,14 @@ func (vec *vector) initArray(logicalType m.LogicalType, colIdx int) error {
 }
 
 func (vec *vector) initUUID() {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
-		hugeInt := getPrimitive[m.HugeInt](vec, rowIdx)
+		hugeInt := getPrimitive[mapping.HugeInt](vec, rowIdx)
 		return hugeIntToUUID(hugeInt)
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil || val == (*UUID)(nil) {
 			vec.setNull(rowIdx)
 			return nil
@@ -526,10 +526,10 @@ func (vec *vector) initUUID() {
 }
 
 func (vec *vector) initSQLNull() {
-	vec.getFn = func(vec *vector, rowIdx m.IdxT) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		return nil
 	}
-	vec.setFn = func(vec *vector, rowIdx m.IdxT, val any) error {
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		return errSetSQLNULLValue
 	}
 	vec.Type = TYPE_SQLNULL

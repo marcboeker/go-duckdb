@@ -1,50 +1,50 @@
 package duckdb
 
 import (
-	m "github.com/marcboeker/go-duckdb/mapping"
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-// Type wraps the corresponding DuckDB type enum.
-type Type = m.Type
+// Type wraps the corresponding DuckDB type enumapping.
+type Type = mapping.Type
 
 const (
-	TYPE_INVALID      = m.TypeInvalid
-	TYPE_BOOLEAN      = m.TypeBoolean
-	TYPE_TINYINT      = m.TypeTinyInt
-	TYPE_SMALLINT     = m.TypeSmallInt
-	TYPE_INTEGER      = m.TypeInteger
-	TYPE_BIGINT       = m.TypeBigInt
-	TYPE_UTINYINT     = m.TypeUTinyInt
-	TYPE_USMALLINT    = m.TypeUSmallInt
-	TYPE_UINTEGER     = m.TypeUInteger
-	TYPE_UBIGINT      = m.TypeUBigInt
-	TYPE_FLOAT        = m.TypeFloat
-	TYPE_DOUBLE       = m.TypeDouble
-	TYPE_TIMESTAMP    = m.TypeTimestamp
-	TYPE_DATE         = m.TypeDate
-	TYPE_TIME         = m.TypeTime
-	TYPE_INTERVAL     = m.TypeInterval
-	TYPE_HUGEINT      = m.TypeHugeInt
-	TYPE_UHUGEINT     = m.TypeUHugeInt
-	TYPE_VARCHAR      = m.TypeVarchar
-	TYPE_BLOB         = m.TypeBlob
-	TYPE_DECIMAL      = m.TypeDecimal
-	TYPE_TIMESTAMP_S  = m.TypeTimestampS
-	TYPE_TIMESTAMP_MS = m.TypeTimestampMS
-	TYPE_TIMESTAMP_NS = m.TypeTimestampNS
-	TYPE_ENUM         = m.TypeEnum
-	TYPE_LIST         = m.TypeList
-	TYPE_STRUCT       = m.TypeStruct
-	TYPE_MAP          = m.TypeMap
-	TYPE_ARRAY        = m.TypeArray
-	TYPE_UUID         = m.TypeUUID
-	TYPE_UNION        = m.TypeUnion
-	TYPE_BIT          = m.TypeBit
-	TYPE_TIME_TZ      = m.TypeTimeTZ
-	TYPE_TIMESTAMP_TZ = m.TypeTimestampTZ
-	TYPE_ANY          = m.TypeAny
-	TYPE_VARINT       = m.TypeVarInt
-	TYPE_SQLNULL      = m.TypeSQLNull
+	TYPE_INVALID      = mapping.TypeInvalid
+	TYPE_BOOLEAN      = mapping.TypeBoolean
+	TYPE_TINYINT      = mapping.TypeTinyInt
+	TYPE_SMALLINT     = mapping.TypeSmallInt
+	TYPE_INTEGER      = mapping.TypeInteger
+	TYPE_BIGINT       = mapping.TypeBigInt
+	TYPE_UTINYINT     = mapping.TypeUTinyInt
+	TYPE_USMALLINT    = mapping.TypeUSmallInt
+	TYPE_UINTEGER     = mapping.TypeUInteger
+	TYPE_UBIGINT      = mapping.TypeUBigInt
+	TYPE_FLOAT        = mapping.TypeFloat
+	TYPE_DOUBLE       = mapping.TypeDouble
+	TYPE_TIMESTAMP    = mapping.TypeTimestamp
+	TYPE_DATE         = mapping.TypeDate
+	TYPE_TIME         = mapping.TypeTime
+	TYPE_INTERVAL     = mapping.TypeInterval
+	TYPE_HUGEINT      = mapping.TypeHugeInt
+	TYPE_UHUGEINT     = mapping.TypeUHugeInt
+	TYPE_VARCHAR      = mapping.TypeVarchar
+	TYPE_BLOB         = mapping.TypeBlob
+	TYPE_DECIMAL      = mapping.TypeDecimal
+	TYPE_TIMESTAMP_S  = mapping.TypeTimestampS
+	TYPE_TIMESTAMP_MS = mapping.TypeTimestampMS
+	TYPE_TIMESTAMP_NS = mapping.TypeTimestampNS
+	TYPE_ENUM         = mapping.TypeEnum
+	TYPE_LIST         = mapping.TypeList
+	TYPE_STRUCT       = mapping.TypeStruct
+	TYPE_MAP          = mapping.TypeMap
+	TYPE_ARRAY        = mapping.TypeArray
+	TYPE_UUID         = mapping.TypeUUID
+	TYPE_UNION        = mapping.TypeUnion
+	TYPE_BIT          = mapping.TypeBit
+	TYPE_TIME_TZ      = mapping.TypeTimeTZ
+	TYPE_TIMESTAMP_TZ = mapping.TypeTimestampTZ
+	TYPE_ANY          = mapping.TypeAny
+	TYPE_VARINT       = mapping.TypeVarInt
+	TYPE_SQLNULL      = mapping.TypeSQLNull
 )
 
 // FIXME: Implement support for these types.

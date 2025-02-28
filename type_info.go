@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"runtime"
 
-	m "github.com/marcboeker/go-duckdb/mapping"
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 type structEntry struct {
@@ -48,7 +48,7 @@ type baseTypeInfo struct {
 	structEntries []StructEntry
 	decimalWidth  uint8
 	decimalScale  uint8
-	arrayLength   m.IdxT
+	arrayLength   mapping.IdxT
 	// The internal type for ENUM and DECIMAL values.
 	internalType Type
 }
@@ -68,7 +68,7 @@ type typeInfo struct {
 type TypeInfo interface {
 	// InternalType returns the Type.
 	InternalType() Type
-	logicalType() m.LogicalType
+	logicalType() mapping.LogicalType
 }
 
 func (info *typeInfo) InternalType() Type {
@@ -243,24 +243,24 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 	}
 
 	info := &typeInfo{
-		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: m.IdxT(size)},
+		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: mapping.IdxT(size)},
 		childTypes:   make([]TypeInfo, 1),
 	}
 	info.childTypes[0] = childInfo
 	return info, nil
 }
 
-func (info *typeInfo) logicalType() m.LogicalType {
+func (info *typeInfo) logicalType() mapping.LogicalType {
 	switch info.Type {
 	case TYPE_BOOLEAN, TYPE_TINYINT, TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_UTINYINT, TYPE_USMALLINT,
 		TYPE_UINTEGER, TYPE_UBIGINT, TYPE_FLOAT, TYPE_DOUBLE, TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS,
 		TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ, TYPE_DATE, TYPE_TIME, TYPE_TIME_TZ, TYPE_INTERVAL, TYPE_HUGEINT, TYPE_VARCHAR,
 		TYPE_BLOB, TYPE_UUID, TYPE_ANY:
-		return m.CreateLogicalType(info.Type)
+		return mapping.CreateLogicalType(info.Type)
 	case TYPE_DECIMAL:
-		return m.CreateDecimalType(info.decimalWidth, info.decimalScale)
+		return mapping.CreateDecimalType(info.decimalWidth, info.decimalScale)
 	case TYPE_ENUM:
-		return m.CreateEnumType(info.enumNames)
+		return mapping.CreateEnumType(info.enumNames)
 	case TYPE_LIST:
 		return info.logicalListType()
 	case TYPE_STRUCT:
@@ -270,17 +270,17 @@ func (info *typeInfo) logicalType() m.LogicalType {
 	case TYPE_ARRAY:
 		return info.logicalArrayType()
 	}
-	return m.LogicalType{}
+	return mapping.LogicalType{}
 }
 
-func (info *typeInfo) logicalListType() m.LogicalType {
+func (info *typeInfo) logicalListType() mapping.LogicalType {
 	child := info.childTypes[0].logicalType()
-	defer m.DestroyLogicalType(&child)
-	return m.CreateListType(child)
+	defer mapping.DestroyLogicalType(&child)
+	return mapping.CreateListType(child)
 }
 
-func (info *typeInfo) logicalStructType() m.LogicalType {
-	var types []m.LogicalType
+func (info *typeInfo) logicalStructType() mapping.LogicalType {
+	var types []mapping.LogicalType
 	defer destroyLogicalTypes(&types)
 
 	var names []string
@@ -288,29 +288,29 @@ func (info *typeInfo) logicalStructType() m.LogicalType {
 		types = append(types, entry.Info().logicalType())
 		names = append(names, entry.Name())
 	}
-	return m.CreateStructType(types, names)
+	return mapping.CreateStructType(types, names)
 }
 
-func (info *typeInfo) logicalMapType() m.LogicalType {
+func (info *typeInfo) logicalMapType() mapping.LogicalType {
 	key := info.childTypes[0].logicalType()
-	defer m.DestroyLogicalType(&key)
+	defer mapping.DestroyLogicalType(&key)
 	value := info.childTypes[1].logicalType()
-	defer m.DestroyLogicalType(&value)
-	return m.CreateMapType(key, value)
+	defer mapping.DestroyLogicalType(&value)
+	return mapping.CreateMapType(key, value)
 }
 
-func (info *typeInfo) logicalArrayType() m.LogicalType {
+func (info *typeInfo) logicalArrayType() mapping.LogicalType {
 	child := info.childTypes[0].logicalType()
-	defer m.DestroyLogicalType(&child)
-	return m.CreateArrayType(child, info.arrayLength)
+	defer mapping.DestroyLogicalType(&child)
+	return mapping.CreateArrayType(child, info.arrayLength)
 }
 
 func funcName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
-func destroyLogicalTypes(types *[]m.LogicalType) {
+func destroyLogicalTypes(types *[]mapping.LogicalType) {
 	for _, t := range *types {
-		m.DestroyLogicalType(&t)
+		mapping.DestroyLogicalType(&t)
 	}
 }

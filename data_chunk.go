@@ -4,13 +4,13 @@ import "C"
 import (
 	"sync"
 
-	m "github.com/marcboeker/go-duckdb/mapping"
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // DataChunk storage of a DuckDB table.
 type DataChunk struct {
 	// data holds the underlying duckdb data chunk.
-	chunk m.DataChunk
+	chunk mapping.DataChunk
 	// columns is a helper slice providing direct access to all columns.
 	columns []vector
 	// columnNames holds the column names, if known.
@@ -19,11 +19,11 @@ type DataChunk struct {
 	size int
 }
 
-var GetDataChunkCapacity = sync.OnceValue[int](func() int { return int(m.VectorSize()) })
+var GetDataChunkCapacity = sync.OnceValue[int](func() int { return int(mapping.VectorSize()) })
 
 // GetSize returns the internal size of the data chunk.
 func (chunk *DataChunk) GetSize() int {
-	chunk.size = int(m.DataChunkGetSize(chunk.chunk))
+	chunk.size = int(mapping.DataChunkGetSize(chunk.chunk))
 	return chunk.size
 }
 
@@ -32,7 +32,7 @@ func (chunk *DataChunk) SetSize(size int) error {
 	if size > GetDataChunkCapacity() {
 		return getError(errAPI, errVectorSize)
 	}
-	m.DataChunkSetSize(chunk.chunk, m.IdxT(size))
+	mapping.DataChunkSetSize(chunk.chunk, mapping.IdxT(size))
 	return nil
 }
 
@@ -43,7 +43,7 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 	}
 
 	column := &chunk.columns[colIdx]
-	return column.getFn(column, m.IdxT(rowIdx)), nil
+	return column.getFn(column, mapping.IdxT(rowIdx)), nil
 }
 
 // SetValue writes a single value to a column in a data chunk.
@@ -55,7 +55,7 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	}
 
 	column := &chunk.columns[colIdx]
-	return column.setFn(column, m.IdxT(rowIdx), val)
+	return column.setFn(column, mapping.IdxT(rowIdx), val)
 }
 
 // SetChunkValue writes a single value to a column in a data chunk.
@@ -66,10 +66,10 @@ func SetChunkValue[T any](chunk DataChunk, colIdx int, rowIdx int, val T) error 
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
-	return setVectorVal(&chunk.columns[colIdx], m.IdxT(rowIdx), val)
+	return setVectorVal(&chunk.columns[colIdx], mapping.IdxT(rowIdx), val)
 }
 
-func (chunk *DataChunk) initFromTypes(types []m.LogicalType, writable bool) error {
+func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool) error {
 	// NOTE: initFromTypes does not initialize the column names.
 	columnCount := len(types)
 
@@ -85,30 +85,30 @@ func (chunk *DataChunk) initFromTypes(types []m.LogicalType, writable bool) erro
 		return err
 	}
 
-	chunk.chunk = m.CreateDataChunk(types)
-	m.DataChunkSetSize(chunk.chunk, m.IdxT(GetDataChunkCapacity()))
+	chunk.chunk = mapping.CreateDataChunk(types)
+	mapping.DataChunkSetSize(chunk.chunk, mapping.IdxT(GetDataChunkCapacity()))
 
 	// Initialize the vectors and their child vectors.
 	for i := 0; i < columnCount; i++ {
-		v := m.DataChunkGetVector(chunk.chunk, m.IdxT(i))
+		v := mapping.DataChunkGetVector(chunk.chunk, mapping.IdxT(i))
 		chunk.columns[i].initVectors(v, writable)
 	}
 	return nil
 }
 
-func (chunk *DataChunk) initFromDuckDataChunk(apiChunk m.DataChunk, writable bool) error {
-	columnCount := m.DataChunkGetColumnCount(apiChunk)
+func (chunk *DataChunk) initFromDuckDataChunk(apiChunk mapping.DataChunk, writable bool) error {
+	columnCount := mapping.DataChunkGetColumnCount(apiChunk)
 	chunk.columns = make([]vector, columnCount)
 	chunk.chunk = apiChunk
 
 	var err error
-	for i := m.IdxT(0); i < columnCount; i++ {
-		vec := m.DataChunkGetVector(apiChunk, i)
+	for i := mapping.IdxT(0); i < columnCount; i++ {
+		vec := mapping.DataChunkGetVector(apiChunk, i)
 
 		// Initialize the callback functions to read and write values.
-		logicalType := m.VectorGetColumnType(vec)
+		logicalType := mapping.VectorGetColumnType(vec)
 		err = chunk.columns[i].init(logicalType, int(i))
-		m.DestroyLogicalType(&logicalType)
+		mapping.DestroyLogicalType(&logicalType)
 		if err != nil {
 			break
 		}
@@ -121,14 +121,14 @@ func (chunk *DataChunk) initFromDuckDataChunk(apiChunk m.DataChunk, writable boo
 	return err
 }
 
-func (chunk *DataChunk) initFromDuckVector(vec m.Vector, writable bool) error {
+func (chunk *DataChunk) initFromDuckVector(vec mapping.Vector, writable bool) error {
 	columnCount := 1
 	chunk.columns = make([]vector, columnCount)
 
 	// Initialize the callback functions to read and write values.
-	logicalType := m.VectorGetColumnType(vec)
+	logicalType := mapping.VectorGetColumnType(vec)
 	err := chunk.columns[0].init(logicalType, 0)
-	m.DestroyLogicalType(&logicalType)
+	mapping.DestroyLogicalType(&logicalType)
 	if err != nil {
 		return err
 	}
@@ -139,5 +139,5 @@ func (chunk *DataChunk) initFromDuckVector(vec m.Vector, writable bool) error {
 }
 
 func (chunk *DataChunk) close() {
-	m.DestroyDataChunk(&chunk.chunk)
+	mapping.DestroyDataChunk(&chunk.chunk)
 }
