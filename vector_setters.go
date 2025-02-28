@@ -85,7 +85,7 @@ func setBool[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 }
 
 func setTS[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	ts, err := getAPITimestamp(vec.Type, val)
+	ts, err := getMappedTimestamp(vec.Type, val)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func setTS[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 }
 
 func setDate[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	date, err := getAPIDate(val)
+	date, err := getMappedDate(val)
 	if err != nil {
 		return err
 	}

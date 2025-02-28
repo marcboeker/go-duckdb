@@ -149,7 +149,7 @@ func (s *Stmt) bindHugeint(val *big.Int, n int) (mapping.State, error) {
 }
 
 func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.State, error) {
-	ts, err := getAPITimestamp(t, val.Value)
+	ts, err := getMappedTimestamp(t, val.Value)
 	if err != nil {
 		return mapping.StateError, err
 	}
@@ -158,7 +158,7 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.Stat
 }
 
 func (s *Stmt) bindDate(val driver.NamedValue, n int) (mapping.State, error) {
-	date, err := getAPIDate(val.Value)
+	date, err := getMappedDate(val.Value)
 	if err != nil {
 		return mapping.StateError, err
 	}
@@ -252,7 +252,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	case []byte:
 		return mapping.BindBlob(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case Interval:
-		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), v.getAPIInterval()), nil
+		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), v.getMappedInterval()), nil
 	case nil:
 		return mapping.BindNull(*s.preparedStmt, mapping.IdxT(n+1)), nil
 	}

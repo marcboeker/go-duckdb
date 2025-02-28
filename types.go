@@ -130,7 +130,7 @@ type Interval struct {
 	Micros int64 `json:"micros"`
 }
 
-func (i *Interval) getAPIInterval() mapping.Interval {
+func (i *Interval) getMappedInterval() mapping.Interval {
 	var interval mapping.Interval
 	mapping.IntervalSetMonths(&interval, i.Months)
 	mapping.IntervalSetDays(&interval, i.Days)
@@ -237,7 +237,7 @@ func getTSTicks[T any](t Type, val T) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getAPITimestamp[T any](t Type, val T) (mapping.Timestamp, error) {
+func getMappedTimestamp[T any](t Type, val T) (mapping.Timestamp, error) {
 	var ts mapping.Timestamp
 	ticks, err := getTSTicks(t, val)
 	if err != nil {
@@ -248,7 +248,7 @@ func getAPITimestamp[T any](t Type, val T) (mapping.Timestamp, error) {
 	return ts, nil
 }
 
-func getAPIDate[T any](val T) (mapping.Date, error) {
+func getMappedDate[T any](val T) (mapping.Date, error) {
 	var date mapping.Date
 	ti, err := castToTime(val)
 	if err != nil {
