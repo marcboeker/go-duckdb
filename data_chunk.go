@@ -41,8 +41,8 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 	if colIdx >= len(chunk.columns) {
 		return nil, getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
-
 	column := &chunk.columns[colIdx]
+
 	return column.getFn(column, mapping.IdxT(rowIdx)), nil
 }
 
@@ -53,8 +53,8 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
-
 	column := &chunk.columns[colIdx]
+
 	return column.setFn(column, mapping.IdxT(rowIdx), val)
 }
 
@@ -93,17 +93,18 @@ func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool
 		v := mapping.DataChunkGetVector(chunk.chunk, mapping.IdxT(i))
 		chunk.columns[i].initVectors(v, writable)
 	}
+
 	return nil
 }
 
-func (chunk *DataChunk) initFromDuckDataChunk(apiChunk mapping.DataChunk, writable bool) error {
-	columnCount := mapping.DataChunkGetColumnCount(apiChunk)
+func (chunk *DataChunk) initFromDuckDataChunk(inputChunk mapping.DataChunk, writable bool) error {
+	columnCount := mapping.DataChunkGetColumnCount(inputChunk)
 	chunk.columns = make([]vector, columnCount)
-	chunk.chunk = apiChunk
+	chunk.chunk = inputChunk
 
 	var err error
 	for i := mapping.IdxT(0); i < columnCount; i++ {
-		vec := mapping.DataChunkGetVector(apiChunk, i)
+		vec := mapping.DataChunkGetVector(inputChunk, i)
 
 		// Initialize the callback functions to read and write values.
 		logicalType := mapping.VectorGetColumnType(vec)
@@ -116,8 +117,8 @@ func (chunk *DataChunk) initFromDuckDataChunk(apiChunk mapping.DataChunk, writab
 		// Initialize the vector and its child vectors.
 		chunk.columns[i].initVectors(vec, writable)
 	}
-
 	chunk.GetSize()
+
 	return err
 }
 
@@ -135,6 +136,7 @@ func (chunk *DataChunk) initFromDuckVector(vec mapping.Vector, writable bool) er
 
 	// Initialize the vector and its child vectors.
 	chunk.columns[0].initVectors(vec, writable)
+
 	return nil
 }
 

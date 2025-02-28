@@ -108,8 +108,8 @@ func (vec *vector) getHugeint(rowIdx mapping.IdxT) *big.Int {
 }
 
 func (vec *vector) getBytes(rowIdx mapping.IdxT) any {
-	apiStr := getPrimitive[mapping.StringT](vec, rowIdx)
-	str := mapping.StringTData(&apiStr)
+	strT := getPrimitive[mapping.StringT](vec, rowIdx)
+	str := mapping.StringTData(&strT)
 	if vec.Type == TYPE_VARCHAR {
 		return str
 	}

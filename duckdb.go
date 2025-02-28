@@ -26,6 +26,7 @@ func (d Driver) Open(dsn string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return c.Connect(context.Background())
 }
 
@@ -92,6 +93,7 @@ func (c *Connector) Connect(context.Context) (driver.Conn, error) {
 			return nil, err
 		}
 	}
+
 	return conn, nil
 }
 
@@ -101,6 +103,7 @@ func (c *Connector) Close() error {
 	}
 	mapping.Close(&c.db)
 	c.closed = true
+
 	return nil
 }
 
@@ -145,5 +148,6 @@ func setConfigOption(config mapping.Config, name string, option string) error {
 		mapping.DestroyConfig(&config)
 		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))
 	}
+
 	return nil
 }

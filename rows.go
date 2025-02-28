@@ -61,9 +61,9 @@ func (r *rows) Next(dst []driver.Value) error {
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
-		apiChunk := mapping.ResultGetChunk(r.res, r.chunkIdx)
+		chunk := mapping.ResultGetChunk(r.res, r.chunkIdx)
 		r.closeChunk = true
-		if err := r.chunk.initFromDuckDataChunk(apiChunk, false); err != nil {
+		if err := r.chunk.initFromDuckDataChunk(chunk, false); err != nil {
 			return getError(err, nil)
 		}
 
