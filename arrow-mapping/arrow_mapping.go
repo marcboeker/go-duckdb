@@ -6,9 +6,7 @@ import (
 	bindings "github.com/duckdb/duckdb-go-bindings"
 )
 
-// ------------------------------------------------------------------ //
 // Pointers
-// ------------------------------------------------------------------ //
 
 type (
 	Arrow       = bindings.Arrow
@@ -17,9 +15,7 @@ type (
 	ArrowArray  = bindings.ArrowArray
 )
 
-// ------------------------------------------------------------------ //
 // Functions
-// ------------------------------------------------------------------ //
 
 var (
 	QueryArrowSchema     = bindings.QueryArrowSchema

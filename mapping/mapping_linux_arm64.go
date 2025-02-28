@@ -6,9 +6,7 @@ import (
 	bindings "github.com/duckdb/duckdb-go-bindings/linux-arm64"
 )
 
-// ------------------------------------------------------------------ //
 // Enums
-// ------------------------------------------------------------------ //
 
 type Type = bindings.Type
 
@@ -91,9 +89,7 @@ const (
 	StatementTypeMulti       = bindings.StatementTypeMulti
 )
 
-// ------------------------------------------------------------------ //
 // Types
-// ------------------------------------------------------------------ //
 
 type (
 	IdxT      = bindings.IdxT
@@ -138,9 +134,7 @@ var (
 	ListEntrySetLength        = bindings.ListEntrySetLength
 )
 
-// ------------------------------------------------------------------ //
 // Pointers
-// ------------------------------------------------------------------ //
 
 type (
 	Vector              = bindings.Vector
@@ -163,9 +157,7 @@ type (
 	ReplacementScanInfo = bindings.ReplacementScanInfo
 )
 
-// ------------------------------------------------------------------ //
 // Functions
-// ------------------------------------------------------------------ //
 
 var (
 	OpenExt                                 = bindings.OpenExt
