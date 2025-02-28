@@ -71,16 +71,16 @@ jobs:
         include:
           - os: "macos-13"
             filename: "libduckdb-osx-universal"
-            filepath: "DYLD_LIBRARY_PATH"
+            ld_path_env_name: "DYLD_LIBRARY_PATH"
           - os: "macos-14"
             filename: "libduckdb-osx-universal"
-            filepath: "DYLD_LIBRARY_PATH"
+            ld_path_env_name: "DYLD_LIBRARY_PATH"
           - os: "ubuntu-latest"
             filename: "libduckdb-linux-amd64"
-            filepath: "LD_LIBRARY_PATH"
+            ld_path_env_name: "LD_LIBRARY_PATH"
           - os: "ubuntu-24.04-arm"
             filename: "libduckdb-linux-aarch64"
-            filepath: "LD_LIBRARY_PATH"
+            ld_path_env_name: "LD_LIBRARY_PATH"
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +90,7 @@ jobs:
       - name: Run Dynamic Lib Tests
         run: |
           make test.dynamic.lib FILENAME=${{ matrix.filename }} VERSION=v1.2.0
-          CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L${SRCDIR}dynamic-dir" ${{ matrix.filepath }}=${SRCDIR}dynamic-dir go test -tags=duckdb_use_lib
+          CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L${SRCDIR}dynamic-dir" ${{ matrix.ld_path_env_name }}=${SRCDIR}dynamic-dir go test -tags=duckdb_use_lib
   test-static-lib-darwin-arm64:
     name: Static Lib Tests Darwin ARM64
     runs-on: macos-latest
