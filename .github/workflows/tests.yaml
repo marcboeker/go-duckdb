@@ -104,5 +104,5 @@ jobs:
           go-version: 1.24
       - name: Run Static Lib Tests Darwin ARM64
         run: |
-          make test.static.lib.darwin.arm64
+          make test.static.lib.darwin.arm64 VERSION=v1.2.0
           CGO_ENABLED=1 CPPFLAGS="-DDUCKDB_STATIC_BUILD" CGO_LDFLAGS="-lduckdb -lc++ -L${SRCDIR}static-dir" go test -tags=duckdb_use_static_lib
