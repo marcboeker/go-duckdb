@@ -65,7 +65,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	am "github.com/marcboeker/go-duckdb/arrow-mapping"
+	am "github.com/marcboeker/go-duckdb/arrowmapping"
 	m "github.com/marcboeker/go-duckdb/mapping"
 
 	"github.com/apache/arrow-go/v18/arrow"
