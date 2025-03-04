@@ -1,56 +1,52 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"context"
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"math/big"
-	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-type StmtType C.duckdb_statement_type
+type StmtType mapping.StatementType
 
 const (
-	STATEMENT_TYPE_INVALID      StmtType = C.DUCKDB_STATEMENT_TYPE_INVALID
-	STATEMENT_TYPE_SELECT       StmtType = C.DUCKDB_STATEMENT_TYPE_SELECT
-	STATEMENT_TYPE_INSERT       StmtType = C.DUCKDB_STATEMENT_TYPE_INSERT
-	STATEMENT_TYPE_UPDATE       StmtType = C.DUCKDB_STATEMENT_TYPE_UPDATE
-	STATEMENT_TYPE_EXPLAIN      StmtType = C.DUCKDB_STATEMENT_TYPE_EXPLAIN
-	STATEMENT_TYPE_DELETE       StmtType = C.DUCKDB_STATEMENT_TYPE_DELETE
-	STATEMENT_TYPE_PREPARE      StmtType = C.DUCKDB_STATEMENT_TYPE_PREPARE
-	STATEMENT_TYPE_CREATE       StmtType = C.DUCKDB_STATEMENT_TYPE_CREATE
-	STATEMENT_TYPE_EXECUTE      StmtType = C.DUCKDB_STATEMENT_TYPE_EXECUTE
-	STATEMENT_TYPE_ALTER        StmtType = C.DUCKDB_STATEMENT_TYPE_ALTER
-	STATEMENT_TYPE_TRANSACTION  StmtType = C.DUCKDB_STATEMENT_TYPE_TRANSACTION
-	STATEMENT_TYPE_COPY         StmtType = C.DUCKDB_STATEMENT_TYPE_COPY
-	STATEMENT_TYPE_ANALYZE      StmtType = C.DUCKDB_STATEMENT_TYPE_ANALYZE
-	STATEMENT_TYPE_VARIABLE_SET StmtType = C.DUCKDB_STATEMENT_TYPE_VARIABLE_SET
-	STATEMENT_TYPE_CREATE_FUNC  StmtType = C.DUCKDB_STATEMENT_TYPE_CREATE_FUNC
-	STATEMENT_TYPE_DROP         StmtType = C.DUCKDB_STATEMENT_TYPE_DROP
-	STATEMENT_TYPE_EXPORT       StmtType = C.DUCKDB_STATEMENT_TYPE_EXPORT
-	STATEMENT_TYPE_PRAGMA       StmtType = C.DUCKDB_STATEMENT_TYPE_PRAGMA
-	STATEMENT_TYPE_VACUUM       StmtType = C.DUCKDB_STATEMENT_TYPE_VACUUM
-	STATEMENT_TYPE_CALL         StmtType = C.DUCKDB_STATEMENT_TYPE_CALL
-	STATEMENT_TYPE_SET          StmtType = C.DUCKDB_STATEMENT_TYPE_SET
-	STATEMENT_TYPE_LOAD         StmtType = C.DUCKDB_STATEMENT_TYPE_LOAD
-	STATEMENT_TYPE_RELATION     StmtType = C.DUCKDB_STATEMENT_TYPE_RELATION
-	STATEMENT_TYPE_EXTENSION    StmtType = C.DUCKDB_STATEMENT_TYPE_EXTENSION
-	STATEMENT_TYPE_LOGICAL_PLAN StmtType = C.DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN
-	STATEMENT_TYPE_ATTACH       StmtType = C.DUCKDB_STATEMENT_TYPE_ATTACH
-	STATEMENT_TYPE_DETACH       StmtType = C.DUCKDB_STATEMENT_TYPE_DETACH
-	STATEMENT_TYPE_MULTI        StmtType = C.DUCKDB_STATEMENT_TYPE_MULTI
+	STATEMENT_TYPE_INVALID      = StmtType(mapping.StatementTypeInvalid)
+	STATEMENT_TYPE_SELECT       = StmtType(mapping.StatementTypeSelect)
+	STATEMENT_TYPE_INSERT       = StmtType(mapping.StatementTypeInsert)
+	STATEMENT_TYPE_UPDATE       = StmtType(mapping.StatementTypeUpdate)
+	STATEMENT_TYPE_EXPLAIN      = StmtType(mapping.StatementTypeExplain)
+	STATEMENT_TYPE_DELETE       = StmtType(mapping.StatementTypeDelete)
+	STATEMENT_TYPE_PREPARE      = StmtType(mapping.StatementTypePrepare)
+	STATEMENT_TYPE_CREATE       = StmtType(mapping.StatementTypeCreate)
+	STATEMENT_TYPE_EXECUTE      = StmtType(mapping.StatementTypeExecute)
+	STATEMENT_TYPE_ALTER        = StmtType(mapping.StatementTypeAlter)
+	STATEMENT_TYPE_TRANSACTION  = StmtType(mapping.StatementTypeTransaction)
+	STATEMENT_TYPE_COPY         = StmtType(mapping.StatementTypeCopy)
+	STATEMENT_TYPE_ANALYZE      = StmtType(mapping.StatementTypeAnalyze)
+	STATEMENT_TYPE_VARIABLE_SET = StmtType(mapping.StatementTypeVariableSet)
+	STATEMENT_TYPE_CREATE_FUNC  = StmtType(mapping.StatementTypeCreateFunc)
+	STATEMENT_TYPE_DROP         = StmtType(mapping.StatementTypeDrop)
+	STATEMENT_TYPE_EXPORT       = StmtType(mapping.StatementTypeExport)
+	STATEMENT_TYPE_PRAGMA       = StmtType(mapping.StatementTypePragma)
+	STATEMENT_TYPE_VACUUM       = StmtType(mapping.StatementTypeVacuum)
+	STATEMENT_TYPE_CALL         = StmtType(mapping.StatementTypeCall)
+	STATEMENT_TYPE_SET          = StmtType(mapping.StatementTypeSet)
+	STATEMENT_TYPE_LOAD         = StmtType(mapping.StatementTypeLoad)
+	STATEMENT_TYPE_RELATION     = StmtType(mapping.StatementTypeRelation)
+	STATEMENT_TYPE_EXTENSION    = StmtType(mapping.StatementTypeExtension)
+	STATEMENT_TYPE_LOGICAL_PLAN = StmtType(mapping.StatementTypeLogicalPlan)
+	STATEMENT_TYPE_ATTACH       = StmtType(mapping.StatementTypeAttach)
+	STATEMENT_TYPE_DETACH       = StmtType(mapping.StatementTypeDetach)
+	STATEMENT_TYPE_MULTI        = StmtType(mapping.StatementTypeMulti)
 )
 
 // Stmt implements the driver.Stmt interface.
 type Stmt struct {
-	c                *Conn
-	stmt             *C.duckdb_prepared_statement
+	conn             *Conn
+	preparedStmt     *mapping.PreparedStatement
 	closeOnRowsClose bool
 	bound            bool
 	closed           bool
@@ -68,7 +64,7 @@ func (s *Stmt) Close() error {
 	}
 
 	s.closed = true
-	C.duckdb_destroy_prepare(s.stmt)
+	mapping.DestroyPrepare(s.preparedStmt)
 	return nil
 }
 
@@ -78,7 +74,7 @@ func (s *Stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	count := C.duckdb_nparams(*s.stmt)
+	count := mapping.NParams(*s.preparedStmt)
 	return int(count)
 }
 
@@ -87,18 +83,16 @@ func (s *Stmt) ParamName(n int) (string, error) {
 	if s.closed {
 		return "", errClosedStmt
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return "", errUninitializedStmt
 	}
 
-	count := C.duckdb_nparams(*s.stmt)
-	if C.idx_t(n) == 0 || C.idx_t(n) > count {
+	count := mapping.NParams(*s.preparedStmt)
+	if n == 0 || n > int(count) {
 		return "", getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	cStr := C.duckdb_parameter_name(*s.stmt, C.idx_t(n))
-	name := C.GoString(cStr)
-	C.duckdb_free(unsafe.Pointer(cStr))
+	name := mapping.ParameterName(*s.preparedStmt, mapping.IdxT(n))
 	return name, nil
 }
 
@@ -107,16 +101,17 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	if s.closed {
 		return TYPE_INVALID, errClosedStmt
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return TYPE_INVALID, errUninitializedStmt
 	}
 
-	count := C.duckdb_nparams(*s.stmt)
-	if C.idx_t(n) == 0 || C.idx_t(n) > count {
+	count := mapping.NParams(*s.preparedStmt)
+	if n == 0 || n > int(count) {
 		return TYPE_INVALID, getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	return Type(C.duckdb_param_type(*s.stmt, C.idx_t(n))), nil
+	t := mapping.ParamType(*s.preparedStmt, mapping.IdxT(n))
+	return Type(t), nil
 }
 
 // StatementType returns the type of the statement.
@@ -124,11 +119,12 @@ func (s *Stmt) StatementType() (StmtType, error) {
 	if s.closed {
 		return STATEMENT_TYPE_INVALID, errClosedStmt
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return STATEMENT_TYPE_INVALID, errUninitializedStmt
 	}
 
-	return StmtType(C.duckdb_prepared_statement_type(*s.stmt)), nil
+	t := mapping.PreparedStatementType(*s.preparedStmt)
+	return StmtType(t), nil
 }
 
 // Bind the parameters to the statement.
@@ -137,91 +133,67 @@ func (s *Stmt) Bind(args []driver.NamedValue) error {
 	if s.closed {
 		return errors.Join(errCouldNotBind, errClosedStmt)
 	}
-	if s.stmt == nil {
+	if s.preparedStmt == nil {
 		return errors.Join(errCouldNotBind, errUninitializedStmt)
 	}
 	return s.bind(args)
 }
 
-func (s *Stmt) bindHugeint(val *big.Int, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindHugeint(val *big.Int, n int) (mapping.State, error) {
 	hugeint, err := hugeIntFromNative(val)
 	if err != nil {
-		return C.DuckDBError, err
+		return mapping.StateError, err
 	}
-	state := C.duckdb_bind_hugeint(*s.stmt, C.idx_t(n+1), hugeint)
+	state := mapping.BindHugeInt(*s.preparedStmt, mapping.IdxT(n+1), hugeint)
 	return state, nil
 }
 
-func (s *Stmt) bindString(val string, n int) (C.duckdb_state, error) {
-	v := C.CString(val)
-	state := C.duckdb_bind_varchar(*s.stmt, C.idx_t(n+1), v)
-	C.duckdb_free(unsafe.Pointer(v))
-	return state, nil
-}
-
-func (s *Stmt) bindBlob(val []byte, n int) (C.duckdb_state, error) {
-	v := C.CBytes(val)
-	state := C.duckdb_bind_blob(*s.stmt, C.idx_t(n+1), v, C.uint64_t(len(val)))
-	C.duckdb_free(unsafe.Pointer(v))
-	return state, nil
-}
-
-func (s *Stmt) bindInterval(val Interval, n int) (C.duckdb_state, error) {
-	v := C.duckdb_interval{
-		months: C.int32_t(val.Months),
-		days:   C.int32_t(val.Days),
-		micros: C.int64_t(val.Micros),
-	}
-	state := C.duckdb_bind_interval(*s.stmt, C.idx_t(n+1), v)
-	return state, nil
-}
-
-func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (C.duckdb_state, error) {
-	ts, err := getCTimestamp(t, val.Value)
+func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.State, error) {
+	ts, err := getMappedTimestamp(t, val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return mapping.StateError, err
 	}
-	state := C.duckdb_bind_timestamp(*s.stmt, C.idx_t(n+1), ts)
+	state := mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), ts)
 	return state, nil
 }
 
-func (s *Stmt) bindDate(val driver.NamedValue, n int) (C.duckdb_state, error) {
-	date, err := getCDate(val.Value)
+func (s *Stmt) bindDate(val driver.NamedValue, n int) (mapping.State, error) {
+	date, err := getMappedDate(val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return mapping.StateError, err
 	}
-	state := C.duckdb_bind_date(*s.stmt, C.idx_t(n+1), date)
+	state := mapping.BindDate(*s.preparedStmt, mapping.IdxT(n+1), date)
 	return state, nil
 }
 
-func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (mapping.State, error) {
 	ticks, err := getTimeTicks(val.Value)
 	if err != nil {
-		return C.DuckDBError, err
+		return mapping.StateError, err
 	}
 
 	if t == TYPE_TIME {
-		var ti C.duckdb_time
-		ti.micros = C.int64_t(ticks)
-		state := C.duckdb_bind_time(*s.stmt, C.idx_t(n+1), ti)
+		var ti mapping.Time
+		mapping.TimeSetMicros(&ti, ticks)
+		state := mapping.BindTime(*s.preparedStmt, mapping.IdxT(n+1), ti)
 		return state, nil
 	}
 
 	// TYPE_TIME_TZ: The UTC offset is 0.
-	ti := C.duckdb_create_time_tz(C.int64_t(ticks), 0)
-	v := C.duckdb_create_time_tz_value(ti)
-	state := C.duckdb_bind_value(*s.stmt, C.idx_t(n+1), v)
-	C.duckdb_destroy_value(&v)
+	ti := mapping.CreateTimeTZ(ticks, 0)
+	v := mapping.CreateTimeTZValue(ti)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), v)
+	mapping.DestroyValue(&v)
 	return state, nil
 }
 
-func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
 	t, err := s.ParamType(n + 1)
 	if err != nil {
-		return C.DuckDBError, err
+		return mapping.StateError, err
 	}
 	if name, ok := unsupportedTypeToStringMap[t]; ok {
-		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
 
 	switch t {
@@ -237,51 +209,52 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (C.duckdb_state, e
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[t]
-		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
-	return C.DuckDBError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+	return mapping.StateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
 }
 
-func (s *Stmt) bindValue(val driver.NamedValue, n int) (C.duckdb_state, error) {
+func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	switch v := val.Value.(type) {
 	case bool:
-		return C.duckdb_bind_boolean(*s.stmt, C.idx_t(n+1), C.bool(v)), nil
+		return mapping.BindBoolean(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int8:
-		return C.duckdb_bind_int8(*s.stmt, C.idx_t(n+1), C.int8_t(v)), nil
+		return mapping.BindInt8(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int16:
-		return C.duckdb_bind_int16(*s.stmt, C.idx_t(n+1), C.int16_t(v)), nil
+		return mapping.BindInt16(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int32:
-		return C.duckdb_bind_int32(*s.stmt, C.idx_t(n+1), C.int32_t(v)), nil
+		return mapping.BindInt32(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int64:
-		return C.duckdb_bind_int64(*s.stmt, C.idx_t(n+1), C.int64_t(v)), nil
+		return mapping.BindInt64(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int:
-		return C.duckdb_bind_int64(*s.stmt, C.idx_t(n+1), C.int64_t(v)), nil
+		// int is at least 32 bits.
+		return mapping.BindInt64(*s.preparedStmt, mapping.IdxT(n+1), int64(v)), nil
 	case *big.Int:
 		return s.bindHugeint(v, n)
 	case Decimal:
 		// FIXME: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[TYPE_DECIMAL]
-		return C.DuckDBError, addIndexToError(unsupportedTypeError(name), n+1)
+		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	case uint8:
-		return C.duckdb_bind_uint8(*s.stmt, C.idx_t(n+1), C.uint8_t(v)), nil
+		return mapping.BindUInt8(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case uint16:
-		return C.duckdb_bind_uint16(*s.stmt, C.idx_t(n+1), C.uint16_t(v)), nil
+		return mapping.BindUInt16(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case uint32:
-		return C.duckdb_bind_uint32(*s.stmt, C.idx_t(n+1), C.uint32_t(v)), nil
+		return mapping.BindUInt32(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case uint64:
-		return C.duckdb_bind_uint64(*s.stmt, C.idx_t(n+1), C.uint64_t(v)), nil
+		return mapping.BindUInt64(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case float32:
-		return C.duckdb_bind_float(*s.stmt, C.idx_t(n+1), C.float(v)), nil
+		return mapping.BindFloat(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case float64:
-		return C.duckdb_bind_double(*s.stmt, C.idx_t(n+1), C.double(v)), nil
+		return mapping.BindDouble(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case string:
-		return s.bindString(v, n)
+		return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case []byte:
-		return s.bindBlob(v, n)
+		return mapping.BindBlob(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case Interval:
-		return s.bindInterval(v, n)
+		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), v.getMappedInterval()), nil
 	case nil:
-		return C.duckdb_bind_null(*s.stmt, C.idx_t(n+1)), nil
+		return mapping.BindNull(*s.preparedStmt, mapping.IdxT(n+1)), nil
 	}
 	return s.bindComplexValue(val, n)
 }
@@ -293,9 +266,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 
 	// relaxed length check allow for unused parameters.
 	for i := 0; i < s.NumInput(); i++ {
-		cStr := C.duckdb_parameter_name(*s.stmt, C.idx_t(i+1))
-		name := C.GoString(cStr)
-		C.duckdb_free(unsafe.Pointer(cStr))
+		name := mapping.ParameterName(*s.preparedStmt, mapping.IdxT(i+1))
 
 		// fallback on index position
 		arg := args[i]
@@ -315,8 +286,9 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 		}
 
 		state, err := s.bindValue(arg, i)
-		if state == C.DuckDBError {
-			err = errors.Join(err, duckdbError(C.duckdb_prepare_error(*s.stmt)))
+		if state == mapping.StateError {
+			errMsg := mapping.PrepareError(*s.preparedStmt)
+			err = errors.Join(err, getDuckDBError(errMsg))
 			return errors.Join(errCouldNotBind, err)
 		}
 	}
@@ -337,9 +309,9 @@ func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_result(res)
+	defer mapping.DestroyResult(res)
 
-	ra := int64(C.duckdb_value_int64(res, 0, 0))
+	ra := mapping.ValueInt64(res, 0, 0)
 	return &result{ra}, nil
 }
 
@@ -361,9 +333,9 @@ func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer C.duckdb_destroy_result(res)
+	defer mapping.DestroyResult(res)
 
-	ra := int64(C.duckdb_value_int64(res, 0, 0))
+	ra := mapping.ValueInt64(res, 0, 0)
 	return &result{ra}, nil
 }
 
@@ -407,7 +379,7 @@ func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb_result, error) {
+func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*mapping.Result, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
 	}
@@ -420,21 +392,21 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*C.duckdb
 	return s.executeBound(ctx)
 }
 
-func (s *Stmt) executeBound(ctx context.Context) (*C.duckdb_result, error) {
-	var pendingRes C.duckdb_pending_result
-	if state := C.duckdb_pending_prepared(*s.stmt, &pendingRes); state == C.DuckDBError {
-		dbErr := getDuckDBError(C.GoString(C.duckdb_pending_error(pendingRes)))
-		C.duckdb_destroy_pending(&pendingRes)
+func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
+	var pendingRes mapping.PendingResult
+	if mapping.PendingPrepared(*s.preparedStmt, &pendingRes) == mapping.StateError {
+		dbErr := getDuckDBError(mapping.PendingError(pendingRes))
+		mapping.DestroyPending(&pendingRes)
 		return nil, dbErr
 	}
-	defer C.duckdb_destroy_pending(&pendingRes)
+	defer mapping.DestroyPending(&pendingRes)
 
 	mainDoneCh := make(chan struct{})
 	bgDoneCh := make(chan struct{})
 	go func() {
 		select {
 		case <-ctx.Done():
-			C.duckdb_interrupt(s.c.duckdbCon)
+			mapping.Interrupt(s.conn.conn)
 			close(bgDoneCh)
 			return
 		case <-mainDoneCh:
@@ -443,24 +415,23 @@ func (s *Stmt) executeBound(ctx context.Context) (*C.duckdb_result, error) {
 		}
 	}()
 
-	var res C.duckdb_result
-	state := C.duckdb_execute_pending(pendingRes, &res)
+	var res mapping.Result
+	state := mapping.ExecutePending(pendingRes, &res)
 	close(mainDoneCh)
 	// also wait for background goroutine to finish
 	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
 	// it can cancel that query so need to wait for it to finish as well
 	<-bgDoneCh
-	if state == C.DuckDBError {
+	if state == mapping.StateError {
 		if ctx.Err() != nil {
-			C.duckdb_destroy_result(&res)
+			mapping.DestroyResult(&res)
 			return nil, ctx.Err()
 		}
 
-		err := getDuckDBError(C.GoString(C.duckdb_result_error(&res)))
-		C.duckdb_destroy_result(&res)
+		err := getDuckDBError(mapping.ResultError(&res))
+		mapping.DestroyResult(&res)
 		return nil, err
 	}
-
 	return &res, nil
 }
 

@@ -1,27 +1,26 @@
 package duckdb
 
 /*
-#include <duckdb.h>
+// For the function definitions see https://golang.org/issue/19837.
+// For the typedef's see https://golang.org/issue/19835.
 
-void table_udf_bind_row(duckdb_bind_info info);
-void table_udf_bind_chunk(duckdb_bind_info info);
-void table_udf_bind_parallel_row(duckdb_bind_info info);
-void table_udf_bind_parallel_chunk(duckdb_bind_info info);
+void table_udf_bind_row(void *);
+void table_udf_bind_chunk(void *);
+void table_udf_bind_parallel_row(void *);
+void table_udf_bind_parallel_chunk(void *);
+typedef void (*table_udf_bind_t)(void *);
 
-void table_udf_init(duckdb_init_info info);
-void table_udf_init_parallel(duckdb_init_info info);
-void table_udf_local_init(duckdb_init_info info);
+void table_udf_init(void *);
+void table_udf_init_parallel(void *);
+void table_udf_local_init(void *);
+typedef void (*table_udf_init_t)(void *);
 
-// See https://golang.org/issue/19837
-void table_udf_row_callback(duckdb_function_info, duckdb_data_chunk);
-void table_udf_chunk_callback(duckdb_function_info, duckdb_data_chunk);
+void table_udf_row_callback(void *, void *);
+void table_udf_chunk_callback(void *, void *);
+typedef void (*table_udf_callback_t)(void *, void *, void *);
 
-// See https://golang.org/issue/19835.
-typedef void (*init)(duckdb_function_info);
-typedef void (*bind)(duckdb_function_info);
-typedef void (*callback)(duckdb_function_info, duckdb_data_chunk);
-
-void udf_delete_callback(void *);
+void table_udf_delete_callback(void *);
+typedef void (*table_udf_delete_callback_t)(void *);
 */
 import "C"
 
@@ -30,6 +29,8 @@ import (
 	"runtime"
 	"runtime/cgo"
 	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 type (
@@ -166,36 +167,38 @@ type (
 	}
 )
 
-func (tfd *tableFunctionData) setColumnCount(info C.duckdb_init_info) {
-	count := C.duckdb_init_get_column_count(info)
-	for i := 0; i < int(count); i++ {
-		srcPos := C.duckdb_init_get_column_index(info, C.idx_t(i))
-		tfd.projection[int(srcPos)] = i
+func (tfd *tableFunctionData) setColumnCount(info mapping.InitInfo) {
+	count := mapping.InitGetColumnCount(info)
+	for i := mapping.IdxT(0); i < count; i++ {
+		srcPos := mapping.InitGetColumnIndex(info, i)
+		tfd.projection[int(srcPos)] = int(i)
 	}
 }
 
 //export table_udf_bind_row
-func table_udf_bind_row(info C.duckdb_bind_info) {
-	udfBindTyped[RowTableSource](info)
+func table_udf_bind_row(infoPtr unsafe.Pointer) {
+	udfBindTyped[RowTableSource](infoPtr)
 }
 
 //export table_udf_bind_chunk
-func table_udf_bind_chunk(info C.duckdb_bind_info) {
-	udfBindTyped[ChunkTableSource](info)
+func table_udf_bind_chunk(infoPtr unsafe.Pointer) {
+	udfBindTyped[ChunkTableSource](infoPtr)
 }
 
 //export table_udf_bind_parallel_row
-func table_udf_bind_parallel_row(info C.duckdb_bind_info) {
-	udfBindTyped[ParallelRowTableSource](info)
+func table_udf_bind_parallel_row(infoPtr unsafe.Pointer) {
+	udfBindTyped[ParallelRowTableSource](infoPtr)
 }
 
 //export table_udf_bind_parallel_chunk
-func table_udf_bind_parallel_chunk(info C.duckdb_bind_info) {
-	udfBindTyped[ParallelChunkTableSource](info)
+func table_udf_bind_parallel_chunk(infoPtr unsafe.Pointer) {
+	udfBindTyped[ParallelChunkTableSource](infoPtr)
 }
 
-func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
-	f := getPinned[tableFunction[T]](C.duckdb_bind_get_extra_info(info))
+func udfBindTyped[T tableSource](infoPtr unsafe.Pointer) {
+	info := mapping.BindInfo{Ptr: infoPtr}
+
+	f := getPinned[tableFunction[T]](mapping.BindGetExtraInfo(info))
 	config := f.Config
 
 	argCount := len(config.Arguments)
@@ -203,35 +206,32 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 	namedArgs := make(map[string]any)
 
 	for i, t := range config.Arguments {
-		value := C.duckdb_bind_get_parameter(info, C.idx_t(i))
 		var err error
+		value := mapping.BindGetParameter(info, mapping.IdxT(i))
 		args[i], err = getValue(t, value)
-		C.duckdb_destroy_value(&value)
+		mapping.DestroyValue(&value)
 
 		if err != nil {
-			setBindError(info, err.Error())
+			mapping.BindSetError(info, err.Error())
 			return
 		}
 	}
 
 	for name, t := range config.NamedArguments {
-		argName := C.CString(name)
-		value := C.duckdb_bind_get_named_parameter(info, argName)
-		C.duckdb_free(unsafe.Pointer(argName))
-
 		var err error
+		value := mapping.BindGetNamedParameter(info, name)
 		namedArgs[name], err = getValue(t, value)
-		C.duckdb_destroy_value(&value)
+		mapping.DestroyValue(&value)
 
 		if err != nil {
-			setBindError(info, err.Error())
+			mapping.BindSetError(info, err.Error())
 			return
 		}
 	}
 
 	instance, err := f.BindArguments(namedArgs, args...)
 	if err != nil {
-		setBindError(info, err.Error())
+		mapping.BindSetError(info, err.Error())
 		return
 	}
 
@@ -243,22 +243,18 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 	for i, v := range columnInfos {
 		if v.T == nil {
-			setBindError(info, errTableUDFColumnTypeIsNil.Error())
+			mapping.BindSetError(info, errTableUDFColumnTypeIsNil.Error())
 			return
 		}
-
 		logicalType := v.T.logicalType()
-		name := C.CString(v.Name)
-		C.duckdb_bind_add_result_column(info, name, logicalType)
-		C.duckdb_destroy_logical_type(&logicalType)
-		C.duckdb_free(unsafe.Pointer(name))
-
+		mapping.BindAddResultColumn(info, v.Name, logicalType)
+		mapping.DestroyLogicalType(&logicalType)
 		instanceData.projection[i] = -1
 	}
 
 	cardinality := instance.Cardinality()
 	if cardinality != nil {
-		C.duckdb_bind_set_cardinality(info, C.idx_t(cardinality.Cardinality), C.bool(cardinality.Exact))
+		mapping.BindSetCardinality(info, mapping.IdxT(cardinality.Cardinality), cardinality.Exact)
 	}
 
 	pinnedInstanceData := pinnedValue[tableFunctionData]{
@@ -268,45 +264,53 @@ func udfBindTyped[T tableSource](info C.duckdb_bind_info) {
 
 	h := cgo.NewHandle(pinnedInstanceData)
 	pinnedInstanceData.pinner.Pin(&h)
-	C.duckdb_bind_set_bind_data(info, unsafe.Pointer(&h), C.duckdb_delete_callback_t(C.udf_delete_callback))
+	deleteCallbackPtr := unsafe.Pointer(C.table_udf_delete_callback_t(C.table_udf_delete_callback))
+	mapping.BindSetBindData(info, unsafe.Pointer(&h), deleteCallbackPtr)
 }
 
 //export table_udf_init
-func table_udf_init(info C.duckdb_init_info) {
-	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
+func table_udf_init(infoPtr unsafe.Pointer) {
+	info := mapping.InitInfo{Ptr: infoPtr}
+	instance := getPinned[tableFunctionData](mapping.InitGetBindData(info))
 	instance.setColumnCount(info)
 	instance.fun.(sequentialTableSource).Init()
 }
 
 //export table_udf_init_parallel
-func table_udf_init_parallel(info C.duckdb_init_info) {
-	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
+func table_udf_init_parallel(infoPtr unsafe.Pointer) {
+	info := mapping.InitInfo{Ptr: infoPtr}
+	instance := getPinned[tableFunctionData](mapping.InitGetBindData(info))
 	instance.setColumnCount(info)
 	initData := instance.fun.(parallelTableSource).Init()
-	maxThreads := C.idx_t(initData.MaxThreads)
-	C.duckdb_init_set_max_threads(info, maxThreads)
+	maxThreads := initData.MaxThreads
+	mapping.InitSetMaxThreads(info, mapping.IdxT(maxThreads))
 }
 
 //export table_udf_local_init
-func table_udf_local_init(info C.duckdb_init_info) {
-	instance := getPinned[tableFunctionData](C.duckdb_init_get_bind_data(info))
+func table_udf_local_init(infoPtr unsafe.Pointer) {
+	info := mapping.InitInfo{Ptr: infoPtr}
+	instance := getPinned[tableFunctionData](mapping.InitGetBindData(info))
 	localState := pinnedValue[any]{
 		pinner: &runtime.Pinner{},
 		value:  instance.fun.(parallelTableSource).NewLocalState(),
 	}
 	h := cgo.NewHandle(localState)
 	localState.pinner.Pin(&h)
-	C.duckdb_init_set_init_data(info, unsafe.Pointer(&h), C.duckdb_delete_callback_t(C.udf_delete_callback))
+	deleteCallbackPtr := unsafe.Pointer(C.table_udf_delete_callback_t(C.table_udf_delete_callback))
+	mapping.InitSetInitData(info, unsafe.Pointer(&h), deleteCallbackPtr)
 }
 
 //export table_udf_row_callback
-func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
-	instance := getPinned[tableFunctionData](C.duckdb_function_get_bind_data(info))
+func table_udf_row_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
+	info := mapping.FunctionInfo{Ptr: infoPtr}
+	output := mapping.DataChunk{Ptr: outputPtr}
+
+	instance := getPinned[tableFunctionData](mapping.FunctionGetBindData(info))
 
 	var chunk DataChunk
 	err := chunk.initFromDuckDataChunk(output, true)
 	if err != nil {
-		setFuncError(info, err.Error())
+		mapping.FunctionSetError(info, err.Error())
 		return
 	}
 
@@ -314,7 +318,7 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 		chunk:      &chunk,
 		projection: instance.projection,
 	}
-	maxSize := C.duckdb_vector_size()
+	maxSize := mapping.IdxT(GetDataChunkCapacity())
 
 	switch fun := instance.fun.(type) {
 	case RowTableSource:
@@ -322,7 +326,7 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 		for row.r = 0; row.r < maxSize; row.r++ {
 			next, errRow := fun.FillRow(row)
 			if errRow != nil {
-				setFuncError(info, errRow.Error())
+				mapping.FunctionSetError(info, errRow.Error())
 				break
 			}
 			if !next {
@@ -331,11 +335,11 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 		}
 	case ParallelRowTableSource:
 		// At the end of the loop row.r must be the index of the last row.
-		localState := getPinned[any](C.duckdb_function_get_local_init_data(info))
+		localState := getPinned[any](mapping.FunctionGetLocalInitData(info))
 		for row.r = 0; row.r < maxSize; row.r++ {
 			next, errRow := fun.FillRow(localState, row)
 			if errRow != nil {
-				setFuncError(info, errRow.Error())
+				mapping.FunctionSetError(info, errRow.Error())
 				break
 			}
 			if !next {
@@ -343,17 +347,20 @@ func table_udf_row_callback(info C.duckdb_function_info, output C.duckdb_data_ch
 			}
 		}
 	}
-	C.duckdb_data_chunk_set_size(output, row.r)
+	mapping.DataChunkSetSize(output, row.r)
 }
 
 //export table_udf_chunk_callback
-func table_udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_chunk) {
-	instance := getPinned[tableFunctionData](C.duckdb_function_get_bind_data(info))
+func table_udf_chunk_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
+	info := mapping.FunctionInfo{Ptr: infoPtr}
+	output := mapping.DataChunk{Ptr: outputPtr}
+
+	instance := getPinned[tableFunctionData](mapping.FunctionGetBindData(info))
 
 	var chunk DataChunk
 	err := chunk.initFromDuckDataChunk(output, true)
 	if err != nil {
-		setFuncError(info, err.Error())
+		mapping.FunctionSetError(info, err.Error())
 		return
 	}
 
@@ -361,26 +368,29 @@ func table_udf_chunk_callback(info C.duckdb_function_info, output C.duckdb_data_
 	case ChunkTableSource:
 		err = fun.FillChunk(chunk)
 	case ParallelChunkTableSource:
-		localState := getPinned[*any](C.duckdb_function_get_local_init_data(info))
+		localState := getPinned[*any](mapping.FunctionGetLocalInitData(info))
 		err = fun.FillChunk(localState, chunk)
 	}
 	if err != nil {
-		setFuncError(info, err.Error())
+		mapping.FunctionSetError(info, err.Error())
 	}
+}
+
+//export table_udf_delete_callback
+func table_udf_delete_callback(info unsafe.Pointer) {
+	h := (*cgo.Handle)(info)
+	h.Value().(unpinner).unpin()
+	h.Delete()
 }
 
 // RegisterTableUDF registers a user-defined table function.
 // Projection pushdown is enabled by default.
-func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error {
+func RegisterTableUDF[TFT TableFunction](conn *sql.Conn, name string, f TFT) error {
 	if name == "" {
 		return getError(errAPI, errTableUDFNoName)
 	}
-	function := C.duckdb_create_table_function()
-
-	// Set the name.
-	cName := C.CString(name)
-	defer C.duckdb_free(unsafe.Pointer(cName))
-	C.duckdb_table_function_set_name(function, cName)
+	function := mapping.CreateTableFunction()
+	mapping.TableFunctionSetName(function, name)
 
 	var config TableFunctionConfig
 
@@ -393,19 +403,23 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 	value.pinner.Pin(&h)
 
 	// Set the execution data, which is the table function f.
-	C.duckdb_table_function_set_extra_info(
-		function,
-		unsafe.Pointer(&h),
-		C.duckdb_delete_callback_t(C.udf_delete_callback))
-	C.duckdb_table_function_supports_projection_pushdown(function, C.bool(true))
+	deleteCallbackPtr := unsafe.Pointer(C.table_udf_delete_callback_t(C.table_udf_delete_callback))
+	mapping.TableFunctionSetExtraInfo(function, unsafe.Pointer(&h), deleteCallbackPtr)
+
+	mapping.TableFunctionSupportsProjectionPushdown(function, true)
 
 	// Set the config.
 	var x any = f
 	switch tableFunc := x.(type) {
 	case RowTableFunction:
-		C.duckdb_table_function_set_init(function, C.init(C.table_udf_init))
-		C.duckdb_table_function_set_bind(function, C.bind(C.table_udf_bind_row))
-		C.duckdb_table_function_set_function(function, C.callback(C.table_udf_row_callback))
+		initCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_init))
+		mapping.TableFunctionSetInit(function, initCallbackPtr)
+
+		bindCallbackPtr := unsafe.Pointer(C.table_udf_bind_t(C.table_udf_bind_row))
+		mapping.TableFunctionSetBind(function, bindCallbackPtr)
+
+		callbackPtr := unsafe.Pointer(C.table_udf_callback_t(C.table_udf_row_callback))
+		mapping.TableFunctionSetFunction(function, callbackPtr)
 
 		config = tableFunc.Config
 		if tableFunc.BindArguments == nil {
@@ -413,9 +427,14 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 		}
 
 	case ChunkTableFunction:
-		C.duckdb_table_function_set_init(function, C.init(C.table_udf_init))
-		C.duckdb_table_function_set_bind(function, C.bind(C.table_udf_bind_chunk))
-		C.duckdb_table_function_set_function(function, C.callback(C.table_udf_chunk_callback))
+		initCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_init))
+		mapping.TableFunctionSetInit(function, initCallbackPtr)
+
+		bindCallbackPtr := unsafe.Pointer(C.table_udf_bind_t(C.table_udf_bind_chunk))
+		mapping.TableFunctionSetBind(function, bindCallbackPtr)
+
+		callbackPtr := unsafe.Pointer(C.table_udf_callback_t(C.table_udf_chunk_callback))
+		mapping.TableFunctionSetFunction(function, callbackPtr)
 
 		config = tableFunc.Config
 		if tableFunc.BindArguments == nil {
@@ -423,10 +442,17 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 		}
 
 	case ParallelRowTableFunction:
-		C.duckdb_table_function_set_init(function, C.init(C.table_udf_init_parallel))
-		C.duckdb_table_function_set_bind(function, C.bind(C.table_udf_bind_parallel_row))
-		C.duckdb_table_function_set_function(function, C.callback(C.table_udf_row_callback))
-		C.duckdb_table_function_set_local_init(function, C.init(C.table_udf_local_init))
+		initCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_init_parallel))
+		mapping.TableFunctionSetInit(function, initCallbackPtr)
+
+		bindCallbackPtr := unsafe.Pointer(C.table_udf_bind_t(C.table_udf_bind_parallel_row))
+		mapping.TableFunctionSetBind(function, bindCallbackPtr)
+
+		callbackPtr := unsafe.Pointer(C.table_udf_callback_t(C.table_udf_row_callback))
+		mapping.TableFunctionSetFunction(function, callbackPtr)
+
+		localInitCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_local_init))
+		mapping.TableFunctionSetLocalInit(function, localInitCallbackPtr)
 
 		config = tableFunc.Config
 		if tableFunc.BindArguments == nil {
@@ -434,10 +460,17 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 		}
 
 	case ParallelChunkTableFunction:
-		C.duckdb_table_function_set_init(function, C.init(C.table_udf_init_parallel))
-		C.duckdb_table_function_set_bind(function, C.bind(C.table_udf_bind_parallel_chunk))
-		C.duckdb_table_function_set_function(function, C.callback(C.table_udf_chunk_callback))
-		C.duckdb_table_function_set_local_init(function, C.init(C.table_udf_local_init))
+		initCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_init_parallel))
+		mapping.TableFunctionSetInit(function, initCallbackPtr)
+
+		bindCallbackPtr := unsafe.Pointer(C.table_udf_bind_t(C.table_udf_bind_parallel_chunk))
+		mapping.TableFunctionSetBind(function, bindCallbackPtr)
+
+		callbackPtr := unsafe.Pointer(C.table_udf_callback_t(C.table_udf_chunk_callback))
+		mapping.TableFunctionSetFunction(function, callbackPtr)
+
+		localInitCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_local_init))
+		mapping.TableFunctionSetLocalInit(function, localInitCallbackPtr)
 
 		config = tableFunc.Config
 		if tableFunc.BindArguments == nil {
@@ -454,8 +487,8 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 			return getError(errAPI, errTableUDFArgumentIsNil)
 		}
 		logicalType := t.logicalType()
-		C.duckdb_table_function_add_parameter(function, logicalType)
-		C.duckdb_destroy_logical_type(&logicalType)
+		mapping.TableFunctionAddParameter(function, logicalType)
+		mapping.DestroyLogicalType(&logicalType)
 	}
 
 	// Set the named arguments.
@@ -464,18 +497,16 @@ func RegisterTableUDF[TFT TableFunction](c *sql.Conn, name string, f TFT) error 
 			return getError(errAPI, errTableUDFArgumentIsNil)
 		}
 		logicalType := t.logicalType()
-		cArg := C.CString(arg)
-		C.duckdb_table_function_add_named_parameter(function, cArg, logicalType)
-		C.duckdb_destroy_logical_type(&logicalType)
-		C.duckdb_free(unsafe.Pointer(cArg))
+		mapping.TableFunctionAddNamedParameter(function, arg, logicalType)
+		mapping.DestroyLogicalType(&logicalType)
 	}
 
 	// Register the function on the underlying driver connection exposed by c.Raw.
-	err := c.Raw(func(driverConn any) error {
-		con := driverConn.(*Conn)
-		state := C.duckdb_register_table_function(con.duckdbCon, function)
-		C.duckdb_destroy_table_function(&function)
-		if state == C.DuckDBError {
+	err := conn.Raw(func(driverConn any) error {
+		c := driverConn.(*Conn)
+		state := mapping.RegisterTableFunction(c.conn, function)
+		mapping.DestroyTableFunction(&function)
+		if state == mapping.StateError {
 			return getError(errAPI, errTableUDFCreate)
 		}
 		return nil

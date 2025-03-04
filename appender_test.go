@@ -728,6 +728,37 @@ func TestAppenderDecimal(t *testing.T) {
 	require.Equal(t, 3, i)
 }
 
+func TestAppenderStrings(t *testing.T) {
+	c, db, conn, a := prepareAppender(t, `
+	CREATE TABLE test (str VARCHAR)`)
+	defer cleanupAppender(t, c, db, conn, a)
+
+	expected := []string{
+		"I am not an inlined string no no",
+		"I am",
+		"Who wants to be inlined anyways?",
+	}
+
+	require.NoError(t, a.AppendRow(expected[0]))
+	require.NoError(t, a.AppendRow(expected[1]))
+	require.NoError(t, a.AppendRow(expected[2]))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res, err := db.QueryContext(context.Background(), `SELECT str FROM test`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
+
+	i := 0
+	for res.Next() {
+		var str string
+		require.NoError(t, res.Scan(&str))
+		require.Equal(t, expected[i], str)
+		i++
+	}
+	require.Equal(t, 3, i)
+}
+
 var jsonInputs = [][]byte{
 	[]byte(`{"c1": 42, "l1": [1, 2, 3], "s1": {"a": 101, "b": ["hello", "world"]}, "l2": [{"a": [{"a": [4.2, 7.9]}]}]}`),
 	[]byte(`{"c1": null, "l1": [null, 2, null], "s1": {"a": null, "b": ["hello", null]}, "l2": [{"a": [{"a": [null, 7.9]}]}]}`),
