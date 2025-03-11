@@ -104,34 +104,20 @@ type (
 )
 
 var (
-	DateSetDays               = bindings.DateSetDays
-	DateStructGetYear         = bindings.DateStructGetYear
-	DateStructGetMonth        = bindings.DateStructGetMonth
-	DateStructGetDay          = bindings.DateStructGetDay
-	TimeGetMicros             = bindings.TimeGetMicros
-	TimeSetMicros             = bindings.TimeSetMicros
-	TimeStructGetHour         = bindings.TimeStructGetHour
-	TimeStructGetMinute       = bindings.TimeStructGetMinute
-	TimeStructGetSecond       = bindings.TimeStructGetSecond
-	TimeStructGetMicros       = bindings.TimeStructGetMicros
-	TimeTZStructGetTimeStruct = bindings.TimeTZStructGetTimeStruct
-	TimeTZStructGetOffset     = bindings.TimeTZStructGetOffset
-	TimestampGetMicros        = bindings.TimestampGetMicros
-	TimestampSetMicros        = bindings.TimestampSetMicros
-	IntervalGetMonths         = bindings.IntervalGetMonths
-	IntervalSetMonths         = bindings.IntervalSetMonths
-	IntervalGetDays           = bindings.IntervalGetDays
-	IntervalSetDays           = bindings.IntervalSetDays
-	IntervalGetMicros         = bindings.IntervalGetMicros
-	IntervalSetMicros         = bindings.IntervalSetMicros
-	HugeIntGetLower           = bindings.HugeIntGetLower
-	HugeIntSetLower           = bindings.HugeIntSetLower
-	HugeIntGetUpper           = bindings.HugeIntGetUpper
-	HugeIntSetUpper           = bindings.HugeIntSetUpper
-	ListEntryGetOffset        = bindings.ListEntryGetOffset
-	ListEntrySetOffset        = bindings.ListEntrySetOffset
-	ListEntryGetLength        = bindings.ListEntryGetLength
-	ListEntrySetLength        = bindings.ListEntrySetLength
+	NewDate             = bindings.NewDate
+	DateStructMembers   = bindings.DateStructMembers
+	NewTime             = bindings.NewTime
+	TimeMembers         = bindings.TimeMembers
+	TimeStructMembers   = bindings.TimeStructMembers
+	TimeTZStructMembers = bindings.TimeTZStructMembers
+	NewTimestamp        = bindings.NewTimestamp
+	TimestampMembers    = bindings.TimestampMembers
+	NewInterval         = bindings.NewInterval
+	IntervalMembers     = bindings.IntervalMembers
+	NewHugeInt          = bindings.NewHugeInt
+	HugeIntMembers      = bindings.HugeIntMembers
+	NewListEntry        = bindings.NewListEntry
+	ListEntryMembers    = bindings.ListEntryMembers
 )
 
 // Pointers
