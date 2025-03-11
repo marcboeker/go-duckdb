@@ -61,32 +61,31 @@ func (u *UUID) String() string {
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
-func hugeIntToUUID(hugeInt mapping.HugeInt) []byte {
+func hugeIntToUUID(hugeInt *mapping.HugeInt) []byte {
 	// Flip the sign bit of the signed hugeint to transform it to UUID bytes.
 	var val [uuidLength]byte
-	binary.BigEndian.PutUint64(val[:8], uint64(mapping.HugeIntGetUpper(&hugeInt))^1<<63)
-	binary.BigEndian.PutUint64(val[8:], mapping.HugeIntGetLower(&hugeInt))
+	lower, upper := mapping.HugeIntMembers(hugeInt)
+	binary.BigEndian.PutUint64(val[:8], uint64(upper)^1<<63)
+	binary.BigEndian.PutUint64(val[8:], lower)
 	return val[:]
 }
 
-func uuidToHugeInt(uuid UUID) mapping.HugeInt {
-	var hugeInt mapping.HugeInt
-	upper := binary.BigEndian.Uint64(uuid[:8])
-
+func uuidToHugeInt(uuid UUID) *mapping.HugeInt {
 	// Flip the sign bit.
-	mapping.HugeIntSetUpper(&hugeInt, int64(upper^(1<<63)))
-	mapping.HugeIntSetLower(&hugeInt, binary.BigEndian.Uint64(uuid[8:]))
-	return hugeInt
+	lower := binary.BigEndian.Uint64(uuid[8:])
+	upper := binary.BigEndian.Uint64(uuid[:8])
+	return mapping.NewHugeInt(lower, int64(upper^(1<<63)))
 }
 
-func hugeIntToNative(hugeInt mapping.HugeInt) *big.Int {
-	i := big.NewInt(mapping.HugeIntGetUpper(&hugeInt))
+func hugeIntToNative(hugeInt *mapping.HugeInt) *big.Int {
+	lower, upper := mapping.HugeIntMembers(hugeInt)
+	i := big.NewInt(upper)
 	i.Lsh(i, 64)
-	i.Add(i, new(big.Int).SetUint64(mapping.HugeIntGetLower(&hugeInt)))
+	i.Add(i, new(big.Int).SetUint64(lower))
 	return i
 }
 
-func hugeIntFromNative(i *big.Int) (mapping.HugeInt, error) {
+func hugeIntFromNative(i *big.Int) (*mapping.HugeInt, error) {
 	d := big.NewInt(1)
 	d.Lsh(d, 64)
 
@@ -95,13 +94,10 @@ func hugeIntFromNative(i *big.Int) (mapping.HugeInt, error) {
 	q.DivMod(i, d, r)
 
 	if !q.IsInt64() {
-		return mapping.HugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
+		return nil, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
 	}
 
-	var hugeInt mapping.HugeInt
-	mapping.HugeIntSetUpper(&hugeInt, q.Int64())
-	mapping.HugeIntSetLower(&hugeInt, r.Uint64())
-	return hugeInt, nil
+	return mapping.NewHugeInt(r.Uint64(), q.Int64()), nil
 }
 
 type Map map[any]any
@@ -130,12 +126,8 @@ type Interval struct {
 	Micros int64 `json:"micros"`
 }
 
-func (i *Interval) getMappedInterval() mapping.Interval {
-	var interval mapping.Interval
-	mapping.IntervalSetMonths(&interval, i.Months)
-	mapping.IntervalSetDays(&interval, i.Days)
-	mapping.IntervalSetMicros(&interval, i.Micros)
-	return interval
+func (i *Interval) getMappedInterval() *mapping.Interval {
+	return mapping.NewInterval(i.Months, i.Days, i.Micros)
 }
 
 // Use as the `Scanner` type for any composite types (maps, lists, structs)
@@ -237,25 +229,22 @@ func getTSTicks[T any](t Type, val T) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getMappedTimestamp[T any](t Type, val T) (mapping.Timestamp, error) {
-	var ts mapping.Timestamp
+func getMappedTimestamp[T any](t Type, val T) (*mapping.Timestamp, error) {
 	ticks, err := getTSTicks(t, val)
 	if err != nil {
-		return ts, err
+		return nil, err
 	}
 
-	mapping.TimestampSetMicros(&ts, ticks)
-	return ts, nil
+	return mapping.NewTimestamp(ticks), nil
 }
 
-func getMappedDate[T any](val T) (mapping.Date, error) {
-	var date mapping.Date
+func getMappedDate[T any](val T) (*mapping.Date, error) {
 	ti, err := castToTime(val)
 	if err != nil {
-		return date, err
+		return nil, err
 	}
 
-	mapping.DateSetDays(&date, int32(ti.Unix()/secondsPerDay))
+	date := mapping.NewDate(int32(ti.Unix() / secondsPerDay))
 	return date, nil
 }
 

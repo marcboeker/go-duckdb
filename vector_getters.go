@@ -25,86 +25,82 @@ func getPrimitive[T any](vec *vector, rowIdx mapping.IdxT) T {
 
 func (vec *vector) getTS(t Type, rowIdx mapping.IdxT) time.Time {
 	val := getPrimitive[mapping.Timestamp](vec, rowIdx)
-	return getTS(t, val)
+	return getTS(t, &val)
 }
 
-func getTS(t Type, ts mapping.Timestamp) time.Time {
+func getTS(t Type, ts *mapping.Timestamp) time.Time {
 	switch t {
 	case TYPE_TIMESTAMP:
-		return time.UnixMicro(mapping.TimestampGetMicros(&ts)).UTC()
+		return time.UnixMicro(mapping.TimestampMembers(ts)).UTC()
 	case TYPE_TIMESTAMP_S:
-		return time.Unix(mapping.TimestampGetMicros(&ts), 0).UTC()
+		return time.Unix(mapping.TimestampMembers(ts), 0).UTC()
 	case TYPE_TIMESTAMP_MS:
-		return time.UnixMilli(mapping.TimestampGetMicros(&ts)).UTC()
+		return time.UnixMilli(mapping.TimestampMembers(ts)).UTC()
 	case TYPE_TIMESTAMP_NS:
-		return time.Unix(0, mapping.TimestampGetMicros(&ts)).UTC()
+		return time.Unix(0, mapping.TimestampMembers(ts)).UTC()
 	case TYPE_TIMESTAMP_TZ:
-		return time.UnixMicro(mapping.TimestampGetMicros(&ts)).UTC()
+		return time.UnixMicro(mapping.TimestampMembers(ts)).UTC()
 	}
 	return time.Time{}
 }
 
 func (vec *vector) getDate(rowIdx mapping.IdxT) time.Time {
 	date := getPrimitive[mapping.Date](vec, rowIdx)
-	return getDate(date)
+	return getDate(&date)
 }
 
-func getDate(date mapping.Date) time.Time {
-	d := mapping.FromDate(date)
-	year := int(mapping.DateStructGetYear(&d))
-	month := time.Month(mapping.DateStructGetMonth(&d))
-	day := int(mapping.DateStructGetDay(&d))
-	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+func getDate(date *mapping.Date) time.Time {
+	d := mapping.FromDate(*date)
+	year, month, day := mapping.DateStructMembers(&d)
+	return time.Date(int(year), time.Month(month), int(day), 0, 0, 0, 0, time.UTC)
 }
 
 func (vec *vector) getTime(rowIdx mapping.IdxT) time.Time {
 	switch vec.Type {
 	case TYPE_TIME:
 		val := getPrimitive[mapping.Time](vec, rowIdx)
-		return getTime(val)
+		return getTime(&val)
 	case TYPE_TIME_TZ:
 		ti := getPrimitive[mapping.TimeTZ](vec, rowIdx)
-		return getTimeTZ(ti)
+		return getTimeTZ(&ti)
 	}
 	return time.Time{}
 }
 
-func getTime(ti mapping.Time) time.Time {
-	micros := mapping.TimeGetMicros(&ti)
+func getTime(ti *mapping.Time) time.Time {
+	micros := mapping.TimeMembers(ti)
 	unix := time.UnixMicro(micros).UTC()
 	return time.Date(1, time.January, 1, unix.Hour(), unix.Minute(), unix.Second(), unix.Nanosecond(), time.UTC)
 }
 
-func getTimeTZ(ti mapping.TimeTZ) time.Time {
-	timeTZStruct := mapping.FromTimeTZ(ti)
-	timeStruct := mapping.TimeTZStructGetTimeStruct(&timeTZStruct)
-	offset := mapping.TimeTZStructGetOffset(&timeTZStruct)
+func getTimeTZ(ti *mapping.TimeTZ) time.Time {
+	timeTZStruct := mapping.FromTimeTZ(*ti)
+	timeStruct, offset := mapping.TimeTZStructMembers(&timeTZStruct)
 
 	// TIMETZ has microsecond precision.
-	nanos := int(mapping.TimeStructGetMicros(&timeStruct)) * 1000
-	hour := int(mapping.TimeStructGetHour(&timeStruct))
-	minute := int(mapping.TimeStructGetMinute(&timeStruct))
-	sec := int(mapping.TimeStructGetSecond(&timeStruct))
+	hour, minute, sec, micro := mapping.TimeStructMembers(&timeStruct)
+	nanos := int(micro) * 1000
 	loc := time.FixedZone("", int(offset))
-	return time.Date(1, time.January, 1, hour, minute, sec, nanos, loc).UTC()
+	return time.Date(1, time.January, 1, int(hour), int(minute), int(sec), nanos, loc).UTC()
 }
 
 func (vec *vector) getInterval(rowIdx mapping.IdxT) Interval {
 	interval := getPrimitive[mapping.Interval](vec, rowIdx)
-	return getInterval(interval)
+	return getInterval(&interval)
 }
 
-func getInterval(interval mapping.Interval) Interval {
+func getInterval(interval *mapping.Interval) Interval {
+	months, days, micros := mapping.IntervalMembers(interval)
 	return Interval{
-		Days:   mapping.IntervalGetDays(&interval),
-		Months: mapping.IntervalGetMonths(&interval),
-		Micros: mapping.IntervalGetMicros(&interval),
+		Days:   days,
+		Months: months,
+		Micros: micros,
 	}
 }
 
 func (vec *vector) getHugeint(rowIdx mapping.IdxT) *big.Int {
 	hugeInt := getPrimitive[mapping.HugeInt](vec, rowIdx)
-	return hugeIntToNative(hugeInt)
+	return hugeIntToNative(&hugeInt)
 }
 
 func (vec *vector) getBytes(rowIdx mapping.IdxT) any {
@@ -137,7 +133,7 @@ func (vec *vector) getDecimal(rowIdx mapping.IdxT) Decimal {
 		val = big.NewInt(v)
 	case TYPE_HUGEINT:
 		v := getPrimitive[mapping.HugeInt](vec, rowIdx)
-		val = hugeIntToNative(v)
+		val = hugeIntToNative(&v)
 	}
 	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
@@ -162,8 +158,7 @@ func (vec *vector) getEnum(rowIdx mapping.IdxT) string {
 
 func (vec *vector) getList(rowIdx mapping.IdxT) []any {
 	entry := getPrimitive[mapping.ListEntry](vec, rowIdx)
-	offset := mapping.ListEntryGetOffset(&entry)
-	length := mapping.ListEntryGetLength(&entry)
+	offset, length := mapping.ListEntryMembers(&entry)
 	return vec.getSliceChild(offset, length)
 }
 
