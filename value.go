@@ -34,22 +34,22 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 		return nil, unsupportedTypeError(typeToStringMap[t])
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
 		ts := mapping.GetTimestamp(v)
-		return getTS(t, ts), nil
+		return getTS(t, &ts), nil
 	case TYPE_DATE:
 		date := mapping.GetDate(v)
-		return getDate(date), nil
+		return getDate(&date), nil
 	case TYPE_TIME:
 		ti := mapping.GetTime(v)
-		return getTime(ti), nil
+		return getTime(&ti), nil
 	case TYPE_TIME_TZ:
 		ti := mapping.GetTimeTZ(v)
-		return getTimeTZ(ti), nil
+		return getTimeTZ(&ti), nil
 	case TYPE_INTERVAL:
 		interval := mapping.GetInterval(v)
-		return getInterval(interval), nil
+		return getInterval(&interval), nil
 	case TYPE_HUGEINT:
 		hugeInt := mapping.GetHugeInt(v)
-		return hugeIntToNative(hugeInt), nil
+		return hugeIntToNative(&hugeInt), nil
 	case TYPE_VARCHAR:
 		return mapping.GetVarchar(v), nil
 	default:

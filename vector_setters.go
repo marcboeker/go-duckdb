@@ -89,7 +89,7 @@ func setTS[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	if err != nil {
 		return err
 	}
-	setPrimitive(vec, rowIdx, ts)
+	setPrimitive(vec, rowIdx, *ts)
 	return nil
 }
 
@@ -98,7 +98,7 @@ func setDate[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	if err != nil {
 		return err
 	}
-	setPrimitive(vec, rowIdx, date)
+	setPrimitive(vec, rowIdx, *date)
 	return nil
 }
 
@@ -110,9 +110,8 @@ func setTime[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 
 	switch vec.Type {
 	case TYPE_TIME:
-		var ti mapping.Time
-		mapping.TimeSetMicros(&ti, ticks)
-		setPrimitive(vec, rowIdx, ti)
+		ti := mapping.NewTime(ticks)
+		setPrimitive(vec, rowIdx, *ti)
 	case TYPE_TIME_TZ:
 		// The UTC offset is 0.
 		ti := mapping.CreateTimeTZ(ticks, 0)
@@ -129,47 +128,36 @@ func setInterval[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(i).String())
 	}
-	var interval mapping.Interval
-	mapping.IntervalSetMonths(&interval, i.Months)
-	mapping.IntervalSetDays(&interval, i.Days)
-	mapping.IntervalSetMicros(&interval, i.Micros)
-	setPrimitive(vec, rowIdx, interval)
+	interval := mapping.NewInterval(i.Months, i.Days, i.Micros)
+	setPrimitive(vec, rowIdx, *interval)
 	return nil
 }
 
 func setHugeint[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	var err error
-	var fv mapping.HugeInt
+	var fv *mapping.HugeInt
 	switch v := any(val).(type) {
 	case uint8:
-		mapping.HugeIntSetLower(&fv, uint64(v))
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(uint64(v), 0)
 	case int8:
-		mapping.HugeIntSetLower(&fv, uint64(v))
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(uint64(v), 0)
 	case uint16:
-		mapping.HugeIntSetLower(&fv, uint64(v))
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(uint64(v), 0)
 	case int16:
-		mapping.HugeIntSetLower(&fv, uint64(v))
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(uint64(v), 0)
 	case uint32:
-		mapping.HugeIntSetLower(&fv, uint64(v))
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(uint64(v), 0)
 	case int32:
-		mapping.HugeIntSetLower(&fv, uint64(v))
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(uint64(v), 0)
 	case uint64:
-		mapping.HugeIntSetLower(&fv, v)
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(v, 0)
 	case int64:
 		fv, err = hugeIntFromNative(big.NewInt(v))
 		if err != nil {
 			return err
 		}
 	case uint:
-		mapping.HugeIntSetLower(&fv, uint64(v))
-		mapping.HugeIntSetUpper(&fv, 0)
+		fv = mapping.NewHugeInt(uint64(v), 0)
 	case int:
 		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
 		if err != nil {
@@ -202,7 +190,7 @@ func setHugeint[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
 	}
-	setPrimitive(vec, rowIdx, fv)
+	setPrimitive(vec, rowIdx, *fv)
 	return nil
 }
 
@@ -274,10 +262,8 @@ func setList[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 
 	// Set the offset and length of the list vector using the current size of the child vector.
 	childVectorSize := mapping.ListVectorGetSize(vec.vec)
-	var listEntry mapping.ListEntry
-	mapping.ListEntrySetOffset(&listEntry, uint64(childVectorSize))
-	mapping.ListEntrySetLength(&listEntry, uint64(len(list)))
-	setPrimitive(vec, rowIdx, listEntry)
+	listEntry := mapping.NewListEntry(uint64(childVectorSize), uint64(len(list)))
+	setPrimitive(vec, rowIdx, *listEntry)
 
 	newLength := mapping.IdxT(len(list)) + childVectorSize
 	vec.resizeListVector(newLength)
@@ -420,7 +406,7 @@ func setUUID[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(uuid).String())
 	}
 	hi := uuidToHugeInt(uuid)
-	setPrimitive(vec, rowIdx, hi)
+	setPrimitive(vec, rowIdx, *hi)
 	return nil
 }
 

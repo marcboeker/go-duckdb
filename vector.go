@@ -513,7 +513,7 @@ func (vec *vector) initUUID() {
 			return nil
 		}
 		hugeInt := getPrimitive[mapping.HugeInt](vec, rowIdx)
-		return hugeIntToUUID(hugeInt)
+		return hugeIntToUUID(&hugeInt)
 	}
 	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
 		if val == nil || val == (*UUID)(nil) {
