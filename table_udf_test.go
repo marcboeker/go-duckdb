@@ -717,6 +717,29 @@ func TestErrTableUDFUnsupportedType(t *testing.T) {
 	}
 }
 
+func TestTableUDFAggregate(t *testing.T) {
+	db := openDbWrapper(t, `?access_mode=READ_WRITE`)
+	defer closeDbWrapper(t, db)
+
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
+
+	var udf incTableUDF
+	err := RegisterTableUDF(conn, "increment", udf.GetFunction())
+	require.NoError(t, err)
+
+	r, err := db.QueryContext(context.Background(), `SELECT COUNT() FROM increment(100)`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, r)
+
+	for r.Next() {
+		var count uint64
+		err = r.Scan(&count)
+		require.NoError(t, err)
+		require.Equal(t, uint64(100), count)
+	}
+}
+
 func BenchmarkRowTableUDF(b *testing.B) {
 	b.StopTimer()
 	db := openDbWrapper(b, `?access_mode=READ_WRITE`)
