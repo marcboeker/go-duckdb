@@ -167,11 +167,18 @@ type (
 	}
 )
 
+func isRowIdColumn(i mapping.IdxT) bool {
+	// FIXME: Replace this with mapping.IsRowIdColumn(i), once available in the C API.
+	return i == 18446744073709551615
+}
+
 func (tfd *tableFunctionData) setColumnCount(info mapping.InitInfo) {
 	count := mapping.InitGetColumnCount(info)
 	for i := mapping.IdxT(0); i < count; i++ {
 		srcPos := mapping.InitGetColumnIndex(info, i)
-		tfd.projection[int(srcPos)] = int(i)
+		if !isRowIdColumn(srcPos) {
+			tfd.projection[int(srcPos)] = int(i)
+		}
 	}
 }
 
