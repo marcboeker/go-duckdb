@@ -168,7 +168,7 @@ type (
 )
 
 func isRowIdColumn(i mapping.IdxT) bool {
-	// FIXME: Replace this with mapping.IsRowIdColumn(i), once available in the C API.
+	// FIXME: Replace this with mapping.IsRowIdColumn(i) / virtual column changes, once available in the C API.
 	return i == 18446744073709551615
 }
 
@@ -176,6 +176,8 @@ func (tfd *tableFunctionData) setColumnCount(info mapping.InitInfo) {
 	count := mapping.InitGetColumnCount(info)
 	for i := mapping.IdxT(0); i < count; i++ {
 		srcPos := mapping.InitGetColumnIndex(info, i)
+		// FIXME: Special-case, should just work post duckdb v1.3.0.
+		// See: https://github.com/duckdb/duckdb/pull/16248
 		if !isRowIdColumn(srcPos) {
 			tfd.projection[int(srcPos)] = int(i)
 		}
