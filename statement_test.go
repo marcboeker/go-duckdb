@@ -231,7 +231,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 	closeRowsWrapper(t, res)
 	closePreparedWrapper(t, prepared)
 
-	// Access the raw connection & statement.
+	// Access the raw connection and statement.
 	err = conn.Raw(func(driverConn interface{}) error {
 		innerConn := driverConn.(*Conn)
 		s, innerErr := innerConn.PrepareContext(context.Background(), `INSERT INTO foo VALUES ($bar, $baz)`)
@@ -263,17 +263,11 @@ func TestPrepareQueryNamed(t *testing.T) {
 		require.Equal(t, TYPE_INVALID, paramType)
 
 		paramType, innerErr = stmt.ParamType(1)
-		// Will be fixed in the next release.
-		// https://github.com/duckdb/duckdb/pull/14952
-		// require.Equal(t, TYPE_VARCHAR, paramType)
-		require.Equal(t, TYPE_INVALID, paramType)
+		require.Equal(t, TYPE_VARCHAR, paramType)
 		require.NoError(t, innerErr)
 
 		paramType, innerErr = stmt.ParamType(2)
-		// Will be fixed in the next release.
-		// https://github.com/duckdb/duckdb/pull/14952
-		// require.Equal(t, TYPE_INTEGER, paramType)
-		require.Equal(t, TYPE_INVALID, paramType)
+		require.Equal(t, TYPE_INTEGER, paramType)
 		require.NoError(t, innerErr)
 
 		paramType, innerErr = stmt.ParamType(3)
