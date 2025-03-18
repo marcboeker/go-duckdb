@@ -16,9 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-/* ------------------------------------------ */
-/* -------- Open and Close Wrappers --------- */
-/* ------------------------------------------ */
+/* ---------- Open and Close Wrappers ---------- */
 
 func openDbWrapper[T require.TestingT](t T, dsn string) *sql.DB {
 	db, err := sql.Open(`duckdb`, dsn)
@@ -100,9 +98,7 @@ func closeAppenderWrapper[T require.TestingT](t T, a *Appender) {
 	require.NoError(t, a.Close())
 }
 
-/* ------------------------------------------ */
-/* -------------- Test Helpers -------------- */
-/* ------------------------------------------ */
+/* ---------- Test Helpers ---------- */
 
 func createTable(t *testing.T, db *sql.DB, query string) {
 	res, err := db.Exec(query)
@@ -117,13 +113,9 @@ func checkIsMemory(t *testing.T, db *sql.DB) {
 	require.True(t, res.Next())
 }
 
-/* ------------------------------------------ */
-/* ------------------ Tests ----------------- */
-/* ------------------------------------------ */
+/* ---------- Tests ---------- */
 
 func TestOpen(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	t.Run("without config", func(t *testing.T) {
 		db := openDbWrapper(t, ``)
 		defer closeDbWrapper(t, db)
@@ -158,18 +150,19 @@ func TestOpen(t *testing.T) {
 		checkIsMemory(t, db)
 
 		var threads int64
-		r := db.QueryRow(`SELECT current_setting('threads')`)
-		require.NoError(t, r.Scan(&threads))
+		res := db.QueryRow(`SELECT current_setting('threads')`)
+		require.NoError(t, res.Scan(&threads))
 		require.Equal(t, int64(4), threads)
 	})
 }
 
 func TestConnectorBootQueries(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	t.Run("README connector example", func(t *testing.T) {
 		db := openDbWrapper(t, `foo.db`)
 		closeDbWrapper(t, db)
+		defer func() {
+			require.NoError(t, os.Remove(`foo.db`))
+		}()
 
 		c := newConnectorWrapper(t, `foo.db?access_mode=read_only&threads=4`, func(execer driver.ExecerContext) error {
 			bootQueries := []string{
@@ -184,13 +177,11 @@ func TestConnectorBootQueries(t *testing.T) {
 		})
 		defer closeConnectorWrapper(t, c)
 		db = sql.OpenDB(c)
-		closeDbWrapper(t, db)
-		require.NoError(t, os.Remove(`foo.db`))
+		defer closeDbWrapper(t, db)
 	})
 }
 
 func TestConnector_Close(t *testing.T) {
-	defer VerifyAllocationCounters()
 	c := newConnectorWrapper(t, ``, nil)
 	// Multiple close calls must not cause panics or errors.
 	closeConnectorWrapper(t, c)
@@ -243,8 +234,6 @@ func ExampleNewConnector() {
 }
 
 func TestConnPool(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -276,8 +265,6 @@ func TestConnPool(t *testing.T) {
 }
 
 func TestConnInit(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	c := newConnectorWrapper(t, ``, func(execer driver.ExecerContext) error {
 		return nil
 	})
@@ -317,15 +304,12 @@ func TestConnInit(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
-	defer VerifyAllocationCounters()
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 }
 
 func TestQuery(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
@@ -396,8 +380,6 @@ func TestQuery(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -428,8 +410,6 @@ func TestJSON(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -442,8 +422,6 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestTypeNamesAndScanTypes(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	tests := []struct {
 		sql      string
 		value    any
@@ -654,8 +632,6 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 }
 
 func TestMultipleStatements(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -747,8 +723,6 @@ func TestMultipleStatements(t *testing.T) {
 }
 
 func TestParquetExtension(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -775,8 +749,6 @@ func TestParquetExtension(t *testing.T) {
 }
 
 func TestQueryTimeout(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 

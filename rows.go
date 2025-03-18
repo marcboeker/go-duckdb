@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // rows is a helper struct for scanning a duckdb result.
@@ -15,34 +17,35 @@ type rows struct {
 	// stmt is a pointer to the stmt of which we are scanning the result.
 	stmt *Stmt
 	// res is the result of stmt.
-	res apiResult
+	res mapping.Result
 	// chunk holds the currently active data chunk.
 	chunk DataChunk
 	// closeChunk is true after the first iteration of Next.
 	closeChunk bool
 	// chunkCount is the number of chunks in the result.
-	chunkCount uint64
+	chunkCount mapping.IdxT
 	// chunkIdx is the chunk index in the result.
-	chunkIdx uint64
+	chunkIdx mapping.IdxT
 	// rowCount is the number of scanned rows.
 	rowCount int
 }
 
-func newRowsWithStmt(res apiResult, stmt *Stmt) *rows {
-	columnCount := apiColumnCount(&res)
+func newRowsWithStmt(res mapping.Result, stmt *Stmt) *rows {
+	columnCount := mapping.ColumnCount(&res)
 	r := rows{
 		res:        res,
 		stmt:       stmt,
 		chunk:      DataChunk{},
-		chunkCount: apiResultChunkCount(res),
+		chunkCount: mapping.ResultChunkCount(res),
 		chunkIdx:   0,
 		rowCount:   0,
 	}
 
-	for i := uint64(0); i < columnCount; i++ {
-		columnName := apiColumnName(&res, i)
+	for i := mapping.IdxT(0); i < columnCount; i++ {
+		columnName := mapping.ColumnName(&res, mapping.IdxT(i))
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
+
 	return &r
 }
 
@@ -59,9 +62,9 @@ func (r *rows) Next(dst []driver.Value) error {
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
-		apiChunk := apiResultGetChunk(r.res, r.chunkIdx)
+		chunk := mapping.ResultGetChunk(r.res, r.chunkIdx)
 		r.closeChunk = true
-		if err := r.chunk.initFromDuckDataChunk(apiChunk, false); err != nil {
+		if err := r.chunk.initFromDuckDataChunk(chunk, false); err != nil {
 			return getError(err, nil)
 		}
 
@@ -76,14 +79,14 @@ func (r *rows) Next(dst []driver.Value) error {
 			return err
 		}
 	}
-
 	r.rowCount++
+
 	return nil
 }
 
 // ColumnTypeScanType implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	t := Type(apiColumnType(&r.res, uint64(index)))
+	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
 	switch t {
 	case TYPE_INVALID:
 		return nil
@@ -138,12 +141,12 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	t := Type(apiColumnType(&r.res, uint64(index)))
+	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
 	switch t {
 	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
 		// Only allocate the logical type if necessary.
-		logicalType := apiColumnLogicalType(&r.res, uint64(index))
-		defer apiDestroyLogicalType(&logicalType)
+		logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
+		defer mapping.DestroyLogicalType(&logicalType)
 		return logicalTypeName(logicalType)
 	default:
 		return typeToStringMap[t]
@@ -154,7 +157,7 @@ func (r *rows) Close() error {
 	if r.closeChunk {
 		r.chunk.close()
 	}
-	apiDestroyResult(&r.res)
+	mapping.DestroyResult(&r.res)
 
 	var err error
 	if r.stmt != nil {
@@ -164,11 +167,12 @@ func (r *rows) Close() error {
 		}
 		r.stmt = nil
 	}
+
 	return err
 }
 
-func logicalTypeName(logicalType apiLogicalType) string {
-	t := Type(apiGetTypeId(logicalType))
+func logicalTypeName(logicalType mapping.LogicalType) string {
+	t := Type(mapping.GetTypeId(logicalType))
 	switch t {
 	case TYPE_DECIMAL:
 		return logicalTypeNameDecimal(logicalType)
@@ -188,52 +192,54 @@ func logicalTypeName(logicalType apiLogicalType) string {
 	}
 }
 
-func logicalTypeNameDecimal(logicalType apiLogicalType) string {
-	width := apiDecimalWidth(logicalType)
-	scale := apiDecimalScale(logicalType)
+func logicalTypeNameDecimal(logicalType mapping.LogicalType) string {
+	width := mapping.DecimalWidth(logicalType)
+	scale := mapping.DecimalScale(logicalType)
 	return fmt.Sprintf("DECIMAL(%d,%d)", int(width), int(scale))
 }
 
-func logicalTypeNameList(logicalType apiLogicalType) string {
-	childType := apiListTypeChildType(logicalType)
-	defer apiDestroyLogicalType(&childType)
+func logicalTypeNameList(logicalType mapping.LogicalType) string {
+	childType := mapping.ListTypeChildType(logicalType)
+	defer mapping.DestroyLogicalType(&childType)
 	childName := logicalTypeName(childType)
 	return fmt.Sprintf("%s[]", childName)
 }
 
-func logicalTypeNameStruct(logicalType apiLogicalType) string {
-	count := apiStructTypeChildCount(logicalType)
+func logicalTypeNameStruct(logicalType mapping.LogicalType) string {
+	count := mapping.StructTypeChildCount(logicalType)
 	name := "STRUCT("
 
-	for i := uint64(0); i < count; i++ {
-		childName := apiStructTypeChildName(logicalType, i)
-		childType := apiStructTypeChildType(logicalType, i)
+	for i := mapping.IdxT(0); i < count; i++ {
+		childName := mapping.StructTypeChildName(logicalType, i)
+		childType := mapping.StructTypeChildType(logicalType, i)
 
 		// Add comma if not at the end of the list.
 		name += escapeStructFieldName(childName) + " " + logicalTypeName(childType)
 		if i != count-1 {
 			name += ", "
 		}
-		apiDestroyLogicalType(&childType)
+		mapping.DestroyLogicalType(&childType)
 	}
+
 	return name + ")"
 }
 
-func logicalTypeNameMap(logicalType apiLogicalType) string {
-	keyType := apiMapTypeKeyType(logicalType)
-	defer apiDestroyLogicalType(&keyType)
+func logicalTypeNameMap(logicalType mapping.LogicalType) string {
+	keyType := mapping.MapTypeKeyType(logicalType)
+	defer mapping.DestroyLogicalType(&keyType)
 
-	valueType := apiMapTypeValueType(logicalType)
-	defer apiDestroyLogicalType(&valueType)
+	valueType := mapping.MapTypeValueType(logicalType)
+	defer mapping.DestroyLogicalType(&valueType)
 
 	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(keyType), logicalTypeName(valueType))
 }
 
-func logicalTypeNameArray(logicalType apiLogicalType) string {
-	size := apiArrayTypeArraySize(logicalType)
-	childType := apiArrayTypeChildType(logicalType)
-	defer apiDestroyLogicalType(&childType)
+func logicalTypeNameArray(logicalType mapping.LogicalType) string {
+	size := mapping.ArrayTypeArraySize(logicalType)
+	childType := mapping.ArrayTypeChildType(logicalType)
+	defer mapping.DestroyLogicalType(&childType)
 	childName := logicalTypeName(childType)
+
 	return fmt.Sprintf("%s[%d]", childName, int(size))
 }
 

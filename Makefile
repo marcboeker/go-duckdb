@@ -7,20 +7,20 @@ test.examples:
 	go run examples/table_udf_parallel/main.go
 
 duplicate.mapping:
-	cp mapping.go mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:duckdb_use_lib:!duckdb_use_lib:g' mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:duckdb_use_static_lib:!duckdb_use_static_lib:g' mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:\|:\&:g' mapping_${OS_ARCH}.go
+	cp mapping/mapping.go mapping/mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' mapping/mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:duckdb_use_lib:!duckdb_use_lib:g' mapping/mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:duckdb_use_static_lib:!duckdb_use_static_lib:g' mapping/mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:\|:\&:g' mapping/mapping_${FILE_SUFFIX}.go
 
 duplicate.arrow.mapping:
-	cp arrow_mapping.go arrow_mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' arrow_mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:duckdb_use_lib:!duckdb_use_lib:g' arrow_mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:duckdb_use_static_lib:!duckdb_use_static_lib:g' arrow_mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:\|:\&:g' arrow_mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:(!:!:g' arrow_mapping_${OS_ARCH}.go && \
-  	sed -i '' 's:b):b:g' arrow_mapping_${OS_ARCH}.go
+	cp arrowmapping/arrow_mapping.go arrowmapping/arrow_mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:duckdb-go-bindings:duckdb-go-bindings/${OS_ARCH}:g' arrowmapping/arrow_mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:duckdb_use_lib:!duckdb_use_lib:g' arrowmapping/arrow_mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:duckdb_use_static_lib:!duckdb_use_static_lib:g' arrowmapping/arrow_mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:\|:\&:g' arrowmapping/arrow_mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:(!:!:g' arrowmapping/arrow_mapping_${FILE_SUFFIX}.go && \
+  	sed -i '' 's:b):b:g' arrowmapping/arrow_mapping_${FILE_SUFFIX}.go
 
 test.dynamic.lib:
 	mkdir dynamic-dir && \
@@ -31,6 +31,6 @@ test.dynamic.lib:
 test.static.lib.darwin.arm64:
 	mkdir static-dir && \
 	cd static-dir && \
-	curl -OL https://github.com/duckdb/duckdb/releases/download/v1.2.0/static-lib-osx-arm64.zip && \
+	curl -OL https://github.com/duckdb/duckdb/releases/download/${VERSION}/static-lib-osx-arm64.zip && \
 	unzip static-lib-osx-arm64.zip && \
 	cp libduckdb_bundle.a libduckdb.a

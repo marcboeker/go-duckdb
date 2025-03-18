@@ -190,7 +190,6 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 }
 
 func TestTypeInterface(t *testing.T) {
-	defer VerifyAllocationCounters()
 	testTypeInfos := getTypeInfos(t, true)
 
 	// Use each type as a child.
@@ -201,8 +200,6 @@ func TestTypeInterface(t *testing.T) {
 }
 
 func TestErrTypeInfo(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	var incorrectTypes []Type
 	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY)
 

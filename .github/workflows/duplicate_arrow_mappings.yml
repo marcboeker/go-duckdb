@@ -9,11 +9,11 @@ jobs:
       - name: Duplicate Arrow Mappings
         shell: bash
         run: |
-          make duplicate.arrow.mapping OS_ARCH=darwin-amd64
-          make duplicate.arrow.mapping OS_ARCH=darwin-arm64
-          make duplicate.arrow.mapping OS_ARCH=linux-amd64
-          make duplicate.arrow.mapping OS_ARCH=linux-arm64
-          make duplicate.arrow.mapping OS_ARCH=windows-amd64
+          make duplicate.arrow.mapping FILE_SUFFIX=darwin_amd64 OS_ARCH=darwin-amd64
+          make duplicate.arrow.mapping FILE_SUFFIX=darwin_arm64 OS_ARCH=darwin-arm64
+          make duplicate.arrow.mapping FILE_SUFFIX=linux_amd64 OS_ARCH=linux-amd64
+          make duplicate.arrow.mapping FILE_SUFFIX=linux_arm64 OS_ARCH=linux-arm64
+          make duplicate.arrow.mapping FILE_SUFFIX=windows_amd64 OS_ARCH=windows-amd64
       - name: Push Duplicated Arrow Mappings
         uses: stefanzweifel/git-auto-commit-action@v5
         with:

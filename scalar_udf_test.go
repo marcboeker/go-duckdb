@@ -169,8 +169,6 @@ func (*errExecSUDF) Executor() ScalarFuncExecutor {
 }
 
 func TestSimpleScalarUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -200,8 +198,6 @@ func TestSimpleScalarUDF(t *testing.T) {
 }
 
 func TestConstantScalarUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -231,8 +227,6 @@ func TestConstantScalarUDF(t *testing.T) {
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	typeInfos := getTypeInfos(t, false)
 	for _, info := range typeInfos {
 		func() {
@@ -264,8 +258,6 @@ func TestAllTypesScalarUDF(t *testing.T) {
 }
 
 func TestScalarUDFSet(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -292,8 +284,6 @@ func TestScalarUDFSet(t *testing.T) {
 }
 
 func TestVariadicScalarUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -331,8 +321,6 @@ func TestVariadicScalarUDF(t *testing.T) {
 }
 
 func TestANYScalarUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -370,8 +358,6 @@ func TestANYScalarUDF(t *testing.T) {
 }
 
 func TestErrScalarUDF(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -431,8 +417,6 @@ func TestErrScalarUDF(t *testing.T) {
 }
 
 func TestErrScalarUDFClosedConn(t *testing.T) {
-	defer VerifyAllocationCounters()
-
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 

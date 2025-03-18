@@ -6,12 +6,14 @@ import (
 	"database/sql/driver"
 	"errors"
 	"math/big"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // Conn holds a connection to a DuckDB database.
 // It implements the driver.Conn interface.
 type Conn struct {
-	conn   apiConnection
+	conn   mapping.Connection
 	closed bool
 	tx     bool
 }
@@ -44,6 +46,7 @@ func (conn *Conn) ExecContext(ctx context.Context, query string, args []driver.N
 	if errClose != nil {
 		return nil, errClose
 	}
+
 	return res, nil
 }
 
@@ -63,9 +66,9 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 		}
 		return nil, err
 	}
-
 	// We must close the prepared statement after closing the rows r.
 	prepared.closeOnRowsClose = true
+
 	return r, nil
 }
 
@@ -82,16 +85,16 @@ func (conn *Conn) Prepare(query string) (driver.Stmt, error) {
 		return nil, errors.Join(errPrepare, errClosedCon)
 	}
 
-	extractedStmts, count, err := conn.extractStmts(query)
+	stmts, count, err := conn.extractStmts(query)
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyExtracted(&extractedStmts)
-
+	defer mapping.DestroyExtracted(stmts)
 	if count != 1 {
 		return nil, errors.Join(errPrepare, errMissingPrepareContext)
 	}
-	return conn.prepareExtractedStmt(extractedStmts, 0)
+
+	return conn.prepareExtractedStmt(*stmts, 0)
 }
 
 // Begin is deprecated: Use BeginTx instead.
@@ -119,8 +122,8 @@ func (conn *Conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx
 	if _, err := conn.ExecContext(ctx, `BEGIN TRANSACTION`, nil); err != nil {
 		return nil, err
 	}
-
 	conn.tx = true
+
 	return &tx{conn}, nil
 }
 
@@ -131,36 +134,37 @@ func (conn *Conn) Close() error {
 		return errClosedCon
 	}
 	conn.closed = true
-	apiDisconnect(&conn.conn)
+	mapping.Disconnect(&conn.conn)
+
 	return nil
 }
 
-func (conn *Conn) extractStmts(query string) (apiExtractedStatements, uint64, error) {
-	var extractedStmts apiExtractedStatements
+func (conn *Conn) extractStmts(query string) (*mapping.ExtractedStatements, mapping.IdxT, error) {
+	var stmts mapping.ExtractedStatements
 
-	count := apiExtractStatements(conn.conn, query, &extractedStmts)
+	count := mapping.ExtractStatements(conn.conn, query, &stmts)
 	if count == 0 {
-		errMsg := apiExtractStatementsError(extractedStmts)
-		apiDestroyExtracted(&extractedStmts)
+		errMsg := mapping.ExtractStatementsError(stmts)
+		mapping.DestroyExtracted(&stmts)
 		if errMsg != "" {
-			return extractedStmts, 0, getDuckDBError(errMsg)
+			return nil, 0, getDuckDBError(errMsg)
 		}
-		return extractedStmts, 0, errEmptyQuery
+		return nil, 0, errEmptyQuery
 	}
-	return extractedStmts, count, nil
+
+	return &stmts, count, nil
 }
 
-func (conn *Conn) prepareExtractedStmt(extractedStmts apiExtractedStatements, i uint64) (*Stmt, error) {
-	var preparedStmt apiPreparedStatement
-	state := apiPrepareExtractedStatement(conn.conn, extractedStmts, i, &preparedStmt)
-
-	if apiState(state) == apiStateError {
-		err := getDuckDBError(apiPrepareError(preparedStmt))
-		apiDestroyPrepare(&preparedStmt)
+func (conn *Conn) prepareExtractedStmt(extractedStmts mapping.ExtractedStatements, i mapping.IdxT) (*Stmt, error) {
+	var stmt mapping.PreparedStatement
+	state := mapping.PrepareExtractedStatement(conn.conn, extractedStmts, i, &stmt)
+	if state == mapping.StateError {
+		err := getDuckDBError(mapping.PrepareError(stmt))
+		mapping.DestroyPrepare(&stmt)
 		return nil, err
 	}
 
-	return &Stmt{conn: conn, preparedStmt: &preparedStmt}, nil
+	return &Stmt{conn: conn, preparedStmt: &stmt}, nil
 }
 
 func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error) {
@@ -168,14 +172,14 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 		return nil, errClosedCon
 	}
 
-	extractedStmts, count, errExtract := conn.extractStmts(query)
+	stmts, count, errExtract := conn.extractStmts(query)
 	if errExtract != nil {
 		return nil, errExtract
 	}
-	defer apiDestroyExtracted(&extractedStmts)
+	defer mapping.DestroyExtracted(stmts)
 
-	for i := uint64(0); i < count-1; i++ {
-		preparedStmt, err := conn.prepareExtractedStmt(extractedStmts, i)
+	for i := mapping.IdxT(0); i < count-1; i++ {
+		preparedStmt, err := conn.prepareExtractedStmt(*stmts, i)
 		if err != nil {
 			return nil, err
 		}
@@ -190,5 +194,6 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 			return nil, closeErr
 		}
 	}
-	return conn.prepareExtractedStmt(extractedStmts, count-1)
+
+	return conn.prepareExtractedStmt(*stmts, count-1)
 }

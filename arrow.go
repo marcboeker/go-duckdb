@@ -65,6 +65,9 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/marcboeker/go-duckdb/arrowmapping"
+	"github.com/marcboeker/go-duckdb/mapping"
+
 	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/cdata"
@@ -82,10 +85,10 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	if !ok {
 		return nil, fmt.Errorf("not a duckdb driver connection")
 	}
-
 	if conn.closed {
 		return nil, errClosedCon
 	}
+
 	return &Arrow{conn: conn}, nil
 }
 
@@ -96,15 +99,15 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		return nil, errClosedCon
 	}
 
-	extractedStmts, size, errExtract := a.conn.extractStmts(query)
+	stmts, size, errExtract := a.conn.extractStmts(query)
 	if errExtract != nil {
 		return nil, errExtract
 	}
-	defer apiDestroyExtracted(&extractedStmts)
+	defer mapping.DestroyExtracted(stmts)
 
 	// Execute all statements without args, except the last one.
-	for i := uint64(0); i < size-1; i++ {
-		extractedStmt, err := a.conn.prepareExtractedStmt(extractedStmts, i)
+	for i := mapping.IdxT(0); i < size-mapping.IdxT(1); i++ {
+		extractedStmt, err := a.conn.prepareExtractedStmt(*stmts, i)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +121,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	}
 
 	// Prepare and execute the last statement with args.
-	stmt, err := a.conn.prepareExtractedStmt(extractedStmts, size-1)
+	stmt, err := a.conn.prepareExtractedStmt(*stmts, size-mapping.IdxT(1))
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +131,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyArrow(res)
+	defer arrowmapping.DestroyArrow(res)
 
 	sc, err := a.queryArrowSchema(res)
 	if err != nil {
@@ -142,7 +145,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		}
 	}()
 
-	rowCount := uint64(apiArrowRowCount(*res))
+	rowCount := uint64(arrowmapping.ArrowRowCount(*res))
 	var retrievedRows uint64
 	for retrievedRows < rowCount {
 		select {
@@ -159,23 +162,22 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		recs = append(recs, rec)
 		retrievedRows += uint64(rec.NumRows())
 	}
+
 	return array.NewRecordReader(sc, recs)
 }
 
 // queryArrowSchema fetches the internal arrow schema from the arrow result.
-func (a *Arrow) queryArrowSchema(res *apiArrow) (*arrow.Schema, error) {
+func (a *Arrow) queryArrowSchema(res *arrowmapping.Arrow) (*arrow.Schema, error) {
 	schema := C.calloc(1, C.sizeof_struct_ArrowSchema)
 	defer func() {
 		cdata.ReleaseCArrowSchema((*cdata.CArrowSchema)(schema))
 		C.free(schema)
 	}()
 
-	arrowSchema := apiArrowSchema{
+	arrowSchema := arrowmapping.ArrowSchema{
 		Ptr: unsafe.Pointer(&schema),
 	}
-
-	state := apiQueryArrowSchema(*res, &arrowSchema)
-	if apiState(state) == apiStateError {
+	if arrowmapping.QueryArrowSchema(*res, &arrowSchema) == mapping.StateError {
 		return nil, errors.New("duckdb_query_arrow_schema")
 	}
 
@@ -183,6 +185,7 @@ func (a *Arrow) queryArrowSchema(res *apiArrow) (*arrow.Schema, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: ImportCArrowSchema", err)
 	}
+
 	return sc, nil
 }
 
@@ -190,19 +193,17 @@ func (a *Arrow) queryArrowSchema(res *apiArrow) (*arrow.Schema, error) {
 //
 // This function can be called multiple time to get next chunks,
 // which will free the previous out_array.
-func (a *Arrow) queryArrowArray(res *apiArrow, sc *arrow.Schema) (arrow.Record, error) {
+func (a *Arrow) queryArrowArray(res *arrowmapping.Arrow, sc *arrow.Schema) (arrow.Record, error) {
 	arr := C.calloc(1, C.sizeof_struct_ArrowArray)
 	defer func() {
 		cdata.ReleaseCArrowArray((*cdata.CArrowArray)(arr))
 		C.free(arr)
 	}()
 
-	arrowArray := apiArrowArray{
+	arrowArray := arrowmapping.ArrowArray{
 		Ptr: unsafe.Pointer(&arr),
 	}
-
-	state := apiQueryArrowArray(*res, &arrowArray)
-	if apiState(state) == apiStateError {
+	if arrowmapping.QueryArrowArray(*res, &arrowArray) == mapping.StateError {
 		return nil, errors.New("duckdb_query_arrow_array")
 	}
 
@@ -214,7 +215,7 @@ func (a *Arrow) queryArrowArray(res *apiArrow, sc *arrow.Schema) (arrow.Record, 
 	return rec, nil
 }
 
-func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
+func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*arrowmapping.Arrow, error) {
 	if s.closed {
 		return nil, errClosedCon
 	}
@@ -222,13 +223,13 @@ func (a *Arrow) execute(s *Stmt, args []driver.NamedValue) (*apiArrow, error) {
 		return nil, err
 	}
 
-	var res apiArrow
-	state := apiExecutePreparedArrow(*s.preparedStmt, &res)
-	if apiState(state) == apiStateError {
-		errMsg := apiQueryArrowError(res)
-		apiDestroyArrow(&res)
+	var res arrowmapping.Arrow
+	if arrowmapping.ExecutePreparedArrow(*s.preparedStmt, &res) == mapping.StateError {
+		errMsg := arrowmapping.QueryArrowError(res)
+		arrowmapping.DestroyArrow(&res)
 		return nil, fmt.Errorf("failed to execute the prepared arrow: %v", errMsg)
 	}
+
 	return &res, nil
 }
 
@@ -241,6 +242,7 @@ func (a *Arrow) anyArgsToNamedArgs(args []any) []driver.NamedValue {
 	for i, arg := range args {
 		values[i] = arg
 	}
+
 	return argsToNamedArgs(values)
 }
 
@@ -251,22 +253,19 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 		return nil, errClosedCon
 	}
 
-	// duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow);
-
 	stream := C.calloc(1, C.sizeof_struct_ArrowArrayStream)
 	release = func() {
 		C.free(stream)
 	}
 	cdata.ExportRecordReader(reader, (*cdata.CArrowArrayStream)(stream))
 
-	arrowStream := apiArrowStream{
+	arrowStream := arrowmapping.ArrowStream{
 		Ptr: unsafe.Pointer(stream),
 	}
-
-	state := apiArrowScan(a.conn.conn, name, arrowStream)
-	if apiState(state) == apiStateError {
+	if arrowmapping.ArrowScan(a.conn.conn, name, arrowStream) == mapping.StateError {
 		release()
 		return nil, errors.New("duckdb_arrow_scan")
 	}
+
 	return release, nil
 }

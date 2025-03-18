@@ -6,45 +6,47 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-type StmtType apiStatementType
+type StmtType mapping.StatementType
 
 const (
-	STATEMENT_TYPE_INVALID      = StmtType(apiStatementTypeInvalid)
-	STATEMENT_TYPE_SELECT       = StmtType(apiStatementTypeSelect)
-	STATEMENT_TYPE_INSERT       = StmtType(apiStatementTypeInsert)
-	STATEMENT_TYPE_UPDATE       = StmtType(apiStatementTypeUpdate)
-	STATEMENT_TYPE_EXPLAIN      = StmtType(apiStatementTypeExplain)
-	STATEMENT_TYPE_DELETE       = StmtType(apiStatementTypeDelete)
-	STATEMENT_TYPE_PREPARE      = StmtType(apiStatementTypePrepare)
-	STATEMENT_TYPE_CREATE       = StmtType(apiStatementTypeCreate)
-	STATEMENT_TYPE_EXECUTE      = StmtType(apiStatementTypeExecute)
-	STATEMENT_TYPE_ALTER        = StmtType(apiStatementTypeAlter)
-	STATEMENT_TYPE_TRANSACTION  = StmtType(apiStatementTypeTransaction)
-	STATEMENT_TYPE_COPY         = StmtType(apiStatementTypeCopy)
-	STATEMENT_TYPE_ANALYZE      = StmtType(apiStatementTypeAnalyze)
-	STATEMENT_TYPE_VARIABLE_SET = StmtType(apiStatementTypeVariableSet)
-	STATEMENT_TYPE_CREATE_FUNC  = StmtType(apiStatementTypeCreateFunc)
-	STATEMENT_TYPE_DROP         = StmtType(apiStatementTypeDrop)
-	STATEMENT_TYPE_EXPORT       = StmtType(apiStatementTypeExport)
-	STATEMENT_TYPE_PRAGMA       = StmtType(apiStatementTypePragma)
-	STATEMENT_TYPE_VACUUM       = StmtType(apiStatementTypeVacuum)
-	STATEMENT_TYPE_CALL         = StmtType(apiStatementTypeCall)
-	STATEMENT_TYPE_SET          = StmtType(apiStatementTypeSet)
-	STATEMENT_TYPE_LOAD         = StmtType(apiStatementTypeLoad)
-	STATEMENT_TYPE_RELATION     = StmtType(apiStatementTypeRelation)
-	STATEMENT_TYPE_EXTENSION    = StmtType(apiStatementTypeExtension)
-	STATEMENT_TYPE_LOGICAL_PLAN = StmtType(apiStatementTypeLogicalPlan)
-	STATEMENT_TYPE_ATTACH       = StmtType(apiStatementTypeAttach)
-	STATEMENT_TYPE_DETACH       = StmtType(apiStatementTypeDetach)
-	STATEMENT_TYPE_MULTI        = StmtType(apiStatementTypeMulti)
+	STATEMENT_TYPE_INVALID      = StmtType(mapping.StatementTypeInvalid)
+	STATEMENT_TYPE_SELECT       = StmtType(mapping.StatementTypeSelect)
+	STATEMENT_TYPE_INSERT       = StmtType(mapping.StatementTypeInsert)
+	STATEMENT_TYPE_UPDATE       = StmtType(mapping.StatementTypeUpdate)
+	STATEMENT_TYPE_EXPLAIN      = StmtType(mapping.StatementTypeExplain)
+	STATEMENT_TYPE_DELETE       = StmtType(mapping.StatementTypeDelete)
+	STATEMENT_TYPE_PREPARE      = StmtType(mapping.StatementTypePrepare)
+	STATEMENT_TYPE_CREATE       = StmtType(mapping.StatementTypeCreate)
+	STATEMENT_TYPE_EXECUTE      = StmtType(mapping.StatementTypeExecute)
+	STATEMENT_TYPE_ALTER        = StmtType(mapping.StatementTypeAlter)
+	STATEMENT_TYPE_TRANSACTION  = StmtType(mapping.StatementTypeTransaction)
+	STATEMENT_TYPE_COPY         = StmtType(mapping.StatementTypeCopy)
+	STATEMENT_TYPE_ANALYZE      = StmtType(mapping.StatementTypeAnalyze)
+	STATEMENT_TYPE_VARIABLE_SET = StmtType(mapping.StatementTypeVariableSet)
+	STATEMENT_TYPE_CREATE_FUNC  = StmtType(mapping.StatementTypeCreateFunc)
+	STATEMENT_TYPE_DROP         = StmtType(mapping.StatementTypeDrop)
+	STATEMENT_TYPE_EXPORT       = StmtType(mapping.StatementTypeExport)
+	STATEMENT_TYPE_PRAGMA       = StmtType(mapping.StatementTypePragma)
+	STATEMENT_TYPE_VACUUM       = StmtType(mapping.StatementTypeVacuum)
+	STATEMENT_TYPE_CALL         = StmtType(mapping.StatementTypeCall)
+	STATEMENT_TYPE_SET          = StmtType(mapping.StatementTypeSet)
+	STATEMENT_TYPE_LOAD         = StmtType(mapping.StatementTypeLoad)
+	STATEMENT_TYPE_RELATION     = StmtType(mapping.StatementTypeRelation)
+	STATEMENT_TYPE_EXTENSION    = StmtType(mapping.StatementTypeExtension)
+	STATEMENT_TYPE_LOGICAL_PLAN = StmtType(mapping.StatementTypeLogicalPlan)
+	STATEMENT_TYPE_ATTACH       = StmtType(mapping.StatementTypeAttach)
+	STATEMENT_TYPE_DETACH       = StmtType(mapping.StatementTypeDetach)
+	STATEMENT_TYPE_MULTI        = StmtType(mapping.StatementTypeMulti)
 )
 
 // Stmt implements the driver.Stmt interface.
 type Stmt struct {
 	conn             *Conn
-	preparedStmt     *apiPreparedStatement
+	preparedStmt     *mapping.PreparedStatement
 	closeOnRowsClose bool
 	bound            bool
 	closed           bool
@@ -62,7 +64,7 @@ func (s *Stmt) Close() error {
 	}
 
 	s.closed = true
-	apiDestroyPrepare(s.preparedStmt)
+	mapping.DestroyPrepare(s.preparedStmt)
 	return nil
 }
 
@@ -72,7 +74,7 @@ func (s *Stmt) NumInput() int {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: NumInput after Close")
 	}
-	count := apiNParams(*s.preparedStmt)
+	count := mapping.NParams(*s.preparedStmt)
 	return int(count)
 }
 
@@ -85,12 +87,12 @@ func (s *Stmt) ParamName(n int) (string, error) {
 		return "", errUninitializedStmt
 	}
 
-	count := apiNParams(*s.preparedStmt)
+	count := mapping.NParams(*s.preparedStmt)
 	if n == 0 || n > int(count) {
 		return "", getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	name := apiParameterName(*s.preparedStmt, uint64(n))
+	name := mapping.ParameterName(*s.preparedStmt, mapping.IdxT(n))
 	return name, nil
 }
 
@@ -103,12 +105,12 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 		return TYPE_INVALID, errUninitializedStmt
 	}
 
-	count := apiNParams(*s.preparedStmt)
+	count := mapping.NParams(*s.preparedStmt)
 	if n == 0 || n > int(count) {
 		return TYPE_INVALID, getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	t := apiParamType(*s.preparedStmt, uint64(n))
+	t := mapping.ParamType(*s.preparedStmt, mapping.IdxT(n))
 	return Type(t), nil
 }
 
@@ -121,7 +123,7 @@ func (s *Stmt) StatementType() (StmtType, error) {
 		return STATEMENT_TYPE_INVALID, errUninitializedStmt
 	}
 
-	t := apiPreparedStatementType(*s.preparedStmt)
+	t := mapping.PreparedStatementType(*s.preparedStmt)
 	return StmtType(t), nil
 }
 
@@ -137,61 +139,60 @@ func (s *Stmt) Bind(args []driver.NamedValue) error {
 	return s.bind(args)
 }
 
-func (s *Stmt) bindHugeint(val *big.Int, n int) (apiState, error) {
+func (s *Stmt) bindHugeint(val *big.Int, n int) (mapping.State, error) {
 	hugeint, err := hugeIntFromNative(val)
 	if err != nil {
-		return apiStateError, err
+		return mapping.StateError, err
 	}
-	state := apiBindHugeInt(*s.preparedStmt, uint64(n+1), hugeint)
-	return apiState(state), nil
+	state := mapping.BindHugeInt(*s.preparedStmt, mapping.IdxT(n+1), *hugeint)
+	return state, nil
 }
 
-func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (apiState, error) {
-	ts, err := getAPITimestamp(t, val.Value)
+func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.State, error) {
+	ts, err := getMappedTimestamp(t, val.Value)
 	if err != nil {
-		return apiStateError, err
+		return mapping.StateError, err
 	}
-	state := apiBindTimestamp(*s.preparedStmt, uint64(n+1), ts)
-	return apiState(state), nil
+	state := mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), *ts)
+	return state, nil
 }
 
-func (s *Stmt) bindDate(val driver.NamedValue, n int) (apiState, error) {
-	date, err := getAPIDate(val.Value)
+func (s *Stmt) bindDate(val driver.NamedValue, n int) (mapping.State, error) {
+	date, err := getMappedDate(val.Value)
 	if err != nil {
-		return apiStateError, err
+		return mapping.StateError, err
 	}
-	state := apiBindDate(*s.preparedStmt, uint64(n+1), date)
-	return apiState(state), nil
+	state := mapping.BindDate(*s.preparedStmt, mapping.IdxT(n+1), *date)
+	return state, nil
 }
 
-func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (apiState, error) {
+func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (mapping.State, error) {
 	ticks, err := getTimeTicks(val.Value)
 	if err != nil {
-		return apiStateError, err
+		return mapping.StateError, err
 	}
 
 	if t == TYPE_TIME {
-		var ti apiTime
-		apiTimeSetMicros(&ti, ticks)
-		state := apiBindTime(*s.preparedStmt, uint64(n+1), ti)
-		return apiState(state), nil
+		ti := mapping.NewTime(ticks)
+		state := mapping.BindTime(*s.preparedStmt, mapping.IdxT(n+1), *ti)
+		return state, nil
 	}
 
 	// TYPE_TIME_TZ: The UTC offset is 0.
-	ti := apiCreateTimeTZ(ticks, 0)
-	v := apiCreateTimeTZValue(ti)
-	state := apiBindValue(*s.preparedStmt, uint64(n+1), v)
-	apiDestroyValue(&v)
-	return apiState(state), nil
+	ti := mapping.CreateTimeTZ(ticks, 0)
+	v := mapping.CreateTimeTZValue(ti)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), v)
+	mapping.DestroyValue(&v)
+	return state, nil
 }
 
-func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (apiState, error) {
+func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
 	t, err := s.ParamType(n + 1)
 	if err != nil {
-		return apiStateError, err
+		return mapping.StateError, err
 	}
 	if name, ok := unsupportedTypeToStringMap[t]; ok {
-		return apiStateError, addIndexToError(unsupportedTypeError(name), n+1)
+		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
 
 	switch t {
@@ -207,52 +208,52 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (apiState, error) 
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[t]
-		return apiStateError, addIndexToError(unsupportedTypeError(name), n+1)
+		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
-	return apiStateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+	return mapping.StateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
 }
 
-func (s *Stmt) bindValue(val driver.NamedValue, n int) (apiState, error) {
+func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	switch v := val.Value.(type) {
 	case bool:
-		return apiState(apiBindBoolean(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindBoolean(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int8:
-		return apiState(apiBindInt8(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindInt8(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int16:
-		return apiState(apiBindInt16(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindInt16(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int32:
-		return apiState(apiBindInt32(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindInt32(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int64:
-		return apiState(apiBindInt64(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindInt64(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int:
 		// int is at least 32 bits.
-		return apiState(apiBindInt64(*s.preparedStmt, uint64(n+1), int64(v))), nil
+		return mapping.BindInt64(*s.preparedStmt, mapping.IdxT(n+1), int64(v)), nil
 	case *big.Int:
 		return s.bindHugeint(v, n)
 	case Decimal:
 		// FIXME: implement NamedValueChecker to support custom data types.
 		name := typeToStringMap[TYPE_DECIMAL]
-		return apiStateError, addIndexToError(unsupportedTypeError(name), n+1)
+		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	case uint8:
-		return apiState(apiBindUInt8(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindUInt8(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case uint16:
-		return apiState(apiBindUInt16(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindUInt16(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case uint32:
-		return apiState(apiBindUInt32(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindUInt32(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case uint64:
-		return apiState(apiBindUInt64(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindUInt64(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case float32:
-		return apiState(apiBindFloat(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindFloat(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case float64:
-		return apiState(apiBindDouble(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindDouble(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case string:
-		return apiState(apiBindVarchar(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case []byte:
-		return apiState(apiBindBlob(*s.preparedStmt, uint64(n+1), v)), nil
+		return mapping.BindBlob(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case Interval:
-		return apiState(apiBindInterval(*s.preparedStmt, uint64(n+1), v.getAPIInterval())), nil
+		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), *v.getMappedInterval()), nil
 	case nil:
-		return apiState(apiBindNull(*s.preparedStmt, uint64(n+1))), nil
+		return mapping.BindNull(*s.preparedStmt, mapping.IdxT(n+1)), nil
 	}
 	return s.bindComplexValue(val, n)
 }
@@ -264,7 +265,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 
 	// relaxed length check allow for unused parameters.
 	for i := 0; i < s.NumInput(); i++ {
-		name := apiParameterName(*s.preparedStmt, uint64(i+1))
+		name := mapping.ParameterName(*s.preparedStmt, mapping.IdxT(i+1))
 
 		// fallback on index position
 		arg := args[i]
@@ -284,8 +285,8 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 		}
 
 		state, err := s.bindValue(arg, i)
-		if apiState(state) == apiStateError {
-			errMsg := apiPrepareError(*s.preparedStmt)
+		if state == mapping.StateError {
+			errMsg := mapping.PrepareError(*s.preparedStmt)
 			err = errors.Join(err, getDuckDBError(errMsg))
 			return errors.Join(errCouldNotBind, err)
 		}
@@ -307,9 +308,9 @@ func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyResult(res)
+	defer mapping.DestroyResult(res)
 
-	ra := apiValueInt64(res, 0, 0)
+	ra := mapping.ValueInt64(res, 0, 0)
 	return &result{ra}, nil
 }
 
@@ -331,9 +332,9 @@ func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer apiDestroyResult(res)
+	defer mapping.DestroyResult(res)
 
-	ra := apiValueInt64(res, 0, 0)
+	ra := mapping.ValueInt64(res, 0, 0)
 	return &result{ra}, nil
 }
 
@@ -377,7 +378,7 @@ func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
 
 // This method executes the query in steps and checks if context is cancelled before executing each step.
 // It uses Pending Result Interface C APIs to achieve this. Reference - https://duckdb.org/docs/api/c/api#pending-result-interface
-func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*apiResult, error) {
+func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*mapping.Result, error) {
 	if s.closed {
 		panic("database/sql/driver: misuse of duckdb driver: ExecContext or QueryContext after Close")
 	}
@@ -390,22 +391,21 @@ func (s *Stmt) execute(ctx context.Context, args []driver.NamedValue) (*apiResul
 	return s.executeBound(ctx)
 }
 
-func (s *Stmt) executeBound(ctx context.Context) (*apiResult, error) {
-	var pendingRes apiPendingResult
-	state := apiPendingPrepared(*s.preparedStmt, &pendingRes)
-	if apiState(state) == apiStateError {
-		dbErr := getDuckDBError(apiPendingError(pendingRes))
-		apiDestroyPending(&pendingRes)
+func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
+	var pendingRes mapping.PendingResult
+	if mapping.PendingPrepared(*s.preparedStmt, &pendingRes) == mapping.StateError {
+		dbErr := getDuckDBError(mapping.PendingError(pendingRes))
+		mapping.DestroyPending(&pendingRes)
 		return nil, dbErr
 	}
-	defer apiDestroyPending(&pendingRes)
+	defer mapping.DestroyPending(&pendingRes)
 
 	mainDoneCh := make(chan struct{})
 	bgDoneCh := make(chan struct{})
 	go func() {
 		select {
 		case <-ctx.Done():
-			apiInterrupt(s.conn.conn)
+			mapping.Interrupt(s.conn.conn)
 			close(bgDoneCh)
 			return
 		case <-mainDoneCh:
@@ -414,21 +414,21 @@ func (s *Stmt) executeBound(ctx context.Context) (*apiResult, error) {
 		}
 	}()
 
-	var res apiResult
-	state = apiExecutePending(pendingRes, &res)
+	var res mapping.Result
+	state := mapping.ExecutePending(pendingRes, &res)
 	close(mainDoneCh)
 	// also wait for background goroutine to finish
 	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
 	// it can cancel that query so need to wait for it to finish as well
 	<-bgDoneCh
-	if apiState(state) == apiStateError {
+	if state == mapping.StateError {
 		if ctx.Err() != nil {
-			apiDestroyResult(&res)
+			mapping.DestroyResult(&res)
 			return nil, ctx.Err()
 		}
 
-		err := getDuckDBError(apiResultError(&res))
-		apiDestroyResult(&res)
+		err := getDuckDBError(mapping.ResultError(&res))
+		mapping.DestroyResult(&res)
 		return nil, err
 	}
 	return &res, nil
