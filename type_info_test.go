@@ -200,8 +200,6 @@ func TestTypeInterface(t *testing.T) {
 }
 
 func TestErrTypeInfo(t *testing.T) {
-	t.Parallel()
-
 	var incorrectTypes []Type
 	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY)
 

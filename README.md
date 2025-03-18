@@ -1,13 +1,22 @@
-# Go SQL driver for [DuckDB](https://github.com/duckdb/duckdb)
+# Go SQL Driver For [DuckDB](https://github.com/duckdb/duckdb)
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
+
+Current DuckDB version: `v1.2.0`.
 
 ![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
 [![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb)
 
+```diff
+! Starting with v2.0.0, go-duckdb supports DuckDB v1.2.0.
+! Breaking changes are:
+! - Drops pre-built FreeBSD support.
+! - The Arrow dependency is now opt-in via -tags=duckdb_arrow
+```
+
 ## Installation
 
-```
+```sh
 go get github.com/marcboeker/go-duckdb
 ```
 
@@ -18,7 +27,7 @@ One method to do this is using msys64.
 To begin, install msys64 using their installer.
 Once you installed msys64, open a msys64 shell and run:
 
-```
+```sh
 pacman -S mingw-w64-ucrt-x86_64-gcc
 ```
 
@@ -61,22 +70,21 @@ That way, you can perform initialization steps in a callback function before ope
 Here's an example that configures some parameters when opening a database with `sql.OpenDB(connector)`.
 
 ```go
-connector, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
+c, err := duckdb.NewConnector("/path/to/foo.db?access_mode=read_only&threads=4", func(execer driver.ExecerContext) error {
     bootQueries := []string{
-        "SET schema=main",
-        "SET search_path=main",
+        `SET schema=main`,
+        `SET search_path=main`,
     }
-
     for _, query := range bootQueries {
         _, err = execer.ExecContext(context.Background(), query, nil)
         if err != nil {
-			return err
+            return err
         }
     }
     return nil
 })
-
-db := sql.OpenDB(connector)
+defer c.Close()
+db := sql.OpenDB(c)
 defer db.Close()
 ```
 
@@ -84,44 +92,57 @@ Please refer to the [database/sql](https://godoc.org/database/sql) documentation
 
 ## Linking DuckDB
 
-By default, `go-duckdb` statically links pre-build DuckDB libraries into your binary.
+By default, `go-duckdb` statically links pre-built DuckDB libraries into your binary.
 Statically linking DuckDB increases your binary size.
 
 `go-duckdb` bundles the following pre-compiled static libraries.
-However, due to GitHub file size restrictions (100MB) and Go repository size limitations (500MB), these might change in the future.
 - MacOS: amd64, arm64.
 - Linux: amd64, arm64.
-- FreeBSD: amd64.
 - Windows: amd64.
 
-### Linking a custom static library
+### Linking a Static Library
 
-If none of the pre-build libraries satisfy your needs, you can build a custom static library; see `deps.yaml`.
+If none of the pre-built libraries satisfy your needs, you can build a custom static library.
 
-*Note: The DuckDB team is currently working on deploying pre-built static libraries as part of their releases and nightly builds.
-Once available, you can also download these libraries. They bundle the default extensions for duckdb releases.*
+1. Clone and build the DuckDB source code.
+   - Use their `bundle-library` Makefile target (e.g., `make bundle-library`).
+   - Common build flags are: `DUCKDB_PLATFORM=any BUILD_EXTENSIONS="icu;json;parquet;autocomplete"`.
+   - See DuckDB's [development](https://github.com/duckdb/duckdb#development) instructions for more details.
+2. Link against the resulting static library, which you can find in: `duckdb/build/release/libduckdb_bundle.a`.
 
-Once a static library (`libduckdb_bundle.a`) is available, you can build your project like this.
+For Darwin ARM64, you can then build your module like so:
+```sh
+CGO_ENABLED=1 CPPFLAGS="-DDUCKDB_STATIC_BUILD" CGO_LDFLAGS="-lduckdb_bundle -lc++ -L/path/to/libs" go build -tags=duckdb_use_static_lib
 ```
-CGO_LDFLAGS="-lc++ -lduckdb_bundle -L/path/to/folder/with/lib" go build -tags=duckdb_use_static_lib
-```
 
-### Dynamic linking
+You can also find these steps in the `Makefile` and the `tests.yaml`.
+The DuckDB team also publishes some pre-built bundled libraries as part of their [releases](https://github.com/duckdb/duckdb/releases).
+
+#### Note on FreeBSD
+
+Starting with `v2`, go-duckdb drops pre-built FreeBSD support.
+This change is because DuckDB does not publish any bundled FreeBSD libraries.
+Thus, you must build your static library for FreeBSD using the steps above.
+
+### Linking a Dynamic Library
 
 Alternatively, you can dynamically link DuckDB by passing `-tags=duckdb_use_lib` to `go build`.
 You must have a copy of `libduckdb` available on your system (`.so` on Linux or `.dylib` on macOS), 
 which you can download from the DuckDB [releases page](https://github.com/duckdb/duckdb/releases).
+
 For example:
 
 ```sh
 # On Linux.
-CGO_ENABLED=1 CGO_LDFLAGS="-L/path/to/libs" go build -tags=duckdb_use_lib main.go
+CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L/path/to/libs" go build -tags=duckdb_use_lib main.go
 LD_LIBRARY_PATH=/path/to/libs ./main
 
-# On macOS.
-CGO_ENABLED=1 CGO_LDFLAGS="-L/path/to/libs" go build -tags=duckdb_use_lib main.go
+# On MacOS.
+CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L/path/to/libs" go build -tags=duckdb_use_lib main.go
 DYLD_LIBRARY_PATH=/path/to/libs ./main
 ```
+
+You can also find these steps in the `Makefile` and the `tests.yaml`.
 
 ## Notes and FAQs
 
@@ -171,9 +192,9 @@ rows.Close()
 appender, err := NewAppenderFromConn(conn, "", "test")
 defer appender.Close()
 
-// If not passed to sql.OpenDB.
-connector, err := NewConnector("", nil)
-defer connector.Close()
+c, err := NewConnector("", nil)
+// Optional, if passed to sql.OpenDB.
+defer c.Close()
 ```
 
 ## DuckDB Appender API
@@ -182,10 +203,10 @@ If you want to use the [DuckDB Appender API](https://duckdb.org/docs/data/append
 See `examples/appender.go` for a complete example.
 
 ```go
-connector, err := duckdb.NewConnector("test.db", nil)
-defer connector.Close()
+c, err := duckdb.NewConnector("test.db", nil)
+defer c.Close()
 
-conn, err := connector.Connect(context.Background())
+conn, err := c.Connect(context.Background())
 defer conn.Close()
 
 // Obtain an appender from the connection.
@@ -212,29 +233,39 @@ Please refer to the [DuckDB documentation](https://duckdb.org/docs/dev/profiling
 
 ```Go
 db, err := sql.Open("duckdb", "")
-con, err := db.Conn(context.Background())
+defer db.Close()
 
-_, err = con.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
-_, err = con.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
+conn, err := db.Conn(context.Background())
+defer conn.Close()
 
-res, err := con.QueryContext(context.Background(), `SELECT 42`)
-info, err := GetProfilingInfo(con)
-err = res.Close()
+_, err = conn.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
+_, err = conn.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
 
-_, err = con.ExecContext(context.Background(), `PRAGMA disable_profiling`)
-err = con.Close()
-err = db.Close()
+res, err := conn.QueryContext(context.Background(), `SELECT 42`)
+defer res.Close()
+
+info, err := GetProfilingInfo(conn)
+
+_, err = conn.ExecContext(context.Background(), `PRAGMA disable_profiling`)
 ```
 
 ## DuckDB Apache Arrow Interface
 
-If you want to use the [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface), you can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
+The [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface) is a heavy dependency.
+Starting with `v2`, the DuckDB Arrow Interface is opt-in instead of opt-out.
+If you want to use it, you can enable it by passing `-tags=duckdb_arrow` to `go build`.
+
+```sh
+go build -tags="duckdb_arrow"
+```
+
+You can obtain a new `Arrow` by passing a DuckDB connection to `NewArrowFromConn()`.
 
 ```go
-connector, err := duckdb.NewConnector("", nil)
-defer connector.Close()
+c, err := duckdb.NewConnector("", nil)
+defer c.Close()
 
-conn, err := connector.Connect(context.Background())
+conn, err := c.Connect(context.Background())
 defer conn.Close()
 
 // Obtain the Arrow from the connection.
@@ -248,32 +279,8 @@ for rdr.Next() {
 }
 ```
 
-The Arrow interface is a heavy dependency.
-If you do not need it, you can disable it by passing `-tags=no_duckdb_arrow` to `go build`.
-
-*Note: This will be made opt-in in V2.*
-
-```sh
-go build -tags="no_duckdb_arrow"
-```
-
-## Vendoring
-
-If you want to vendor a module containing `go-duckdb`, please use `modvendor` to include the missing header files and libraries.
-See issue [#174](https://github.com/marcboeker/go-duckdb/issues/174#issuecomment-1979097864) for more details.
-
-1. `go install github.com/goware/modvendor@latest`
-2. `go mod vendor`
-3. `modvendor -copy="**/*.a **/*.h" -v`
-
-Now, you can build your module as usual.
-
 ## DuckDB Extensions
 
-`go-duckdb` statically builds the `JSON` extension for its pre-compiled libraries.
+`go-duckdb` relies on the [`duckdb-go-bindings` module](https://github.com/duckdb/duckdb-go-bindings).
+Any pre-built library in `duckdb-go-bindings` statically links the default extensions: ICU, JSON, Parquet, and Autocomplete.
 Additionally, automatic extension loading is enabled.
-The extensions available differ between the pre-compiled libraries.
-Thus, if you fail to install and load an extension, you might have to link a custom DuckDB.
-
-Specifically, for MingW (Windows), there are no distributed extensions (yet).
-You can statically include them by extending the `BUILD_EXTENSIONS="json"` variable in the `Makefile`.

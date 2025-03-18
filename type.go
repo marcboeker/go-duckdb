@@ -1,51 +1,50 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
+import (
+	"github.com/marcboeker/go-duckdb/mapping"
+)
 
-// Type wraps the corresponding DuckDB type enum.
-type Type C.duckdb_type
+// Type wraps the corresponding DuckDB type enumapping.
+type Type = mapping.Type
 
 const (
-	TYPE_INVALID      Type = C.DUCKDB_TYPE_INVALID
-	TYPE_BOOLEAN      Type = C.DUCKDB_TYPE_BOOLEAN
-	TYPE_TINYINT      Type = C.DUCKDB_TYPE_TINYINT
-	TYPE_SMALLINT     Type = C.DUCKDB_TYPE_SMALLINT
-	TYPE_INTEGER      Type = C.DUCKDB_TYPE_INTEGER
-	TYPE_BIGINT       Type = C.DUCKDB_TYPE_BIGINT
-	TYPE_UTINYINT     Type = C.DUCKDB_TYPE_UTINYINT
-	TYPE_USMALLINT    Type = C.DUCKDB_TYPE_USMALLINT
-	TYPE_UINTEGER     Type = C.DUCKDB_TYPE_UINTEGER
-	TYPE_UBIGINT      Type = C.DUCKDB_TYPE_UBIGINT
-	TYPE_FLOAT        Type = C.DUCKDB_TYPE_FLOAT
-	TYPE_DOUBLE       Type = C.DUCKDB_TYPE_DOUBLE
-	TYPE_TIMESTAMP    Type = C.DUCKDB_TYPE_TIMESTAMP
-	TYPE_DATE         Type = C.DUCKDB_TYPE_DATE
-	TYPE_TIME         Type = C.DUCKDB_TYPE_TIME
-	TYPE_INTERVAL     Type = C.DUCKDB_TYPE_INTERVAL
-	TYPE_HUGEINT      Type = C.DUCKDB_TYPE_HUGEINT
-	TYPE_UHUGEINT     Type = C.DUCKDB_TYPE_UHUGEINT
-	TYPE_VARCHAR      Type = C.DUCKDB_TYPE_VARCHAR
-	TYPE_BLOB         Type = C.DUCKDB_TYPE_BLOB
-	TYPE_DECIMAL      Type = C.DUCKDB_TYPE_DECIMAL
-	TYPE_TIMESTAMP_S  Type = C.DUCKDB_TYPE_TIMESTAMP_S
-	TYPE_TIMESTAMP_MS Type = C.DUCKDB_TYPE_TIMESTAMP_MS
-	TYPE_TIMESTAMP_NS Type = C.DUCKDB_TYPE_TIMESTAMP_NS
-	TYPE_ENUM         Type = C.DUCKDB_TYPE_ENUM
-	TYPE_LIST         Type = C.DUCKDB_TYPE_LIST
-	TYPE_STRUCT       Type = C.DUCKDB_TYPE_STRUCT
-	TYPE_MAP          Type = C.DUCKDB_TYPE_MAP
-	TYPE_ARRAY        Type = C.DUCKDB_TYPE_ARRAY
-	TYPE_UUID         Type = C.DUCKDB_TYPE_UUID
-	TYPE_UNION        Type = C.DUCKDB_TYPE_UNION
-	TYPE_BIT          Type = C.DUCKDB_TYPE_BIT
-	TYPE_TIME_TZ      Type = C.DUCKDB_TYPE_TIME_TZ
-	TYPE_TIMESTAMP_TZ Type = C.DUCKDB_TYPE_TIMESTAMP_TZ
-	TYPE_ANY          Type = C.DUCKDB_TYPE_ANY
-	TYPE_VARINT       Type = C.DUCKDB_TYPE_VARINT
-	TYPE_SQLNULL      Type = C.DUCKDB_TYPE_SQLNULL
+	TYPE_INVALID      = mapping.TypeInvalid
+	TYPE_BOOLEAN      = mapping.TypeBoolean
+	TYPE_TINYINT      = mapping.TypeTinyInt
+	TYPE_SMALLINT     = mapping.TypeSmallInt
+	TYPE_INTEGER      = mapping.TypeInteger
+	TYPE_BIGINT       = mapping.TypeBigInt
+	TYPE_UTINYINT     = mapping.TypeUTinyInt
+	TYPE_USMALLINT    = mapping.TypeUSmallInt
+	TYPE_UINTEGER     = mapping.TypeUInteger
+	TYPE_UBIGINT      = mapping.TypeUBigInt
+	TYPE_FLOAT        = mapping.TypeFloat
+	TYPE_DOUBLE       = mapping.TypeDouble
+	TYPE_TIMESTAMP    = mapping.TypeTimestamp
+	TYPE_DATE         = mapping.TypeDate
+	TYPE_TIME         = mapping.TypeTime
+	TYPE_INTERVAL     = mapping.TypeInterval
+	TYPE_HUGEINT      = mapping.TypeHugeInt
+	TYPE_UHUGEINT     = mapping.TypeUHugeInt
+	TYPE_VARCHAR      = mapping.TypeVarchar
+	TYPE_BLOB         = mapping.TypeBlob
+	TYPE_DECIMAL      = mapping.TypeDecimal
+	TYPE_TIMESTAMP_S  = mapping.TypeTimestampS
+	TYPE_TIMESTAMP_MS = mapping.TypeTimestampMS
+	TYPE_TIMESTAMP_NS = mapping.TypeTimestampNS
+	TYPE_ENUM         = mapping.TypeEnum
+	TYPE_LIST         = mapping.TypeList
+	TYPE_STRUCT       = mapping.TypeStruct
+	TYPE_MAP          = mapping.TypeMap
+	TYPE_ARRAY        = mapping.TypeArray
+	TYPE_UUID         = mapping.TypeUUID
+	TYPE_UNION        = mapping.TypeUnion
+	TYPE_BIT          = mapping.TypeBit
+	TYPE_TIME_TZ      = mapping.TypeTimeTZ
+	TYPE_TIMESTAMP_TZ = mapping.TypeTimestampTZ
+	TYPE_ANY          = mapping.TypeAny
+	TYPE_VARINT       = mapping.TypeVarInt
+	TYPE_SQLNULL      = mapping.TypeSQLNull
 )
 
 // FIXME: Implement support for these types.
