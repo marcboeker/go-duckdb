@@ -761,6 +761,12 @@ func TestAppenderStrings(t *testing.T) {
 }
 
 func TestAppendToCatalog(t *testing.T) {
+	defer func() {
+		// For Windows, this must happen after closing the DB, to avoid:
+		// "The process cannot access the file because it is being used by another process."
+		require.NoError(t, os.Remove("hello_appender.db"))
+	}()
+
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
@@ -798,7 +804,6 @@ func TestAppendToCatalog(t *testing.T) {
 		i++
 	}
 	require.Equal(t, 1, i)
-	require.NoError(t, os.Remove("hello_appender.db"))
 }
 
 var jsonInputs = [][]byte{
