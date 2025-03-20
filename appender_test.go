@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -757,6 +758,52 @@ func TestAppenderStrings(t *testing.T) {
 		i++
 	}
 	require.Equal(t, 3, i)
+}
+
+func TestAppendToCatalog(t *testing.T) {
+	defer func() {
+		// For Windows, this must happen after closing the DB, to avoid:
+		// "The process cannot access the file because it is being used by another process."
+		require.NoError(t, os.Remove("hello_appender.db"))
+	}()
+
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`ATTACH 'hello_appender.db' AS other`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE other.test (col BIGINT)`)
+	require.NoError(t, err)
+
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
+
+	err = conn.Raw(func(anyConn interface{}) error {
+		driverConn := anyConn.(driver.Conn)
+		a, innerErr := NewAppender(driverConn, "other", "", "test")
+		require.NoError(t, innerErr)
+
+		require.NoError(t, a.AppendRow(42))
+		require.NoError(t, a.Flush())
+		require.NoError(t, a.Close())
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Verify results.
+	res, err := db.QueryContext(context.Background(), `SELECT col FROM other.test ORDER BY col`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
+
+	i := 0
+	for res.Next() {
+		var col int64
+		require.NoError(t, res.Scan(&col))
+		require.Equal(t, int64(42), col)
+		i++
+	}
+	require.Equal(t, 1, i)
 }
 
 var jsonInputs = [][]byte{
