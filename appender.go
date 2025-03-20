@@ -24,12 +24,12 @@ type Appender struct {
 }
 
 // NewAppenderFromConn returns a new Appender for the default catalog from a DuckDB driver connection.
-func NewAppenderFromConn(driverConn driver.Conn, schema string, table string) (*Appender, error) {
+func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
 	return NewAppender(driverConn, "", schema, table)
 }
 
 // NewAppender returns a new Appender from a DuckDB driver connection.
-func NewAppender(driverConn driver.Conn, catalog string, schema string, table string) (*Appender, error) {
+func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
 	conn, ok := driverConn.(*Conn)
 	if !ok {
 		return nil, getError(errInvalidCon, nil)
