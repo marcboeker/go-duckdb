@@ -15,8 +15,11 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
+var instanceCache mapping.InstanceCache
+
 func init() {
 	sql.Register("duckdb", Driver{})
+	instanceCache = mapping.CreateInstanceCache()
 }
 
 type Driver struct{}
@@ -58,9 +61,9 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	}
 	defer mapping.DestroyConfig(&config)
 
-	connStr := getConnString(dsn)
 	var errMsg string
-	if mapping.OpenExt(connStr, &db, config, &errMsg) == mapping.StateError {
+	state := mapping.GetOrCreateFromCache(instanceCache, getDBPath(dsn), &db, config, &errMsg)
+	if state == mapping.StateError {
 		mapping.Close(&db)
 		return nil, getError(errConnect, getDuckDBError(errMsg))
 	}
@@ -107,7 +110,7 @@ func (c *Connector) Close() error {
 	return nil
 }
 
-func getConnString(dsn string) string {
+func getDBPath(dsn string) string {
 	idx := strings.Index(dsn, "?")
 	if idx < 0 {
 		idx = len(dsn)

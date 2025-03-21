@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -762,6 +763,23 @@ func TestQueryTimeout(t *testing.T) {
 	// This check is a very defensive time check, but it should be good enough.
 	// The query takes significantly longer than 10 seconds.
 	require.Less(t, time.Since(now), 10*time.Second)
+}
+
+func TestInstanceCache(t *testing.T) {
+	// We loop a few times to try and trigger different concurrent behavior.
+	for i := 0; i < 20; i++ {
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		db := openDbWrapper(t, `instance_cache.db`)
+		go func() {
+			db1 := openDbWrapper(t, `instance_cache.db`)
+			closeDbWrapper(t, db1)
+			wg.Done()
+		}()
+		closeDbWrapper(t, db)
+		wg.Wait()
+		require.NoError(t, os.Remove("instance_cache.db"))
+	}
 }
 
 func Example_simpleConnection() {
