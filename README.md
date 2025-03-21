@@ -17,7 +17,7 @@ Current DuckDB version: `v1.2.0`.
 ## Installation
 
 ```sh
-go get github.com/marcboeker/go-duckdb
+go get github.com/marcboeker/go-duckdb/v2
 ```
 
 ### Windows
