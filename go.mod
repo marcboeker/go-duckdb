@@ -6,19 +6,19 @@ require (
 	github.com/apache/arrow-go/v18 v18.1.0
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
-	github.com/marcboeker/go-duckdb/arrowmapping v0.0.4
-	github.com/marcboeker/go-duckdb/mapping v0.0.4
+	github.com/marcboeker/go-duckdb/arrowmapping v0.0.5
+	github.com/marcboeker/go-duckdb/mapping v0.0.5
 	github.com/stretchr/testify v1.10.0
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/duckdb/duckdb-go-bindings v0.1.11 // indirect
-	github.com/duckdb/duckdb-go-bindings/darwin-amd64 v0.1.6 // indirect
-	github.com/duckdb/duckdb-go-bindings/darwin-arm64 v0.1.6 // indirect
-	github.com/duckdb/duckdb-go-bindings/linux-amd64 v0.1.6 // indirect
-	github.com/duckdb/duckdb-go-bindings/linux-arm64 v0.1.6 // indirect
-	github.com/duckdb/duckdb-go-bindings/windows-amd64 v0.1.6 // indirect
+	github.com/duckdb/duckdb-go-bindings v0.1.12 // indirect
+	github.com/duckdb/duckdb-go-bindings/darwin-amd64 v0.1.7 // indirect
+	github.com/duckdb/duckdb-go-bindings/darwin-arm64 v0.1.7 // indirect
+	github.com/duckdb/duckdb-go-bindings/linux-amd64 v0.1.7 // indirect
+	github.com/duckdb/duckdb-go-bindings/linux-arm64 v0.1.7 // indirect
+	github.com/duckdb/duckdb-go-bindings/windows-amd64 v0.1.7 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/google/flatbuffers v25.1.24+incompatible // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
