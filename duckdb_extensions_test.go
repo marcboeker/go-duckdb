@@ -1,4 +1,4 @@
-//go:build !duckdb_use_lib && !windows
+//go:build !duckdb_use_lib && !duckdb_use_static_lib
 
 package duckdb
 
@@ -16,4 +16,24 @@ func TestOpenSQLite(t *testing.T) {
 	res := db.QueryRow(`SELECT species FROM pets WHERE id = 1`)
 	require.NoError(t, res.Scan(&species))
 	require.Equal(t, "Gopher", species)
+}
+
+func TestLoadHTTPFS(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`INSTALL httpfs`)
+	require.NoError(t, err)
+	_, err = db.Exec(`LOAD httpfs`)
+	require.NoError(t, err)
+}
+
+func TestLoadExcel(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`INSTALL excel`)
+	require.NoError(t, err)
+	_, err = db.Exec(`LOAD excel`)
+	require.NoError(t, err)
 }
