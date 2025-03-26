@@ -1,4 +1,6 @@
 # Go SQL Driver For [DuckDB](https://github.com/duckdb/duckdb)
+![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
+[![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb)
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
@@ -12,9 +14,6 @@ Previous DuckDB versions:
 | ----------- | ----------- |
 | `v1.2.0`      | `v2.0.3`       |
 | `v1.1.3`   | `v1.8.5`        |
-
-![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
-[![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb)
 
 ```diff
 ! Starting with v2.0.0, go-duckdb supports DuckDB v1.2.0 and upward.
