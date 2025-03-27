@@ -199,7 +199,7 @@ func setBytes[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	case string:
 		mapping.VectorAssignStringElement(vec.vec, rowIdx, v)
 	case []byte:
-		mapping.VectorAssignStringElementLen(vec.vec, rowIdx, v, mapping.IdxT(len(v)))
+		mapping.VectorAssignStringElementLen(vec.vec, rowIdx, v)
 	default:
 		return castError(reflect.TypeOf(val).String(), reflect.String.String())
 	}

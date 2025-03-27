@@ -23,8 +23,13 @@ type Appender struct {
 	rowCount int
 }
 
-// NewAppenderFromConn returns a new Appender from a DuckDB driver connection.
+// NewAppenderFromConn returns a new Appender for the default catalog from a DuckDB driver connection.
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
+	return NewAppender(driverConn, "", schema, table)
+}
+
+// NewAppender returns a new Appender from a DuckDB driver connection.
+func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
 	conn, ok := driverConn.(*Conn)
 	if !ok {
 		return nil, getError(errInvalidCon, nil)
@@ -34,7 +39,7 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 	}
 
 	var appender mapping.Appender
-	state := mapping.AppenderCreate(conn.conn, schema, table, &appender)
+	state := mapping.AppenderCreateExt(conn.conn, catalog, schema, table, &appender)
 	if state == mapping.StateError {
 		err := getDuckDBError(mapping.AppenderError(appender))
 		mapping.AppenderDestroy(&appender)
