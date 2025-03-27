@@ -198,7 +198,7 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 		unionTypeInfo := testTypeInfo{
 			TypeInfo: info,
 			testTypeValues: testTypeValues{
-				input:  `UNION_VALUE(1::INTEGER as int_val)`,
+				input:  `UNION_VALUE( int_val := 1::INTEGER)`,
 				output: `{int_val : 1}`,
 			},
 		}

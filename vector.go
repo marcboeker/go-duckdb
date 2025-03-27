@@ -136,21 +136,29 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 	switch vec.Type {
 	case TYPE_LIST, TYPE_MAP:
 		child := mapping.ListVectorGetChild(v)
-		vec.childVectors[0].initVectors(child, writable)
+		if child.Ptr != nil {
+			vec.childVectors[0].initVectors(child, writable)
+		}
 	case TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
 			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
-			vec.childVectors[i].initVectors(child, writable)
+			if child.Ptr != nil {
+				vec.childVectors[i].initVectors(child, writable)
+			}
 		}
 	case TYPE_ARRAY:
 		child := mapping.ArrayVectorGetChild(v)
-		vec.childVectors[0].initVectors(child, writable)
+		if child.Ptr != nil {
+			vec.childVectors[0].initVectors(child, writable)
+		}
 	case TYPE_UNION:
 		// For unions, each member has its own vector
 		for i := 0; i < len(vec.childVectors); i++ {
 			// Union members are stored as struct fields internally
-			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
-			vec.childVectors[i].initVectors(child, writable)
+			child := mapping.StructVectorGetChild(v, mapping.IdxT(i+1))
+			if child.Ptr != nil {
+				vec.childVectors[i].initVectors(child, writable)
+			}
 		}
 	}
 }

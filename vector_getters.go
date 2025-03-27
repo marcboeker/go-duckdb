@@ -203,23 +203,34 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 }
 
 func (vec *vector) getUnion(rowIdx mapping.IdxT) any {
+	// Get the tag vector (stored at index 0)
 	tagVector := mapping.StructVectorGetChild(vec.vec, 0)
+	if tagVector.Ptr == nil {
+		return nil
+	}
 
+	// Get the tag value
 	tagData := mapping.VectorGetData(tagVector)
 	if tagData == nil {
 		return nil
 	}
-
 	tags := (*[1 << 31]int8)(tagData)
 	tag := tags[rowIdx]
 
+	// Get the member vector
 	memberVector := mapping.StructVectorGetChild(vec.vec, mapping.IdxT(tag+1))
+	if memberVector.Ptr == nil {
+		return nil
+	}
+
+	// Create a temporary vector with the member's type info and data
 	tempVec := vector{
 		vec:            memberVector,
 		dataPtr:        mapping.VectorGetData(memberVector),
 		maskPtr:        mapping.VectorGetValidity(memberVector),
 		vectorTypeInfo: vec.childVectors[tag].vectorTypeInfo,
 		getFn:          vec.childVectors[tag].getFn,
+		childVectors:   vec.childVectors[tag].childVectors,
 	}
 
 	return tempVec.getFn(&tempVec, rowIdx)
