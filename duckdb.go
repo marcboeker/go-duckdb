@@ -11,15 +11,18 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-var instanceCache mapping.InstanceCache
+var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](
+	func() mapping.InstanceCache {
+		return mapping.CreateInstanceCache()
+	})
 
 func init() {
 	sql.Register("duckdb", Driver{})
-	instanceCache = mapping.CreateInstanceCache()
 }
 
 type Driver struct{}
@@ -62,7 +65,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	defer mapping.DestroyConfig(&config)
 
 	var errMsg string
-	state := mapping.GetOrCreateFromCache(instanceCache, getDBPath(dsn), &db, config, &errMsg)
+	state := mapping.GetOrCreateFromCache(GetInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
 	if state == mapping.StateError {
 		mapping.Close(&db)
 		return nil, getError(errConnect, getDuckDBError(errMsg))
