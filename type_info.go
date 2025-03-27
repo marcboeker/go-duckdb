@@ -304,6 +304,8 @@ func (info *typeInfo) logicalType() mapping.LogicalType {
 		return info.logicalMapType()
 	case TYPE_ARRAY:
 		return info.logicalArrayType()
+	case TYPE_UNION:
+		return info.logicalUnionType()
 	}
 	return mapping.LogicalType{}
 }
@@ -338,6 +340,18 @@ func (info *typeInfo) logicalArrayType() mapping.LogicalType {
 	child := info.childTypes[0].logicalType()
 	defer mapping.DestroyLogicalType(&child)
 	return mapping.CreateArrayType(child, info.arrayLength)
+}
+
+func (info *typeInfo) logicalUnionType() mapping.LogicalType {
+	var types []mapping.LogicalType
+	defer destroyLogicalTypes(&types)
+
+	var names []string
+	for _, entry := range info.structEntries {
+		types = append(types, entry.Info().logicalType())
+		names = append(names, entry.Name())
+	}
+	return mapping.CreateUnionType(types, names)
 }
 
 func funcName(i interface{}) string {

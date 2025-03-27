@@ -183,6 +183,28 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 		},
 	}
 
+	// Create union type info - only add if useAny is true since unions aren't supported in scalar UDFs
+	if useAny {
+		intInfo, err := NewTypeInfo(TYPE_INTEGER)
+		require.NoError(t, err)
+		stringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+		require.NoError(t, err)
+
+		info, err = NewUnionInfo(
+			[]TypeInfo{intInfo, stringInfo},
+			[]string{"int_val", "str_val"},
+		)
+		require.NoError(t, err)
+		unionTypeInfo := testTypeInfo{
+			TypeInfo: info,
+			testTypeValues: testTypeValues{
+				input:  `UNION_VALUE(1::INTEGER as int_val)`,
+				output: `{int_val : 1}`,
+			},
+		}
+		testTypeInfos = append(testTypeInfos, unionTypeInfo)
+	}
+
 	testTypeInfos = append(testTypeInfos, decimalTypeInfo, enumTypeInfo,
 		listTypeInfo, nestedListTypeInfo, structTypeInfo, nestedStructTypeInfo, mapTypeInfo,
 		arrayTypeInfo, nestedArrayTypeInfo)
@@ -197,6 +219,22 @@ func TestTypeInterface(t *testing.T) {
 		_, err := NewListInfo(info.TypeInfo)
 		require.NoError(t, err)
 	}
+
+	// Test union type creation
+	intInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	stringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	unionInfo, err := NewUnionInfo(
+		[]TypeInfo{intInfo, stringInfo},
+		[]string{"int_val", "str_val"},
+	)
+	require.NoError(t, err)
+
+	// Verify we can use union type as a child type
+	_, err = NewListInfo(unionInfo)
+	require.NoError(t, err)
 }
 
 func TestErrTypeInfo(t *testing.T) {
@@ -277,4 +315,35 @@ func TestErrTypeInfo(t *testing.T) {
 
 	_, err = NewArrayInfo(nil, 3)
 	testError(t, err, errAPI.Error(), interfaceIsNilErrMsg)
+
+	// Invalid union types
+	intInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	stringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	// Test empty members
+	_, err = NewUnionInfo([]TypeInfo{}, []string{})
+	testError(t, err, errAPI.Error(), "union type must have at least one member")
+
+	// Test mismatched lengths
+	_, err = NewUnionInfo(
+		[]TypeInfo{intInfo, stringInfo},
+		[]string{"single_name"},
+	)
+	testError(t, err, errAPI.Error(), "member types and names must have same length")
+
+	// Test empty name
+	_, err = NewUnionInfo(
+		[]TypeInfo{intInfo},
+		[]string{""},
+	)
+	testError(t, err, errAPI.Error(), errEmptyName.Error())
+
+	// Test duplicate names
+	_, err = NewUnionInfo(
+		[]TypeInfo{intInfo, stringInfo},
+		[]string{"same_name", "same_name"},
+	)
+	testError(t, err, errAPI.Error(), duplicateNameErrMsg)
 }
