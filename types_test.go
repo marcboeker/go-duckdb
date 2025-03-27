@@ -946,8 +946,8 @@ func TestJSONType(t *testing.T) {
 
 func TestUnionTypes(t *testing.T) {
 	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	// Test basic union type creation and reading
 	t.Run("basic union operations", func(t *testing.T) {

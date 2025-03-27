@@ -488,8 +488,8 @@ func TestGetDuckDBErrorIs(t *testing.T) {
 
 func TestUnionErrors(t *testing.T) {
 	t.Parallel()
-	db := openDB(t)
-	defer db.Close()
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("empty union type", func(t *testing.T) {
 		_, err := db.Query("SELECT (1)::UNION() as empty_union")

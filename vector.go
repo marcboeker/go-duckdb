@@ -149,7 +149,7 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 		// For unions, each member has its own vector
 		for i := 0; i < len(vec.childVectors); i++ {
 			// Union members are stored as struct fields internally
-			child := C.duckdb_struct_vector_get_child(v, C.idx_t(i))
+			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
 			vec.childVectors[i].initVectors(child, writable)
 		}
 	}
@@ -516,8 +516,8 @@ func (vec *vector) initArray(logicalType mapping.LogicalType, colIdx int) error 
 	return nil
 }
 
-func (vec *vector) initUnion(logicalType C.duckdb_logical_type, colIdx int) error {
-	memberCount := int(C.duckdb_union_type_member_count(logicalType))
+func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error {
+	memberCount := int(mapping.UnionTypeMemberCount(logicalType))
 
 	if memberCount == 0 {
 		return addIndexToError(unsupportedTypeError("empty union"), colIdx)
@@ -525,17 +525,17 @@ func (vec *vector) initUnion(logicalType C.duckdb_logical_type, colIdx int) erro
 
 	vec.childVectors = make([]vector, memberCount)
 	for i := 0; i < memberCount; i++ {
-		memberType := C.duckdb_union_type_member_type(logicalType, C.idx_t(i))
+		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 
 		err := vec.childVectors[i].init(memberType, colIdx)
-		C.duckdb_destroy_logical_type(&memberType)
+		mapping.DestroyLogicalType(&memberType)
 		if err != nil {
 			return err
 		}
 	}
 
 	vec.Type = TYPE_UNION
-	vec.getFn = func(vec *vector, rowIdx C.idx_t) any {
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}

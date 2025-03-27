@@ -202,13 +202,10 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 	return slice
 }
 
-func (vec *vector) getUnion(rowIdx C.idx_t) any {
-	tagVector := C.duckdb_struct_vector_get_child(vec.duckdbVector, 0)
-	if tagVector == nil {
-		return nil
-	}
+func (vec *vector) getUnion(rowIdx mapping.IdxT) any {
+	tagVector := mapping.StructVectorGetChild(vec.vec, 0)
 
-	tagData := C.duckdb_vector_get_data(tagVector)
+	tagData := mapping.VectorGetData(tagVector)
 	if tagData == nil {
 		return nil
 	}
@@ -216,15 +213,11 @@ func (vec *vector) getUnion(rowIdx C.idx_t) any {
 	tags := (*[1 << 31]int8)(tagData)
 	tag := tags[rowIdx]
 
-	memberVector := C.duckdb_struct_vector_get_child(vec.duckdbVector, C.idx_t(tag+1))
-	if memberVector == nil {
-		return nil
-	}
-
+	memberVector := mapping.StructVectorGetChild(vec.vec, mapping.IdxT(tag+1))
 	tempVec := vector{
-		duckdbVector:   memberVector,
-		ptr:            C.duckdb_vector_get_data(memberVector),
-		mask:           C.duckdb_vector_get_validity(memberVector),
+		vec:            memberVector,
+		dataPtr:        mapping.VectorGetData(memberVector),
+		maskPtr:        mapping.VectorGetValidity(memberVector),
 		vectorTypeInfo: vec.childVectors[tag].vectorTypeInfo,
 		getFn:          vec.childVectors[tag].getFn,
 	}

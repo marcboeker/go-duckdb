@@ -248,14 +248,13 @@ func logicalTypeNameArray(logicalType mapping.LogicalType) string {
 	return fmt.Sprintf("%s[%d]", childName, int(size))
 }
 
-func logicalTypeNameUnion(logicalType C.duckdb_logical_type) string {
-	count := int(C.duckdb_union_type_member_count(logicalType))
+func logicalTypeNameUnion(logicalType mapping.LogicalType) string {
+	count := int(mapping.UnionTypeMemberCount(logicalType))
 	name := "UNION("
 
 	for i := 0; i < count; i++ {
-		ptrToMemberName := C.duckdb_union_type_member_name(logicalType, C.idx_t(i))
-		memberName := C.GoString(ptrToMemberName)
-		memberType := C.duckdb_union_type_member_type(logicalType, C.idx_t(i))
+		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
+		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 
 		// Add comma if not at the end of the list
 		name += memberName + " " + logicalTypeName(memberType)
@@ -263,8 +262,7 @@ func logicalTypeNameUnion(logicalType C.duckdb_logical_type) string {
 			name += ", "
 		}
 
-		C.duckdb_free(unsafe.Pointer(ptrToMemberName))
-		C.duckdb_destroy_logical_type(&memberType)
+		mapping.DestroyLogicalType(&memberType)
 	}
 	return name + ")"
 }
