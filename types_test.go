@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -984,7 +985,7 @@ func TestUnionTypes(t *testing.T) {
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var doubleUnion, dateUnion interface{}
+		var doubleUnion, dateUnion driver.Value
 		err = rows.Scan(&doubleUnion, &dateUnion)
 		require.NoError(t, err)
 
@@ -1014,7 +1015,7 @@ func TestUnionTypes(t *testing.T) {
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var val interface{}
+		var val driver.Value
 		err = rows.Scan(&val)
 		require.NoError(t, err)
 		require.Equal(t, int32(123), val)

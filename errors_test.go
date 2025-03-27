@@ -552,7 +552,7 @@ func TestUnionErrors(t *testing.T) {
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var nullUnion interface{}
+		var nullUnion *driver.Value
 		err = rows.Scan(&nullUnion)
 		require.NoError(t, err)
 		require.Nil(t, nullUnion)

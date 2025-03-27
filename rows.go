@@ -133,8 +133,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case TYPE_ARRAY:
 		return reflect.TypeOf([]any{})
 	case TYPE_UNION:
-		// Union types are scanned as interface{} since they can contain any of their member types
-		return reflect.TypeOf((*interface{})(nil)).Elem()
+		// Union types are scanned as driver.Value since they can contain any of their member types
+		return reflect.TypeOf((*driver.Value)(nil)).Elem()
 	case TYPE_UUID:
 		return reflect.TypeOf([]byte{})
 	default:
