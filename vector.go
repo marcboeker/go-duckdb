@@ -97,6 +97,8 @@ func (vec *vector) init(logicalType mapping.LogicalType, colIdx int) error {
 		return vec.initMap(logicalType, colIdx)
 	case TYPE_ARRAY:
 		return vec.initArray(logicalType, colIdx)
+	case TYPE_UNION:
+		return vec.initUnion(logicalType, colIdx)
 	case TYPE_UUID:
 		vec.initUUID()
 	case TYPE_SQLNULL:
@@ -143,6 +145,13 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 	case TYPE_ARRAY:
 		child := mapping.ArrayVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
+	case TYPE_UNION:
+		// For unions, each member has its own vector
+		for i := 0; i < len(vec.childVectors); i++ {
+			// Union members are stored as struct fields internally
+			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
+			vec.childVectors[i].initVectors(child, writable)
+		}
 	}
 }
 
@@ -504,6 +513,35 @@ func (vec *vector) initArray(logicalType mapping.LogicalType, colIdx int) error 
 		return setArray(vec, rowIdx, val)
 	}
 	vec.Type = TYPE_ARRAY
+	return nil
+}
+
+func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error {
+	memberCount := int(mapping.UnionTypeMemberCount(logicalType))
+
+	if memberCount == 0 {
+		return addIndexToError(unsupportedTypeError("empty union"), colIdx)
+	}
+
+	vec.childVectors = make([]vector, memberCount)
+	for i := 0; i < memberCount; i++ {
+		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
+
+		err := vec.childVectors[i].init(memberType, colIdx)
+		mapping.DestroyLogicalType(&memberType)
+		if err != nil {
+			return err
+		}
+	}
+
+	vec.Type = TYPE_UNION
+	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
+		if vec.getNull(rowIdx) {
+			return nil
+		}
+		return vec.getUnion(rowIdx)
+	}
+
 	return nil
 }
 

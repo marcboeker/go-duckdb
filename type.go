@@ -51,7 +51,6 @@ const (
 var unsupportedTypeToStringMap = map[Type]string{
 	TYPE_INVALID:  "INVALID",
 	TYPE_UHUGEINT: "UHUGEINT",
-	TYPE_UNION:    "UNION",
 	TYPE_BIT:      "BIT",
 	TYPE_ANY:      "ANY",
 	TYPE_VARINT:   "VARINT",
