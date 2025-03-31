@@ -44,6 +44,10 @@ Then, add gcc to the path using whatever method you prefer.
 In powershell this is `$env:PATH = "C:\msys64\ucrt64\bin:$env:PATH"`.
 After, you can compile this package in Windows.
 
+### Vendoring
+
+You can use `go mod vendor` to make a copy of the third-party packages in this package, including the pre-built DuckDB libraries in [duckdb-go-bindings](https://github.com/duckdb/duckdb-go-bindings). 
+
 ## Usage
 
 _Note: For readability, we omit error handling in most examples._
