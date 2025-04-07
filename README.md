@@ -15,12 +15,35 @@ Previous DuckDB versions:
 | `v1.2.0`      | `v2.0.3`       |
 | `v1.1.3`   | `v1.8.5`        |
 
+### Breaking Changes
+
 ```diff
 ! Starting with v2.0.0, go-duckdb supports DuckDB v1.2.0 and upward.
-! Breaking changes are:
-! - Drops pre-built FreeBSD support.
-! - The Arrow dependency is now opt-in via -tags=duckdb_arrow
+! Moving to v2 includes the following breaking changes:
 ```
+
+#### Dropping pre-built FreeBSD support
+
+Starting with `v2`, go-duckdb drops pre-built FreeBSD support.
+This change is because DuckDB does not publish any bundled FreeBSD libraries.
+Thus, you must build your static library for FreeBSD using the steps below.
+
+#### The Arrow dependency is now opt-in
+
+The [DuckDB Arrow Interface](https://duckdb.org/docs/api/c/api#arrow-interface) is a heavy dependency.
+Starting with `v2`, the DuckDB Arrow Interface is opt-in instead of opt-out.
+If you want to use it, you can enable it by passing `-tags=duckdb_arrow` to `go build`.
+
+#### JSON type scanning changes
+
+The pre-built libraries ship DuckDB's JSON extension containing the `JSON` type.
+Pre-v2, it was possible to scan a JSON type into `[]byte` via [`Rows.Scan`](https://cs.opensource.google/go/go/+/go1.24.1:src/database/sql/sql.go;l=3365).
+However, scanning into `any` (`driver.Value`) would cause the JSON string to contain escape characters and other unexpected behavior.
+
+It is now possible to scan into `any`, or directly into go-duckdb's `Composite` type,
+as shown in the [JSON example](https://github.com/marcboeker/go-duckdb/blob/main/examples/json/main.go).
+Scanning directly into `string` or `[]byte` is no longer possible.
+A workaround is casting to `::VARCHAR` or `::BLOB` in DuckDB if you do not need to scan the result into a JSON interface.
 
 ## Installation
 
