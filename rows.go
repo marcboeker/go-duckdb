@@ -86,6 +86,15 @@ func (r *rows) Next(dst []driver.Value) error {
 
 // ColumnTypeScanType implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
+	logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
+	defer mapping.DestroyLogicalType(&logicalType)
+
+	alias := mapping.LogicalTypeGetAlias(logicalType)
+	switch alias {
+	case aliasJSON:
+		return reflect.TypeOf((*any)(nil)).Elem()
+	}
+
 	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
 	switch t {
 	case TYPE_INVALID:
@@ -141,12 +150,18 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
+	logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
+	defer mapping.DestroyLogicalType(&logicalType)
+
+	alias := mapping.LogicalTypeGetAlias(logicalType)
+	switch alias {
+	case aliasJSON:
+		return aliasJSON
+	}
+
 	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
 	switch t {
 	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
-		// Only allocate the logical type if necessary.
-		logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
-		defer mapping.DestroyLogicalType(&logicalType)
 		return logicalTypeName(logicalType)
 	default:
 		return typeToStringMap[t]
