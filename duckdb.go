@@ -46,11 +46,15 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 // The user must close the Connector, if it is not passed to the sql.OpenDB function.
 // Otherwise, sql.DB closes the Connector when calling sql.DB.Close().
 func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error) (*Connector, error) {
-	var db mapping.Database
-
+	inMemory := false
 	const inMemoryName = ":memory:"
+
+	// If necessary, trim the in-memory prefix, and determine if this is an in-memory database.
 	if dsn == inMemoryName || strings.HasPrefix(dsn, inMemoryName+"?") {
 		dsn = dsn[len(inMemoryName):]
+		inMemory = true
+	} else if dsn == "" || strings.HasPrefix(dsn, "?") {
+		inMemory = true
 	}
 
 	parsedDSN, err := url.Parse(dsn)
@@ -64,8 +68,17 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	}
 	defer mapping.DestroyConfig(&config)
 
+	var db mapping.Database
 	var errMsg string
-	state := mapping.GetOrCreateFromCache(GetInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
+	var state mapping.State
+
+	if inMemory {
+		// Open an in-memory database.
+		state = mapping.OpenExt(getDBPath(dsn), &db, config, &errMsg)
+	} else {
+		// Open a file-backed database.
+		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
+	}
 	if state == mapping.StateError {
 		mapping.Close(&db)
 		return nil, getError(errConnect, getDuckDBError(errMsg))

@@ -782,6 +782,21 @@ func TestInstanceCache(t *testing.T) {
 	}
 }
 
+func TestInstanceCacheWithInMemoryDB(t *testing.T) {
+	db1 := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db1)
+
+	_, err := db1.Exec(`CREATE TABLE test AS SELECT 1 AS id`)
+	require.NoError(t, err)
+
+	db2 := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db2)
+
+	var id int
+	err = db2.QueryRow(`SELECT * FROM test`).Scan(&id)
+	require.ErrorContains(t, err, "Table with name test does not exist")
+}
+
 func Example_simpleConnection() {
 	// Connect to DuckDB using '[database/sql.Open]'.
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
