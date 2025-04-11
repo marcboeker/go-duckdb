@@ -74,7 +74,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 
 	if inMemory {
 		// Open an in-memory database.
-		state = mapping.OpenExt(getDBPath(dsn), &db, config, &errMsg)
+		state = mapping.OpenExt("", &db, config, &errMsg)
 	} else {
 		// Open a file-backed database.
 		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
