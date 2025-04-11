@@ -962,8 +962,6 @@ func TestJSONColType(t *testing.T) {
 	require.Equal(t, 2, len(columnTypes))
 	require.Equal(t, aliasJSON, columnTypes[0].DatabaseTypeName())
 	require.Equal(t, typeToStringMap[TYPE_BIGINT], columnTypes[1].DatabaseTypeName())
-
-	var i any
-	require.Equal(t, reflect.TypeOf(i), columnTypes[0].ScanType())
+	require.Equal(t, reflect.TypeOf((*any)(nil)).Elem(), columnTypes[0].ScanType())
 	require.Equal(t, reflect.TypeOf(int64(0)), columnTypes[1].ScanType())
 }
