@@ -545,7 +545,7 @@ func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error 
 	vec.Type = TYPE_UNION
 	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
-			return nil
+			return Union{Tag: "", Value: nil}
 		}
 		return vec.getUnion(rowIdx)
 	}

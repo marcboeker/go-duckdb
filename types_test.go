@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -962,13 +961,19 @@ func TestUnionTypes(t *testing.T) {
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var intUnion, strUnion, nullUnion interface{}
+		var intUnion, strUnion, nullUnion Union
 		err = rows.Scan(&intUnion, &strUnion, &nullUnion)
 		require.NoError(t, err)
 
-		require.Equal(t, int32(123), intUnion)
-		require.Equal(t, "hello", strUnion)
-		require.Nil(t, nullUnion)
+		// Check int union
+		require.Equal(t, "num", intUnion.Tag)
+		require.Equal(t, int32(123), intUnion.Value)
+
+		require.Equal(t, "str", strUnion.Tag)
+		require.Equal(t, "hello", strUnion.Value)
+
+		require.Equal(t, "", nullUnion.Tag)
+		require.Nil(t, nullUnion.Value)
 	})
 
 	// Test union with different types
@@ -985,12 +990,15 @@ func TestUnionTypes(t *testing.T) {
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var doubleUnion, dateUnion driver.Value
+		var doubleUnion, dateUnion Union
 		err = rows.Scan(&doubleUnion, &dateUnion)
 		require.NoError(t, err)
 
-		require.Equal(t, float64(1.5), doubleUnion)
-		require.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), dateUnion)
+		require.Equal(t, "d", doubleUnion.Tag)
+		require.Equal(t, float64(1.5), doubleUnion.Value)
+
+		require.Equal(t, "d", dateUnion.Tag)
+		require.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), dateUnion.Value)
 	})
 
 	// Test column type information
@@ -1015,9 +1023,10 @@ func TestUnionTypes(t *testing.T) {
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var val driver.Value
+		var val Union
 		err = rows.Scan(&val)
 		require.NoError(t, err)
-		require.Equal(t, int32(123), val)
+		require.Equal(t, "a", val.Tag)
+		require.Equal(t, int32(123), val.Value)
 	})
 }

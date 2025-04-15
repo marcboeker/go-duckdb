@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"database/sql/driver"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -188,6 +189,27 @@ func (d *Decimal) String() string {
 		return fmt.Sprintf("%s0.%s%s", signStr, strings.Repeat("0", scale-len(zeroTrimmed)), zeroTrimmed)
 	}
 	return signStr + zeroTrimmed[:len(zeroTrimmed)-scale] + "." + zeroTrimmed[len(zeroTrimmed)-scale:]
+}
+
+type Union struct {
+	Value driver.Value
+	Tag   string
+}
+
+func (u *Union) Scan(v any) error {
+	if v == nil {
+		u.Tag = ""
+		u.Value = nil
+		return nil
+	}
+
+	// If the value is already a Union, just copy it
+	if union, ok := v.(Union); ok {
+		*u = union
+		return nil
+	}
+
+	return fmt.Errorf("unsupported Scan, storing driver.Value type %T into type *duckdb.Union", v)
 }
 
 func castToTime[T any](val T) (time.Time, error) {

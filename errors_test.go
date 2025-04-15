@@ -545,17 +545,17 @@ func TestUnionErrors(t *testing.T) {
 
 	t.Run("null member access", func(t *testing.T) {
 		rows, err := db.Query(`
-            SELECT
-                NULL::UNION(num INTEGER, str VARCHAR) as null_union
+            SELECT NULL::UNION(num INTEGER, str VARCHAR) as null_union
         `)
 		require.NoError(t, err)
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var nullUnion *driver.Value
+		var nullUnion Union
 		err = rows.Scan(&nullUnion)
 		require.NoError(t, err)
-		require.Nil(t, nullUnion)
+		require.Equal(t, "", nullUnion.Tag)
+		require.Nil(t, nullUnion.Value)
 	})
 
 	t.Run("invalid member type", func(t *testing.T) {

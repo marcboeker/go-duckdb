@@ -138,9 +138,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case TYPE_ARRAY:
 		return reflect.TypeOf([]any{})
 	case TYPE_UNION:
-		// For unions, we need to return the type based on the actual value
-		// Since unions can contain any of their member types, we return any
-		return reflect.TypeOf((*any)(nil)).Elem()
+		return reflect.TypeOf(Union{})
 	case TYPE_UUID:
 		return reflect.TypeOf([]byte{})
 	default:
