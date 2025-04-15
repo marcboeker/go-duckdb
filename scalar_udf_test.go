@@ -25,9 +25,10 @@ type (
 	errResultNilSUDF  struct{}
 	errResultAnySUDF  struct{}
 	errExecSUDF       struct{}
+	contextSUDF       struct{}
 )
 
-func simpleSum(values []driver.Value) (any, error) {
+func simpleSum(ctx context.Context, values []driver.Value) (any, error) {
 	if values[0] == nil || values[1] == nil {
 		return nil, nil
 	}
@@ -35,15 +36,15 @@ func simpleSum(values []driver.Value) (any, error) {
 	return val, nil
 }
 
-func constantOne([]driver.Value) (any, error) {
+func constantOne(ctx context.Context, _ []driver.Value) (any, error) {
 	return int32(1), nil
 }
 
-func identity(values []driver.Value) (any, error) {
+func identity(ctx context.Context, values []driver.Value) (any, error) {
 	return values[0], nil
 }
 
-func variadicSum(values []driver.Value) (any, error) {
+func variadicSum(ctx context.Context, values []driver.Value) (any, error) {
 	sum := int32(0)
 	for _, val := range values {
 		if val == nil {
@@ -54,7 +55,7 @@ func variadicSum(values []driver.Value) (any, error) {
 	return sum, nil
 }
 
-func nilCount(values []driver.Value) (any, error) {
+func nilCount(ctx context.Context, values []driver.Value) (any, error) {
 	count := int32(0)
 	for _, val := range values {
 		if val == nil {
@@ -64,8 +65,17 @@ func nilCount(values []driver.Value) (any, error) {
 	return count, nil
 }
 
-func constantError([]driver.Value) (any, error) {
+func constantError(ctx context.Context, _ []driver.Value) (any, error) {
 	return nil, errors.New("test invalid execution")
+}
+
+func contextUDF(ctx context.Context, values []driver.Value) (any, error) {
+	key, isString := values[0].(string)
+	if !isString {
+		return nil, errors.New("expected string key")
+	}
+
+	return ctx.Value(key), nil
 }
 
 func (*simpleSUDF) Config() ScalarFuncConfig {
@@ -166,6 +176,20 @@ func (*errExecSUDF) Config() ScalarFuncConfig {
 
 func (*errExecSUDF) Executor() ScalarFuncExecutor {
 	return ScalarFuncExecutor{constantError}
+}
+
+func (*contextSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{
+		[]TypeInfo{currentInfo},
+		currentInfo,
+		nil,
+		false,
+		false,
+	}
+}
+
+func (*contextSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{contextUDF}
 }
 
 func TestSimpleScalarUDF(t *testing.T) {
@@ -431,3 +455,32 @@ func TestErrScalarUDFClosedConn(t *testing.T) {
 	err = RegisterScalarUDF(conn, "closed_con", errClosedConUDF)
 	require.ErrorContains(t, err, sql.ErrConnDone.Error())
 }
+
+func TestContextScalarUDF(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.WithValue(context.Background(), "test_key", "test_value")
+	conn := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn)
+
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	var udf *contextSUDF
+	err = RegisterScalarUDF(conn, "context_test", udf)
+	require.NoError(t, err)
+
+	var result string
+	row := db.QueryRowContext(ctx, `SELECT context_test('test_key') AS result`)
+	require.NoError(t, row.Scan(&result))
+	require.Equal(t, "test_value", result)
+
+	// Test with non-existent key
+	var nilResult *string
+	row = db.QueryRowContext(ctx, `SELECT context_test('non_existent') AS result`)
+	require.NoError(t, row.Scan(&nilResult))
+	require.Nil(t, nilResult)
+}
+
