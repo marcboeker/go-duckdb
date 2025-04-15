@@ -646,7 +646,6 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			cols, err := r.ColumnTypes()
 			require.NoError(t, err)
 			require.Equal(t, test.typeName, cols[0].DatabaseTypeName())
-			fmt.Println(cols[0].ScanType())
 			require.Equal(t, reflect.TypeOf(test.value), cols[0].ScanType())
 
 			var val any

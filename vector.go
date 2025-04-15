@@ -142,23 +142,17 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 	case TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
 			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
-			if child.Ptr != nil {
-				vec.childVectors[i].initVectors(child, writable)
-			}
+			vec.childVectors[i].initVectors(child, writable)
 		}
 	case TYPE_ARRAY:
 		child := mapping.ArrayVectorGetChild(v)
-		if child.Ptr != nil {
-			vec.childVectors[0].initVectors(child, writable)
-		}
+		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_UNION:
 		// For unions, each member has its own vector
 		for i := 0; i < len(vec.childVectors); i++ {
 			// Union members are stored as struct fields internally
 			child := mapping.StructVectorGetChild(v, mapping.IdxT(i+1))
-			if child.Ptr != nil {
-				vec.childVectors[i].initVectors(child, writable)
-			}
+			vec.childVectors[i].initVectors(child, writable)
 		}
 	}
 }

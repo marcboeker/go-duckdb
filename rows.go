@@ -125,11 +125,6 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case TYPE_DECIMAL:
 		return reflect.TypeOf(Decimal{})
 	case TYPE_LIST:
-		// Check if this is a list of unions
-		logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
-		defer mapping.DestroyLogicalType(&logicalType)
-		childType := mapping.ListTypeChildType(logicalType)
-		defer mapping.DestroyLogicalType(&childType)
 		return reflect.TypeOf([]any{})
 	case TYPE_STRUCT:
 		return reflect.TypeOf(map[string]any{})
