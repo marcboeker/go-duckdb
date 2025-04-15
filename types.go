@@ -192,8 +192,8 @@ func (d *Decimal) String() string {
 }
 
 type Union struct {
-	Value driver.Value
-	Tag   string
+	Value driver.Value `json:"value"`
+	Tag   string       `json:"tag"`
 }
 
 func (u *Union) Scan(v any) error {
