@@ -196,22 +196,6 @@ type Union struct {
 	Tag   string       `json:"tag"`
 }
 
-func (u *Union) Scan(v any) error {
-	if v == nil {
-		u.Tag = ""
-		u.Value = nil
-		return nil
-	}
-
-	// If the value is already a Union, just copy it
-	if union, ok := v.(Union); ok {
-		*u = union
-		return nil
-	}
-
-	return fmt.Errorf("unsupported Scan, storing driver.Value type %T into type *duckdb.Union", v)
-}
-
 func castToTime[T any](val T) (time.Time, error) {
 	var ti time.Time
 	switch v := any(val).(type) {
