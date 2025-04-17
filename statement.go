@@ -1,6 +1,5 @@
 package duckdb
 
-import "C"
 import (
 	"context"
 	"database/sql/driver"
@@ -192,7 +191,6 @@ func (s *Stmt) tryBindComplexValue(val driver.NamedValue, t Type, n int) (mappin
 	switch val.Value.(type) {
 	case time.Time:
 		// Fallback to TIMESTAMP, if we cannot know the exact type.
-		// Let DuckDB cast the value.
 		return s.bindTimestamp(val, TYPE_TIMESTAMP, n)
 	}
 	name := typeToStringMap[t]
