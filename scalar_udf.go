@@ -10,6 +10,7 @@ typedef void (*scalar_udf_delete_callback_t)(void *);
 import "C"
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"runtime"
@@ -47,7 +48,7 @@ type ScalarFuncConfig struct {
 type ScalarFuncExecutor struct {
 	// RowExecutor accepts a row-based execution function.
 	// []driver.Value contains the row values, and it returns the row execution result, or error.
-	RowExecutor func(values []driver.Value) (any, error)
+	RowExecutor func(ctx context.Context, values []driver.Value) (any, error)
 }
 
 // ScalarFunc is the user-defined scalar function interface.
@@ -64,15 +65,15 @@ type ScalarFunc interface {
 // name is the function name, and f is the scalar function's interface ScalarFunc.
 // RegisterScalarUDF takes ownership of f, so you must pass it as a pointer.
 func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
-	function, err := createScalarFunc(name, f)
-	if err != nil {
-		return getError(errAPI, err)
-	}
-	defer mapping.DestroyScalarFunction(&function)
-
 	// Register the function on the underlying driver connection exposed by c.Raw.
-	err = c.Raw(func(driverConn any) error {
+	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
+		function, err := createScalarFunc(name, f, &conn.state)
+		if err != nil {
+			return getError(errAPI, err)
+		}
+		defer mapping.DestroyScalarFunction(&function)
+
 		state := mapping.RegisterScalarFunction(conn.conn, function)
 		if state == mapping.StateError {
 			return getError(errAPI, errScalarUDFCreate)
@@ -91,25 +92,25 @@ func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
 func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) error {
 	set := mapping.CreateScalarFunctionSet(name)
 
-	// Create each function and add it to the set.
-	for i, f := range functions {
-		function, err := createScalarFunc(name, f)
-		if err != nil {
-			mapping.DestroyScalarFunctionSet(&set)
-			return getError(errAPI, err)
-		}
-
-		state := mapping.AddScalarFunctionToSet(set, function)
-		mapping.DestroyScalarFunction(&function)
-		if state == mapping.StateError {
-			mapping.DestroyScalarFunctionSet(&set)
-			return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
-		}
-	}
-
 	// Register the function set on the underlying driver connection exposed by c.Raw.
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
+		connState := &conn.state
+		// Create each function and add it to the set.
+		for i, f := range functions {
+			function, err := createScalarFunc(name, f, connState)
+			if err != nil {
+				mapping.DestroyScalarFunctionSet(&set)
+				return getError(errAPI, err)
+			}
+
+			state := mapping.AddScalarFunctionToSet(set, function)
+			mapping.DestroyScalarFunction(&function)
+			if state == mapping.StateError {
+				mapping.DestroyScalarFunctionSet(&set)
+				return getError(errAPI, addIndexToError(errScalarUDFAddToSet, i))
+			}
+		}
 		state := mapping.RegisterScalarFunctionSet(conn.conn, set)
 		mapping.DestroyScalarFunctionSet(&set)
 		if state == mapping.StateError {
@@ -127,7 +128,9 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 	output := mapping.Vector{Ptr: outputPtr}
 
 	extraInfo := mapping.ScalarFunctionGetExtraInfo(functionInfo)
-	function := getPinned[ScalarFunc](extraInfo)
+	functionPinnedValue := getPinned[scalarFuncPinnedValue](extraInfo)
+	function := functionPinnedValue.f
+	ctx := functionPinnedValue.connState.currCtx
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
@@ -177,7 +180,7 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 
 		// Execute the function.
 		var val any
-		if val, err = executor.RowExecutor(values); err != nil {
+		if val, err = executor.RowExecutor(ctx, values); err != nil {
 			mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 			return
 		}
@@ -238,7 +241,12 @@ func registerResultParams(config ScalarFuncConfig, f mapping.ScalarFunction) err
 	return nil
 }
 
-func createScalarFunc(name string, f ScalarFunc) (mapping.ScalarFunction, error) {
+type scalarFuncPinnedValue struct {
+	f         ScalarFunc
+	connState *connState
+}
+
+func createScalarFunc(name string, f ScalarFunc, connState *connState) (mapping.ScalarFunction, error) {
 	if name == "" {
 		return mapping.ScalarFunction{}, errScalarUDFNoName
 	}
@@ -274,9 +282,9 @@ func createScalarFunc(name string, f ScalarFunc) (mapping.ScalarFunction, error)
 	mapping.ScalarFunctionSetFunction(function, callbackPtr)
 
 	// Pin the ScalarFunc f.
-	value := pinnedValue[ScalarFunc]{
+	value := pinnedValue[scalarFuncPinnedValue]{
 		pinner: &runtime.Pinner{},
-		value:  f,
+		value:  scalarFuncPinnedValue{f: f, connState: connState},
 	}
 	h := cgo.NewHandle(value)
 	value.pinner.Pin(&h)

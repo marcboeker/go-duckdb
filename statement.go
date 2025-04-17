@@ -304,6 +304,9 @@ func (s *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 // ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
 // It implements the driver.StmtExecContext interface.
 func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driver.Result, error) {
+	cleanupCtx := s.conn.setCurrCtx(ctx)
+	defer cleanupCtx()
+
 	res, err := s.execute(ctx, nargs)
 	if err != nil {
 		return nil, err
@@ -328,6 +331,9 @@ func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
 		return nil, errNotBound
 	}
 
+	cleanupCtx := s.conn.setCurrCtx(ctx)
+	defer cleanupCtx()
+
 	res, err := s.executeBound(ctx)
 	if err != nil {
 		return nil, err
@@ -346,6 +352,9 @@ func (s *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 // QueryContext executes a query that may return rows, such as a SELECT.
 // It implements the driver.StmtQueryContext interface.
 func (s *Stmt) QueryContext(ctx context.Context, nargs []driver.NamedValue) (driver.Rows, error) {
+	cleanupCtx := s.conn.setCurrCtx(ctx)
+	defer cleanupCtx()
+
 	res, err := s.execute(ctx, nargs)
 	if err != nil {
 		return nil, err
@@ -367,6 +376,8 @@ func (s *Stmt) QueryBound(ctx context.Context) (driver.Rows, error) {
 	if !s.bound {
 		return nil, errNotBound
 	}
+	cleanupCtx := s.conn.setCurrCtx(ctx)
+	defer cleanupCtx()
 
 	res, err := s.executeBound(ctx)
 	if err != nil {
