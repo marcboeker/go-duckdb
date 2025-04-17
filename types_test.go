@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -942,4 +943,25 @@ func TestJSONType(t *testing.T) {
 	require.Equal(t, float64(1), res.Get()["1"])
 	require.Equal(t, float64(2), res.Get()["2"])
 	require.Equal(t, float64(3), res.Get()["3"])
+}
+
+func TestJSONColType(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE OR REPLACE TABLE test AS SELECT '[10]'::JSON AS col, 1 AS val`)
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(context.Background(), `SELECT col AS value, count(*) AS count FROM test GROUP BY 1`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
+
+	columnTypes, err := res.ColumnTypes()
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(columnTypes))
+	require.Equal(t, aliasJSON, columnTypes[0].DatabaseTypeName())
+	require.Equal(t, typeToStringMap[TYPE_BIGINT], columnTypes[1].DatabaseTypeName())
+	require.Equal(t, reflect.TypeOf((*any)(nil)).Elem(), columnTypes[0].ScanType())
+	require.Equal(t, reflect.TypeOf(int64(0)), columnTypes[1].ScanType())
 }
