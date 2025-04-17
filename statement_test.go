@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -410,4 +411,19 @@ func TestPreparePivot(t *testing.T) {
 	require.Equal(t, "Netherlands", name)
 	require.Equal(t, 42, population)
 	closePreparedWrapper(t, prepared)
+}
+
+func TestBindWithoutResolvedParams(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	d := time.Date(2022, 0o2, 0o7, 0, 0, 0, 0, time.UTC)
+
+	r := db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, d, d)
+	require.NoError(t, r.Err())
+
+	var a, b string
+	require.NoError(t, r.Scan(&a, &b))
+	require.Equal(t, "2022-02-07 00:00:00", a)
+	require.Equal(t, "2022-02-07 00:00:00", b)
 }
