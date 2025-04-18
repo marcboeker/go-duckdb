@@ -201,3 +201,17 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 	}
 	return slice
 }
+
+func (vec *vector) getUnion(rowIdx mapping.IdxT) any {
+	if vec.tagDataPtr == nil {
+		return nil
+	}
+	tags := (*[1 << 31]int8)(vec.tagDataPtr)
+	tag := tags[rowIdx]
+	child := &vec.childVectors[tag]
+	value := child.getFn(child, rowIdx)
+	return Union{
+		Tag:   vec.indexDict[uint32(tag)],
+		Value: value,
+	}
+}

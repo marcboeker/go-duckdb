@@ -607,6 +607,27 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			value:    time.Date(1992, time.September, 20, 8, 30, 0, 0, time.UTC),
 			typeName: "TIMESTAMPTZ",
 		},
+		// DUCKDB_TYPE_UNION
+		{
+			sql:      `SELECT (123)::UNION(num INTEGER, str VARCHAR) AS col`,
+			value:    Union{Tag: "num", Value: int32(123)},
+			typeName: "UNION(num INTEGER, str VARCHAR)",
+		},
+		{
+			sql:      `SELECT ('hello')::UNION(num INTEGER, str VARCHAR) AS col`,
+			value:    Union{Tag: "str", Value: "hello"},
+			typeName: "UNION(num INTEGER, str VARCHAR)",
+		},
+		{
+			sql:      `SELECT (1.5)::UNION(d DOUBLE, i INTEGER, s VARCHAR) AS col`,
+			value:    Union{Tag: "d", Value: float64(1.5)},
+			typeName: "UNION(d DOUBLE, i INTEGER, s VARCHAR)",
+		},
+		{
+			sql:      `SELECT ('2024-01-01'::DATE)::UNION(d DATE, s VARCHAR) AS col`,
+			value:    Union{Tag: "d", Value: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
+			typeName: "UNION(d DATE, s VARCHAR)",
+		},
 	}
 
 	db := openDbWrapper(t, ``)
@@ -620,8 +641,8 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 
 			cols, err := r.ColumnTypes()
 			require.NoError(t, err)
-			require.Equal(t, reflect.TypeOf(test.value), cols[0].ScanType())
 			require.Equal(t, test.typeName, cols[0].DatabaseTypeName())
+			require.Equal(t, reflect.TypeOf(test.value), cols[0].ScanType())
 
 			var val any
 			require.True(t, r.Next())

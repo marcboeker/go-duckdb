@@ -76,6 +76,11 @@ type (
 		n     int64
 		count int64
 	}
+
+	unionTableUDF struct {
+		n     int64
+		count int64
+	}
 )
 
 var (
@@ -217,6 +222,12 @@ var (
 			name:        "constTableUDF_timestamp_tz",
 			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))`,
 			resultCount: 1,
+		},
+		{
+			udf:         &unionTableUDF{},
+			name:        "unionTableUDF",
+			query:       `SELECT * FROM %s(4)`,
+			resultCount: 4,
 		},
 	}
 	parallelTableUDFs = []tableUDFTest[ParallelRowTableFunction]{
@@ -628,6 +639,85 @@ func (udf *chunkIncTableUDF) GetTypes() []any {
 }
 
 func (udf *chunkIncTableUDF) Cardinality() *CardinalityInfo {
+	return nil
+}
+
+func (udf *unionTableUDF) GetFunction() RowTableFunction {
+	return RowTableFunction{
+		Config: TableFunctionConfig{
+			Arguments: []TypeInfo{typeBigintTableUDF},
+		},
+		BindArguments: bindUnionTableUDF,
+	}
+}
+
+func bindUnionTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+	return &unionTableUDF{
+		count: 0,
+		n:     args[0].(int64),
+	}, nil
+}
+
+func (udf *unionTableUDF) ColumnInfos() []ColumnInfo {
+	// Create member types
+	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
+	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
+
+	// Create union type info
+	unionInfo, _ := NewUnionInfo(
+		[]TypeInfo{intInfo, varcharInfo},
+		[]string{"number", "text"},
+	)
+
+	return []ColumnInfo{{Name: "result", T: unionInfo}}
+}
+
+func (udf *unionTableUDF) Init() {}
+
+func (udf *unionTableUDF) FillRow(row Row) (bool, error) {
+	if udf.count >= udf.n {
+		return false, nil
+	}
+	udf.count++
+
+	var val Union
+	if udf.count%2 == 0 {
+		// Even numbers: store as number
+		val = Union{
+			Value: int32(udf.count),
+			Tag:   "number",
+		}
+	} else {
+		// Odd numbers: store as text
+		val = Union{
+			Value: fmt.Sprintf("text_%d", udf.count),
+			Tag:   "text",
+		}
+	}
+
+	err := SetRowValue(row, 0, val)
+	return true, err
+}
+
+func (udf *unionTableUDF) GetValue(r, c int) any {
+	count := int64(r + 1)
+	if count%2 == 0 {
+		return Union{
+			Value: int32(count),
+			Tag:   "number",
+		}
+	}
+	return Union{
+		Value: fmt.Sprintf("text_%d", count),
+		Tag:   "text",
+	}
+}
+
+func (udf *unionTableUDF) GetTypes() []any {
+	return []any{Union{}}
+}
+
+func (udf *unionTableUDF) Cardinality() *CardinalityInfo {
 	return nil
 }
 

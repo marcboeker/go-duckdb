@@ -20,6 +20,7 @@ type (
 	typesSUDF         struct{}
 	variadicSUDF      struct{}
 	anyTypeSUDF       struct{}
+	unionTestSUDF     struct{}
 	errExecutorSUDF   struct{}
 	errInputNilSUDF   struct{}
 	errResultNilSUDF  struct{}
@@ -166,6 +167,21 @@ func (*errExecSUDF) Config() ScalarFuncConfig {
 
 func (*errExecSUDF) Executor() ScalarFuncExecutor {
 	return ScalarFuncExecutor{constantError}
+}
+
+func (*unionTestSUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{
+		InputTypeInfos: []TypeInfo{currentInfo},
+		ResultTypeInfo: currentInfo,
+	}
+}
+
+func (*unionTestSUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{
+		RowExecutor: func(values []driver.Value) (any, error) {
+			return values[0], nil
+		},
+	}
 }
 
 func TestSimpleScalarUDF(t *testing.T) {
@@ -355,6 +371,52 @@ func TestANYScalarUDF(t *testing.T) {
 	row = db.QueryRow(`SELECT my_null_count() AS msg`)
 	require.NoError(t, row.Scan(&count))
 	require.Equal(t, 0, count)
+}
+
+func TestUnionScalarUDF(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
+
+	_, err := conn.ExecContext(context.Background(), `CREATE TYPE NUMBER_OR_STRING AS UNION(number INTEGER, text VARCHAR)`)
+	require.NoError(t, err)
+
+	// Create member types
+	intInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	varcharInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	// Create union type info
+	unionInfo, err := NewUnionInfo(
+		[]TypeInfo{intInfo, varcharInfo},
+		[]string{"number", "text"},
+	)
+	require.NoError(t, err)
+
+	currentInfo = unionInfo
+
+	var udf *unionTestSUDF
+	err = RegisterScalarUDF(conn, "union_identity", udf)
+	require.NoError(t, err)
+
+	// Test with integer input
+	var result any
+	row := db.QueryRow(`SELECT union_identity(42::NUMBER_OR_STRING) AS res`)
+	require.NoError(t, row.Scan(&result))
+	require.Equal(t, Union{Value: int32(42), Tag: "number"}, result)
+
+	// Test with string input
+	row = db.QueryRow(`SELECT union_identity('hello'::NUMBER_OR_STRING) AS res`)
+	require.NoError(t, row.Scan(&result))
+	require.Equal(t, Union{Value: "hello", Tag: "text"}, result)
+
+	// Test with NULL input
+	row = db.QueryRow(`SELECT union_identity(NULL::NUMBER_OR_STRING) AS res`)
+	require.NoError(t, row.Scan(&result))
+	require.Equal(t, nil, result)
 }
 
 func TestErrScalarUDF(t *testing.T) {

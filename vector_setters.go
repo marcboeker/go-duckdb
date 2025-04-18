@@ -237,7 +237,7 @@ func setEnum[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(str).String())
 	}
 
-	if v, ok := vec.dict[str]; ok {
+	if v, ok := vec.namesDict[str]; ok {
 		switch vec.internalType {
 		case TYPE_UTINYINT:
 			return setNumeric[uint32, int8](vec, rowIdx, v)
@@ -410,6 +410,49 @@ func setUUID[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	return nil
 }
 
+func setUnion[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
+	switch v := any(val).(type) {
+	case Union:
+		// For explicit Union structs - find the tag index
+		var tagIdx int8
+		var found bool
+		for idx, memberName := range vec.indexDict {
+			if memberName == v.Tag {
+				tagIdx = int8(idx)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return invalidInputError("tag", v.Tag)
+		}
+		// Set the tag in the tag vector
+		tags := (*[1 << 31]int8)(vec.tagDataPtr)
+		tags[rowIdx] = tagIdx
+		// Set the value in the corresponding child vector
+		childVec := &vec.childVectors[tagIdx]
+		return childVec.setFn(childVec, rowIdx, v.Value)
+
+	default:
+		// For plain values - try to match type with a union member
+		plainVal := any(val)
+		// Try each member vector until we find one that accepts the value
+		for idx := range vec.childVectors {
+			childVec := &vec.childVectors[idx]
+			// Try to set value in this member's vector
+			err := childVec.setFn(childVec, rowIdx, plainVal)
+			if err == nil {
+				// Value was accepted - set the tag
+				tags := (*[1 << 31]int8)(vec.tagDataPtr)
+				tags[rowIdx] = int8(idx)
+				return nil
+			}
+		}
+		// No member vector accepted the value
+		return castError(reflect.TypeOf(val).String(), "union member")
+	}
+}
+
 func setVectorVal[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	name, inMap := unsupportedTypeToStringMap[vec.Type]
 	if inMap {
@@ -466,6 +509,8 @@ func setVectorVal[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		return unsupportedTypeError(unsupportedTypeToStringMap[vec.Type])
 	case TYPE_UUID:
 		return setUUID[S](vec, rowIdx, val)
+	case TYPE_UNION:
+		return setUnion[S](vec, rowIdx, val)
 	default:
 		return unsupportedTypeError(unknownTypeErrMsg)
 	}
