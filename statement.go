@@ -286,6 +286,44 @@ func (s *Stmt) bindList(val driver.NamedValue, n int) (mapping.State, error) {
 	return state, nil
 }
 
+func (s *Stmt) bindStruct(val driver.NamedValue, n int) (mapping.State, error) {
+	lt, err := s.ParamLogicalType(n + 1)
+	if err != nil {
+		return mapping.StateError, err
+	}
+
+	var values []mapping.Value
+
+	vMap := val.Value.(map[string]any)
+	if err != nil {
+		return mapping.StateError, addIndexToError(fmt.Errorf("could not cast %T to map[string]any: %s", val.Value, err), n+1)
+	}
+
+	childCount := mapping.StructTypeChildCount(*lt)
+
+	for i := mapping.IdxT(0); i < childCount; i++ {
+		childName := mapping.StructTypeChildName(*lt, i)
+		childType := mapping.StructTypeChildType(*lt, i)
+		defer mapping.DestroyLogicalType(&childType)
+		v, exists := vMap[childName]
+		if exists {
+			vv, err := createValue(childType, v)
+			if err != nil {
+				return mapping.StateError, addIndexToError(fmt.Errorf("could not create value %s", err), n+1)
+			}
+			values = append(values, vv)
+		} else {
+			values = append(values, mapping.CreateNullValue())
+		}
+	}
+
+	structValue := mapping.CreateStructValue(*lt, values)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), structValue)
+	mapping.DestroyValue(&structValue) // TODO: do I need to destroy every value in `values`?
+	mapping.DestroyLogicalType(lt)
+	return state, nil
+}
+
 func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
 	t, err := s.ParamType(n + 1)
 	if err != nil {
@@ -306,7 +344,9 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 		return s.bindArray(val, n)
 	case TYPE_LIST:
 		return s.bindList(val, n)
-	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_STRUCT, TYPE_MAP, TYPE_ENUM, TYPE_UNION:
+	case TYPE_STRUCT:
+		return s.bindStruct(val, n)
+	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_MAP, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: implement NamedValueChecker to support custom data types.

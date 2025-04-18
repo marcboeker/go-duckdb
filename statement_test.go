@@ -417,22 +417,37 @@ func TestPrepareComplex(t *testing.T) {
 	defer closeDbWrapper(t, db)
 
 	ctx := context.Background()
-	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(arr_int INTEGER[2], list_str VARCHAR[])`)
-	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES (array_value(7, 1), list_value('foo', 'bar'))`)
+	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(
+		arr_int INTEGER[2],
+		list_str VARCHAR[],
+		str_col STRUCT(v VARCHAR, i INTEGER)
+	)`)
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES
+		(array_value(7, 1), list_value('foo', 'bar'), {'v': 'baz', 'i': 42})
+	`)
 	require.NoError(t, err)
 
-	prepared, err := db.Prepare(`SELECT * FROM arr_test WHERE arr_int = ? AND list_str = ?`)
+	prepared, err := db.Prepare(`SELECT * FROM arr_test
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?
+	`)
 	require.NoError(t, err)
 
-	var res Composite[[]int32]
-	var res2 Composite[[]string]
-	err = prepared.QueryRow([]int32{7, 1}, []string{"foo", "bar"}).Scan(&res, &res2)
+	var arr Composite[[]int32]
+	var list Composite[[]string]
+	var struc Composite[map[string]any]
+	err = prepared.QueryRow(
+		[]int32{7, 1},
+		[]string{"foo", "bar"},
+		map[string]any{"v": "baz", "i": 42},
+	).Scan(&arr, &list, &struc)
 	require.NoError(t, err)
 
-	require.Equal(t, int32(7), res.Get()[0])
-	require.Equal(t, int32(1), res.Get()[1])
-	require.Equal(t, "foo", res2.Get()[0])
-	require.Equal(t, "bar", res2.Get()[1])
+	require.Equal(t, int32(7), arr.Get()[0])
+	require.Equal(t, int32(1), arr.Get()[1])
+	require.Equal(t, "foo", list.Get()[0])
+	require.Equal(t, "bar", list.Get()[1])
+	require.Equal(t, "baz", struc.Get()["v"])
+	require.Equal(t, int32(42), struc.Get()["i"])
 
 	closePreparedWrapper(t, prepared)
 }

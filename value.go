@@ -69,7 +69,12 @@ func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
 	case TYPE_SMALLINT:
 		return mapping.CreateInt16(v.(int16)), nil
 	case TYPE_INTEGER:
-		return mapping.CreateInt32(v.(int32)), nil
+		// TODO: do all int types need this casting?
+		if i, ok := v.(int); ok {
+			return mapping.CreateInt32(int32(i)), nil
+		} else {
+			return mapping.CreateInt32(v.(int32)), nil
+		}
 	case TYPE_BIGINT:
 		return mapping.CreateInt64(v.(int64)), nil
 	case TYPE_UTINYINT:
