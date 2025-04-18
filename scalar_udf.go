@@ -218,9 +218,6 @@ func registerInputParams(config ScalarFuncConfig, f mapping.ScalarFunction) erro
 		if info == nil {
 			return addIndexToError(errScalarUDFInputTypeIsNil, i)
 		}
-		if info.InternalType() == TYPE_UNION {
-			return errScalarUDFInputTypeIsUNION
-		}
 		t := info.logicalType()
 		mapping.ScalarFunctionAddParameter(f, t)
 		mapping.DestroyLogicalType(&t)
@@ -234,9 +231,6 @@ func registerResultParams(config ScalarFuncConfig, f mapping.ScalarFunction) err
 	}
 	if config.ResultTypeInfo.InternalType() == TYPE_ANY {
 		return errScalarUDFResultTypeIsANY
-	}
-	if config.ResultTypeInfo.InternalType() == TYPE_UNION {
-		return errScalarUDFResultTypeIsUNION
 	}
 	t := config.ResultTypeInfo.logicalType()
 	mapping.ScalarFunctionSetReturnType(f, t)
