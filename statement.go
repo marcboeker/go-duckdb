@@ -115,21 +115,21 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	return Type(t), nil
 }
 
-func (s *Stmt) ParamLogicalType(n int) (*mapping.LogicalType, error) {
+func (s *Stmt) ParamLogicalType(n int) (mapping.LogicalType, error) {
+	var lt mapping.LogicalType
 	if s.closed {
-		return nil, errClosedStmt
+		return lt, errClosedStmt
 	}
 	if s.preparedStmt == nil {
-		return nil, errUninitializedStmt
+		return lt, errUninitializedStmt
 	}
 
 	count := mapping.NParams(*s.preparedStmt)
 	if n == 0 || n > int(count) {
-		return nil, getError(errAPI, paramIndexError(n, uint64(count)))
+		return lt, getError(errAPI, paramIndexError(n, uint64(count)))
 	}
 
-	t := mapping.ParamLogicalType(*s.preparedStmt, mapping.IdxT(n))
-	return &t, nil
+	return mapping.ParamLogicalType(*s.preparedStmt, mapping.IdxT(n)), nil
 }
 
 // StatementType returns the type of the statement.
@@ -228,99 +228,52 @@ func toAnySlice(v any) ([]any, error) {
 
 func (s *Stmt) bindArray(val driver.NamedValue, n int) (mapping.State, error) {
 	lt, err := s.ParamLogicalType(n + 1)
+	defer mapping.DestroyLogicalType(&lt)
 	if err != nil {
-		return mapping.StateError, err
+		return mapping.StateError, addIndexToError(err, n+1)
 	}
 
-	var values []mapping.Value
-	childType := mapping.ArrayTypeChildType(*lt)
-
-	vSlice, err := toAnySlice(val.Value)
+	arrValue, err := getMappedArrayValue(lt, val.Value)
 	if err != nil {
-		return mapping.StateError, addIndexToError(fmt.Errorf("could not cast %T to []any: %s", val.Value, err), n+1)
+		return mapping.StateError, addIndexToError(err, n+1)
 	}
 
-	for _, v := range vSlice {
-		vv, err := createValue(childType, v)
-		if err != nil {
-			return mapping.StateError, addIndexToError(fmt.Errorf("could not create value %s", err), n+1)
-		}
-		values = append(values, vv)
-	}
-
-	arrValue := mapping.CreateArrayValue(childType, values)
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), arrValue)
-	mapping.DestroyValue(&arrValue) // TODO: do I need to destroy every value in `values`?
-	mapping.DestroyLogicalType(&childType)
-	mapping.DestroyLogicalType(lt)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *arrValue)
+	// mapping.DestroyValue(arrValue) // TODO: do I need to destroy every value in `values`?
 	return state, nil
 }
 
 func (s *Stmt) bindList(val driver.NamedValue, n int) (mapping.State, error) {
 	lt, err := s.ParamLogicalType(n + 1)
+	defer mapping.DestroyLogicalType(&lt)
 	if err != nil {
 		return mapping.StateError, err
 	}
 
-	var values []mapping.Value
-	childType := mapping.ListTypeChildType(*lt)
-
-	vSlice, err := toAnySlice(val.Value)
+	listValue, err := getMappedListValue(lt, val.Value)
 	if err != nil {
-		return mapping.StateError, addIndexToError(fmt.Errorf("could not cast %T to []any: %s", val.Value, err), n+1)
+		return mapping.StateError, addIndexToError(err, n+1)
 	}
 
-	for _, v := range vSlice {
-		vv, err := createValue(childType, v)
-		if err != nil {
-			return mapping.StateError, addIndexToError(fmt.Errorf("could not create value %s", err), n+1)
-		}
-		values = append(values, vv)
-	}
-
-	listValue := mapping.CreateListValue(childType, values)
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), listValue)
-	mapping.DestroyValue(&listValue) // TODO: do I need to destroy every value in `values`?
-	mapping.DestroyLogicalType(&childType)
-	mapping.DestroyLogicalType(lt)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *listValue)
+	// mapping.DestroyValue(&listValue) // TODO: do I need to destroy every value in `values`?
 	return state, nil
 }
 
 func (s *Stmt) bindStruct(val driver.NamedValue, n int) (mapping.State, error) {
 	lt, err := s.ParamLogicalType(n + 1)
+	defer mapping.DestroyLogicalType(&lt)
 	if err != nil {
 		return mapping.StateError, err
 	}
 
-	var values []mapping.Value
-
-	vMap := val.Value.(map[string]any)
+	structValue, err := getMappedStructValue(lt, val.Value)
 	if err != nil {
-		return mapping.StateError, addIndexToError(fmt.Errorf("could not cast %T to map[string]any: %s", val.Value, err), n+1)
+		return mapping.StateError, addIndexToError(err, n+1)
 	}
 
-	childCount := mapping.StructTypeChildCount(*lt)
-
-	for i := mapping.IdxT(0); i < childCount; i++ {
-		childName := mapping.StructTypeChildName(*lt, i)
-		childType := mapping.StructTypeChildType(*lt, i)
-		defer mapping.DestroyLogicalType(&childType)
-		v, exists := vMap[childName]
-		if exists {
-			vv, err := createValue(childType, v)
-			if err != nil {
-				return mapping.StateError, addIndexToError(fmt.Errorf("could not create value %s", err), n+1)
-			}
-			values = append(values, vv)
-		} else {
-			values = append(values, mapping.CreateNullValue())
-		}
-	}
-
-	structValue := mapping.CreateStructValue(*lt, values)
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), structValue)
-	mapping.DestroyValue(&structValue) // TODO: do I need to destroy every value in `values`?
-	mapping.DestroyLogicalType(lt)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *structValue)
+	// mapping.DestroyValue(&structValue) // TODO: do I need to destroy every value in `values`?
 	return state, nil
 }
 
