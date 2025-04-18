@@ -523,6 +523,7 @@ func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error 
 	}
 	vec.childVectors = make([]vector, memberCount)
 	vec.indexDict = make(map[uint32]string)
+
 	for i := 0; i < memberCount; i++ {
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
@@ -533,12 +534,20 @@ func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error 
 		}
 		vec.indexDict[uint32(i)] = memberName
 	}
+
 	vec.Type = TYPE_UNION
 	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
 		}
 		return vec.getUnion(rowIdx)
+	}
+	vec.setFn = func(vec *vector, rowIdx mapping.IdxT, val any) error {
+		if val == nil {
+			vec.setNull(rowIdx)
+			return nil
+		}
+		return setUnion(vec, rowIdx, val)
 	}
 	return nil
 }
