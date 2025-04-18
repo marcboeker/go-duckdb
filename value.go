@@ -1,6 +1,8 @@
 package duckdb
 
 import (
+	"reflect"
+
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
@@ -55,4 +57,55 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 	default:
 		return nil, unsupportedTypeError(typeToStringMap[t])
 	}
+}
+
+func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
+	var vv mapping.Value
+	var err error
+	t := Type(mapping.GetTypeId(lt))
+	switch t {
+	case TYPE_BOOLEAN:
+		vv, err = mapping.CreateBool(v.(bool)), nil
+	case TYPE_TINYINT:
+		vv, err = mapping.CreateInt8(v.(int8)), nil
+	case TYPE_SMALLINT:
+		vv, err = mapping.CreateInt16(v.(int16)), nil
+	case TYPE_INTEGER:
+		// TODO: do all int types need this casting?
+		if i, ok := v.(int); ok {
+			vv, err = mapping.CreateInt32(int32(i)), nil
+		} else {
+			vv, err = mapping.CreateInt32(v.(int32)), nil
+		}
+	case TYPE_BIGINT:
+		vv, err = mapping.CreateInt64(v.(int64)), nil
+	case TYPE_UTINYINT:
+		vv, err = mapping.CreateUInt8(v.(uint8)), nil
+	case TYPE_USMALLINT:
+		vv, err = mapping.CreateUInt16(v.(uint16)), nil
+	case TYPE_UINTEGER:
+		vv, err = mapping.CreateUInt32(v.(uint32)), nil
+	case TYPE_UBIGINT:
+		vv, err = mapping.CreateUInt64(v.(uint64)), nil
+	case TYPE_FLOAT:
+		vv, err = mapping.CreateFloat(v.(float32)), nil
+	case TYPE_DOUBLE:
+		vv, err = mapping.CreateDouble(v.(float64)), nil
+	case TYPE_VARCHAR:
+		vv, err = mapping.CreateVarchar(v.(string)), nil
+	case TYPE_ARRAY:
+		return getMappedArrayValue(lt, v)
+	case TYPE_LIST:
+		return getMappedListValue(lt, v)
+	case TYPE_STRUCT:
+		return getMappedStructValue(lt, v)
+	default:
+		return nil, unsupportedTypeError(reflect.TypeOf(v).Name())
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vv, err
 }
