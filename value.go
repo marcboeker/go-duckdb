@@ -59,40 +59,53 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 	}
 }
 
-func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
+func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
+	var vv mapping.Value
+	var err error
 	t := Type(mapping.GetTypeId(lt))
 	switch t {
 	case TYPE_BOOLEAN:
-		return mapping.CreateBool(v.(bool)), nil
+		vv, err = mapping.CreateBool(v.(bool)), nil
 	case TYPE_TINYINT:
-		return mapping.CreateInt8(v.(int8)), nil
+		vv, err = mapping.CreateInt8(v.(int8)), nil
 	case TYPE_SMALLINT:
-		return mapping.CreateInt16(v.(int16)), nil
+		vv, err = mapping.CreateInt16(v.(int16)), nil
 	case TYPE_INTEGER:
 		// TODO: do all int types need this casting?
 		if i, ok := v.(int); ok {
-			return mapping.CreateInt32(int32(i)), nil
+			vv, err = mapping.CreateInt32(int32(i)), nil
 		} else {
-			return mapping.CreateInt32(v.(int32)), nil
+			vv, err = mapping.CreateInt32(v.(int32)), nil
 		}
 	case TYPE_BIGINT:
-		return mapping.CreateInt64(v.(int64)), nil
+		vv, err = mapping.CreateInt64(v.(int64)), nil
 	case TYPE_UTINYINT:
-		return mapping.CreateUInt8(v.(uint8)), nil
+		vv, err = mapping.CreateUInt8(v.(uint8)), nil
 	case TYPE_USMALLINT:
-		return mapping.CreateUInt16(v.(uint16)), nil
+		vv, err = mapping.CreateUInt16(v.(uint16)), nil
 	case TYPE_UINTEGER:
-		return mapping.CreateUInt32(v.(uint32)), nil
+		vv, err = mapping.CreateUInt32(v.(uint32)), nil
 	case TYPE_UBIGINT:
-		return mapping.CreateUInt64(v.(uint64)), nil
+		vv, err = mapping.CreateUInt64(v.(uint64)), nil
 	case TYPE_FLOAT:
-		return mapping.CreateFloat(v.(float32)), nil
+		vv, err = mapping.CreateFloat(v.(float32)), nil
 	case TYPE_DOUBLE:
-		return mapping.CreateDouble(v.(float64)), nil
+		vv, err = mapping.CreateDouble(v.(float64)), nil
 	case TYPE_VARCHAR:
-		return mapping.CreateVarchar(v.(string)), nil
+		vv, err = mapping.CreateVarchar(v.(string)), nil
+	case TYPE_ARRAY:
+		return getMappedArrayValue(lt, v)
+	case TYPE_LIST:
+		return getMappedListValue(lt, v)
+	case TYPE_STRUCT:
+		return getMappedStructValue(lt, v)
+	default:
+		return nil, unsupportedTypeError(reflect.TypeOf(v).Name())
 	}
 
-	var mv mapping.Value
-	return mv, unsupportedTypeError(reflect.TypeOf(v).Name())
+	if err != nil {
+		return nil, err
+	}
+
+	return &vv, err
 }

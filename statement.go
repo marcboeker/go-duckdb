@@ -226,57 +226,6 @@ func toAnySlice(v any) ([]any, error) {
 	return []any{v}, nil
 }
 
-func (s *Stmt) bindArray(val driver.NamedValue, n int) (mapping.State, error) {
-	lt, err := s.ParamLogicalType(n + 1)
-	defer mapping.DestroyLogicalType(&lt)
-	if err != nil {
-		return mapping.StateError, addIndexToError(err, n+1)
-	}
-
-	arrValue, err := getMappedArrayValue(lt, val.Value)
-	if err != nil {
-		return mapping.StateError, addIndexToError(err, n+1)
-	}
-
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *arrValue)
-	// mapping.DestroyValue(arrValue) // TODO: do I need to destroy every value in `values`?
-	return state, nil
-}
-
-func (s *Stmt) bindList(val driver.NamedValue, n int) (mapping.State, error) {
-	lt, err := s.ParamLogicalType(n + 1)
-	defer mapping.DestroyLogicalType(&lt)
-	if err != nil {
-		return mapping.StateError, err
-	}
-
-	listValue, err := getMappedListValue(lt, val.Value)
-	if err != nil {
-		return mapping.StateError, addIndexToError(err, n+1)
-	}
-
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *listValue)
-	// mapping.DestroyValue(&listValue) // TODO: do I need to destroy every value in `values`?
-	return state, nil
-}
-
-func (s *Stmt) bindStruct(val driver.NamedValue, n int) (mapping.State, error) {
-	lt, err := s.ParamLogicalType(n + 1)
-	defer mapping.DestroyLogicalType(&lt)
-	if err != nil {
-		return mapping.StateError, err
-	}
-
-	structValue, err := getMappedStructValue(lt, val.Value)
-	if err != nil {
-		return mapping.StateError, addIndexToError(err, n+1)
-	}
-
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *structValue)
-	// mapping.DestroyValue(&structValue) // TODO: do I need to destroy every value in `values`?
-	return state, nil
-}
-
 func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
 	t, err := s.ParamType(n + 1)
 	if err != nil {
@@ -293,12 +242,20 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 		return s.bindDate(val, n)
 	case TYPE_TIME, TYPE_TIME_TZ:
 		return s.bindTime(val, t, n)
-	case TYPE_ARRAY:
-		return s.bindArray(val, n)
-	case TYPE_LIST:
-		return s.bindList(val, n)
-	case TYPE_STRUCT:
-		return s.bindStruct(val, n)
+	case TYPE_ARRAY, TYPE_LIST, TYPE_STRUCT:
+		lt, err := s.ParamLogicalType(n + 1)
+		defer mapping.DestroyLogicalType(&lt)
+		if err != nil {
+			return mapping.StateError, err
+		}
+
+		mappedVal, err := createValue(lt, val.Value)
+		if err != nil {
+			return mapping.StateError, addIndexToError(err, n+1)
+		}
+
+		state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *mappedVal)
+		return state, nil
 	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_MAP, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value

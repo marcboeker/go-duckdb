@@ -274,7 +274,7 @@ func getMappedArrayValue[T any](lt mapping.LogicalType, val T) (*mapping.Value, 
 		if err != nil {
 			return nil, fmt.Errorf("could not create value %s", err)
 		}
-		childValues = append(childValues, vv)
+		childValues = append(childValues, *vv)
 	}
 
 	arrValue := mapping.CreateArrayValue(childType, childValues)
@@ -296,7 +296,7 @@ func getMappedListValue[T any](lt mapping.LogicalType, val T) (*mapping.Value, e
 		if err != nil {
 			return nil, fmt.Errorf("could not create value %s", err)
 		}
-		childValues = append(childValues, vv)
+		childValues = append(childValues, *vv)
 	}
 
 	listValue := mapping.CreateListValue(childType, childValues)
@@ -322,7 +322,7 @@ func getMappedStructValue(lt mapping.LogicalType, val any) (*mapping.Value, erro
 			if err != nil {
 				return nil, fmt.Errorf("could not create value %s", err)
 			}
-			values = append(values, vv)
+			values = append(values, *vv)
 		} else {
 			values = append(values, mapping.CreateNullValue())
 		}
