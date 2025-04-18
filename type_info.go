@@ -56,13 +56,16 @@ type baseTypeInfo struct {
 
 type vectorTypeInfo struct {
 	baseTypeInfo
-	dict map[string]uint32
+	namesDict map[string]uint32
+	indexDict map[uint32]string
 }
 
 type typeInfo struct {
 	baseTypeInfo
-	childTypes []TypeInfo
-	enumNames  []string
+	// Member or child types for LIST, MAP, ARRAY, and UNION.
+	types []TypeInfo
+	// Enum names or UNION member names.
+	names []string
 }
 
 // TypeInfo is an interface for a DuckDB type.
@@ -150,11 +153,11 @@ func NewEnumInfo(first string, others ...string) (TypeInfo, error) {
 		baseTypeInfo: baseTypeInfo{
 			Type: TYPE_ENUM,
 		},
-		enumNames: make([]string, 0),
+		names: make([]string, 0),
 	}
 
-	info.enumNames = append(info.enumNames, first)
-	info.enumNames = append(info.enumNames, others...)
+	info.names = append(info.names, first)
+	info.names = append(info.names, others...)
 	return info, nil
 }
 
@@ -167,9 +170,9 @@ func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_LIST},
-		childTypes:   make([]TypeInfo, 1),
+		types:        make([]TypeInfo, 1),
 	}
-	info.childTypes[0] = childInfo
+	info.types[0] = childInfo
 	return info, nil
 }
 
@@ -227,10 +230,10 @@ func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_MAP},
-		childTypes:   make([]TypeInfo, 2),
+		types:        make([]TypeInfo, 2),
 	}
-	info.childTypes[0] = keyInfo
-	info.childTypes[1] = valueInfo
+	info.types[0] = keyInfo
+	info.types[1] = valueInfo
 	return info, nil
 }
 
@@ -247,9 +250,9 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: mapping.IdxT(size)},
-		childTypes:   make([]TypeInfo, 1),
+		types:        make([]TypeInfo, 1),
 	}
-	info.childTypes[0] = childInfo
+	info.types[0] = childInfo
 	return info, nil
 }
 
@@ -278,9 +281,8 @@ func NewUnionInfo(memberTypes []TypeInfo, memberNames []string) (TypeInfo, error
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_UNION},
-		childTypes:   memberTypes,
-		// Store member names
-		enumNames: memberNames, // We can reuse the enumNames field for union member names
+		types:        memberTypes,
+		names:        memberNames,
 	}
 	return info, nil
 }
@@ -295,7 +297,7 @@ func (info *typeInfo) logicalType() mapping.LogicalType {
 	case TYPE_DECIMAL:
 		return mapping.CreateDecimalType(info.decimalWidth, info.decimalScale)
 	case TYPE_ENUM:
-		return mapping.CreateEnumType(info.enumNames)
+		return mapping.CreateEnumType(info.names)
 	case TYPE_LIST:
 		return info.logicalListType()
 	case TYPE_STRUCT:
@@ -311,7 +313,7 @@ func (info *typeInfo) logicalType() mapping.LogicalType {
 }
 
 func (info *typeInfo) logicalListType() mapping.LogicalType {
-	child := info.childTypes[0].logicalType()
+	child := info.types[0].logicalType()
 	defer mapping.DestroyLogicalType(&child)
 	return mapping.CreateListType(child)
 }
@@ -329,15 +331,15 @@ func (info *typeInfo) logicalStructType() mapping.LogicalType {
 }
 
 func (info *typeInfo) logicalMapType() mapping.LogicalType {
-	key := info.childTypes[0].logicalType()
+	key := info.types[0].logicalType()
 	defer mapping.DestroyLogicalType(&key)
-	value := info.childTypes[1].logicalType()
+	value := info.types[1].logicalType()
 	defer mapping.DestroyLogicalType(&value)
 	return mapping.CreateMapType(key, value)
 }
 
 func (info *typeInfo) logicalArrayType() mapping.LogicalType {
-	child := info.childTypes[0].logicalType()
+	child := info.types[0].logicalType()
 	defer mapping.DestroyLogicalType(&child)
 	return mapping.CreateArrayType(child, info.arrayLength)
 }
@@ -345,13 +347,10 @@ func (info *typeInfo) logicalArrayType() mapping.LogicalType {
 func (info *typeInfo) logicalUnionType() mapping.LogicalType {
 	var types []mapping.LogicalType
 	defer destroyLogicalTypes(&types)
-
-	var names []string
-	for _, entry := range info.structEntries {
-		types = append(types, entry.Info().logicalType())
-		names = append(names, entry.Name())
+	for _, t := range info.types {
+		types = append(types, t.logicalType())
 	}
-	return mapping.CreateUnionType(types, names)
+	return mapping.CreateUnionType(types, info.names)
 }
 
 func funcName(i interface{}) string {

@@ -237,7 +237,7 @@ func setEnum[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(str).String())
 	}
 
-	if v, ok := vec.dict[str]; ok {
+	if v, ok := vec.namesDict[str]; ok {
 		switch vec.internalType {
 		case TYPE_UTINYINT:
 			return setNumeric[uint32, int8](vec, rowIdx, v)

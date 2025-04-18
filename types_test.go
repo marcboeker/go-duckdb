@@ -983,7 +983,8 @@ func TestUnionTypes(t *testing.T) {
 		defer rows.Close()
 
 		require.True(t, rows.Next())
-		var intUnion, strUnion, nullUnion Union
+		var intUnion, strUnion Union
+		var nullUnion any
 		err = rows.Scan(&intUnion, &strUnion, &nullUnion)
 		require.NoError(t, err)
 
@@ -994,8 +995,7 @@ func TestUnionTypes(t *testing.T) {
 		require.Equal(t, "str", strUnion.Tag)
 		require.Equal(t, "hello", strUnion.Value)
 
-		require.Equal(t, "", nullUnion.Tag)
-		require.Nil(t, nullUnion.Value)
+		require.Nil(t, nullUnion)
 	})
 
 	// Test union with different types

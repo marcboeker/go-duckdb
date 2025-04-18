@@ -203,47 +203,20 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 }
 
 func (vec *vector) getUnion(rowIdx mapping.IdxT) any {
-	if vec.getNull(rowIdx) {
-		return Union{Tag: "", Value: nil}
-	}
-
-	// Get the tag vector (stored at index 0)
+	// Get the tag vector (stored at index 0 of the union struct)
 	tagVector := mapping.StructVectorGetChild(vec.vec, 0)
-	if tagVector.Ptr == nil {
-		return Union{Tag: "", Value: nil}
-	}
-
-	// Get the tag value
 	tagData := mapping.VectorGetData(tagVector)
 	if tagData == nil {
-		return Union{Tag: "", Value: nil}
+		return nil
 	}
+	// The tag is stored as an int8
 	tags := (*[1 << 31]int8)(tagData)
 	tag := tags[rowIdx]
-
-	// Get the member vector
-	memberVector := mapping.StructVectorGetChild(vec.vec, mapping.IdxT(tag+1))
-	if memberVector.Ptr == nil {
-		return Union{Tag: "", Value: nil}
-	}
-
-	logicalType := mapping.VectorGetColumnType(vec.vec)
-	tagName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(tag))
-	mapping.DestroyLogicalType(&logicalType)
-
-	// Create a temporary vector with the member's type info and data
-	tempVec := vector{
-		vec:            memberVector,
-		dataPtr:        mapping.VectorGetData(memberVector),
-		maskPtr:        mapping.VectorGetValidity(memberVector),
-		vectorTypeInfo: vec.childVectors[tag].vectorTypeInfo,
-		getFn:          vec.childVectors[tag].getFn,
-		childVectors:   vec.childVectors[tag].childVectors,
-	}
-
-	value := tempVec.getFn(&tempVec, rowIdx)
+	child := &vec.childVectors[tag]
+	value := child.getFn(child, rowIdx)
+	tagName := vec.indexDict[uint32(tag)]
 	return Union{
-		Value: value,
 		Tag:   tagName,
+		Value: value,
 	}
 }

@@ -136,9 +136,7 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 	switch vec.Type {
 	case TYPE_LIST, TYPE_MAP:
 		child := mapping.ListVectorGetChild(v)
-		if child.Ptr != nil {
-			vec.childVectors[0].initVectors(child, writable)
-		}
+		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_STRUCT:
 		for i := 0; i < len(vec.childVectors); i++ {
 			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
@@ -342,11 +340,11 @@ func (vec *vector) initDecimal(logicalType mapping.LogicalType, colIdx int) erro
 func (vec *vector) initEnum(logicalType mapping.LogicalType, colIdx int) error {
 	// Initialize the dictionary.
 	dictSize := mapping.EnumDictionarySize(logicalType)
-	vec.dict = make(map[string]uint32)
+	vec.namesDict = make(map[string]uint32)
 
 	for i := uint32(0); i < dictSize; i++ {
 		str := mapping.EnumDictionaryValue(logicalType, mapping.IdxT(i))
-		vec.dict[str] = i
+		vec.namesDict[str] = i
 	}
 
 	t := Type(mapping.EnumInternalType(logicalType))
@@ -520,30 +518,28 @@ func (vec *vector) initArray(logicalType mapping.LogicalType, colIdx int) error 
 
 func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error {
 	memberCount := int(mapping.UnionTypeMemberCount(logicalType))
-
 	if memberCount == 0 {
 		return addIndexToError(unsupportedTypeError("empty union"), colIdx)
 	}
-
 	vec.childVectors = make([]vector, memberCount)
+	vec.indexDict = make(map[uint32]string)
 	for i := 0; i < memberCount; i++ {
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
-
+		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
 		err := vec.childVectors[i].init(memberType, colIdx)
 		mapping.DestroyLogicalType(&memberType)
 		if err != nil {
 			return err
 		}
+		vec.indexDict[uint32(i)] = memberName
 	}
-
 	vec.Type = TYPE_UNION
 	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
-			return Union{Tag: "", Value: nil}
+			return nil
 		}
 		return vec.getUnion(rowIdx)
 	}
-
 	return nil
 }
 

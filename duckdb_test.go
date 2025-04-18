@@ -619,11 +619,6 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 			typeName: "UNION(num INTEGER, str VARCHAR)",
 		},
 		{
-			sql:      `SELECT NULL::UNION(num INTEGER, str VARCHAR) AS col`,
-			value:    Union{Tag: "", Value: nil},
-			typeName: "UNION(num INTEGER, str VARCHAR)",
-		},
-		{
 			sql:      `SELECT (1.5)::UNION(d DOUBLE, i INTEGER, s VARCHAR) AS col`,
 			value:    Union{Tag: "d", Value: float64(1.5)},
 			typeName: "UNION(d DOUBLE, i INTEGER, s VARCHAR)",
