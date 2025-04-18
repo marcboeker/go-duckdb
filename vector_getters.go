@@ -203,20 +203,15 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 }
 
 func (vec *vector) getUnion(rowIdx mapping.IdxT) any {
-	// Get the tag vector (stored at index 0 of the union struct)
-	tagVector := mapping.StructVectorGetChild(vec.vec, 0)
-	tagData := mapping.VectorGetData(tagVector)
-	if tagData == nil {
+	if vec.tagDataPtr == nil {
 		return nil
 	}
-	// The tag is stored as an int8
-	tags := (*[1 << 31]int8)(tagData)
+	tags := (*[1 << 31]int8)(vec.tagDataPtr)
 	tag := tags[rowIdx]
 	child := &vec.childVectors[tag]
 	value := child.getFn(child, rowIdx)
-	tagName := vec.indexDict[uint32(tag)]
 	return Union{
-		Tag:   tagName,
+		Tag:   vec.indexDict[uint32(tag)],
 		Value: value,
 	}
 }

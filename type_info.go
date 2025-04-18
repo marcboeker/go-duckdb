@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"runtime"
+	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -58,6 +59,8 @@ type vectorTypeInfo struct {
 	baseTypeInfo
 	namesDict map[string]uint32
 	indexDict map[uint32]string
+	// For UNION types: cached tag vector data
+	tagDataPtr unsafe.Pointer
 }
 
 type typeInfo struct {

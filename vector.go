@@ -146,9 +146,9 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 		child := mapping.ArrayVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_UNION:
-		// For unions, each member has its own vector
+		tagVector := mapping.StructVectorGetChild(v, 0)
+		vec.tagDataPtr = mapping.VectorGetData(tagVector)
 		for i := 0; i < len(vec.childVectors); i++ {
-			// Union members are stored as struct fields internally
 			child := mapping.StructVectorGetChild(v, mapping.IdxT(i+1))
 			vec.childVectors[i].initVectors(child, writable)
 		}
