@@ -411,3 +411,28 @@ func TestPreparePivot(t *testing.T) {
 	require.Equal(t, 42, population)
 	closePreparedWrapper(t, prepared)
 }
+
+func TestPrepareComplex(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.Background()
+	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(arr_int INTEGER[2], list_str VARCHAR[])`)
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES (array_value(7, 1), list_value('foo', 'bar'))`)
+	require.NoError(t, err)
+
+	prepared, err := db.Prepare(`SELECT * FROM arr_test WHERE arr_int = ? AND list_str = ?`)
+	require.NoError(t, err)
+
+	var res Composite[[]int32]
+	var res2 Composite[[]string]
+	err = prepared.QueryRow([]int32{7, 1}, []string{"foo", "bar"}).Scan(&res, &res2)
+	require.NoError(t, err)
+
+	require.Equal(t, int32(7), res.Get()[0])
+	require.Equal(t, int32(1), res.Get()[1])
+	require.Equal(t, "foo", res2.Get()[0])
+	require.Equal(t, "bar", res2.Get()[1])
+
+	closePreparedWrapper(t, prepared)
+}

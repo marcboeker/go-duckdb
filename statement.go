@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -114,6 +115,23 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	return Type(t), nil
 }
 
+func (s *Stmt) ParamLogicalType(n int) (*mapping.LogicalType, error) {
+	if s.closed {
+		return nil, errClosedStmt
+	}
+	if s.preparedStmt == nil {
+		return nil, errUninitializedStmt
+	}
+
+	count := mapping.NParams(*s.preparedStmt)
+	if n == 0 || n > int(count) {
+		return nil, getError(errAPI, paramIndexError(n, uint64(count)))
+	}
+
+	t := mapping.ParamLogicalType(*s.preparedStmt, mapping.IdxT(n))
+	return &t, nil
+}
+
 // StatementType returns the type of the statement.
 func (s *Stmt) StatementType() (StmtType, error) {
 	if s.closed {
@@ -186,6 +204,88 @@ func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (mapping.State, er
 	return state, nil
 }
 
+func toAnySlice(v any) ([]any, error) {
+	// If already []any, return as is
+	if slice, ok := v.([]any); ok {
+		return slice, nil
+	}
+
+	// Use reflection to handle other cases
+	rv := reflect.ValueOf(v)
+
+	// If it's a slice or array, convert each element
+	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
+		result := make([]any, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			result[i] = rv.Index(i).Interface()
+		}
+		return result, nil
+	}
+
+	// Handle single values by wrapping in a slice
+	return []any{v}, nil
+}
+
+func (s *Stmt) bindArray(val driver.NamedValue, n int) (mapping.State, error) {
+	lt, err := s.ParamLogicalType(n + 1)
+	if err != nil {
+		return mapping.StateError, err
+	}
+
+	var values []mapping.Value
+	childType := mapping.ArrayTypeChildType(*lt)
+
+	vSlice, err := toAnySlice(val.Value)
+	if err != nil {
+		return mapping.StateError, addIndexToError(fmt.Errorf("could not cast %T to []any: %s", val.Value, err), n+1)
+	}
+
+	for _, v := range vSlice {
+		vv, err := createValue(childType, v)
+		if err != nil {
+			return mapping.StateError, addIndexToError(fmt.Errorf("could not create value %s", err), n+1)
+		}
+		values = append(values, vv)
+	}
+
+	arrValue := mapping.CreateArrayValue(childType, values)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), arrValue)
+	mapping.DestroyValue(&arrValue) // TODO: do I need to destroy every value in `values`?
+	mapping.DestroyLogicalType(&childType)
+	mapping.DestroyLogicalType(lt)
+	return state, nil
+}
+
+func (s *Stmt) bindList(val driver.NamedValue, n int) (mapping.State, error) {
+	lt, err := s.ParamLogicalType(n + 1)
+	if err != nil {
+		return mapping.StateError, err
+	}
+
+	var values []mapping.Value
+	childType := mapping.ListTypeChildType(*lt)
+
+	vSlice, err := toAnySlice(val.Value)
+	if err != nil {
+		return mapping.StateError, addIndexToError(fmt.Errorf("could not cast %T to []any: %s", val.Value, err), n+1)
+	}
+
+	for _, v := range vSlice {
+		vv, err := createValue(childType, v)
+		if err != nil {
+			return mapping.StateError, addIndexToError(fmt.Errorf("could not create value %s", err), n+1)
+		}
+		values = append(values, vv)
+	}
+
+	listValue := mapping.CreateListValue(childType, values)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), listValue)
+	mapping.DestroyValue(&listValue) // TODO: do I need to destroy every value in `values`?
+	mapping.DestroyLogicalType(&childType)
+	mapping.DestroyLogicalType(lt)
+	return state, nil
+}
+
 func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
 	t, err := s.ParamType(n + 1)
 	if err != nil {
@@ -202,8 +302,11 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 		return s.bindDate(val, n)
 	case TYPE_TIME, TYPE_TIME_TZ:
 		return s.bindTime(val, t, n)
-	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_LIST, TYPE_STRUCT, TYPE_MAP,
-		TYPE_ARRAY, TYPE_ENUM:
+	case TYPE_ARRAY:
+		return s.bindArray(val, n)
+	case TYPE_LIST:
+		return s.bindList(val, n)
+	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_STRUCT, TYPE_MAP, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: implement NamedValueChecker to support custom data types.
