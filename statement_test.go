@@ -442,12 +442,9 @@ func TestPrepareComplex(t *testing.T) {
 	).Scan(&arr, &list, &struc)
 	require.NoError(t, err)
 
-	require.Equal(t, int32(7), arr.Get()[0])
-	require.Equal(t, int32(1), arr.Get()[1])
-	require.Equal(t, "foo", list.Get()[0])
-	require.Equal(t, "bar", list.Get()[1])
-	require.Equal(t, "baz", struc.Get()["v"])
-	require.Equal(t, int32(42), struc.Get()["i"])
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
 
 	closePreparedWrapper(t, prepared)
 }
