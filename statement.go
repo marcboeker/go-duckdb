@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -186,13 +187,34 @@ func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (mapping.State, er
 	return state, nil
 }
 
+func (s *Stmt) tryBindComplexValue(val driver.NamedValue, t Type, n int) (mapping.State, error) {
+	switch val.Value.(type) {
+	case time.Time:
+		// Fallback to TIMESTAMP, if we cannot know the exact type.
+		return s.bindTimestamp(val, TYPE_TIMESTAMP, n)
+	}
+	name := typeToStringMap[t]
+	return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
+}
+
 func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
+	// For some queries, we cannot resolve the parameter type when preparing the query.
+	// E.g., for "SELECT * FROM (VALUES (?, ?)) t(a, b)", we cannot know the parameter types from the SQL statement alone.
+	// For these cases, ParamType returns TYPE_INVALID.
 	t, err := s.ParamType(n + 1)
 	if err != nil {
 		return mapping.StateError, err
 	}
-	if name, ok := unsupportedTypeToStringMap[t]; ok {
+
+	name, ok := unsupportedTypeToStringMap[t]
+	if ok && t != TYPE_INVALID {
 		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
+	}
+
+	// We could not resolve this parameter when binding the query.
+	// Fall back to the Go type.
+	if t == TYPE_INVALID {
+		return s.tryBindComplexValue(val, t, n)
 	}
 
 	switch t {
@@ -206,8 +228,8 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 		TYPE_ARRAY, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
-		// FIXME: for other types: implement NamedValueChecker to support custom data types.
-		name := typeToStringMap[t]
+		// FIXME: for other types: use NamedValueChecker to support.
+		name = typeToStringMap[t]
 		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
 	return mapping.StateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
@@ -231,7 +253,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	case *big.Int:
 		return s.bindHugeint(v, n)
 	case Decimal:
-		// FIXME: implement NamedValueChecker to support custom data types.
+		// FIXME: use NamedValueChecker to support this type.
 		name := typeToStringMap[TYPE_DECIMAL]
 		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	case uint8:

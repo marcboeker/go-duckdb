@@ -152,7 +152,7 @@ type Decimal struct {
 	Value *big.Int
 }
 
-func (d *Decimal) Float64() float64 {
+func (d Decimal) Float64() float64 {
 	scale := big.NewInt(int64(d.Scale))
 	factor := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), scale, nil))
 	value := new(big.Float).SetInt(d.Value)
@@ -161,7 +161,7 @@ func (d *Decimal) Float64() float64 {
 	return f
 }
 
-func (d *Decimal) String() string {
+func (d Decimal) String() string {
 	// Get the sign, and return early, if zero.
 	if d.Value.Sign() == 0 {
 		return "0"

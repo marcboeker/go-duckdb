@@ -441,6 +441,8 @@ func TestDecimal(t *testing.T) {
 			var fs Decimal
 			require.NoError(t, r.Scan(&fs))
 			require.Equal(t, test.want, fs.String())
+			//confirms Decimal implements fmt.Stringer correctly (see #424)
+			require.Equal(t, test.want, fmt.Sprint(fs))
 		}
 	})
 }
