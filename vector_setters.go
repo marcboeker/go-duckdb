@@ -17,7 +17,7 @@ type fnSetVectorValue func(vec *vector, rowIdx mapping.IdxT, val any) error
 
 func (vec *vector) setNull(rowIdx mapping.IdxT) {
 	mapping.ValiditySetRowInvalid(vec.maskPtr, rowIdx)
-	if vec.Type == TYPE_STRUCT {
+	if vec.Type == TYPE_STRUCT || vec.Type == TYPE_UNION {
 		for i := 0; i < len(vec.childVectors); i++ {
 			vec.childVectors[i].setNull(rowIdx)
 		}
@@ -413,43 +413,64 @@ func setUUID[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 func setUnion[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	switch v := any(val).(type) {
 	case Union:
-		// For explicit Union structs - find the tag index
-		var tagIdx int8
-		var found bool
-		for idx, memberName := range vec.indexDict {
-			if memberName == v.Tag {
-				tagIdx = int8(idx)
-				found = true
-				break
-			}
-		}
+		// Get the tag index.
+		tag, found := vec.namesDict[v.Tag]
 		if !found {
 			return invalidInputError("tag", v.Tag)
 		}
-		// Set the tag in the tag vector
-		tags := (*[1 << 31]int8)(vec.tagDataPtr)
-		tags[rowIdx] = tagIdx
-		// Set the value in the corresponding child vector
-		childVec := &vec.childVectors[tagIdx]
-		return childVec.setFn(childVec, rowIdx, v.Value)
 
-	default:
-		// For plain values - try to match type with a union member
-		plainVal := any(val)
-		// Try each member vector until we find one that accepts the value
-		for idx := range vec.childVectors {
-			childVec := &vec.childVectors[idx]
-			// Try to set value in this member's vector
-			err := childVec.setFn(childVec, rowIdx, plainVal)
-			if err == nil {
-				// Value was accepted - set the tag
-				tags := (*[1 << 31]int8)(vec.tagDataPtr)
-				tags[rowIdx] = int8(idx)
-				return nil
+		// Set the tag in the tag vector.
+		setPrimitive(&vec.childVectors[0], rowIdx, uint8(tag))
+
+		// Set the value in the tagged member vector, and set all other members to NULL.
+		for i := 1; i < len(vec.childVectors); i++ {
+			child := &vec.childVectors[i]
+			if uint32(i) == tag+1 {
+				if err := child.setFn(child, rowIdx, v.Value); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := child.setFn(child, rowIdx, nil); err != nil {
+				return err
 			}
 		}
-		// No member vector accepted the value
-		return castError(reflect.TypeOf(val).String(), "union member")
+
+		return nil
+
+	default:
+		// Try to match the type with a UNION member.
+		anyVal := any(val)
+
+		// Try each member until we find one accepting the value.
+		match := 0
+		for i := 1; i < len(vec.childVectors); i++ {
+			childVec := &vec.childVectors[i]
+			err := childVec.setFn(childVec, rowIdx, anyVal)
+			if err == nil {
+				// The member accepted the value.
+				match = i
+				// Set the tag.
+				setPrimitive(&vec.childVectors[0], rowIdx, uint8(i-1))
+				break
+			}
+		}
+		if match != 0 {
+			// Set all other members to NULL.
+			for i := 1; i < len(vec.childVectors); i++ {
+				child := &vec.childVectors[i]
+				if i == match {
+					continue
+				}
+				if err := child.setFn(child, rowIdx, nil); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		// No member accepted the value.
+		return castError(reflect.TypeOf(val).String(), "UNION member")
 	}
 }
 

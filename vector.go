@@ -137,7 +137,7 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 	case TYPE_LIST, TYPE_MAP:
 		child := mapping.ListVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
-	case TYPE_STRUCT:
+	case TYPE_STRUCT, TYPE_UNION:
 		for i := 0; i < len(vec.childVectors); i++ {
 			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
 			vec.childVectors[i].initVectors(child, writable)
@@ -145,13 +145,6 @@ func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
 	case TYPE_ARRAY:
 		child := mapping.ArrayVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
-	case TYPE_UNION:
-		tagVector := mapping.StructVectorGetChild(v, 0)
-		vec.tagDataPtr = mapping.VectorGetData(tagVector)
-		for i := 0; i < len(vec.childVectors); i++ {
-			child := mapping.StructVectorGetChild(v, mapping.IdxT(i+1))
-			vec.childVectors[i].initVectors(child, writable)
-		}
 	}
 }
 
@@ -464,7 +457,7 @@ func (vec *vector) initMap(logicalType mapping.LogicalType, colIdx int) error {
 
 	t := Type(mapping.GetTypeId(keyType))
 	switch t {
-	case TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
+	case TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		return addIndexToError(errUnsupportedMapKeyType, colIdx)
 	}
 
@@ -518,24 +511,33 @@ func (vec *vector) initArray(logicalType mapping.LogicalType, colIdx int) error 
 
 func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error {
 	memberCount := int(mapping.UnionTypeMemberCount(logicalType))
-	if memberCount == 0 {
-		return addIndexToError(unsupportedTypeError("empty union"), colIdx)
-	}
-	vec.childVectors = make([]vector, memberCount)
-	vec.indexDict = make(map[uint32]string)
 
+	// The child vector with index zero is the tag vector.
+	vec.childVectors = make([]vector, memberCount+1)
+
+	// Initialize the tag vector.
+	tagType := mapping.StructTypeChildType(logicalType, 0)
+	defer mapping.DestroyLogicalType(&tagType)
+	if err := vec.childVectors[0].init(tagType, colIdx); err != nil {
+		return err
+	}
+
+	// Initialize the members and the dictionaries.
+	vec.namesDict = make(map[string]uint32)
+	vec.tagDict = make(map[uint32]string)
 	for i := 0; i < memberCount; i++ {
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
-		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
-		err := vec.childVectors[i].init(memberType, colIdx)
+		err := vec.childVectors[i+1].init(memberType, colIdx)
 		mapping.DestroyLogicalType(&memberType)
 		if err != nil {
 			return err
 		}
-		vec.indexDict[uint32(i)] = memberName
+
+		name := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
+		vec.namesDict[name] = uint32(i)
+		vec.tagDict[uint32(i)] = name
 	}
 
-	vec.Type = TYPE_UNION
 	vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
 		if vec.getNull(rowIdx) {
 			return nil
@@ -549,6 +551,7 @@ func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error 
 		}
 		return setUnion(vec, rowIdx, val)
 	}
+	vec.Type = TYPE_UNION
 	return nil
 }
 

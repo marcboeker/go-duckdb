@@ -183,31 +183,27 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 		},
 	}
 
-	// Create union type info - only add if useAny is true since unions aren't supported in scalar UDFs
-	if useAny {
-		intInfo, err := NewTypeInfo(TYPE_INTEGER)
-		require.NoError(t, err)
-		stringInfo, err := NewTypeInfo(TYPE_VARCHAR)
-		require.NoError(t, err)
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
 
-		info, err = NewUnionInfo(
-			[]TypeInfo{intInfo, stringInfo},
-			[]string{"int_val", "str_val"},
-		)
-		require.NoError(t, err)
-		unionTypeInfo := testTypeInfo{
-			TypeInfo: info,
-			testTypeValues: testTypeValues{
-				input:  `UNION_VALUE( int_val := 1::INTEGER)`,
-				output: `{int_val : 1}`,
-			},
-		}
-		testTypeInfos = append(testTypeInfos, unionTypeInfo)
+	info, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"int_val", "str_val"},
+	)
+	require.NoError(t, err)
+	unionTypeInfo := testTypeInfo{
+		TypeInfo: info,
+		testTypeValues: testTypeValues{
+			input:  `UNION_VALUE(int_val := 1::INTEGER)`,
+			output: `{int_val : 1}`,
+		},
 	}
 
 	testTypeInfos = append(testTypeInfos, decimalTypeInfo, enumTypeInfo,
 		listTypeInfo, nestedListTypeInfo, structTypeInfo, nestedStructTypeInfo, mapTypeInfo,
-		arrayTypeInfo, nestedArrayTypeInfo)
+		arrayTypeInfo, nestedArrayTypeInfo, unionTypeInfo)
 	return testTypeInfos
 }
 
@@ -220,26 +216,26 @@ func TestTypeInterface(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Test union type creation
-	intInfo, err := NewTypeInfo(TYPE_INTEGER)
+	// Test UNION type creation.
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
-	stringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
 	require.NoError(t, err)
 
 	unionInfo, err := NewUnionInfo(
-		[]TypeInfo{intInfo, stringInfo},
+		[]TypeInfo{unionIntInfo, unionStringInfo},
 		[]string{"int_val", "str_val"},
 	)
 	require.NoError(t, err)
 
-	// Verify we can use union type as a child type
+	// Verify that we can use the UNION type as a child type.
 	_, err = NewListInfo(unionInfo)
 	require.NoError(t, err)
 }
 
 func TestErrTypeInfo(t *testing.T) {
 	var incorrectTypes []Type
-	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY)
+	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION)
 
 	for _, incorrect := range incorrectTypes {
 		_, err := NewTypeInfo(incorrect)
@@ -316,33 +312,33 @@ func TestErrTypeInfo(t *testing.T) {
 	_, err = NewArrayInfo(nil, 3)
 	testError(t, err, errAPI.Error(), interfaceIsNilErrMsg)
 
-	// Invalid union types
-	intInfo, err := NewTypeInfo(TYPE_INTEGER)
+	// Invalid UNION types.
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
-	stringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
 	require.NoError(t, err)
 
-	// Test empty members
+	// Test empty members.
 	_, err = NewUnionInfo([]TypeInfo{}, []string{})
-	testError(t, err, errAPI.Error(), "union type must have at least one member")
+	testError(t, err, errAPI.Error(), "UNION type must have at least one member")
 
-	// Test mismatched lengths
+	// Test mismatched lengths.
 	_, err = NewUnionInfo(
-		[]TypeInfo{intInfo, stringInfo},
+		[]TypeInfo{unionIntInfo, unionStringInfo},
 		[]string{"single_name"},
 	)
-	testError(t, err, errAPI.Error(), "member types and names must have same length")
+	testError(t, err, errAPI.Error(), "member types and names must have the same length")
 
-	// Test empty name
+	// Test empty name.
 	_, err = NewUnionInfo(
-		[]TypeInfo{intInfo},
+		[]TypeInfo{unionIntInfo},
 		[]string{""},
 	)
 	testError(t, err, errAPI.Error(), errEmptyName.Error())
 
-	// Test duplicate names
+	// Test duplicate names.
 	_, err = NewUnionInfo(
-		[]TypeInfo{intInfo, stringInfo},
+		[]TypeInfo{unionIntInfo, unionStringInfo},
 		[]string{"same_name", "same_name"},
 	)
 	testError(t, err, errAPI.Error(), duplicateNameErrMsg)

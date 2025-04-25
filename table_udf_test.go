@@ -659,11 +659,11 @@ func bindUnionTableUDF(namedArgs map[string]any, args ...interface{}) (RowTableS
 }
 
 func (udf *unionTableUDF) ColumnInfos() []ColumnInfo {
-	// Create member types
+	// Create member types.
 	intInfo, _ := NewTypeInfo(TYPE_INTEGER)
 	varcharInfo, _ := NewTypeInfo(TYPE_VARCHAR)
 
-	// Create union type info
+	// Create UNION type info.
 	unionInfo, _ := NewUnionInfo(
 		[]TypeInfo{intInfo, varcharInfo},
 		[]string{"number", "text"},
@@ -682,13 +682,13 @@ func (udf *unionTableUDF) FillRow(row Row) (bool, error) {
 
 	var val Union
 	if udf.count%2 == 0 {
-		// Even numbers: store as number
+		// Even numbers: store as number.
 		val = Union{
 			Value: int32(udf.count),
 			Tag:   "number",
 		}
 	} else {
-		// Odd numbers: store as text
+		// Odd numbers: store as text.
 		val = Union{
 			Value: fmt.Sprintf("text_%d", udf.count),
 			Tag:   "text",

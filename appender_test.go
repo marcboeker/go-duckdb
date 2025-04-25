@@ -914,7 +914,7 @@ func TestAppenderUnion(t *testing.T) {
 	}
 	require.NoError(t, a.Flush())
 
-	// Verify results
+	// Verify results.
 	res, err := db.QueryContext(context.Background(), `SELECT u FROM test ORDER BY i`)
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)

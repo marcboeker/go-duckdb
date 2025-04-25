@@ -967,28 +967,26 @@ func TestJSONColType(t *testing.T) {
 }
 
 func TestUnionTypes(t *testing.T) {
-	t.Parallel()
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
-	// Test basic union type creation and reading
-	t.Run("basic union operations", func(t *testing.T) {
-		rows, err := db.Query(`
+	// Test basic UNION type creation and scanning.
+	t.Run("basic UNION operations", func(t *testing.T) {
+		r, err := db.Query(`
             SELECT
-                (123)::UNION(num INTEGER, str VARCHAR) as int_union,
-                ('hello')::UNION(num INTEGER, str VARCHAR) as str_union,
-                NULL::UNION(num INTEGER, str VARCHAR) as null_union
+                (123)::UNION(num INTEGER, str VARCHAR) AS int_union,
+                ('hello')::UNION(num INTEGER, str VARCHAR) AS str_union,
+                NULL::UNION(num INTEGER, str VARCHAR) AS null_union
         `)
 		require.NoError(t, err)
-		defer rows.Close()
+		defer closeRowsWrapper(t, r)
 
-		require.True(t, rows.Next())
+		require.True(t, r.Next())
 		var intUnion, strUnion Union
 		var nullUnion any
-		err = rows.Scan(&intUnion, &strUnion, &nullUnion)
+		err = r.Scan(&intUnion, &strUnion, &nullUnion)
 		require.NoError(t, err)
 
-		// Check int union
 		require.Equal(t, "num", intUnion.Tag)
 		require.Equal(t, int32(123), intUnion.Value)
 
@@ -998,22 +996,22 @@ func TestUnionTypes(t *testing.T) {
 		require.Nil(t, nullUnion)
 	})
 
-	// Test union with different types
-	t.Run("union with different types", func(t *testing.T) {
-		rows, err := db.Query(`
+	// Test UNION with different types.
+	t.Run("UNION with different types", func(t *testing.T) {
+		r, err := db.Query(`
             WITH unions AS (
                 SELECT
-                    (1.5)::UNION(d DOUBLE, i INTEGER) as double_union,
-                    ('2024-01-01'::DATE)::UNION(d DATE, s VARCHAR) as date_union
+                    (1.5)::UNION(d DOUBLE, i INTEGER) AS double_union,
+                    ('2024-01-01'::DATE)::UNION(d DATE, s VARCHAR) AS date_union
             )
             SELECT * FROM unions
         `)
 		require.NoError(t, err)
-		defer rows.Close()
+		defer closeRowsWrapper(t, r)
 
-		require.True(t, rows.Next())
+		require.True(t, r.Next())
 		var doubleUnion, dateUnion Union
-		err = rows.Scan(&doubleUnion, &dateUnion)
+		err = r.Scan(&doubleUnion, &dateUnion)
 		require.NoError(t, err)
 
 		require.Equal(t, "d", doubleUnion.Tag)
@@ -1023,30 +1021,30 @@ func TestUnionTypes(t *testing.T) {
 		require.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), dateUnion.Value)
 	})
 
-	// Test column type information
-	t.Run("union column type info", func(t *testing.T) {
-		rows, err := db.Query(`
-            SELECT (123)::UNION(num INTEGER, str VARCHAR) as union_col
+	// Test column type information.
+	t.Run("UNION column type info", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT (123)::UNION(num INTEGER, str VARCHAR) AS union_col
         `)
 		require.NoError(t, err)
-		defer rows.Close()
+		defer closeRowsWrapper(t, r)
 
-		types, err := rows.ColumnTypes()
+		types, err := r.ColumnTypes()
 		require.NoError(t, err)
 		require.Equal(t, "UNION(num INTEGER, str VARCHAR)", types[0].DatabaseTypeName())
 	})
 
-	// Test multiple union members
-	t.Run("union with multiple members", func(t *testing.T) {
-		rows, err := db.Query(`
-            SELECT (123)::UNION(a INTEGER, b VARCHAR, c DOUBLE) as multi_union
+	// Test multiple UNION members.
+	t.Run("UNION with multiple members", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT (123)::UNION(a INTEGER, b VARCHAR, c DOUBLE) AS multi_union
         `)
 		require.NoError(t, err)
-		defer rows.Close()
+		defer closeRowsWrapper(t, r)
 
-		require.True(t, rows.Next())
+		require.True(t, r.Next())
 		var val Union
-		err = rows.Scan(&val)
+		err = r.Scan(&val)
 		require.NoError(t, err)
 		require.Equal(t, "a", val.Tag)
 		require.Equal(t, int32(123), val.Value)
