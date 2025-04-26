@@ -4,7 +4,6 @@ import (
 	"errors"
 	"reflect"
 	"runtime"
-	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -58,9 +57,7 @@ type baseTypeInfo struct {
 type vectorTypeInfo struct {
 	baseTypeInfo
 	namesDict map[string]uint32
-	indexDict map[uint32]string
-	// For UNION types: cached tag vector data
-	tagDataPtr unsafe.Pointer
+	tagDict   map[uint32]string
 }
 
 type typeInfo struct {
@@ -259,18 +256,18 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 	return info, nil
 }
 
-// NewUnionInfo returns union type information.
+// NewUnionInfo returns UNION type information.
 // memberTypes contains the type information of the union members.
 // memberNames contains the names of the union members.
 func NewUnionInfo(memberTypes []TypeInfo, memberNames []string) (TypeInfo, error) {
 	if len(memberTypes) == 0 {
-		return nil, getError(errAPI, errors.New("union type must have at least one member"))
+		return nil, getError(errAPI, errors.New("UNION type must have at least one member"))
 	}
 	if len(memberTypes) != len(memberNames) {
-		return nil, getError(errAPI, errors.New("member types and names must have same length"))
+		return nil, getError(errAPI, errors.New("member types and names must have the same length"))
 	}
 
-	// Check for duplicate names
+	// Check for duplicate names.
 	m := map[string]bool{}
 	for _, name := range memberNames {
 		if name == "" {

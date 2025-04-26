@@ -380,16 +380,16 @@ func TestUnionScalarUDF(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
-	_, err := conn.ExecContext(context.Background(), `CREATE TYPE NUMBER_OR_STRING AS UNION(number INTEGER, text VARCHAR)`)
+	_, err := conn.ExecContext(context.Background(), `CREATE TYPE number_or_string AS UNION(number INTEGER, text VARCHAR)`)
 	require.NoError(t, err)
 
-	// Create member types
+	// Create member types.
 	intInfo, err := NewTypeInfo(TYPE_INTEGER)
 	require.NoError(t, err)
 	varcharInfo, err := NewTypeInfo(TYPE_VARCHAR)
 	require.NoError(t, err)
 
-	// Create union type info
+	// Create UNION type info.
 	unionInfo, err := NewUnionInfo(
 		[]TypeInfo{intInfo, varcharInfo},
 		[]string{"number", "text"},
@@ -402,21 +402,21 @@ func TestUnionScalarUDF(t *testing.T) {
 	err = RegisterScalarUDF(conn, "union_identity", udf)
 	require.NoError(t, err)
 
-	// Test with integer input
-	var result any
-	row := db.QueryRow(`SELECT union_identity(42::NUMBER_OR_STRING) AS res`)
-	require.NoError(t, row.Scan(&result))
-	require.Equal(t, Union{Value: int32(42), Tag: "number"}, result)
+	// Test with integer input.
+	var res any
+	row := db.QueryRow(`SELECT union_identity(42::number_or_string) AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, Union{Value: int32(42), Tag: "number"}, res)
 
-	// Test with string input
-	row = db.QueryRow(`SELECT union_identity('hello'::NUMBER_OR_STRING) AS res`)
-	require.NoError(t, row.Scan(&result))
-	require.Equal(t, Union{Value: "hello", Tag: "text"}, result)
+	// Test with string input.
+	row = db.QueryRow(`SELECT union_identity('hello'::number_or_string) AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, Union{Value: "hello", Tag: "text"}, res)
 
-	// Test with NULL input
-	row = db.QueryRow(`SELECT union_identity(NULL::NUMBER_OR_STRING) AS res`)
-	require.NoError(t, row.Scan(&result))
-	require.Equal(t, nil, result)
+	// Test with NULL input.
+	row = db.QueryRow(`SELECT union_identity(NULL::number_or_string) AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, nil, res)
 }
 
 func TestErrScalarUDF(t *testing.T) {
