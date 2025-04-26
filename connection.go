@@ -16,6 +16,18 @@ type Conn struct {
 	conn   mapping.Connection
 	closed bool
 	tx     bool
+	state  connState
+}
+
+type connState struct {
+	currCtx context.Context
+}
+
+func (conn *Conn) setCurrCtx(ctx context.Context) func() {
+	conn.state.currCtx = ctx
+	return func() {
+		// conn.state.currCtx = nil
+	}
 }
 
 // CheckNamedValue implements the driver.NamedValueChecker interface.
@@ -30,6 +42,9 @@ func (conn *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 // ExecContext executes a query that doesn't return rows, such as an INSERT or UPDATE.
 // It implements the driver.ExecerContext interface.
 func (conn *Conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	cleanupCtx := conn.setCurrCtx(ctx)
+	defer cleanupCtx()
+
 	prepared, err := conn.prepareStmts(ctx, query)
 	if err != nil {
 		return nil, err
@@ -53,6 +68,9 @@ func (conn *Conn) ExecContext(ctx context.Context, query string, args []driver.N
 // QueryContext executes a query that may return rows, such as a SELECT.
 // It implements the driver.QueryerContext interface.
 func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	cleanupCtx := conn.setCurrCtx(ctx)
+	defer cleanupCtx()
+
 	prepared, err := conn.prepareStmts(ctx, query)
 	if err != nil {
 		return nil, err
