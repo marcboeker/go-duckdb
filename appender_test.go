@@ -832,7 +832,7 @@ func TestAppenderWithJSON(t *testing.T) {
 		    c1 UBIGINT,
 			l1 TINYINT[],
 			s1 STRUCT(a INTEGER, b VARCHAR[]),
-		    l2 STRUCT(a STRUCT(a FLOAT[])[])[]              
+		    l2 STRUCT(a STRUCT(a FLOAT[])[])[]
 	  	)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
@@ -867,6 +867,66 @@ func TestAppenderWithJSON(t *testing.T) {
 		i++
 	}
 	require.Equal(t, len(jsonInputs), i)
+}
+
+func TestAppenderUnion(t *testing.T) {
+	c, db, conn, a := prepareAppender(t, `
+    CREATE TABLE test (
+    	i INTEGER,
+        u UNION(num INTEGER, str VARCHAR)
+    )`)
+	defer cleanupAppender(t, c, db, conn, a)
+
+	testCases := []struct {
+		name     string
+		input    any
+		expected any
+	}{
+		{
+			name:     "integer union",
+			input:    Union{Tag: "num", Value: int32(42)},
+			expected: Union{Tag: "num", Value: int32(42)},
+		},
+		{
+			name:     "string union",
+			input:    Union{Tag: "str", Value: "hello union"},
+			expected: Union{Tag: "str", Value: "hello union"},
+		},
+		{
+			name:     "plain integer",
+			input:    42,
+			expected: Union{Tag: "num", Value: int32(42)},
+		},
+		{
+			name:     "plain string",
+			input:    "plain",
+			expected: Union{Tag: "str", Value: "plain"},
+		},
+		{
+			name:     "nil value",
+			input:    nil,
+			expected: nil,
+		},
+	}
+
+	for i, tc := range testCases {
+		require.NoError(t, a.AppendRow(i, tc.input))
+	}
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res, err := db.QueryContext(context.Background(), `SELECT u FROM test ORDER BY i`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
+
+	i := 0
+	for res.Next() {
+		var v any
+		require.NoError(t, res.Scan(&v))
+		require.Equal(t, testCases[i].expected, v, "case: %s", testCases[i].name)
+		i++
+	}
+	require.Equal(t, len(testCases), i)
 }
 
 func BenchmarkAppenderNested(b *testing.B) {

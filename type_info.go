@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"errors"
 	"reflect"
 	"runtime"
 
@@ -55,13 +56,16 @@ type baseTypeInfo struct {
 
 type vectorTypeInfo struct {
 	baseTypeInfo
-	dict map[string]uint32
+	namesDict map[string]uint32
+	tagDict   map[uint32]string
 }
 
 type typeInfo struct {
 	baseTypeInfo
-	childTypes []TypeInfo
-	enumNames  []string
+	// Member or child types for LIST, MAP, ARRAY, and UNION.
+	types []TypeInfo
+	// Enum names or UNION member names.
+	names []string
 }
 
 // TypeInfo is an interface for a DuckDB type.
@@ -101,6 +105,8 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
 	case TYPE_ARRAY:
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewArrayInfo)))
+	case TYPE_UNION:
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewUnionInfo)))
 	case TYPE_SQLNULL:
 		return nil, getError(errAPI, unsupportedTypeError(typeToStringMap[t]))
 	}
@@ -147,11 +153,11 @@ func NewEnumInfo(first string, others ...string) (TypeInfo, error) {
 		baseTypeInfo: baseTypeInfo{
 			Type: TYPE_ENUM,
 		},
-		enumNames: make([]string, 0),
+		names: make([]string, 0),
 	}
 
-	info.enumNames = append(info.enumNames, first)
-	info.enumNames = append(info.enumNames, others...)
+	info.names = append(info.names, first)
+	info.names = append(info.names, others...)
 	return info, nil
 }
 
@@ -164,9 +170,9 @@ func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_LIST},
-		childTypes:   make([]TypeInfo, 1),
+		types:        make([]TypeInfo, 1),
 	}
-	info.childTypes[0] = childInfo
+	info.types[0] = childInfo
 	return info, nil
 }
 
@@ -224,10 +230,10 @@ func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_MAP},
-		childTypes:   make([]TypeInfo, 2),
+		types:        make([]TypeInfo, 2),
 	}
-	info.childTypes[0] = keyInfo
-	info.childTypes[1] = valueInfo
+	info.types[0] = keyInfo
+	info.types[1] = valueInfo
 	return info, nil
 }
 
@@ -244,9 +250,40 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: mapping.IdxT(size)},
-		childTypes:   make([]TypeInfo, 1),
+		types:        make([]TypeInfo, 1),
 	}
-	info.childTypes[0] = childInfo
+	info.types[0] = childInfo
+	return info, nil
+}
+
+// NewUnionInfo returns UNION type information.
+// memberTypes contains the type information of the union members.
+// memberNames contains the names of the union members.
+func NewUnionInfo(memberTypes []TypeInfo, memberNames []string) (TypeInfo, error) {
+	if len(memberTypes) == 0 {
+		return nil, getError(errAPI, errors.New("UNION type must have at least one member"))
+	}
+	if len(memberTypes) != len(memberNames) {
+		return nil, getError(errAPI, errors.New("member types and names must have the same length"))
+	}
+
+	// Check for duplicate names.
+	m := map[string]bool{}
+	for _, name := range memberNames {
+		if name == "" {
+			return nil, getError(errAPI, errEmptyName)
+		}
+		if m[name] {
+			return nil, getError(errAPI, duplicateNameError(name))
+		}
+		m[name] = true
+	}
+
+	info := &typeInfo{
+		baseTypeInfo: baseTypeInfo{Type: TYPE_UNION},
+		types:        memberTypes,
+		names:        memberNames,
+	}
 	return info, nil
 }
 
@@ -260,7 +297,7 @@ func (info *typeInfo) logicalType() mapping.LogicalType {
 	case TYPE_DECIMAL:
 		return mapping.CreateDecimalType(info.decimalWidth, info.decimalScale)
 	case TYPE_ENUM:
-		return mapping.CreateEnumType(info.enumNames)
+		return mapping.CreateEnumType(info.names)
 	case TYPE_LIST:
 		return info.logicalListType()
 	case TYPE_STRUCT:
@@ -269,12 +306,14 @@ func (info *typeInfo) logicalType() mapping.LogicalType {
 		return info.logicalMapType()
 	case TYPE_ARRAY:
 		return info.logicalArrayType()
+	case TYPE_UNION:
+		return info.logicalUnionType()
 	}
 	return mapping.LogicalType{}
 }
 
 func (info *typeInfo) logicalListType() mapping.LogicalType {
-	child := info.childTypes[0].logicalType()
+	child := info.types[0].logicalType()
 	defer mapping.DestroyLogicalType(&child)
 	return mapping.CreateListType(child)
 }
@@ -292,17 +331,26 @@ func (info *typeInfo) logicalStructType() mapping.LogicalType {
 }
 
 func (info *typeInfo) logicalMapType() mapping.LogicalType {
-	key := info.childTypes[0].logicalType()
+	key := info.types[0].logicalType()
 	defer mapping.DestroyLogicalType(&key)
-	value := info.childTypes[1].logicalType()
+	value := info.types[1].logicalType()
 	defer mapping.DestroyLogicalType(&value)
 	return mapping.CreateMapType(key, value)
 }
 
 func (info *typeInfo) logicalArrayType() mapping.LogicalType {
-	child := info.childTypes[0].logicalType()
+	child := info.types[0].logicalType()
 	defer mapping.DestroyLogicalType(&child)
 	return mapping.CreateArrayType(child, info.arrayLength)
+}
+
+func (info *typeInfo) logicalUnionType() mapping.LogicalType {
+	var types []mapping.LogicalType
+	defer destroyLogicalTypes(&types)
+	for _, t := range info.types {
+		types = append(types, t.logicalType())
+	}
+	return mapping.CreateUnionType(types, info.names)
 }
 
 func funcName(i interface{}) string {
