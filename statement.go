@@ -225,7 +225,7 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 	case TYPE_TIME, TYPE_TIME_TZ:
 		return s.bindTime(val, t, n)
 	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_LIST, TYPE_STRUCT, TYPE_MAP,
-		TYPE_ARRAY, TYPE_ENUM:
+		TYPE_ARRAY, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: use NamedValueChecker to support.

@@ -54,7 +54,7 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 			continue
 		}
 		switch k {
-		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_SQLNULL:
+		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION, TYPE_SQLNULL:
 			continue
 		}
 		primitiveTypes = append(primitiveTypes, k)
@@ -183,9 +183,27 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 		},
 	}
 
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	info, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"int_val", "str_val"},
+	)
+	require.NoError(t, err)
+	unionTypeInfo := testTypeInfo{
+		TypeInfo: info,
+		testTypeValues: testTypeValues{
+			input:  `UNION_VALUE(int_val := 1::INTEGER)`,
+			output: `1`,
+		},
+	}
+
 	testTypeInfos = append(testTypeInfos, decimalTypeInfo, enumTypeInfo,
 		listTypeInfo, nestedListTypeInfo, structTypeInfo, nestedStructTypeInfo, mapTypeInfo,
-		arrayTypeInfo, nestedArrayTypeInfo)
+		arrayTypeInfo, nestedArrayTypeInfo, unionTypeInfo)
 	return testTypeInfos
 }
 
@@ -197,11 +215,27 @@ func TestTypeInterface(t *testing.T) {
 		_, err := NewListInfo(info.TypeInfo)
 		require.NoError(t, err)
 	}
+
+	// Test UNION type creation.
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	unionInfo, err := NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"int_val", "str_val"},
+	)
+	require.NoError(t, err)
+
+	// Verify that we can use the UNION type as a child type.
+	_, err = NewListInfo(unionInfo)
+	require.NoError(t, err)
 }
 
 func TestErrTypeInfo(t *testing.T) {
 	var incorrectTypes []Type
-	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY)
+	incorrectTypes = append(incorrectTypes, TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION)
 
 	for _, incorrect := range incorrectTypes {
 		_, err := NewTypeInfo(incorrect)
@@ -277,4 +311,35 @@ func TestErrTypeInfo(t *testing.T) {
 
 	_, err = NewArrayInfo(nil, 3)
 	testError(t, err, errAPI.Error(), interfaceIsNilErrMsg)
+
+	// Invalid UNION types.
+	unionIntInfo, err := NewTypeInfo(TYPE_INTEGER)
+	require.NoError(t, err)
+	unionStringInfo, err := NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+
+	// Test empty members.
+	_, err = NewUnionInfo([]TypeInfo{}, []string{})
+	testError(t, err, errAPI.Error(), "UNION type must have at least one member")
+
+	// Test mismatched lengths.
+	_, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"single_name"},
+	)
+	testError(t, err, errAPI.Error(), "member types and names must have the same length")
+
+	// Test empty name.
+	_, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo},
+		[]string{""},
+	)
+	testError(t, err, errAPI.Error(), errEmptyName.Error())
+
+	// Test duplicate names.
+	_, err = NewUnionInfo(
+		[]TypeInfo{unionIntInfo, unionStringInfo},
+		[]string{"same_name", "same_name"},
+	)
+	testError(t, err, errAPI.Error(), duplicateNameErrMsg)
 }

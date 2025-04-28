@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"database/sql/driver"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -188,6 +189,11 @@ func (d Decimal) String() string {
 		return fmt.Sprintf("%s0.%s%s", signStr, strings.Repeat("0", scale-len(zeroTrimmed)), zeroTrimmed)
 	}
 	return signStr + zeroTrimmed[:len(zeroTrimmed)-scale] + "." + zeroTrimmed[len(zeroTrimmed)-scale:]
+}
+
+type Union struct {
+	Value driver.Value `json:"value"`
+	Tag   string       `json:"tag"`
 }
 
 func castToTime[T any](val T) (time.Time, error) {
