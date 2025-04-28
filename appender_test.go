@@ -494,7 +494,7 @@ func TestAppenderUUID(t *testing.T) {
 	}
 }
 
-func newAppenderHugeIntTest[T numericType](val T, c *Connector, db *sql.DB, a *Appender) func(t *testing.T) {
+func newAppenderHugeIntTest[T numericType](val T, db *sql.DB, a *Appender) func(t *testing.T) {
 	return func(t *testing.T) {
 		typeName := reflect.TypeOf(val).String()
 		require.NoError(t, a.AppendRow(val, typeName))
@@ -514,16 +514,16 @@ func TestAppenderHugeInt(t *testing.T) {
 	defer cleanupAppender(t, c, db, conn, a)
 
 	tests := map[string]func(t *testing.T){
-		"int8":    newAppenderHugeIntTest[int8](1, c, db, a),
-		"int16":   newAppenderHugeIntTest[int16](2, c, db, a),
-		"int32":   newAppenderHugeIntTest[int32](3, c, db, a),
-		"int64":   newAppenderHugeIntTest[int64](4, c, db, a),
-		"uint8":   newAppenderHugeIntTest[uint8](5, c, db, a),
-		"uint16":  newAppenderHugeIntTest[uint16](6, c, db, a),
-		"uint32":  newAppenderHugeIntTest[uint32](7, c, db, a),
-		"uint64":  newAppenderHugeIntTest[uint64](8, c, db, a),
-		"float32": newAppenderHugeIntTest[float32](9, c, db, a),
-		"float64": newAppenderHugeIntTest[float64](10, c, db, a),
+		"int8":    newAppenderHugeIntTest[int8](1, db, a),
+		"int16":   newAppenderHugeIntTest[int16](2, db, a),
+		"int32":   newAppenderHugeIntTest[int32](3, db, a),
+		"int64":   newAppenderHugeIntTest[int64](4, db, a),
+		"uint8":   newAppenderHugeIntTest[uint8](5, db, a),
+		"uint16":  newAppenderHugeIntTest[uint16](6, db, a),
+		"uint32":  newAppenderHugeIntTest[uint32](7, db, a),
+		"uint64":  newAppenderHugeIntTest[uint64](8, db, a),
+		"float32": newAppenderHugeIntTest[float32](9, db, a),
+		"float64": newAppenderHugeIntTest[float64](10, db, a),
 	}
 	for name, test := range tests {
 		t.Run(name, test)
