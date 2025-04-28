@@ -15,7 +15,7 @@ type Appender struct {
 	appender mapping.Appender
 	closed   bool
 
-	// The current chunk to append to.
+	// The chunk to append to.
 	chunk DataChunk
 	// The column types of the table to append to.
 	types []mapping.LogicalType
