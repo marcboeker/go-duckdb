@@ -97,10 +97,8 @@ func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
 		vv, err = mapping.CreateVarchar(v.(string)), nil
 	case TYPE_ARRAY:
 		return getMappedSliceValue(lt, t, v)
-		return getMappedArrayValue(lt, v)
 	case TYPE_LIST:
-		// return getMappedSliceValue(lt, t, v)
-		return getMappedListValue(lt, v)
+		return getMappedSliceValue(lt, t, v)
 	case TYPE_STRUCT:
 		return getMappedStructValue(lt, v)
 	default:
@@ -152,50 +150,6 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping
 	}
 
 	return &v, nil
-}
-
-func getMappedArrayValue[T any](lt mapping.LogicalType, val T) (*mapping.Value, error) {
-	var childValues []mapping.Value
-	childType := mapping.ArrayTypeChildType(lt)
-	defer mapping.DestroyLogicalType(&childType)
-
-	vSlice, err := extractSlice(val)
-	if err != nil {
-		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
-	}
-
-	for _, v := range vSlice {
-		vv, err := createValue(childType, v)
-		if err != nil {
-			return nil, fmt.Errorf("could not create value %s", err)
-		}
-		childValues = append(childValues, *vv)
-	}
-
-	arrValue := mapping.CreateArrayValue(childType, childValues)
-	return &arrValue, nil
-}
-
-func getMappedListValue[T any](lt mapping.LogicalType, val T) (*mapping.Value, error) {
-	var childValues []mapping.Value
-	childType := mapping.ListTypeChildType(lt)
-	defer mapping.DestroyLogicalType(&childType)
-
-	vSlice, err := extractSlice(val)
-	if err != nil {
-		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
-	}
-
-	for _, v := range vSlice {
-		vv, err := createValue(childType, v)
-		if err != nil {
-			return nil, fmt.Errorf("could not create value %s", err)
-		}
-		childValues = append(childValues, *vv)
-	}
-
-	listValue := mapping.CreateListValue(childType, childValues)
-	return &listValue, nil
 }
 
 func getMappedStructValue(lt mapping.LogicalType, val any) (*mapping.Value, error) {
