@@ -15,8 +15,8 @@ type Appender struct {
 	appender mapping.Appender
 	closed   bool
 
-	// The appender storage before flushing any data.
-	chunks []DataChunk
+	// The chunk to append to.
+	chunk DataChunk
 	// The column types of the table to append to.
 	types []mapping.LogicalType
 	// The number of appended rows.
@@ -71,6 +71,14 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 		}
 	}
 
+	// Initialize the data chunk.
+	if err := a.chunk.initFromTypes(a.types, true); err != nil {
+		a.chunk.close()
+		destroyTypeSlice(a.types)
+		mapping.AppenderDestroy(&appender)
+		return nil, getError(errAppenderCreation, err)
+	}
+
 	return a, nil
 }
 
@@ -78,9 +86,10 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 // Does not close the appender, even if it returns an error. Unless you have a good reason to call this,
 // call Close when you are done with the appender.
 func (a *Appender) Flush() error {
-	if err := a.appendDataChunks(); err != nil {
+	if err := a.appendDataChunk(); err != nil {
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
+
 	if mapping.AppenderFlush(a.appender) == mapping.StateError {
 		err := getDuckDBError(mapping.AppenderError(a.appender))
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
@@ -98,7 +107,8 @@ func (a *Appender) Close() error {
 	a.closed = true
 
 	// Append all remaining chunks.
-	errAppend := a.appendDataChunks()
+	errAppend := a.appendDataChunk()
+	a.chunk.close()
 
 	// We flush before closing to get a meaningful error message.
 	var errFlush error
@@ -135,16 +145,6 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	return nil
 }
 
-func (a *Appender) addDataChunk() error {
-	var chunk DataChunk
-	if err := chunk.initFromTypes(a.types, true); err != nil {
-		return err
-	}
-	a.chunks = append(a.chunks, chunk)
-
-	return nil
-}
-
 func (a *Appender) appendRowSlice(args []driver.Value) error {
 	// Early-out, if the number of args does not match the column count.
 	if len(args) != len(a.types) {
@@ -152,17 +152,15 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 	}
 
 	// Create a new data chunk if the current chunk is full.
-	if a.rowCount == GetDataChunkCapacity() || len(a.chunks) == 0 {
-		if err := a.addDataChunk(); err != nil {
+	if a.rowCount == GetDataChunkCapacity() {
+		if err := a.appendDataChunk(); err != nil {
 			return err
 		}
-		a.rowCount = 0
 	}
 
 	// Set all values.
 	for i, val := range args {
-		chunk := &a.chunks[len(a.chunks)-1]
-		err := chunk.SetValue(i, a.rowCount, val)
+		err := a.chunk.SetValue(i, a.rowCount, val)
 		if err != nil {
 			return err
 		}
@@ -172,31 +170,22 @@ func (a *Appender) appendRowSlice(args []driver.Value) error {
 	return nil
 }
 
-func (a *Appender) appendDataChunks() error {
-	var err error
-
-	for i, chunk := range a.chunks {
-		// All data chunks except the last are at maximum capacity.
-		size := GetDataChunkCapacity()
-		if i == len(a.chunks)-1 {
-			size = a.rowCount
-		}
-		if err = chunk.SetSize(size); err != nil {
-			break
-		}
-		if mapping.AppendDataChunk(a.appender, chunk.chunk) == mapping.StateError {
-			err = getDuckDBError(mapping.AppenderError(a.appender))
-			break
-		}
+func (a *Appender) appendDataChunk() error {
+	if a.rowCount == 0 {
+		// Nothing to append.
+		return nil
+	}
+	if err := a.chunk.SetSize(a.rowCount); err != nil {
+		return err
+	}
+	if mapping.AppendDataChunk(a.appender, a.chunk.chunk) == mapping.StateError {
+		return getDuckDBError(mapping.AppenderError(a.appender))
 	}
 
-	for _, chunk := range a.chunks {
-		chunk.close()
-	}
-	a.chunks = a.chunks[:0]
+	mapping.DataChunkReset(a.chunk.chunk)
 	a.rowCount = 0
 
-	return err
+	return nil
 }
 
 func destroyTypeSlice(slice []mapping.LogicalType) {

@@ -175,10 +175,20 @@ func TestErrAppender(t *testing.T) {
 	})
 
 	t.Run(errUnsupportedMapKeyType.Error(), func(t *testing.T) {
-		c, db, conn, a := prepareAppender(t, `CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
-		defer cleanupAppender(t, c, db, conn, a)
-		err := a.AppendRow(nil)
-		testError(t, err, errAppenderAppendRow.Error(), errUnsupportedMapKeyType.Error())
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		db := sql.OpenDB(c)
+		_, err := db.Exec(`CREATE TABLE test (m MAP(INT[], STRUCT(v INT)))`)
+		require.NoError(t, err)
+		defer closeDbWrapper(t, db)
+
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
+
+		a, err := NewAppenderFromConn(conn, "", "test")
+		defer closeAppenderWrapper(t, a)
+		testError(t, err, errAppenderCreation.Error(), errUnsupportedMapKeyType.Error())
 	})
 
 	t.Run(invalidInputErrMsg, func(t *testing.T) {
