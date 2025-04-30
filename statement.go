@@ -213,7 +213,7 @@ func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, 
 	}
 
 	mappedVal, err := createValue(lt, val.Value)
-	// defer mapping.DestroyValue(mappedVal)
+	defer mapping.DestroyValue(mappedVal)
 	if err != nil {
 		return mapping.StateError, addIndexToError(err, n+1)
 	}

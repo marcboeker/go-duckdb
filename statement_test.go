@@ -459,7 +459,7 @@ func TestPrepareComplex(t *testing.T) {
 	err = prepared.QueryRow(
 		[]int32{7, 1},
 		[]string{"foo", "bar"},
-		map[string]any{"v": "baz", "i": 42},
+		map[string]any{"v": "baz", "i": int32(42)},
 	).Scan(&arr, &list, &struc)
 	require.NoError(t, err)
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"reflect"
 
-	duckdb_go_bindings "github.com/duckdb/duckdb-go-bindings/darwin-arm64"
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
@@ -73,12 +72,7 @@ func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
 	case TYPE_SMALLINT:
 		vv, err = mapping.CreateInt16(v.(int16)), nil
 	case TYPE_INTEGER:
-		// TODO: do all int types need this casting?
-		if i, ok := v.(int); ok {
-			vv, err = mapping.CreateInt32(int32(i)), nil
-		} else {
-			vv, err = mapping.CreateInt32(v.(int32)), nil
-		}
+		vv, err = mapping.CreateInt32(v.(int32)), nil
 	case TYPE_BIGINT:
 		vv, err = mapping.CreateInt64(v.(int64)), nil
 	case TYPE_UTINYINT:
@@ -105,25 +99,15 @@ func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
 		return nil, unsupportedTypeError(reflect.TypeOf(v).Name())
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
 	return &vv, err
 }
 
 func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping.Value, error) {
-	var childValues []mapping.Value
-
-	var childType duckdb_go_bindings.LogicalType
+	var childType mapping.LogicalType
 	if t == TYPE_ARRAY {
-		fmt.Printf("ARRAY\n")
 		childType = mapping.ArrayTypeChildType(lt)
 	} else if t == TYPE_LIST {
-		fmt.Printf("ELSE\n")
 		childType = mapping.ListTypeChildType(lt)
-	} else {
-		return nil, fmt.Errorf("unexpected type passed to getMappedSliceValue: %v", t)
 	}
 	defer mapping.DestroyLogicalType(&childType)
 
@@ -131,6 +115,9 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping
 	if err != nil {
 		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
 	}
+
+	var childValues []mapping.Value
+	defer destroyValueSlice(childValues)
 
 	for _, v := range vSlice {
 		vv, err := createValue(childType, v)
@@ -142,10 +129,8 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping
 
 	var v mapping.Value
 	if t == TYPE_ARRAY {
-		fmt.Printf("ARRAY\n")
 		v = mapping.CreateArrayValue(childType, childValues)
 	} else if t == TYPE_LIST {
-		fmt.Printf("ELSE\n")
 		v = mapping.CreateListValue(childType, childValues)
 	}
 
@@ -153,18 +138,20 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping
 }
 
 func getMappedStructValue(lt mapping.LogicalType, val any) (*mapping.Value, error) {
-	var values []mapping.Value
 	vMap, ok := val.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("could not cast %T to map[string]any", val)
 	}
 
-	childCount := mapping.StructTypeChildCount(lt)
+	var values []mapping.Value
+	defer destroyValueSlice(values)
 
+	childCount := mapping.StructTypeChildCount(lt)
 	for i := mapping.IdxT(0); i < childCount; i++ {
 		childName := mapping.StructTypeChildName(lt, i)
 		childType := mapping.StructTypeChildType(lt, i)
 		defer mapping.DestroyLogicalType(&childType)
+
 		v, exists := vMap[childName]
 		if exists {
 			vv, err := createValue(childType, v)
@@ -179,6 +166,12 @@ func getMappedStructValue(lt mapping.LogicalType, val any) (*mapping.Value, erro
 
 	structValue := mapping.CreateStructValue(lt, values)
 	return &structValue, nil
+}
+
+func destroyValueSlice(values []mapping.Value) {
+	for _, v := range values {
+		mapping.DestroyValue(&v)
+	}
 }
 
 func canNil(val reflect.Value) bool {
