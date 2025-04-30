@@ -1,8 +1,10 @@
 package duckdb
 
 import (
+	"fmt"
 	"reflect"
 
+	duckdb_go_bindings "github.com/duckdb/duckdb-go-bindings/darwin-arm64"
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
@@ -94,8 +96,10 @@ func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
 	case TYPE_VARCHAR:
 		vv, err = mapping.CreateVarchar(v.(string)), nil
 	case TYPE_ARRAY:
+		return getMappedSliceValue(lt, t, v)
 		return getMappedArrayValue(lt, v)
 	case TYPE_LIST:
+		// return getMappedSliceValue(lt, t, v)
 		return getMappedListValue(lt, v)
 	case TYPE_STRUCT:
 		return getMappedStructValue(lt, v)
@@ -108,4 +112,155 @@ func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
 	}
 
 	return &vv, err
+}
+
+func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping.Value, error) {
+	var childValues []mapping.Value
+
+	var childType duckdb_go_bindings.LogicalType
+	if t == TYPE_ARRAY {
+		fmt.Printf("ARRAY\n")
+		childType = mapping.ArrayTypeChildType(lt)
+	} else if t == TYPE_LIST {
+		fmt.Printf("ELSE\n")
+		childType = mapping.ListTypeChildType(lt)
+	} else {
+		return nil, fmt.Errorf("unexpected type passed to getMappedSliceValue: %v", t)
+	}
+	defer mapping.DestroyLogicalType(&childType)
+
+	vSlice, err := extractSlice(val)
+	if err != nil {
+		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
+	}
+
+	for _, v := range vSlice {
+		vv, err := createValue(childType, v)
+		if err != nil {
+			return nil, fmt.Errorf("could not create value %s", err)
+		}
+		childValues = append(childValues, *vv)
+	}
+
+	var v mapping.Value
+	if t == TYPE_ARRAY {
+		fmt.Printf("ARRAY\n")
+		v = mapping.CreateArrayValue(childType, childValues)
+	} else if t == TYPE_LIST {
+		fmt.Printf("ELSE\n")
+		v = mapping.CreateListValue(childType, childValues)
+	}
+
+	return &v, nil
+}
+
+func getMappedArrayValue[T any](lt mapping.LogicalType, val T) (*mapping.Value, error) {
+	var childValues []mapping.Value
+	childType := mapping.ArrayTypeChildType(lt)
+	defer mapping.DestroyLogicalType(&childType)
+
+	vSlice, err := extractSlice(val)
+	if err != nil {
+		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
+	}
+
+	for _, v := range vSlice {
+		vv, err := createValue(childType, v)
+		if err != nil {
+			return nil, fmt.Errorf("could not create value %s", err)
+		}
+		childValues = append(childValues, *vv)
+	}
+
+	arrValue := mapping.CreateArrayValue(childType, childValues)
+	return &arrValue, nil
+}
+
+func getMappedListValue[T any](lt mapping.LogicalType, val T) (*mapping.Value, error) {
+	var childValues []mapping.Value
+	childType := mapping.ListTypeChildType(lt)
+	defer mapping.DestroyLogicalType(&childType)
+
+	vSlice, err := extractSlice(val)
+	if err != nil {
+		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
+	}
+
+	for _, v := range vSlice {
+		vv, err := createValue(childType, v)
+		if err != nil {
+			return nil, fmt.Errorf("could not create value %s", err)
+		}
+		childValues = append(childValues, *vv)
+	}
+
+	listValue := mapping.CreateListValue(childType, childValues)
+	return &listValue, nil
+}
+
+func getMappedStructValue(lt mapping.LogicalType, val any) (*mapping.Value, error) {
+	var values []mapping.Value
+	vMap, ok := val.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("could not cast %T to map[string]any", val)
+	}
+
+	childCount := mapping.StructTypeChildCount(lt)
+
+	for i := mapping.IdxT(0); i < childCount; i++ {
+		childName := mapping.StructTypeChildName(lt, i)
+		childType := mapping.StructTypeChildType(lt, i)
+		defer mapping.DestroyLogicalType(&childType)
+		v, exists := vMap[childName]
+		if exists {
+			vv, err := createValue(childType, v)
+			if err != nil {
+				return nil, fmt.Errorf("could not create value %s", err)
+			}
+			values = append(values, *vv)
+		} else {
+			values = append(values, mapping.CreateNullValue())
+		}
+	}
+
+	structValue := mapping.CreateStructValue(lt, values)
+	return &structValue, nil
+}
+
+func canNil(val reflect.Value) bool {
+	switch val.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer,
+		reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return true
+	default:
+		return false
+	}
+}
+
+func extractSlice[S any](val S) ([]any, error) {
+	var s []any
+	switch v := any(val).(type) {
+	case []any:
+		s = v
+	default:
+		kind := reflect.TypeOf(val).Kind()
+		if kind != reflect.Array && kind != reflect.Slice {
+			return nil, castError(reflect.TypeOf(val).String(), reflect.TypeOf(s).String())
+		}
+		// Insert the values into the child vector.
+		rv := reflect.ValueOf(val)
+		s = make([]any, rv.Len())
+
+		for i := 0; i < rv.Len(); i++ {
+			idx := rv.Index(i)
+			if canNil(idx) && idx.IsNil() {
+				s[i] = nil
+				continue
+			}
+
+			s[i] = idx.Interface()
+		}
+	}
+
+	return s, nil
 }

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"reflect"
 	"time"
 
 	"github.com/marcboeker/go-duckdb/mapping"
@@ -116,7 +115,7 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	return Type(t), nil
 }
 
-func (s *Stmt) ParamLogicalType(n int) (mapping.LogicalType, error) {
+func (s *Stmt) paramLogicalType(n int) (mapping.LogicalType, error) {
 	var lt mapping.LogicalType
 	if s.closed {
 		return lt, errClosedStmt
@@ -205,26 +204,22 @@ func (s *Stmt) bindTime(val driver.NamedValue, t Type, n int) (mapping.State, er
 	return state, nil
 }
 
-func toAnySlice(v any) ([]any, error) {
-	// If already []any, return as is
-	if slice, ok := v.([]any); ok {
-		return slice, nil
+// Used for binding Array, List, Struct. In the future, also Map and Union
+func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, error) {
+	lt, err := s.paramLogicalType(n + 1)
+	defer mapping.DestroyLogicalType(&lt)
+	if err != nil {
+		return mapping.StateError, err
 	}
 
-	// Use reflection to handle other cases
-	rv := reflect.ValueOf(v)
-
-	// If it's a slice or array, convert each element
-	if rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array {
-		result := make([]any, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
-			result[i] = rv.Index(i).Interface()
-		}
-		return result, nil
+	mappedVal, err := createValue(lt, val.Value)
+	// defer mapping.DestroyValue(mappedVal)
+	if err != nil {
+		return mapping.StateError, addIndexToError(err, n+1)
 	}
 
-	// Handle single values by wrapping in a slice
-	return []any{v}, nil
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *mappedVal)
+	return state, nil
 }
 
 func (s *Stmt) tryBindComplexValue(val driver.NamedValue, t Type, n int) (mapping.State, error) {
@@ -265,19 +260,7 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 	case TYPE_TIME, TYPE_TIME_TZ:
 		return s.bindTime(val, t, n)
 	case TYPE_ARRAY, TYPE_LIST, TYPE_STRUCT:
-		lt, err := s.ParamLogicalType(n + 1)
-		defer mapping.DestroyLogicalType(&lt)
-		if err != nil {
-			return mapping.StateError, err
-		}
-
-		mappedVal, err := createValue(lt, val.Value)
-		if err != nil {
-			return mapping.StateError, addIndexToError(err, n+1)
-		}
-
-		state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *mappedVal)
-		return state, nil
+		return s.bindCompositeValue(val, n)
 	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_MAP, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value

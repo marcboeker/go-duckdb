@@ -1,7 +1,6 @@
 package duckdb
 
 import (
-	"reflect"
 	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/mapping"
@@ -24,16 +23,6 @@ type vector struct {
 
 	// The vector's type information.
 	vectorTypeInfo
-}
-
-func (*vector) canNil(val reflect.Value) bool {
-	switch val.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer,
-		reflect.UnsafePointer, reflect.Interface, reflect.Slice:
-		return true
-	default:
-		return false
-	}
 }
 
 func (vec *vector) init(logicalType mapping.LogicalType, colIdx int) error {
