@@ -456,6 +456,16 @@ func TestPrepareComplex(t *testing.T) {
 	var arr Composite[[]int32]
 	var list Composite[[]string]
 	var struc Composite[map[string]any]
+
+	// Test with `any`` slice types
+	err = prepared.QueryRow(
+		[]any{int32(7), int32(1)},
+		[]any{"foo", "bar"},
+		map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	// Test with specific slice types
 	err = prepared.QueryRow(
 		[]int32{7, 1},
 		[]string{"foo", "bar"},
