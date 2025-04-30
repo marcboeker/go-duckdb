@@ -430,5 +430,52 @@ func TestBindWithoutResolvedParams(t *testing.T) {
 	// Type without a fallback.
 	s := []int32{1}
 	r = db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, s, s)
-	require.Contains(t, r.Err().Error(), "unsupported type")
+	require.Contains(t, r.Err().Error(), "unsupported data type")
+}
+
+func TestPrepareComplex(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.Background()
+	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(
+		arr_int INTEGER[2],
+		list_str VARCHAR[],
+		str_col STRUCT(v VARCHAR, i INTEGER)
+	)`)
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES
+		(array_value(7, 1), list_value('foo', 'bar'), {'v': 'baz', 'i': 42})
+	`)
+	require.NoError(t, err)
+
+	prepared, err := db.Prepare(`SELECT * FROM arr_test
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?
+	`)
+	require.NoError(t, err)
+
+	var arr Composite[[]int32]
+	var list Composite[[]string]
+	var struc Composite[map[string]any]
+
+	// Test with `any`` slice types
+	err = prepared.QueryRow(
+		[]any{int32(7), int32(1)},
+		[]any{"foo", "bar"},
+		map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	// Test with specific slice types
+	err = prepared.QueryRow(
+		[]int32{7, 1},
+		[]string{"foo", "bar"},
+		map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+
+	closePreparedWrapper(t, prepared)
 }

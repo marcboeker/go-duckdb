@@ -255,7 +255,7 @@ func setEnum[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 }
 
 func setList[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	list, err := extractSlice(vec, val)
+	list, err := extractSlice(val)
 	if err != nil {
 		return err
 	}
@@ -339,7 +339,7 @@ func setMap[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 }
 
 func setArray[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	array, err := extractSlice(vec, val)
+	array, err := extractSlice(val)
 	if err != nil {
 		return err
 	}
@@ -347,33 +347,6 @@ func setArray[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		return invalidInputError(strconv.Itoa(len(array)), strconv.Itoa(int(vec.arrayLength)))
 	}
 	return setSliceChildren(vec, array, rowIdx*vec.arrayLength)
-}
-
-func extractSlice[S any](vec *vector, val S) ([]any, error) {
-	var s []any
-	switch v := any(val).(type) {
-	case []any:
-		s = v
-	default:
-		kind := reflect.TypeOf(val).Kind()
-		if kind != reflect.Array && kind != reflect.Slice {
-			return nil, castError(reflect.TypeOf(val).String(), reflect.TypeOf(s).String())
-		}
-		// Insert the values into the child vector.
-		rv := reflect.ValueOf(val)
-		s = make([]any, rv.Len())
-
-		for i := 0; i < rv.Len(); i++ {
-			idx := rv.Index(i)
-			if vec.canNil(idx) && idx.IsNil() {
-				s[i] = nil
-				continue
-			}
-
-			s[i] = idx.Interface()
-		}
-	}
-	return s, nil
 }
 
 func setSliceChildren(vec *vector, s []any, offset mapping.IdxT) error {
