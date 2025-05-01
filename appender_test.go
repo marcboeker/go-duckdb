@@ -74,6 +74,8 @@ type nestedDataRow struct {
 	structWithList      structWithList
 	mix                 mixedStruct
 	mixList             []mixedStruct
+	union               Union
+	mapUnion            Map
 }
 
 type resultRow struct {
@@ -89,6 +91,8 @@ type resultRow struct {
 	structWithList      any
 	mix                 any
 	mixList             []any
+	union               any
+	mapUnion            Map
 }
 
 func castList[T any](val []any) []T {
@@ -272,6 +276,8 @@ func TestAppenderNested(t *testing.T) {
 			&r.structWithList,
 			&r.mix,
 			&r.mixList,
+			&r.union,
+			&r.mapUnion,
 		))
 
 		require.Equal(t, rowsToAppend[i].ID, r.ID)
@@ -295,6 +301,15 @@ func TestAppenderNested(t *testing.T) {
 		i++
 	}
 	require.Equal(t, rowCount, i)
+
+	res, err = db.QueryContext(context.Background(), `SELECT map_union['key1'] FROM test ORDER BY id`)
+	require.NoError(t, err)
+
+	for res.Next() {
+		var i Union
+		require.NoError(t, res.Scan(&i))
+		require.Equal(t, int32(1), i.Value)
+	}
 }
 
 func TestAppenderNullList(t *testing.T) {
@@ -973,7 +988,9 @@ const createNestedDataTableSQL = `
 			A STRUCT(L VARCHAR[]),
 			B STRUCT(L INT[])[],
 			C STRUCT(L MAP(VARCHAR, INT))
-		)[]
+		)[],
+		union_col UNION(i INT, s VARCHAR),
+		map_union MAP(VARCHAR, UNION(i INT, s VARCHAR))
 	)
 `
 
@@ -1017,6 +1034,21 @@ func prepareNestedData(rowCount int) []nestedDataRow {
 		rowsToAppend[i].structWithList.L = []int32{6, 7, 8}
 		rowsToAppend[i].mix = ms
 		rowsToAppend[i].mixList = []mixedStruct{ms, ms}
+		// Make sure the union column has a mix of union tags
+		// This works fine
+		if i%2 == 0 {
+			rowsToAppend[i].union = Union{Value: 1, Tag: "i"}
+		} else {
+			rowsToAppend[i].union = Union{Value: "str", Tag: "s"}
+		}
+		// This with a SIGBUS when there are mixed union tags in the map values in the same row
+		// It only fails if there are two values of one tag and at least one of another tag
+		// Sometimes the append just hangs, other times it fails with SIGBUS
+		rowsToAppend[i].mapUnion = Map{
+			"key1": Union{Value: 1, Tag: "i"},
+			"key2": Union{Value: 2, Tag: "i"},
+			"key3": Union{Value: "str2", Tag: "s"},
+		}
 	}
 
 	return rowsToAppend
@@ -1036,7 +1068,9 @@ func appendNestedData[T require.TestingT](t T, a *Appender, rowsToAppend []neste
 			row.structList,
 			row.structWithList,
 			row.mix,
-			row.mixList))
+			row.mixList,
+			row.union,
+			row.mapUnion))
 	}
 	require.NoError(t, a.Flush())
 }
