@@ -1061,7 +1061,8 @@ func TestAppenderAppendDataChunk(t *testing.T) {
 
 	// Add enough rows to overflow several chunks
 	for i := 0; i < GetDataChunkCapacity()*3; i++ {
-		appender.AppendRow(i, Union{Value: "str2", Tag: "s"})
+		err := appender.AppendRow(i, Union{Value: "str2", Tag: "s"})
+		require.NoError(t, err)
 	}
 
 	err = appender.Flush()
