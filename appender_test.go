@@ -1040,3 +1040,30 @@ func appendNestedData[T require.TestingT](t T, a *Appender, rowsToAppend []neste
 	}
 	require.NoError(t, a.Flush())
 }
+
+// Ensures that when new data chunks are added, their state is correctly reset
+// and we will be able to append data
+func TestAppenderAppendDataChunk(t *testing.T) {
+	c, _ := NewConnector("", nil)
+	defer c.Close()
+
+	conn, _ := c.Connect(context.Background())
+	defer conn.Close()
+
+	db := sql.OpenDB(c)
+
+	_, err := db.Exec("CREATE TABLE test(id int, attr UNION(i INT, s VARCHAR))")
+	require.NoError(t, err)
+
+	appender, err := NewAppenderFromConn(conn, "", "test")
+	require.NoError(t, err)
+	defer appender.Close()
+
+	// Add enough rows to overflow several chunks
+	for i := 0; i < GetDataChunkCapacity()*3; i++ {
+		appender.AppendRow(i, Union{Value: "str2", Tag: "s"})
+	}
+
+	err = appender.Flush()
+	require.NoError(t, err)
+}

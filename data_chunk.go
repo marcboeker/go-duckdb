@@ -98,6 +98,15 @@ func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool
 	return nil
 }
 
+func (chunk *DataChunk) reset() {
+	mapping.DataChunkReset(chunk.chunk)
+
+	for i, col := range chunk.columns {
+		v := mapping.DataChunkGetVector(chunk.chunk, mapping.IdxT(i))
+		col.initVectors(v, true)
+	}
+}
+
 func (chunk *DataChunk) initFromDuckDataChunk(inputChunk mapping.DataChunk, writable bool) error {
 	columnCount := mapping.DataChunkGetColumnCount(inputChunk)
 	chunk.columns = make([]vector, columnCount)
