@@ -89,7 +89,18 @@ func setTS[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	if err != nil {
 		return err
 	}
-	setPrimitive(vec, rowIdx, *ts)
+	switch vec.Type {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		setPrimitive(vec, rowIdx, *ts.(*mapping.Timestamp))
+	case TYPE_TIMESTAMP_S:
+		setPrimitive(vec, rowIdx, *ts.(*mapping.TimestampS))
+	case TYPE_TIMESTAMP_MS:
+		setPrimitive(vec, rowIdx, *ts.(*mapping.TimestampMS))
+	case TYPE_TIMESTAMP_NS:
+		setPrimitive(vec, rowIdx, *ts.(*mapping.TimestampNS))
+	default:
+		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(ts).String())
+	}
 	return nil
 }
 

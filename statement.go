@@ -171,7 +171,12 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.Stat
 	if err != nil {
 		return mapping.StateError, err
 	}
-	state := mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), *ts)
+	v, ok := ts.(*mapping.Timestamp)
+	if !ok {
+		// this is checked in the upstream code but just in case
+		return mapping.StateError, fmt.Errorf("could not cast %T to *mapping.Timestamp", ts)
+	}
+	state := mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), *v)
 	return state, nil
 }
 

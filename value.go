@@ -32,9 +32,15 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 		return mapping.GetFloat(v), nil
 	case TYPE_DOUBLE:
 		return mapping.GetDouble(v), nil
-	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
-		// DuckDB's C API does not yet support get_timestamp_s|ms|ns.
-		return nil, unsupportedTypeError(typeToStringMap[t])
+	case TYPE_TIMESTAMP_S:
+		ts := mapping.GetTimestampS(v)
+		return getTSS(&ts), nil
+	case TYPE_TIMESTAMP_MS:
+		ts := mapping.GetTimestampMS(v)
+		return getTSMS(&ts), nil
+	case TYPE_TIMESTAMP_NS:
+		ts := mapping.GetTimestampNS(v)
+		return getTSNS(&ts), nil
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
 		ts := mapping.GetTimestamp(v)
 		return getTS(t, &ts), nil

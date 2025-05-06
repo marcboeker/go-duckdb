@@ -235,12 +235,22 @@ func getTSTicks[T any](t Type, val T) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getMappedTimestamp[T any](t Type, val T) (*mapping.Timestamp, error) {
+func getMappedTimestamp[T any](t Type, val T) (any, error) {
 	ticks, err := getTSTicks(t, val)
 	if err != nil {
 		return nil, err
 	}
 
+	switch t {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		return mapping.NewTimestamp(ticks), nil
+	case TYPE_TIMESTAMP_MS:
+		return mapping.NewTimestampMS(ticks), nil
+	case TYPE_TIMESTAMP_NS:
+		return mapping.NewTimestampNS(ticks), nil
+	case TYPE_TIMESTAMP_S:
+		return mapping.NewTimestampS(ticks), nil
+	}
 	return mapping.NewTimestamp(ticks), nil
 }
 
