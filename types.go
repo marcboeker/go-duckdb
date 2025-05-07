@@ -244,12 +244,12 @@ func getMappedTimestamp[T any](t Type, val T) (any, error) {
 	switch t {
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
 		return mapping.NewTimestamp(ticks), nil
+	case TYPE_TIMESTAMP_S:
+		return mapping.NewTimestampS(ticks), nil
 	case TYPE_TIMESTAMP_MS:
 		return mapping.NewTimestampMS(ticks), nil
 	case TYPE_TIMESTAMP_NS:
 		return mapping.NewTimestampNS(ticks), nil
-	case TYPE_TIMESTAMP_S:
-		return mapping.NewTimestampS(ticks), nil
 	}
 	return mapping.NewTimestamp(ticks), nil
 }
