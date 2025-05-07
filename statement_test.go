@@ -433,6 +433,30 @@ func TestBindWithoutResolvedParams(t *testing.T) {
 	require.Contains(t, r.Err().Error(), "unsupported data type")
 }
 
+func TestBindTimestampTypes(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE OR REPLACE TABLE foo(a TIMESTAMP, b TIMESTAMP_S, c TIMESTAMP_MS, d TIMESTAMP_NS)`)
+	require.NoError(t, err)
+
+	tm := time.Date(2025, time.May, 7, 11, 45, 10, 123456789, time.UTC)
+	_, err = db.Exec(`INSERT INTO foo VALUES(?, ?, ?, ?)`, tm, tm, tm, tm)
+	require.NoError(t, err)
+
+	r := db.QueryRow(`SELECT a, b, c, d FROM foo`)
+	require.NoError(t, r.Err())
+
+	var a, b, c, d time.Time
+	err = r.Scan(&a, &b, &c, &d)
+	require.NoError(t, err)
+
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123456000, time.UTC), a)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 0, time.UTC), b)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123000000, time.UTC), c)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123456789, time.UTC), d)
+}
+
 func TestPrepareComplex(t *testing.T) {
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
