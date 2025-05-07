@@ -3,6 +3,7 @@ package duckdb
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"testing"
 	"time"
@@ -84,168 +85,168 @@ type (
 
 var (
 	rowTableUDFs = []tableUDFTest[RowTableFunction]{
-		// {
-		// 	udf:         &incTableUDF{},
-		// 	name:        "incTableUDF_non_full_vector",
-		// 	query:       `SELECT * FROM %s(2047)`,
-		// 	resultCount: 2047,
-		// },
-		// {
-		// 	udf:         &incTableUDF{},
-		// 	name:        "incTableUDF",
-		// 	query:       `SELECT * FROM %s(10000)`,
-		// 	resultCount: 10000,
-		// },
-		// {
-		// 	udf:         &structTableUDF{},
-		// 	name:        "structTableUDF",
-		// 	query:       `SELECT * FROM %s(2048)`,
-		// 	resultCount: 2048,
-		// },
-		// {
-		// 	udf:         &pushdownTableUDF{},
-		// 	name:        "pushdownTableUDF",
-		// 	query:       `SELECT result2 FROM %s(2048)`,
-		// 	resultCount: 2048,
-		// },
-		// {
-		// 	udf:         &incTableNamedUDF{},
-		// 	name:        "incTableNamedUDF",
-		// 	query:       `SELECT * FROM %s(ARG=2048)`,
-		// 	resultCount: 2048,
-		// },
-		// {
-		// 	udf:         &constTableUDF[bool]{value: false, t: TYPE_BOOLEAN},
-		// 	name:        "constTableUDF_bool",
-		// 	query:       `SELECT * FROM %s(false)`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[int8]{value: -8, t: TYPE_TINYINT},
-		// 	name:        "constTableUDF_int8",
-		// 	query:       `SELECT * FROM %s(CAST(-8 AS TINYINT))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[int16]{value: -16, t: TYPE_SMALLINT},
-		// 	name:        "constTableUDF_int16",
-		// 	query:       `SELECT * FROM %s(CAST(-16 AS SMALLINT))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[int32]{value: -32, t: TYPE_INTEGER},
-		// 	name:        "constTableUDF_int32",
-		// 	query:       `SELECT * FROM %s(-32)`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[int64]{value: -64, t: TYPE_BIGINT},
-		// 	name:        "constTableUDF_int64",
-		// 	query:       `SELECT * FROM %s(-64)`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[uint8]{value: 8, t: TYPE_UTINYINT},
-		// 	name:        "constTableUDF_uint8",
-		// 	query:       `SELECT * FROM %s(CAST(8 AS UTINYINT))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[uint16]{value: 16, t: TYPE_USMALLINT},
-		// 	name:        "constTableUDF_uint16",
-		// 	query:       `SELECT * FROM %s(CAST(16 AS USMALLINT))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[uint32]{value: 32, t: TYPE_UINTEGER},
-		// 	name:        "constTableUDF_uint32",
-		// 	query:       `SELECT * FROM %s(CAST(32 AS UINTEGER))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[uint64]{value: 64, t: TYPE_UBIGINT},
-		// 	name:        "constTableUDF_uint64",
-		// 	query:       `SELECT * FROM %s(CAST(64 AS UBIGINT))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[float32]{value: 32, t: TYPE_FLOAT},
-		// 	name:        "constTableUDF_float32",
-		// 	query:       `SELECT * FROM %s(32)`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[float64]{value: 64, t: TYPE_DOUBLE},
-		// 	name:        "constTableUDF_float64",
-		// 	query:       `SELECT * FROM %s(64)`,
-		// 	resultCount: 1,
-		// },
+		{
+			udf:         &incTableUDF{},
+			name:        "incTableUDF_non_full_vector",
+			query:       `SELECT * FROM %s(2047)`,
+			resultCount: 2047,
+		},
+		{
+			udf:         &incTableUDF{},
+			name:        "incTableUDF",
+			query:       `SELECT * FROM %s(10000)`,
+			resultCount: 10000,
+		},
+		{
+			udf:         &structTableUDF{},
+			name:        "structTableUDF",
+			query:       `SELECT * FROM %s(2048)`,
+			resultCount: 2048,
+		},
+		{
+			udf:         &pushdownTableUDF{},
+			name:        "pushdownTableUDF",
+			query:       `SELECT result2 FROM %s(2048)`,
+			resultCount: 2048,
+		},
+		{
+			udf:         &incTableNamedUDF{},
+			name:        "incTableNamedUDF",
+			query:       `SELECT * FROM %s(ARG=2048)`,
+			resultCount: 2048,
+		},
+		{
+			udf:         &constTableUDF[bool]{value: false, t: TYPE_BOOLEAN},
+			name:        "constTableUDF_bool",
+			query:       `SELECT * FROM %s(false)`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int8]{value: -8, t: TYPE_TINYINT},
+			name:        "constTableUDF_int8",
+			query:       `SELECT * FROM %s(CAST(-8 AS TINYINT))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int16]{value: -16, t: TYPE_SMALLINT},
+			name:        "constTableUDF_int16",
+			query:       `SELECT * FROM %s(CAST(-16 AS SMALLINT))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int32]{value: -32, t: TYPE_INTEGER},
+			name:        "constTableUDF_int32",
+			query:       `SELECT * FROM %s(-32)`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[int64]{value: -64, t: TYPE_BIGINT},
+			name:        "constTableUDF_int64",
+			query:       `SELECT * FROM %s(-64)`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint8]{value: 8, t: TYPE_UTINYINT},
+			name:        "constTableUDF_uint8",
+			query:       `SELECT * FROM %s(CAST(8 AS UTINYINT))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint16]{value: 16, t: TYPE_USMALLINT},
+			name:        "constTableUDF_uint16",
+			query:       `SELECT * FROM %s(CAST(16 AS USMALLINT))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint32]{value: 32, t: TYPE_UINTEGER},
+			name:        "constTableUDF_uint32",
+			query:       `SELECT * FROM %s(CAST(32 AS UINTEGER))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[uint64]{value: 64, t: TYPE_UBIGINT},
+			name:        "constTableUDF_uint64",
+			query:       `SELECT * FROM %s(CAST(64 AS UBIGINT))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[float32]{value: 32, t: TYPE_FLOAT},
+			name:        "constTableUDF_float32",
+			query:       `SELECT * FROM %s(32)`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[float64]{value: 64, t: TYPE_DOUBLE},
+			name:        "constTableUDF_float64",
+			query:       `SELECT * FROM %s(64)`,
+			resultCount: 1,
+		},
 		{
 			udf:         &constTableUDF[time.Time]{value: time.Date(2008, time.July, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP},
 			name:        "constTableUDF_timestamp",
 			query:       `SELECT * FROM %s(CAST('2008-07-08 12:34:59.123456789' AS TIMESTAMP))`,
 			resultCount: 1,
 		},
-		// {
-		// 	udf:         &constTableUDF[time.Time]{value: time.Date(2007, time.July, 8, 0, 0, 0, 0, time.UTC), t: TYPE_DATE},
-		// 	name:        "constTableUDF_date",
-		// 	query:       `SELECT * FROM %s(CAST('2007-07-08 12:34:59.123456789' AS DATE))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[time.Time]{value: time.Date(1, time.January, 1, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIME},
-		// 	name:        "constTableUDF_time",
-		// 	query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIME))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[Interval]{value: Interval{Months: 16, Days: 10, Micros: 172800000000}, t: TYPE_INTERVAL},
-		// 	name:        "constTableUDF_interval",
-		// 	query:       `SELECT * FROM %s('16 months 10 days 48:00:00'::INTERVAL)`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[*big.Int]{value: big.NewInt(10000000000000000), t: TYPE_HUGEINT},
-		// 	name:        "constTableUDF_bigint",
-		// 	query:       `SELECT * FROM %s(10000000000000000)`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[string]{value: "my_lovely_string", t: TYPE_VARCHAR},
-		// 	name:        "constTableUDF_string",
-		// 	query:       `SELECT * FROM %s('my_lovely_string')`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_TZ},
-		// 	name:        "constTableUDF_timestamp_tz",
-		// 	query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &unionTableUDF{},
-		// 	name:        "unionTableUDF",
-		// 	query:       `SELECT * FROM %s(4)`,
-		// 	resultCount: 4,
-		// },
-		// {
-		// 	udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
-		// 	name:        "constTableUDF_timestamp_s",
-		// 	query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
-		// 	name:        "constTableUDF_timestamp_ms",
-		// 	query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
-		// 	resultCount: 1,
-		// },
-		// {
-		// 	udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123456789, time.UTC), t: TYPE_TIMESTAMP_NS},
-		// 	name:        "constTableUDF_timestamp_ns",
-		// 	query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
-		// 	resultCount: 1,
-		// },
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2007, time.July, 8, 0, 0, 0, 0, time.UTC), t: TYPE_DATE},
+			name:        "constTableUDF_date",
+			query:       `SELECT * FROM %s(CAST('2007-07-08 12:34:59.123456789' AS DATE))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(1, time.January, 1, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIME},
+			name:        "constTableUDF_time",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIME))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[Interval]{value: Interval{Months: 16, Days: 10, Micros: 172800000000}, t: TYPE_INTERVAL},
+			name:        "constTableUDF_interval",
+			query:       `SELECT * FROM %s('16 months 10 days 48:00:00'::INTERVAL)`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[*big.Int]{value: big.NewInt(10000000000000000), t: TYPE_HUGEINT},
+			name:        "constTableUDF_bigint",
+			query:       `SELECT * FROM %s(10000000000000000)`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[string]{value: "my_lovely_string", t: TYPE_VARCHAR},
+			name:        "constTableUDF_string",
+			query:       `SELECT * FROM %s('my_lovely_string')`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_TZ},
+			name:        "constTableUDF_timestamp_tz",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &unionTableUDF{},
+			name:        "unionTableUDF",
+			query:       `SELECT * FROM %s(4)`,
+			resultCount: 4,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 0, time.UTC), t: TYPE_TIMESTAMP_S},
+			name:        "constTableUDF_timestamp_s",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_S))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123000000, time.UTC), t: TYPE_TIMESTAMP_MS},
+			name:        "constTableUDF_timestamp_ms",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_MS))`,
+			resultCount: 1,
+		},
+		{
+			udf:         &constTableUDF[time.Time]{value: time.Date(2006, time.July, 8, 12, 34, 59, 123456789, time.UTC), t: TYPE_TIMESTAMP_NS},
+			name:        "constTableUDF_timestamp_ns",
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMP_NS))`,
+			resultCount: 1,
+		},
 	}
 	parallelTableUDFs = []tableUDFTest[ParallelRowTableFunction]{
 		{
