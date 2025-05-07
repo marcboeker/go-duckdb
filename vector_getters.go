@@ -44,9 +44,7 @@ func (vec *vector) getTS(t Type, rowIdx mapping.IdxT) time.Time {
 
 func getTS(t Type, ts *mapping.Timestamp) time.Time {
 	switch t {
-	case TYPE_TIMESTAMP:
-		return time.UnixMicro(mapping.TimestampMembers(ts)).UTC()
-	case TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
 		return time.UnixMicro(mapping.TimestampMembers(ts)).UTC()
 	}
 	return time.Time{}

@@ -266,6 +266,7 @@ func getMappedTimestampNS(val any) (*mapping.TimestampNS, error) {
 	}
 	return mapping.NewTimestampNS(ticks), nil
 }
+
 func getMappedDate[T any](val T) (*mapping.Date, error) {
 	ti, err := castToTime(val)
 	if err != nil {
