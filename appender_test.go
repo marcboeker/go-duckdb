@@ -1063,6 +1063,8 @@ func TestAppenderAppendDataChunk(t *testing.T) {
 	for i := 0; i < GetDataChunkCapacity()*3; i++ {
 		err := appender.AppendRow(i, Union{Value: "str2", Tag: "s"})
 		require.NoError(t, err)
+		err = appender.AppendRow(i, nil)
+		require.NoError(t, err)
 	}
 
 	err = appender.Flush()
