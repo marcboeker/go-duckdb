@@ -84,12 +84,35 @@ func setBool[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	return nil
 }
 
-func setTS[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	ts, err := getMappedTimestamp(vec.Type, val)
-	if err != nil {
-		return err
+func setTS(vec *vector, rowIdx mapping.IdxT, val any) error {
+	switch vec.Type {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		ts, err := getMappedTimestamp(val)
+		if err != nil {
+			return err
+		}
+		setPrimitive(vec, rowIdx, *ts)
+	case TYPE_TIMESTAMP_S:
+		ts, err := getMappedTimestampS(val)
+		if err != nil {
+			return err
+		}
+		setPrimitive(vec, rowIdx, *ts)
+	case TYPE_TIMESTAMP_MS:
+		ts, err := getMappedTimestampMS(val)
+		if err != nil {
+			return err
+		}
+		setPrimitive(vec, rowIdx, *ts)
+	case TYPE_TIMESTAMP_NS:
+		ts, err := getMappedTimestampNS(val)
+		if err != nil {
+			return err
+		}
+		setPrimitive(vec, rowIdx, *ts)
+	default:
+		return castError(reflect.TypeOf(val).String(), "")
 	}
-	setPrimitive(vec, rowIdx, *ts)
 	return nil
 }
 
@@ -477,7 +500,7 @@ func setVectorVal[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	case TYPE_DOUBLE:
 		return setNumeric[S, float64](vec, rowIdx, val)
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
-		return setTS[S](vec, rowIdx, val)
+		return setTS(vec, rowIdx, val)
 	case TYPE_DATE:
 		return setDate[S](vec, rowIdx, val)
 	case TYPE_TIME, TYPE_TIME_TZ:

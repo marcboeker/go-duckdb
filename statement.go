@@ -167,11 +167,39 @@ func (s *Stmt) bindHugeint(val *big.Int, n int) (mapping.State, error) {
 }
 
 func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.State, error) {
-	ts, err := getMappedTimestamp(t, val.Value)
-	if err != nil {
-		return mapping.StateError, err
+	var state mapping.State
+	switch t {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		v, err := getMappedTimestamp(val.Value)
+		if err != nil {
+			return mapping.StateError, err
+		}
+		state = mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), *v)
+	case TYPE_TIMESTAMP_S:
+		v, err := getMappedTimestampS(val.Value)
+		if err != nil {
+			return mapping.StateError, err
+		}
+		tS := mapping.CreateTimestampS(*v)
+		state = mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), tS)
+		mapping.DestroyValue(&tS)
+	case TYPE_TIMESTAMP_MS:
+		v, err := getMappedTimestampMS(val.Value)
+		if err != nil {
+			return mapping.StateError, err
+		}
+		tMS := mapping.CreateTimestampMS(*v)
+		state = mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), tMS)
+		mapping.DestroyValue(&tMS)
+	case TYPE_TIMESTAMP_NS:
+		v, err := getMappedTimestampNS(val.Value)
+		if err != nil {
+			return mapping.StateError, err
+		}
+		tMS := mapping.CreateTimestampNS(*v)
+		state = mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), tMS)
+		mapping.DestroyValue(&tMS)
 	}
-	state := mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), *ts)
 	return state, nil
 }
 
@@ -253,7 +281,7 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 	}
 
 	switch t {
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
 		return s.bindTimestamp(val, t, n)
 	case TYPE_DATE:
 		return s.bindDate(val, n)
@@ -261,8 +289,7 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int) (mapping.State, er
 		return s.bindTime(val, t, n)
 	case TYPE_ARRAY, TYPE_LIST, TYPE_STRUCT:
 		return s.bindCompositeValue(val, n)
-	case TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_MAP, TYPE_ENUM, TYPE_UNION:
-		// FIXME: for timestamps: distinguish between timestamp[_s|ms|ns] once available.
+	case TYPE_MAP, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: use NamedValueChecker to support.
 		name = typeToStringMap[t]
