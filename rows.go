@@ -92,7 +92,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	alias := mapping.LogicalTypeGetAlias(logicalType)
 	switch alias {
 	case aliasJSON:
-		return reflect.TypeOf((*any)(nil)).Elem()
+		return reflect.TypeFor[any]()
 	}
 
 	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
