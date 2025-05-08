@@ -118,10 +118,10 @@ func (vec *vector) initVectors(v mapping.Vector, writable bool) {
 		mapping.VectorEnsureValidityWritable(v)
 	}
 	vec.maskPtr = mapping.VectorGetValidity(v)
-	vec.getChildVectors(v, writable)
+	vec.initChildVectors(v, writable)
 }
 
-func (vec *vector) getChildVectors(v mapping.Vector, writable bool) {
+func (vec *vector) initChildVectors(v mapping.Vector, writable bool) {
 	switch vec.Type {
 	case TYPE_LIST, TYPE_MAP:
 		child := mapping.ListVectorGetChild(v)

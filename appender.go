@@ -182,7 +182,7 @@ func (a *Appender) appendDataChunk() error {
 		return getDuckDBError(mapping.AppenderError(a.appender))
 	}
 
-	a.chunk.reset()
+	a.chunk.reset(true)
 	a.rowCount = 0
 
 	return nil
