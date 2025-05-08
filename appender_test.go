@@ -940,9 +940,7 @@ func TestAppenderAppendDataChunk(t *testing.T) {
 		require.NoError(t, a.AppendRow(i, Union{Value: "str2", Tag: "s"}))
 		require.NoError(t, a.AppendRow(i, nil))
 	}
-
-	err := a.Flush()
-	require.NoError(t, err)
+	require.NoError(t, a.Flush())
 }
 
 func BenchmarkAppenderNested(b *testing.B) {
