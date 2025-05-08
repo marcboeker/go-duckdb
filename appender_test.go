@@ -929,6 +929,22 @@ func TestAppenderUnion(t *testing.T) {
 	require.Equal(t, len(testCases), i)
 }
 
+func TestAppenderAppendDataChunk(t *testing.T) {
+	// Ensures that appending multiple data chunks correctly resets the previous chunk.
+
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test(id INT, attr UNION(i INT, s VARCHAR))`)
+	defer cleanupAppender(t, c, db, conn, a)
+
+	// Add enough rows to overflow several chunks.
+	for i := 0; i < GetDataChunkCapacity()*3; i++ {
+		require.NoError(t, a.AppendRow(i, Union{Value: "str2", Tag: "s"}))
+		require.NoError(t, a.AppendRow(i, nil))
+	}
+
+	err := a.Flush()
+	require.NoError(t, err)
+}
+
 func BenchmarkAppenderNested(b *testing.B) {
 	c, db, conn, a := prepareAppender(b, createNestedDataTableSQL)
 	defer cleanupAppender(b, c, db, conn, a)
@@ -1039,34 +1055,4 @@ func appendNestedData[T require.TestingT](t T, a *Appender, rowsToAppend []neste
 			row.mixList))
 	}
 	require.NoError(t, a.Flush())
-}
-
-// Ensures that when new data chunks are added, their state is correctly reset
-// and we will be able to append data
-func TestAppenderAppendDataChunk(t *testing.T) {
-	c, _ := NewConnector("", nil)
-	defer c.Close()
-
-	conn, _ := c.Connect(context.Background())
-	defer conn.Close()
-
-	db := sql.OpenDB(c)
-
-	_, err := db.Exec("CREATE TABLE test(id int, attr UNION(i INT, s VARCHAR))")
-	require.NoError(t, err)
-
-	appender, err := NewAppenderFromConn(conn, "", "test")
-	require.NoError(t, err)
-	defer appender.Close()
-
-	// Add enough rows to overflow several chunks
-	for i := 0; i < GetDataChunkCapacity()*3; i++ {
-		err := appender.AppendRow(i, Union{Value: "str2", Tag: "s"})
-		require.NoError(t, err)
-		err = appender.AppendRow(i, nil)
-		require.NoError(t, err)
-	}
-
-	err = appender.Flush()
-	require.NoError(t, err)
 }
