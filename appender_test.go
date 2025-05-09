@@ -929,6 +929,20 @@ func TestAppenderUnion(t *testing.T) {
 	require.Equal(t, len(testCases), i)
 }
 
+func TestAppenderAppendDataChunk(t *testing.T) {
+	// Ensures that appending multiple data chunks correctly resets the previous chunk.
+
+	c, db, conn, a := prepareAppender(t, `CREATE TABLE test(id INT, attr UNION(i INT, s VARCHAR))`)
+	defer cleanupAppender(t, c, db, conn, a)
+
+	// Add enough rows to overflow several chunks.
+	for i := 0; i < GetDataChunkCapacity()*3; i++ {
+		require.NoError(t, a.AppendRow(i, Union{Value: "str2", Tag: "s"}))
+		require.NoError(t, a.AppendRow(i, nil))
+	}
+	require.NoError(t, a.Flush())
+}
+
 func BenchmarkAppenderNested(b *testing.B) {
 	c, db, conn, a := prepareAppender(b, createNestedDataTableSQL)
 	defer cleanupAppender(b, c, db, conn, a)

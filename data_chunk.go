@@ -87,15 +87,23 @@ func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool
 	}
 
 	chunk.chunk = mapping.CreateDataChunk(types)
+	chunk.initVectors(writable)
+
+	return nil
+}
+
+func (chunk *DataChunk) reset(writable bool) {
+	mapping.DataChunkReset(chunk.chunk)
+	chunk.initVectors(writable)
+}
+
+func (chunk *DataChunk) initVectors(writable bool) {
 	mapping.DataChunkSetSize(chunk.chunk, mapping.IdxT(GetDataChunkCapacity()))
 
-	// Initialize the vectors and their child vectors.
-	for i := 0; i < columnCount; i++ {
+	for i := 0; i < len(chunk.columns); i++ {
 		v := mapping.DataChunkGetVector(chunk.chunk, mapping.IdxT(i))
 		chunk.columns[i].initVectors(v, writable)
 	}
-
-	return nil
 }
 
 func (chunk *DataChunk) initFromDuckDataChunk(inputChunk mapping.DataChunk, writable bool) error {
