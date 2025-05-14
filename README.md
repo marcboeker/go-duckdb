@@ -212,7 +212,11 @@ DuckDB lives in process.
 Therefore, all its memory lives in the driver. 
 All allocations live in the host process, which is the Go application. 
 Especially for long-running applications, it is crucial to call the corresponding `Close`-functions as specified in [database/sql](https://godoc.org/database/sql). 
-The following is a list of examples.
+
+Additionally, it is crucial to call `Close()` on the database and/or connector of a persistent DuckDB database.
+That way, DuckDB synchronizes all changes from the WAL to its persistent storage.
+
+The following is a list of examples of `Close()`-functions.
 
 ```go
 db, err := sql.Open("duckdb", "")
