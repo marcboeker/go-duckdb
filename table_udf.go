@@ -377,7 +377,7 @@ func table_udf_chunk_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) 
 	case ChunkTableSource:
 		err = fun.FillChunk(chunk)
 	case ParallelChunkTableSource:
-		localState := getPinned[*any](mapping.FunctionGetLocalInitData(info))
+		localState := getPinned[any](mapping.FunctionGetLocalInitData(info))
 		err = fun.FillChunk(localState, chunk)
 	}
 	if err != nil {
