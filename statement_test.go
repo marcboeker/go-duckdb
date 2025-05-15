@@ -467,21 +467,22 @@ func TestPrepareComplex(t *testing.T) {
 		list_str VARCHAR[],
 		str_col STRUCT(v VARCHAR, i INTEGER)
 	)`)
-	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES
-		(array_value(7, 1), list_value('foo', 'bar'), {'v': 'baz', 'i': 42})
-	`)
+
+	// Insert parameters.
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES (?, ?, ?)`,
+		[]int32{7, 1}, []string{"foo", "bar"}, map[string]any{"v": "baz", "i": int32(42)})
 	require.NoError(t, err)
 
 	prepared, err := db.Prepare(`SELECT * FROM arr_test
-		WHERE arr_int = ? AND list_str = ? AND str_col = ?
-	`)
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?`)
+	defer closePreparedWrapper(t, prepared)
 	require.NoError(t, err)
 
 	var arr Composite[[]int32]
 	var list Composite[[]string]
 	var struc Composite[map[string]any]
 
-	// Test with `any`` slice types
+	// Test with `any` slice types.
 	err = prepared.QueryRow(
 		[]any{int32(7), int32(1)},
 		[]any{"foo", "bar"},
@@ -489,7 +490,11 @@ func TestPrepareComplex(t *testing.T) {
 	).Scan(&arr, &list, &struc)
 	require.NoError(t, err)
 
-	// Test with specific slice types
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+
+	// Test with specific slice types.
 	err = prepared.QueryRow(
 		[]int32{7, 1},
 		[]string{"foo", "bar"},
@@ -501,5 +506,14 @@ func TestPrepareComplex(t *testing.T) {
 	require.Equal(t, []string{"foo", "bar"}, list.Get())
 	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
 
-	closePreparedWrapper(t, prepared)
+	// Test querying without a prepared statement.
+	err = db.QueryRow(`SELECT * FROM arr_test
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?`,
+		[]int32{7, 1}, []string{"foo", "bar"}, map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
 }
