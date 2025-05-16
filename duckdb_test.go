@@ -839,7 +839,6 @@ func TestHugeUnionQuery(t *testing.T) {
 			require.True(t, r.Next())
 		}()
 	}
-
 	wg.Wait()
 }
 
