@@ -289,7 +289,6 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int, t Type, name strin
 	case TYPE_MAP, TYPE_ENUM, TYPE_UNION:
 		// FIXME: for other types: duckdb_param_logical_type once available, then create duckdb_value + duckdb_bind_value
 		// FIXME: for other types: use NamedValueChecker to support.
-		name = typeToStringMap[t]
 		return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
 	}
 	return mapping.StateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
