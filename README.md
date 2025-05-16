@@ -152,7 +152,12 @@ CGO_ENABLED=1 CPPFLAGS="-DDUCKDB_STATIC_BUILD" CGO_LDFLAGS="-lduckdb_bundle -lc+
 ```
 
 You can also find these steps in the `Makefile` and the `tests.yaml`.
-The DuckDB team also publishes some pre-built bundled libraries as part of their [releases](https://github.com/duckdb/duckdb/releases).
+
+The DuckDB team also publishes pre-built libraries as part of their [releases](https://github.com/duckdb/duckdb/releases).
+The published zipped archives contain libraries for DuckDB core, the third-party libraries, and the default extensions.
+When linking, you might want to bundle these libraries into a single archive first.
+You can use any archive tool (e.g., `ar`). 
+DuckDB's `bundle-library` Makefile target contains an example of `ar`, or you can look at the Docker file [here](https://github.com/duckdb/duckdb/issues/17312#issuecomment-2885130728).
 
 #### Note on FreeBSD
 
