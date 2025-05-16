@@ -517,3 +517,20 @@ func TestPrepareComplex(t *testing.T) {
 	require.Equal(t, []string{"foo", "bar"}, list.Get())
 	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
 }
+
+func TestBindJSON(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE TABLE tbl (j JSON)`)
+	require.NoError(t, err)
+
+	jsonData := []byte(`{"name": "Jimmy","age": 28}`)
+	_, err = db.Exec(`INSERT INTO tbl VALUES (?)`, jsonData)
+	require.NoError(t, err)
+
+	var str string
+	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl`).Scan(&str)
+	require.NoError(t, err)
+	require.Equal(t, string(jsonData), str)
+}
