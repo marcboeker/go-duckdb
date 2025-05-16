@@ -818,6 +818,30 @@ func TestInstanceCacheWithInMemoryDB(t *testing.T) {
 	require.ErrorContains(t, err, "Table with name test does not exist")
 }
 
+func TestHugeUnionQuery(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	part := ` UNION SELECT 1`
+	query := `SELECT 1`
+	for i := 0; i < 350; i++ {
+		query += part
+	}
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r, err := db.Query(query)
+			require.NoError(t, err)
+			defer closeRowsWrapper(t, r)
+			require.True(t, r.Next())
+		}()
+	}
+	wg.Wait()
+}
+
 func Example_simpleConnection() {
 	// Connect to DuckDB using '[database/sql.Open]'.
 	db, err := sql.Open("duckdb", "?access_mode=READ_WRITE")
