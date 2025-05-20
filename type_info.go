@@ -1,14 +1,11 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
+	"errors"
 	"reflect"
 	"runtime"
-	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 type structEntry struct {
@@ -52,27 +49,30 @@ type baseTypeInfo struct {
 	structEntries []StructEntry
 	decimalWidth  uint8
 	decimalScale  uint8
-	arrayLength   uint64
+	arrayLength   mapping.IdxT
 	// The internal type for ENUM and DECIMAL values.
 	internalType Type
 }
 
 type vectorTypeInfo struct {
 	baseTypeInfo
-	dict map[string]uint32
+	namesDict map[string]uint32
+	tagDict   map[uint32]string
 }
 
 type typeInfo struct {
 	baseTypeInfo
-	childTypes []TypeInfo
-	enumNames  []string
+	// Member or child types for LIST, MAP, ARRAY, and UNION.
+	types []TypeInfo
+	// Enum names or UNION member names.
+	names []string
 }
 
 // TypeInfo is an interface for a DuckDB type.
 type TypeInfo interface {
 	// InternalType returns the Type.
 	InternalType() Type
-	logicalType() C.duckdb_logical_type
+	logicalType() mapping.LogicalType
 }
 
 func (info *typeInfo) InternalType() Type {
@@ -105,6 +105,8 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewMapInfo)))
 	case TYPE_ARRAY:
 		return nil, getError(errAPI, tryOtherFuncError(funcName(NewArrayInfo)))
+	case TYPE_UNION:
+		return nil, getError(errAPI, tryOtherFuncError(funcName(NewUnionInfo)))
 	case TYPE_SQLNULL:
 		return nil, getError(errAPI, unsupportedTypeError(typeToStringMap[t]))
 	}
@@ -151,11 +153,11 @@ func NewEnumInfo(first string, others ...string) (TypeInfo, error) {
 		baseTypeInfo: baseTypeInfo{
 			Type: TYPE_ENUM,
 		},
-		enumNames: make([]string, 0),
+		names: make([]string, 0),
 	}
 
-	info.enumNames = append(info.enumNames, first)
-	info.enumNames = append(info.enumNames, others...)
+	info.names = append(info.names, first)
+	info.names = append(info.names, others...)
 	return info, nil
 }
 
@@ -168,9 +170,9 @@ func NewListInfo(childInfo TypeInfo) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_LIST},
-		childTypes:   make([]TypeInfo, 1),
+		types:        make([]TypeInfo, 1),
 	}
-	info.childTypes[0] = childInfo
+	info.types[0] = childInfo
 	return info, nil
 }
 
@@ -228,10 +230,10 @@ func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
 
 	info := &typeInfo{
 		baseTypeInfo: baseTypeInfo{Type: TYPE_MAP},
-		childTypes:   make([]TypeInfo, 2),
+		types:        make([]TypeInfo, 2),
 	}
-	info.childTypes[0] = keyInfo
-	info.childTypes[1] = valueInfo
+	info.types[0] = keyInfo
+	info.types[1] = valueInfo
 	return info, nil
 }
 
@@ -247,25 +249,55 @@ func NewArrayInfo(childInfo TypeInfo, size uint64) (TypeInfo, error) {
 	}
 
 	info := &typeInfo{
-		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: size},
-		childTypes:   make([]TypeInfo, 1),
+		baseTypeInfo: baseTypeInfo{Type: TYPE_ARRAY, arrayLength: mapping.IdxT(size)},
+		types:        make([]TypeInfo, 1),
 	}
-	info.childTypes[0] = childInfo
+	info.types[0] = childInfo
 	return info, nil
 }
 
-func (info *typeInfo) logicalType() C.duckdb_logical_type {
+// NewUnionInfo returns UNION type information.
+// memberTypes contains the type information of the union members.
+// memberNames contains the names of the union members.
+func NewUnionInfo(memberTypes []TypeInfo, memberNames []string) (TypeInfo, error) {
+	if len(memberTypes) == 0 {
+		return nil, getError(errAPI, errors.New("UNION type must have at least one member"))
+	}
+	if len(memberTypes) != len(memberNames) {
+		return nil, getError(errAPI, errors.New("member types and names must have the same length"))
+	}
+
+	// Check for duplicate names.
+	m := map[string]bool{}
+	for _, name := range memberNames {
+		if name == "" {
+			return nil, getError(errAPI, errEmptyName)
+		}
+		if m[name] {
+			return nil, getError(errAPI, duplicateNameError(name))
+		}
+		m[name] = true
+	}
+
+	info := &typeInfo{
+		baseTypeInfo: baseTypeInfo{Type: TYPE_UNION},
+		types:        memberTypes,
+		names:        memberNames,
+	}
+	return info, nil
+}
+
+func (info *typeInfo) logicalType() mapping.LogicalType {
 	switch info.Type {
 	case TYPE_BOOLEAN, TYPE_TINYINT, TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_UTINYINT, TYPE_USMALLINT,
 		TYPE_UINTEGER, TYPE_UBIGINT, TYPE_FLOAT, TYPE_DOUBLE, TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS,
 		TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ, TYPE_DATE, TYPE_TIME, TYPE_TIME_TZ, TYPE_INTERVAL, TYPE_HUGEINT, TYPE_VARCHAR,
 		TYPE_BLOB, TYPE_UUID, TYPE_ANY:
-		return C.duckdb_create_logical_type(C.duckdb_type(info.Type))
-
+		return mapping.CreateLogicalType(info.Type)
 	case TYPE_DECIMAL:
-		return C.duckdb_create_decimal_type(C.uint8_t(info.decimalWidth), C.uint8_t(info.decimalScale))
+		return mapping.CreateDecimalType(info.decimalWidth, info.decimalScale)
 	case TYPE_ENUM:
-		return info.logicalEnumType()
+		return mapping.CreateEnumType(info.names)
 	case TYPE_LIST:
 		return info.logicalListType()
 	case TYPE_STRUCT:
@@ -274,78 +306,59 @@ func (info *typeInfo) logicalType() C.duckdb_logical_type {
 		return info.logicalMapType()
 	case TYPE_ARRAY:
 		return info.logicalArrayType()
+	case TYPE_UNION:
+		return info.logicalUnionType()
 	}
-	return nil
+	return mapping.LogicalType{}
 }
 
-func (info *typeInfo) logicalEnumType() C.duckdb_logical_type {
-	count := len(info.enumNames)
-	size := C.size_t(unsafe.Sizeof((*C.char)(nil)))
-	names := (*[1 << 31]*C.char)(C.malloc(C.size_t(count) * size))
-
-	for i, name := range info.enumNames {
-		(*names)[i] = C.CString(name)
-	}
-	cNames := (**C.char)(unsafe.Pointer(names))
-	logicalType := C.duckdb_create_enum_type(cNames, C.idx_t(count))
-
-	for i := 0; i < count; i++ {
-		C.duckdb_free(unsafe.Pointer((*names)[i]))
-	}
-	C.duckdb_free(unsafe.Pointer(names))
-	return logicalType
+func (info *typeInfo) logicalListType() mapping.LogicalType {
+	child := info.types[0].logicalType()
+	defer mapping.DestroyLogicalType(&child)
+	return mapping.CreateListType(child)
 }
 
-func (info *typeInfo) logicalListType() C.duckdb_logical_type {
-	child := info.childTypes[0].logicalType()
-	logicalType := C.duckdb_create_list_type(child)
-	C.duckdb_destroy_logical_type(&child)
-	return logicalType
-}
+func (info *typeInfo) logicalStructType() mapping.LogicalType {
+	var types []mapping.LogicalType
+	defer destroyLogicalTypes(&types)
 
-func (info *typeInfo) logicalStructType() C.duckdb_logical_type {
-	count := len(info.structEntries)
-	size := C.size_t(unsafe.Sizeof(C.duckdb_logical_type(nil)))
-	types := (*[1 << 31]C.duckdb_logical_type)(C.malloc(C.size_t(count) * size))
-
-	size = C.size_t(unsafe.Sizeof((*C.char)(nil)))
-	names := (*[1 << 31]*C.char)(C.malloc(C.size_t(count) * size))
-
-	for i, entry := range info.structEntries {
-		(*types)[i] = entry.Info().logicalType()
-		(*names)[i] = C.CString(entry.Name())
+	var names []string
+	for _, entry := range info.structEntries {
+		types = append(types, entry.Info().logicalType())
+		names = append(names, entry.Name())
 	}
+	return mapping.CreateStructType(types, names)
+}
 
-	cTypes := (*C.duckdb_logical_type)(unsafe.Pointer(types))
-	cNames := (**C.char)(unsafe.Pointer(names))
-	logicalType := C.duckdb_create_struct_type(cTypes, cNames, C.idx_t(count))
+func (info *typeInfo) logicalMapType() mapping.LogicalType {
+	key := info.types[0].logicalType()
+	defer mapping.DestroyLogicalType(&key)
+	value := info.types[1].logicalType()
+	defer mapping.DestroyLogicalType(&value)
+	return mapping.CreateMapType(key, value)
+}
 
-	for i := 0; i < count; i++ {
-		C.duckdb_destroy_logical_type(&types[i])
-		C.duckdb_free(unsafe.Pointer((*names)[i]))
+func (info *typeInfo) logicalArrayType() mapping.LogicalType {
+	child := info.types[0].logicalType()
+	defer mapping.DestroyLogicalType(&child)
+	return mapping.CreateArrayType(child, info.arrayLength)
+}
+
+func (info *typeInfo) logicalUnionType() mapping.LogicalType {
+	var types []mapping.LogicalType
+	defer destroyLogicalTypes(&types)
+	for _, t := range info.types {
+		types = append(types, t.logicalType())
 	}
-	C.duckdb_free(unsafe.Pointer(types))
-	C.duckdb_free(unsafe.Pointer(names))
-	return logicalType
-}
-
-func (info *typeInfo) logicalMapType() C.duckdb_logical_type {
-	key := info.childTypes[0].logicalType()
-	value := info.childTypes[1].logicalType()
-	logicalType := C.duckdb_create_map_type(key, value)
-
-	C.duckdb_destroy_logical_type(&key)
-	C.duckdb_destroy_logical_type(&value)
-	return logicalType
-}
-
-func (info *typeInfo) logicalArrayType() C.duckdb_logical_type {
-	child := info.childTypes[0].logicalType()
-	logicalType := C.duckdb_create_array_type(child, C.idx_t(info.arrayLength))
-	C.duckdb_destroy_logical_type(&child)
-	return logicalType
+	return mapping.CreateUnionType(types, info.names)
 }
 
 func funcName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+}
+
+func destroyLogicalTypes(types *[]mapping.LogicalType) {
+	for _, t := range *types {
+		mapping.DestroyLogicalType(&t)
+	}
 }

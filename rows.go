@@ -1,10 +1,5 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"database/sql/driver"
 	"fmt"
@@ -13,7 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // rows is a helper struct for scanning a duckdb result.
@@ -21,32 +17,35 @@ type rows struct {
 	// stmt is a pointer to the stmt of which we are scanning the result.
 	stmt *Stmt
 	// res is the result of stmt.
-	res C.duckdb_result
+	res mapping.Result
 	// chunk holds the currently active data chunk.
 	chunk DataChunk
+	// closeChunk is true after the first iteration of Next.
+	closeChunk bool
 	// chunkCount is the number of chunks in the result.
-	chunkCount C.idx_t
+	chunkCount mapping.IdxT
 	// chunkIdx is the chunk index in the result.
-	chunkIdx C.idx_t
+	chunkIdx mapping.IdxT
 	// rowCount is the number of scanned rows.
 	rowCount int
 }
 
-func newRowsWithStmt(res C.duckdb_result, stmt *Stmt) *rows {
-	columnCount := C.duckdb_column_count(&res)
+func newRowsWithStmt(res mapping.Result, stmt *Stmt) *rows {
+	columnCount := mapping.ColumnCount(&res)
 	r := rows{
 		res:        res,
 		stmt:       stmt,
 		chunk:      DataChunk{},
-		chunkCount: C.duckdb_result_chunk_count(res),
+		chunkCount: mapping.ResultChunkCount(res),
 		chunkIdx:   0,
 		rowCount:   0,
 	}
 
-	for i := C.idx_t(0); i < columnCount; i++ {
-		columnName := C.GoString(C.duckdb_column_name(&res, i))
+	for i := mapping.IdxT(0); i < columnCount; i++ {
+		columnName := mapping.ColumnName(&res, mapping.IdxT(i))
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
+
 	return &r
 }
 
@@ -56,12 +55,16 @@ func (r *rows) Columns() []string {
 
 func (r *rows) Next(dst []driver.Value) error {
 	for r.rowCount == r.chunk.size {
-		r.chunk.close()
+		if r.closeChunk {
+			r.chunk.close()
+			r.closeChunk = false
+		}
 		if r.chunkIdx == r.chunkCount {
 			return io.EOF
 		}
-		data := C.duckdb_result_get_chunk(r.res, r.chunkIdx)
-		if err := r.chunk.initFromDuckDataChunk(data, false); err != nil {
+		chunk := mapping.ResultGetChunk(r.res, r.chunkIdx)
+		r.closeChunk = true
+		if err := r.chunk.initFromDuckDataChunk(chunk, false); err != nil {
 			return getError(err, nil)
 		}
 
@@ -76,14 +79,23 @@ func (r *rows) Next(dst []driver.Value) error {
 			return err
 		}
 	}
-
 	r.rowCount++
+
 	return nil
 }
 
 // ColumnTypeScanType implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
+	logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
+	defer mapping.DestroyLogicalType(&logicalType)
+
+	alias := mapping.LogicalTypeGetAlias(logicalType)
+	switch alias {
+	case aliasJSON:
+		return reflect.TypeFor[any]()
+	}
+
+	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
 	switch t {
 	case TYPE_INVALID:
 		return nil
@@ -129,6 +141,8 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeOf(Map{})
 	case TYPE_ARRAY:
 		return reflect.TypeOf([]any{})
+	case TYPE_UNION:
+		return reflect.TypeOf(Union{})
 	case TYPE_UUID:
 		return reflect.TypeOf([]byte{})
 	default:
@@ -138,12 +152,18 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	t := Type(C.duckdb_column_type(&r.res, C.idx_t(index)))
+	logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
+	defer mapping.DestroyLogicalType(&logicalType)
+
+	alias := mapping.LogicalTypeGetAlias(logicalType)
+	switch alias {
+	case aliasJSON:
+		return aliasJSON
+	}
+
+	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
 	switch t {
-	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY:
-		// Only allocate the logical type if necessary.
-		logicalType := C.duckdb_column_logical_type(&r.res, C.idx_t(index))
-		defer C.duckdb_destroy_logical_type(&logicalType)
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		return logicalTypeName(logicalType)
 	default:
 		return typeToStringMap[t]
@@ -151,8 +171,10 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 }
 
 func (r *rows) Close() error {
-	r.chunk.close()
-	C.duckdb_destroy_result(&r.res)
+	if r.closeChunk {
+		r.chunk.close()
+	}
+	mapping.DestroyResult(&r.res)
 
 	var err error
 	if r.stmt != nil {
@@ -162,11 +184,12 @@ func (r *rows) Close() error {
 		}
 		r.stmt = nil
 	}
+
 	return err
 }
 
-func logicalTypeName(logicalType C.duckdb_logical_type) string {
-	t := Type(C.duckdb_get_type_id(logicalType))
+func logicalTypeName(logicalType mapping.LogicalType) string {
+	t := Type(mapping.GetTypeId(logicalType))
 	switch t {
 	case TYPE_DECIMAL:
 		return logicalTypeNameDecimal(logicalType)
@@ -181,61 +204,81 @@ func logicalTypeName(logicalType C.duckdb_logical_type) string {
 		return logicalTypeNameMap(logicalType)
 	case TYPE_ARRAY:
 		return logicalTypeNameArray(logicalType)
+	case TYPE_UNION:
+		return logicalTypeNameUnion(logicalType)
 	default:
 		return typeToStringMap[t]
 	}
 }
 
-func logicalTypeNameDecimal(logicalType C.duckdb_logical_type) string {
-	width := C.duckdb_decimal_width(logicalType)
-	scale := C.duckdb_decimal_scale(logicalType)
+func logicalTypeNameDecimal(logicalType mapping.LogicalType) string {
+	width := mapping.DecimalWidth(logicalType)
+	scale := mapping.DecimalScale(logicalType)
 	return fmt.Sprintf("DECIMAL(%d,%d)", int(width), int(scale))
 }
 
-func logicalTypeNameList(logicalType C.duckdb_logical_type) string {
-	childType := C.duckdb_list_type_child_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&childType)
+func logicalTypeNameList(logicalType mapping.LogicalType) string {
+	childType := mapping.ListTypeChildType(logicalType)
+	defer mapping.DestroyLogicalType(&childType)
 	childName := logicalTypeName(childType)
 	return fmt.Sprintf("%s[]", childName)
 }
 
-func logicalTypeNameStruct(logicalType C.duckdb_logical_type) string {
-	count := int(C.duckdb_struct_type_child_count(logicalType))
+func logicalTypeNameStruct(logicalType mapping.LogicalType) string {
+	count := mapping.StructTypeChildCount(logicalType)
 	name := "STRUCT("
 
-	for i := 0; i < count; i++ {
-		ptrToChildName := C.duckdb_struct_type_child_name(logicalType, C.idx_t(i))
-		childName := C.GoString(ptrToChildName)
-		childType := C.duckdb_struct_type_child_type(logicalType, C.idx_t(i))
+	for i := mapping.IdxT(0); i < count; i++ {
+		childName := mapping.StructTypeChildName(logicalType, i)
+		childType := mapping.StructTypeChildType(logicalType, i)
 
 		// Add comma if not at the end of the list.
 		name += escapeStructFieldName(childName) + " " + logicalTypeName(childType)
 		if i != count-1 {
 			name += ", "
 		}
-
-		C.duckdb_free(unsafe.Pointer(ptrToChildName))
-		C.duckdb_destroy_logical_type(&childType)
+		mapping.DestroyLogicalType(&childType)
 	}
+
 	return name + ")"
 }
 
-func logicalTypeNameMap(logicalType C.duckdb_logical_type) string {
-	keyType := C.duckdb_map_type_key_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&keyType)
+func logicalTypeNameMap(logicalType mapping.LogicalType) string {
+	keyType := mapping.MapTypeKeyType(logicalType)
+	defer mapping.DestroyLogicalType(&keyType)
 
-	valueType := C.duckdb_map_type_value_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&valueType)
+	valueType := mapping.MapTypeValueType(logicalType)
+	defer mapping.DestroyLogicalType(&valueType)
 
 	return fmt.Sprintf("MAP(%s, %s)", logicalTypeName(keyType), logicalTypeName(valueType))
 }
 
-func logicalTypeNameArray(logicalType C.duckdb_logical_type) string {
-	size := C.duckdb_array_type_array_size(logicalType)
-	childType := C.duckdb_array_type_child_type(logicalType)
-	defer C.duckdb_destroy_logical_type(&childType)
+func logicalTypeNameArray(logicalType mapping.LogicalType) string {
+	size := mapping.ArrayTypeArraySize(logicalType)
+	childType := mapping.ArrayTypeChildType(logicalType)
+	defer mapping.DestroyLogicalType(&childType)
 	childName := logicalTypeName(childType)
+
 	return fmt.Sprintf("%s[%d]", childName, int(size))
+}
+
+func logicalTypeNameUnion(logicalType mapping.LogicalType) string {
+	count := int(mapping.UnionTypeMemberCount(logicalType))
+	name := "UNION("
+
+	for i := 0; i < count; i++ {
+		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
+		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
+
+		// Add comma if not at the end of the list
+		name += memberName + " " + logicalTypeName(memberType)
+		if i != count-1 {
+			name += ", "
+		}
+
+		mapping.DestroyLogicalType(&memberType)
+	}
+	return name + ")"
 }
 
 func escapeStructFieldName(s string) string {

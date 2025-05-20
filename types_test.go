@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -200,7 +201,7 @@ func testTypesReset[T require.TestingT](t T, c *Connector) {
 	require.NoError(t, err)
 }
 
-func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows []testTypesRow) []testTypesRow {
+func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []testTypesRow) []testTypesRow {
 	// Append the rows. We cannot append Composite types.
 	for i := 0; i < len(expectedRows); i++ {
 		r := &expectedRows[i]
@@ -242,8 +243,9 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 	}
 	require.NoError(t, a.Flush())
 
-	res, err := sql.OpenDB(c).QueryContext(context.Background(), `SELECT * FROM test ORDER BY Smallint_col`)
+	res, err := db.QueryContext(context.Background(), `SELECT * FROM test ORDER BY Smallint_col`)
 	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
 
 	// Scan the rows.
 	var actualRows []testTypesRow
@@ -293,18 +295,16 @@ func testTypes[T require.TestingT](t T, c *Connector, a *Appender, expectedRows 
 }
 
 func TestTypes(t *testing.T) {
-	t.Parallel()
 	expectedRows := testTypesGenerateRows(t, 3)
-	c, con, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
-	actualRows := testTypes(t, c, a, expectedRows)
+	c, db, conn, a := prepareAppender(t, testTypesEnumSQL+";"+testTypesTableSQL)
+	defer cleanupAppender(t, c, db, conn, a)
+	actualRows := testTypes(t, db, a, expectedRows)
 
 	for i := range actualRows {
 		expectedRows[i].toUTC()
 		require.Equal(t, expectedRows[i], actualRows[i])
 	}
-
 	require.Equal(t, len(expectedRows), len(actualRows))
-	cleanupAppender(t, c, con, a)
 }
 
 // NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
@@ -313,19 +313,19 @@ var benchmarkTypesResult []testTypesRow
 
 func BenchmarkTypes(b *testing.B) {
 	expectedRows := testTypesGenerateRows(b, GetDataChunkCapacity()*3+10)
-	c, con, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
+	c, db, conn, a := prepareAppender(b, testTypesEnumSQL+";"+testTypesTableSQL)
+	defer cleanupAppender(b, c, db, conn, a)
 
 	var r []testTypesRow
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		r = testTypes(b, c, a, expectedRows)
+		r = testTypes(b, db, a, expectedRows)
 		testTypesReset(b, c)
 	}
 	b.StopTimer()
 
 	// Ensure that the compiler does not eliminate the line by storing the result.
 	benchmarkTypesResult = r
-	cleanupAppender(b, c, con, a)
 }
 
 func compareDecimal(t *testing.T, want Decimal, got Decimal) {
@@ -335,8 +335,8 @@ func compareDecimal(t *testing.T, want Decimal, got Decimal) {
 }
 
 func TestDecimal(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("SELECT all possible DECIMAL widths", func(t *testing.T) {
 		for i := 1; i <= 38; i++ {
@@ -361,7 +361,7 @@ func TestDecimal(t *testing.T) {
 		) v
 		ORDER BY v ASC`)
 		require.NoError(t, err)
-		require.NoError(t, res.Close())
+		defer closeRowsWrapper(t, res)
 
 		bigNumber, success := new(big.Int).SetString("1234567890123456789234", 10)
 		require.True(t, success)
@@ -441,15 +441,13 @@ func TestDecimal(t *testing.T) {
 			var fs Decimal
 			require.NoError(t, r.Scan(&fs))
 			require.Equal(t, test.want, fs.String())
+			// confirms Decimal implements fmt.Stringer correctly (see #424)
+			require.Equal(t, test.want, fmt.Sprint(fs))
 		}
 	})
-
-	require.NoError(t, db.Close())
 }
 
 func TestDecimalString(t *testing.T) {
-	t.Parallel()
-
 	testCases := []struct {
 		input    Decimal
 		expected string
@@ -593,19 +591,18 @@ func TestDecimalString(t *testing.T) {
 }
 
 func TestBlob(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	// Scan a hexadecimal value.
 	var b []byte
 	require.NoError(t, db.QueryRow("SELECT '\\xAA'::BLOB").Scan(&b))
 	require.Equal(t, []byte{0xAA}, b)
-	require.NoError(t, db.Close())
 }
 
 func TestList(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	// Test a LIST exceeding duckdb's standard vector size.
 	const n = 4000
@@ -615,12 +612,11 @@ func TestList(t *testing.T) {
 	for i := 0; i < n; i++ {
 		require.Equal(t, i, row.Get()[i])
 	}
-	require.NoError(t, db.Close())
 }
 
 func TestUUID(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	_, err := db.Exec(`CREATE TABLE uuid_test(uuid UUID)`)
 	require.NoError(t, err)
@@ -654,13 +650,11 @@ func TestUUID(t *testing.T) {
 		require.NoError(t, db.QueryRow(`SELECT ?::uuid`, test).Scan(&u))
 		require.Equal(t, test.String(), u.String())
 	}
-
-	require.NoError(t, db.Close())
 }
 
 func TestUUIDScanError(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	var u UUID
 	// invalid value type
@@ -672,8 +666,8 @@ func TestUUIDScanError(t *testing.T) {
 }
 
 func TestDate(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	tests := map[string]struct {
 		want  time.Time
@@ -697,13 +691,11 @@ func TestDate(t *testing.T) {
 	err = db.QueryRow(`SELECT ?::DATE`, ts).Scan(&res)
 	require.NoError(t, err)
 	require.Equal(t, time.Date(2006, time.January, 0o2, 0, 0, 0, 0, time.UTC), res)
-
-	require.NoError(t, db.Close())
 }
 
 func TestTime(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	IST, err := time.LoadLocation("Asia/Kolkata")
 	require.NoError(t, err)
@@ -720,13 +712,11 @@ func TestTime(t *testing.T) {
 	err = db.QueryRow(`SELECT ?::TIMETZ`, timeTZ).Scan(&res)
 	require.NoError(t, err)
 	require.Equal(t, timeTZ.UTC(), res)
-
-	require.NoError(t, db.Close())
 }
 
 func TestENUMs(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	type environment string
 	const (
@@ -759,13 +749,11 @@ func TestENUMs(t *testing.T) {
 	var row Composite[[]environment]
 	require.NoError(t, db.QueryRow("SELECT environments FROM all_enums").Scan(&row))
 	require.ElementsMatch(t, []environment{Air, Sea, Land}, row.Get())
-
-	require.NoError(t, db.Close())
 }
 
 func TestHugeInt(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("SELECT different HUGEINT values", func(t *testing.T) {
 		tests := []string{
@@ -805,13 +793,11 @@ func TestHugeInt(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "too big for HUGEINT")
 	})
-
-	require.NoError(t, db.Close())
 }
 
 func TestTimestampTZ(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	_, err := db.Exec("CREATE TABLE IF NOT EXISTS tbl (tz TIMESTAMPTZ)")
 	require.NoError(t, err)
@@ -830,12 +816,11 @@ func TestTimestampTZ(t *testing.T) {
 	err = db.QueryRow("SELECT tz FROM tbl").Scan(&tz)
 	require.NoError(t, err)
 	require.Equal(t, ts.UTC(), tz)
-	require.NoError(t, db.Close())
 }
 
 func TestBoolean(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	var res bool
 	require.NoError(t, db.QueryRow("SELECT ?", true).Scan(&res))
@@ -849,12 +834,11 @@ func TestBoolean(t *testing.T) {
 
 	require.NoError(t, db.QueryRow("SELECT ?", 1).Scan(&res))
 	require.True(t, res)
-	require.NoError(t, db.Close())
 }
 
 func TestTimestamp(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	tests := map[string]struct {
 		input string
@@ -872,12 +856,11 @@ func TestTimestamp(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, test.want, res)
 	}
-	require.NoError(t, db.Close())
 }
 
 func TestInterval(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	t.Run("INTERVAL binding", func(t *testing.T) {
 		interval := Interval{Days: 10, Months: 4, Micros: 4}
@@ -913,17 +896,13 @@ func TestInterval(t *testing.T) {
 			require.Equal(t, test.want, res)
 		}
 	})
-
-	require.NoError(t, db.Close())
 }
 
 func TestArray(t *testing.T) {
-	t.Parallel()
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
-	db, err := sql.Open("duckdb", "")
-	require.NoError(t, err)
-
-	_, err = db.Exec(`CREATE TABLE needle (vec FLOAT[3])`)
+	_, err := db.Exec(`CREATE TABLE needle (vec FLOAT[3])`)
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO needle VALUES (array[5, 5, 5])`)
@@ -931,6 +910,7 @@ func TestArray(t *testing.T) {
 
 	res, err := db.Query(`SELECT vec FROM needle`)
 	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
 
 	for res.Next() {
 		var vec Composite[[3]float64]
@@ -939,14 +919,11 @@ func TestArray(t *testing.T) {
 		require.NoError(t, res.Err())
 		require.Equal(t, [3]float64{5, 5, 5}, vec.Get())
 	}
-
-	require.NoError(t, res.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestJSONType(t *testing.T) {
-	t.Parallel()
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
 
 	_, err := db.Exec(`CREATE TABLE test (c1 STRUCT(index INTEGER))`)
 	require.NoError(t, err)
@@ -968,5 +945,110 @@ func TestJSONType(t *testing.T) {
 	require.Equal(t, float64(1), res.Get()["1"])
 	require.Equal(t, float64(2), res.Get()["2"])
 	require.Equal(t, float64(3), res.Get()["3"])
-	require.NoError(t, db.Close())
+}
+
+func TestJSONColType(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE OR REPLACE TABLE test AS SELECT '[10]'::JSON AS col, 1 AS val`)
+	require.NoError(t, err)
+
+	res, err := db.QueryContext(context.Background(), `SELECT col AS value, count(*) AS count FROM test GROUP BY 1`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, res)
+
+	columnTypes, err := res.ColumnTypes()
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(columnTypes))
+	require.Equal(t, aliasJSON, columnTypes[0].DatabaseTypeName())
+	require.Equal(t, typeToStringMap[TYPE_BIGINT], columnTypes[1].DatabaseTypeName())
+	require.Equal(t, reflect.TypeOf((*any)(nil)).Elem(), columnTypes[0].ScanType())
+	require.Equal(t, reflect.TypeOf(int64(0)), columnTypes[1].ScanType())
+}
+
+func TestUnionTypes(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Test basic UNION type creation and scanning.
+	t.Run("basic UNION operations", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT
+                (123)::UNION(num INTEGER, str VARCHAR) AS int_union,
+                ('hello')::UNION(num INTEGER, str VARCHAR) AS str_union,
+                NULL::UNION(num INTEGER, str VARCHAR) AS null_union
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		require.True(t, r.Next())
+		var intUnion, strUnion Union
+		var nullUnion any
+		err = r.Scan(&intUnion, &strUnion, &nullUnion)
+		require.NoError(t, err)
+
+		require.Equal(t, "num", intUnion.Tag)
+		require.Equal(t, int32(123), intUnion.Value)
+
+		require.Equal(t, "str", strUnion.Tag)
+		require.Equal(t, "hello", strUnion.Value)
+
+		require.Nil(t, nullUnion)
+	})
+
+	// Test UNION with different types.
+	t.Run("UNION with different types", func(t *testing.T) {
+		r, err := db.Query(`
+            WITH unions AS (
+                SELECT
+                    (1.5)::UNION(d DOUBLE, i INTEGER) AS double_union,
+                    ('2024-01-01'::DATE)::UNION(d DATE, s VARCHAR) AS date_union
+            )
+            SELECT * FROM unions
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		require.True(t, r.Next())
+		var doubleUnion, dateUnion Union
+		err = r.Scan(&doubleUnion, &dateUnion)
+		require.NoError(t, err)
+
+		require.Equal(t, "d", doubleUnion.Tag)
+		require.Equal(t, float64(1.5), doubleUnion.Value)
+
+		require.Equal(t, "d", dateUnion.Tag)
+		require.Equal(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), dateUnion.Value)
+	})
+
+	// Test column type information.
+	t.Run("UNION column type info", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT (123)::UNION(num INTEGER, str VARCHAR) AS union_col
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		types, err := r.ColumnTypes()
+		require.NoError(t, err)
+		require.Equal(t, "UNION(num INTEGER, str VARCHAR)", types[0].DatabaseTypeName())
+	})
+
+	// Test multiple UNION members.
+	t.Run("UNION with multiple members", func(t *testing.T) {
+		r, err := db.Query(`
+            SELECT (123)::UNION(a INTEGER, b VARCHAR, c DOUBLE) AS multi_union
+        `)
+		require.NoError(t, err)
+		defer closeRowsWrapper(t, r)
+
+		require.True(t, r.Next())
+		var val Union
+		err = r.Scan(&val)
+		require.NoError(t, err)
+		require.Equal(t, "a", val.Tag)
+		require.Equal(t, int32(123), val.Value)
+	})
 }

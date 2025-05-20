@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/marcboeker/go-duckdb"
+	"github.com/marcboeker/go-duckdb/v2"
 )
 
 var db *sql.DB

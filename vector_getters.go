@@ -1,141 +1,143 @@
 package duckdb
 
-/*
-#include <duckdb.h>
-*/
-import "C"
-
 import (
 	"encoding/json"
 	"math/big"
 	"time"
-	"unsafe"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // fnGetVectorValue is the getter callback function for any (nested) vector.
-type fnGetVectorValue func(vec *vector, rowIdx C.idx_t) any
+type fnGetVectorValue func(vec *vector, rowIdx mapping.IdxT) any
 
-func (vec *vector) getNull(rowIdx C.idx_t) bool {
-	mask := unsafe.Pointer(vec.mask)
-	if mask == nil {
+func (vec *vector) getNull(rowIdx mapping.IdxT) bool {
+	if vec.maskPtr == nil {
 		return false
 	}
-
-	entryIdx := rowIdx / 64
-	idxInEntry := rowIdx % 64
-	maskPtr := (*[1 << 31]C.uint64_t)(mask)
-	isValid := maskPtr[entryIdx] & (C.uint64_t(1) << idxInEntry)
-	return uint64(isValid) == 0
+	return !mapping.ValidityMaskValueIsValid(vec.maskPtr, rowIdx)
 }
 
-func getPrimitive[T any](vec *vector, rowIdx C.idx_t) T {
-	xs := (*[1 << 31]T)(vec.ptr)
+func getPrimitive[T any](vec *vector, rowIdx mapping.IdxT) T {
+	xs := (*[1 << 31]T)(vec.dataPtr)
 	return xs[rowIdx]
 }
 
-func (vec *vector) getTS(t Type, rowIdx C.idx_t) time.Time {
-	val := getPrimitive[C.duckdb_timestamp](vec, rowIdx)
-	return getTS(t, val)
+func (vec *vector) getTS(t Type, rowIdx mapping.IdxT) time.Time {
+	switch t {
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		val := getPrimitive[mapping.Timestamp](vec, rowIdx)
+		return getTS(t, &val)
+	case TYPE_TIMESTAMP_S:
+		val := getPrimitive[mapping.TimestampS](vec, rowIdx)
+		return getTSS(&val)
+	case TYPE_TIMESTAMP_MS:
+		val := getPrimitive[mapping.TimestampMS](vec, rowIdx)
+		return getTSMS(&val)
+	case TYPE_TIMESTAMP_NS:
+		val := getPrimitive[mapping.TimestampNS](vec, rowIdx)
+		return getTSNS(&val)
+	default:
+		return time.Time{}
+	}
 }
 
-func getTS(t Type, ts C.duckdb_timestamp) time.Time {
+func getTS(t Type, ts *mapping.Timestamp) time.Time {
 	switch t {
-	case TYPE_TIMESTAMP:
-		return time.UnixMicro(int64(ts.micros)).UTC()
-	case TYPE_TIMESTAMP_S:
-		return time.Unix(int64(ts.micros), 0).UTC()
-	case TYPE_TIMESTAMP_MS:
-		return time.UnixMilli(int64(ts.micros)).UTC()
-	case TYPE_TIMESTAMP_NS:
-		return time.Unix(0, int64(ts.micros)).UTC()
-	case TYPE_TIMESTAMP_TZ:
-		return time.UnixMicro(int64(ts.micros)).UTC()
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		return time.UnixMicro(mapping.TimestampMembers(ts)).UTC()
 	}
 	return time.Time{}
 }
 
-func (vec *vector) getDate(rowIdx C.idx_t) time.Time {
-	date := getPrimitive[C.duckdb_date](vec, rowIdx)
-	return getDate(date)
+func getTSS(ts *mapping.TimestampS) time.Time {
+	return time.Unix(mapping.TimestampSMembers(ts), 0).UTC()
 }
 
-func getDate(date C.duckdb_date) time.Time {
-	d := C.duckdb_from_date(date)
-	return time.Date(int(d.year), time.Month(d.month), int(d.day), 0, 0, 0, 0, time.UTC)
+func getTSMS(ts *mapping.TimestampMS) time.Time {
+	return time.UnixMilli(mapping.TimestampMSMembers(ts)).UTC()
 }
 
-func (vec *vector) getTime(rowIdx C.idx_t) time.Time {
+func getTSNS(ts *mapping.TimestampNS) time.Time {
+	return time.Unix(0, mapping.TimestampNSMembers(ts)).UTC()
+}
+
+func (vec *vector) getDate(rowIdx mapping.IdxT) time.Time {
+	date := getPrimitive[mapping.Date](vec, rowIdx)
+	return getDate(&date)
+}
+
+func getDate(date *mapping.Date) time.Time {
+	d := mapping.FromDate(*date)
+	year, month, day := mapping.DateStructMembers(&d)
+	return time.Date(int(year), time.Month(month), int(day), 0, 0, 0, 0, time.UTC)
+}
+
+func (vec *vector) getTime(rowIdx mapping.IdxT) time.Time {
 	switch vec.Type {
 	case TYPE_TIME:
-		val := getPrimitive[C.duckdb_time](vec, rowIdx)
-		return getTime(val)
+		val := getPrimitive[mapping.Time](vec, rowIdx)
+		return getTime(&val)
 	case TYPE_TIME_TZ:
-		ti := getPrimitive[C.duckdb_time_tz](vec, rowIdx)
-		return getTimeTZ(ti)
+		ti := getPrimitive[mapping.TimeTZ](vec, rowIdx)
+		return getTimeTZ(&ti)
 	}
 	return time.Time{}
 }
 
-func getTime(ti C.duckdb_time) time.Time {
-	unix := time.UnixMicro(int64(ti.micros)).UTC()
+func getTime(ti *mapping.Time) time.Time {
+	micros := mapping.TimeMembers(ti)
+	unix := time.UnixMicro(micros).UTC()
 	return time.Date(1, time.January, 1, unix.Hour(), unix.Minute(), unix.Second(), unix.Nanosecond(), time.UTC)
 }
 
-func getTimeTZ(ti C.duckdb_time_tz) time.Time {
-	timeTZ := C.duckdb_from_time_tz(ti)
-	hour := int(timeTZ.time.hour)
-	minute := int(timeTZ.time.min)
-	sec := int(timeTZ.time.sec)
+func getTimeTZ(ti *mapping.TimeTZ) time.Time {
+	timeTZStruct := mapping.FromTimeTZ(*ti)
+	timeStruct, offset := mapping.TimeTZStructMembers(&timeTZStruct)
+
 	// TIMETZ has microsecond precision.
-	nanos := int(timeTZ.time.micros) * 1000
-	loc := time.FixedZone("", int(timeTZ.offset))
-	return time.Date(1, time.January, 1, hour, minute, sec, nanos, loc).UTC()
+	hour, minute, sec, micro := mapping.TimeStructMembers(&timeStruct)
+	nanos := int(micro) * 1000
+	loc := time.FixedZone("", int(offset))
+	return time.Date(1, time.January, 1, int(hour), int(minute), int(sec), nanos, loc).UTC()
 }
 
-func (vec *vector) getInterval(rowIdx C.idx_t) Interval {
-	interval := getPrimitive[C.duckdb_interval](vec, rowIdx)
-	return getInterval(interval)
+func (vec *vector) getInterval(rowIdx mapping.IdxT) Interval {
+	interval := getPrimitive[mapping.Interval](vec, rowIdx)
+	return getInterval(&interval)
 }
 
-func getInterval(interval C.duckdb_interval) Interval {
+func getInterval(interval *mapping.Interval) Interval {
+	months, days, micros := mapping.IntervalMembers(interval)
 	return Interval{
-		Days:   int32(interval.days),
-		Months: int32(interval.months),
-		Micros: int64(interval.micros),
+		Days:   days,
+		Months: months,
+		Micros: micros,
 	}
 }
 
-func (vec *vector) getHugeint(rowIdx C.idx_t) *big.Int {
-	hugeInt := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
-	return hugeIntToNative(hugeInt)
+func (vec *vector) getHugeint(rowIdx mapping.IdxT) *big.Int {
+	hugeInt := getPrimitive[mapping.HugeInt](vec, rowIdx)
+	return hugeIntToNative(&hugeInt)
 }
 
-func (vec *vector) getBytes(rowIdx C.idx_t) any {
-	cStr := getPrimitive[duckdb_string_t](vec, rowIdx)
-
-	var blob []byte
-	if cStr.length <= stringInlineLength {
-		// Inlined data is stored from byte 4 to stringInlineLength + 4.
-		blob = C.GoBytes(unsafe.Pointer(&cStr.prefix), C.int(cStr.length))
-	} else {
-		// Any strings exceeding stringInlineLength are stored as a pointer in `ptr`.
-		blob = C.GoBytes(unsafe.Pointer(cStr.ptr), C.int(cStr.length))
-	}
-
+func (vec *vector) getBytes(rowIdx mapping.IdxT) any {
+	strT := getPrimitive[mapping.StringT](vec, rowIdx)
+	str := mapping.StringTData(&strT)
 	if vec.Type == TYPE_VARCHAR {
-		return string(blob)
+		return str
 	}
-	return blob
+	return []byte(str)
 }
 
-func (vec *vector) getJSON(rowIdx C.idx_t) any {
+func (vec *vector) getJSON(rowIdx mapping.IdxT) any {
 	bytes := vec.getBytes(rowIdx).(string)
 	var value any
 	_ = json.Unmarshal([]byte(bytes), &value)
 	return value
 }
 
-func (vec *vector) getDecimal(rowIdx C.idx_t) Decimal {
+func (vec *vector) getDecimal(rowIdx mapping.IdxT) Decimal {
 	var val *big.Int
 	switch vec.internalType {
 	case TYPE_SMALLINT:
@@ -148,43 +150,37 @@ func (vec *vector) getDecimal(rowIdx C.idx_t) Decimal {
 		v := getPrimitive[int64](vec, rowIdx)
 		val = big.NewInt(v)
 	case TYPE_HUGEINT:
-		v := getPrimitive[C.duckdb_hugeint](vec, rowIdx)
-		val = hugeIntToNative(C.duckdb_hugeint{
-			lower: v.lower,
-			upper: v.upper,
-		})
+		v := getPrimitive[mapping.HugeInt](vec, rowIdx)
+		val = hugeIntToNative(&v)
 	}
-
 	return Decimal{Width: vec.decimalWidth, Scale: vec.decimalScale, Value: val}
 }
 
-func (vec *vector) getEnum(rowIdx C.idx_t) string {
-	var idx uint64
+func (vec *vector) getEnum(rowIdx mapping.IdxT) string {
+	var idx mapping.IdxT
 	switch vec.internalType {
 	case TYPE_UTINYINT:
-		idx = uint64(getPrimitive[uint8](vec, rowIdx))
+		idx = mapping.IdxT(getPrimitive[uint8](vec, rowIdx))
 	case TYPE_USMALLINT:
-		idx = uint64(getPrimitive[uint16](vec, rowIdx))
+		idx = mapping.IdxT(getPrimitive[uint16](vec, rowIdx))
 	case TYPE_UINTEGER:
-		idx = uint64(getPrimitive[uint32](vec, rowIdx))
+		idx = mapping.IdxT(getPrimitive[uint32](vec, rowIdx))
 	case TYPE_UBIGINT:
-		idx = getPrimitive[uint64](vec, rowIdx)
+		idx = mapping.IdxT(getPrimitive[uint64](vec, rowIdx))
 	}
 
-	logicalType := C.duckdb_vector_get_column_type(vec.duckdbVector)
-	defer C.duckdb_destroy_logical_type(&logicalType)
-
-	val := C.duckdb_enum_dictionary_value(logicalType, (C.idx_t)(idx))
-	defer C.duckdb_free(unsafe.Pointer(val))
-	return C.GoString(val)
+	logicalType := mapping.VectorGetColumnType(vec.vec)
+	defer mapping.DestroyLogicalType(&logicalType)
+	return mapping.EnumDictionaryValue(logicalType, idx)
 }
 
-func (vec *vector) getList(rowIdx C.idx_t) []any {
-	entry := getPrimitive[duckdb_list_entry_t](vec, rowIdx)
-	return vec.getSliceChild(entry.offset, entry.length)
+func (vec *vector) getList(rowIdx mapping.IdxT) []any {
+	entry := getPrimitive[mapping.ListEntry](vec, rowIdx)
+	offset, length := mapping.ListEntryMembers(&entry)
+	return vec.getSliceChild(offset, length)
 }
 
-func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
+func (vec *vector) getStruct(rowIdx mapping.IdxT) map[string]any {
 	m := map[string]any{}
 	for i := 0; i < len(vec.childVectors); i++ {
 		child := &vec.childVectors[i]
@@ -194,7 +190,7 @@ func (vec *vector) getStruct(rowIdx C.idx_t) map[string]any {
 	return m
 }
 
-func (vec *vector) getMap(rowIdx C.idx_t) Map {
+func (vec *vector) getMap(rowIdx mapping.IdxT) Map {
 	list := vec.getList(rowIdx)
 
 	m := Map{}
@@ -207,19 +203,30 @@ func (vec *vector) getMap(rowIdx C.idx_t) Map {
 	return m
 }
 
-func (vec *vector) getArray(rowIdx C.idx_t) []any {
-	length := C.idx_t(vec.arrayLength)
-	return vec.getSliceChild(rowIdx*length, length)
+func (vec *vector) getArray(rowIdx mapping.IdxT) []any {
+	length := uint64(vec.arrayLength)
+	return vec.getSliceChild(uint64(rowIdx)*length, length)
 }
 
-func (vec *vector) getSliceChild(offset C.idx_t, length C.idx_t) []any {
+func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 	slice := make([]any, 0, length)
 	child := &vec.childVectors[0]
 
 	// Fill the slice with all child values.
-	for i := C.idx_t(0); i < length; i++ {
-		val := child.getFn(child, i+offset)
+	for i := uint64(0); i < length; i++ {
+		val := child.getFn(child, mapping.IdxT(i+offset))
 		slice = append(slice, val)
 	}
 	return slice
+}
+
+func (vec *vector) getUnion(rowIdx mapping.IdxT) any {
+	tag := getPrimitive[uint8](&vec.childVectors[0], rowIdx)
+	child := &vec.childVectors[tag+1]
+	value := child.getFn(child, rowIdx)
+
+	return Union{
+		Tag:   vec.tagDict[uint32(tag)],
+		Value: value,
+	}
 }

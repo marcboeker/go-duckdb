@@ -6,103 +6,102 @@ import (
 	"database/sql/driver"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestPrepareQuery(t *testing.T) {
-	db := openDB(t)
-	createFooTable(db, t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 
 	prepared, err := db.Prepare(`SELECT * FROM foo WHERE baz = ?`)
 	require.NoError(t, err)
 	res, err := prepared.Query(0)
 	require.NoError(t, err)
-
-	require.NoError(t, res.Close())
-	require.NoError(t, prepared.Close())
+	closeRowsWrapper(t, res)
+	closePreparedWrapper(t, prepared)
 
 	// Prepare on a connection.
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
-	prepared, err = c.PrepareContext(context.Background(), `SELECT * FROM foo WHERE baz = ?`)
+	prepared, err = conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE baz = ?`)
 	require.NoError(t, err)
 	res, err = prepared.Query(0)
 	require.NoError(t, err)
+	closeRowsWrapper(t, res)
+	closePreparedWrapper(t, prepared)
 
-	require.NoError(t, res.Close())
-	require.NoError(t, prepared.Close())
-
-	// Access the raw connection & statement.
-	err = c.Raw(func(driverConn interface{}) error {
-		conn := driverConn.(*Conn)
-		s, err := conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE baz = ?`)
-		require.NoError(t, err)
+	// Access the raw connection and statement.
+	err = conn.Raw(func(driverConn interface{}) error {
+		innerConn := driverConn.(*Conn)
+		s, innerErr := innerConn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE baz = ?`)
+		require.NoError(t, innerErr)
 		stmt := s.(*Stmt)
 
-		stmtType, err := stmt.StatementType()
-		require.NoError(t, err)
+		stmtType, innerErr := stmt.StatementType()
+		require.NoError(t, innerErr)
 		require.Equal(t, STATEMENT_TYPE_SELECT, stmtType)
 
-		paramType, err := stmt.ParamType(0)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramType, innerErr := stmt.ParamType(0)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		paramType, err = stmt.ParamType(1)
-		require.NoError(t, err)
+		paramType, innerErr = stmt.ParamType(1)
+		require.NoError(t, innerErr)
 		require.Equal(t, TYPE_INTEGER, paramType)
 
-		paramType, err = stmt.ParamType(2)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramType, innerErr = stmt.ParamType(2)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		rows, err := stmt.QueryBound(context.Background())
-		require.Nil(t, rows)
-		require.ErrorIs(t, err, errNotBound)
+		r, innerErr := stmt.QueryBound(context.Background())
+		require.Nil(t, r)
+		require.ErrorIs(t, innerErr, errNotBound)
 
-		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
-		require.NoError(t, err)
+		innerErr = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
+		require.NoError(t, innerErr)
 
-		rows, err = stmt.QueryBound(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, rows)
+		// Don't immediately close the rows to trigger an active rows error.
+		r, innerErr = stmt.QueryBound(context.Background())
+		require.NoError(t, innerErr)
+		require.NotNil(t, r)
 
-		badRows, err := stmt.QueryBound(context.Background())
-		require.ErrorIs(t, err, errActiveRows)
+		badRows, innerErr := stmt.QueryBound(context.Background())
+		require.ErrorIs(t, innerErr, errActiveRows)
 		require.Nil(t, badRows)
 
-		badResults, err := stmt.ExecBound(context.Background())
-		require.ErrorIs(t, err, errActiveRows)
+		badResults, innerErr := stmt.ExecBound(context.Background())
+		require.ErrorIs(t, innerErr, errActiveRows)
 		require.Nil(t, badResults)
 
-		require.NoError(t, rows.Close())
-
+		require.NoError(t, r.Close())
 		require.NoError(t, stmt.Close())
 
-		stmtType, err = stmt.StatementType()
-		require.ErrorIs(t, err, errClosedStmt)
+		stmtType, innerErr = stmt.StatementType()
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
-		paramType, err = stmt.ParamType(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		paramType, innerErr = stmt.ParamType(1)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
-		require.ErrorIs(t, err, errCouldNotBind)
-		require.ErrorIs(t, err, errClosedStmt)
-
+		innerErr = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
+		require.ErrorIs(t, innerErr, errCouldNotBind)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		return nil
 	})
 	require.NoError(t, err)
-
-	require.NoError(t, c.Close())
-	require.NoError(t, db.Close())
 }
 
 func TestPrepareQueryPositional(t *testing.T) {
-	db := openDB(t)
-	createFooTable(db, t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 
 	prepared, err := db.Prepare(`SELECT $1, $2 AS foo WHERE foo = $2`)
 	require.NoError(t, err)
@@ -110,107 +109,103 @@ func TestPrepareQueryPositional(t *testing.T) {
 	var foo, bar int
 	row := prepared.QueryRow(1, 2)
 	require.NoError(t, err)
-
-	err = row.Scan(&foo, &bar)
-	require.NoError(t, err)
+	require.NoError(t, row.Scan(&foo, &bar))
 	require.Equal(t, 1, foo)
 	require.Equal(t, 2, bar)
-
-	require.NoError(t, prepared.Close())
+	closePreparedWrapper(t, prepared)
 
 	// Prepare on a connection.
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
-	prepared, err = c.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $2 AND baz = $1`)
+	prepared, err = conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $2 AND baz = $1`)
 	require.NoError(t, err)
 	res, err := prepared.Query(0, "hello")
 	require.NoError(t, err)
-	require.NoError(t, res.Close())
-	require.NoError(t, prepared.Close())
+	closeRowsWrapper(t, res)
+	closePreparedWrapper(t, prepared)
 
-	// Access the raw connection & statement.
-	err = c.Raw(func(driverConn interface{}) error {
-		conn := driverConn.(*Conn)
-		s, err := conn.PrepareContext(context.Background(), `UPDATE foo SET bar = $2 WHERE baz = $1`)
-		require.NoError(t, err)
+	// Access the raw connection and statement.
+	err = conn.Raw(func(driverConn interface{}) error {
+		innerConn := driverConn.(*Conn)
+		s, innerErr := innerConn.PrepareContext(context.Background(), `UPDATE foo SET bar = $2 WHERE baz = $1`)
+		require.NoError(t, innerErr)
 		stmt := s.(*Stmt)
 
-		stmtType, err := stmt.StatementType()
-		require.NoError(t, err)
+		stmtType, innerErr := stmt.StatementType()
+		require.NoError(t, innerErr)
 		require.Equal(t, STATEMENT_TYPE_UPDATE, stmtType)
 
-		paramName, err := stmt.ParamName(0)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramName, innerErr := stmt.ParamName(0)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, "", paramName)
 
-		paramName, err = stmt.ParamName(1)
-		require.NoError(t, err)
+		paramName, innerErr = stmt.ParamName(1)
+		require.NoError(t, innerErr)
 		require.Equal(t, "1", paramName)
 
-		paramName, err = stmt.ParamName(2)
-		require.NoError(t, err)
+		paramName, innerErr = stmt.ParamName(2)
+		require.NoError(t, innerErr)
 		require.Equal(t, "2", paramName)
 
-		paramName, err = stmt.ParamName(3)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramName, innerErr = stmt.ParamName(3)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, "", paramName)
 
-		paramType, err := stmt.ParamType(0)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramType, innerErr := stmt.ParamType(0)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		paramType, err = stmt.ParamType(1)
-		require.NoError(t, err)
+		paramType, innerErr = stmt.ParamType(1)
+		require.NoError(t, innerErr)
 		require.Equal(t, TYPE_INTEGER, paramType)
 
-		paramType, err = stmt.ParamType(2)
-		require.NoError(t, err)
+		paramType, innerErr = stmt.ParamType(2)
+		require.NoError(t, innerErr)
 		require.Equal(t, TYPE_VARCHAR, paramType)
 
-		paramType, err = stmt.ParamType(3)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramType, innerErr = stmt.ParamType(3)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		result, err := stmt.ExecBound(context.Background())
-		require.Nil(t, result)
-		require.ErrorIs(t, err, errNotBound)
+		r, innerErr := stmt.ExecBound(context.Background())
+		require.Nil(t, r)
+		require.ErrorIs(t, innerErr, errNotBound)
 
-		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}, {Ordinal: 2, Value: "hello"}})
-		require.NoError(t, err)
+		innerErr = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}, {Ordinal: 2, Value: "hello"}})
+		require.NoError(t, innerErr)
 
-		result, err = stmt.ExecBound(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, result)
+		r, innerErr = stmt.ExecBound(context.Background())
+		require.NoError(t, innerErr)
+		require.NotNil(t, r)
 
 		require.NoError(t, stmt.Close())
 
-		stmtType, err = stmt.StatementType()
-		require.ErrorIs(t, err, errClosedStmt)
+		stmtType, innerErr = stmt.StatementType()
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
-		paramName, err = stmt.ParamName(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		paramName, innerErr = stmt.ParamName(1)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, "", paramName)
 
-		paramType, err = stmt.ParamType(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		paramType, innerErr = stmt.ParamType(1)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}, {Ordinal: 2, Value: "hello"}})
-		require.ErrorIs(t, err, errCouldNotBind)
-		require.ErrorIs(t, err, errClosedStmt)
-
+		innerErr = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}, {Ordinal: 2, Value: "hello"}})
+		require.ErrorIs(t, innerErr, errCouldNotBind)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		return nil
 	})
 	require.NoError(t, err)
-
-	require.NoError(t, db.Close())
 }
 
 func TestPrepareQueryNamed(t *testing.T) {
-	db := openDB(t)
-	createFooTable(db, t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 
 	prepared, err := db.PrepareContext(context.Background(), `SELECT $foo, $bar, $baz, $foo`)
 	require.NoError(t, err)
@@ -224,102 +219,93 @@ func TestPrepareQueryNamed(t *testing.T) {
 	require.Equal(t, "x", baz)
 	require.Equal(t, 1, foo2)
 
-	require.NoError(t, prepared.Close())
+	closePreparedWrapper(t, prepared)
 
 	// Prepare on a connection.
-	c, err := db.Conn(context.Background())
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, context.Background())
+	defer closeConnWrapper(t, conn)
 
-	prepared, err = c.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $bar AND baz = $baz`)
+	prepared, err = conn.PrepareContext(context.Background(), `SELECT * FROM foo WHERE bar = $bar AND baz = $baz`)
 	require.NoError(t, err)
 	res, err := prepared.Query(sql.Named("bar", "hello"), sql.Named("baz", 0))
 	require.NoError(t, err)
-	require.NoError(t, res.Close())
-	require.NoError(t, prepared.Close())
+	closeRowsWrapper(t, res)
+	closePreparedWrapper(t, prepared)
 
-	// Access the raw connection & statement.
-	err = c.Raw(func(driverConn interface{}) error {
-		conn := driverConn.(*Conn)
-		s, err := conn.PrepareContext(context.Background(), `INSERT INTO foo VALUES ($bar, $baz)`)
-		require.NoError(t, err)
+	// Access the raw connection and statement.
+	err = conn.Raw(func(driverConn interface{}) error {
+		innerConn := driverConn.(*Conn)
+		s, innerErr := innerConn.PrepareContext(context.Background(), `INSERT INTO foo VALUES ($bar, $baz)`)
+		require.NoError(t, innerErr)
 		stmt := s.(*Stmt)
 
-		stmtType, err := stmt.StatementType()
-		require.NoError(t, err)
+		stmtType, innerErr := stmt.StatementType()
+		require.NoError(t, innerErr)
 		require.Equal(t, STATEMENT_TYPE_INSERT, stmtType)
 
-		paramName, err := stmt.ParamName(0)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramName, innerErr := stmt.ParamName(0)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, "", paramName)
 
-		paramName, err = stmt.ParamName(1)
-		require.NoError(t, err)
+		paramName, innerErr = stmt.ParamName(1)
+		require.NoError(t, innerErr)
 		require.Equal(t, "bar", paramName)
 
-		paramName, err = stmt.ParamName(2)
-		require.NoError(t, err)
+		paramName, innerErr = stmt.ParamName(2)
+		require.NoError(t, innerErr)
 		require.Equal(t, "baz", paramName)
 
-		paramName, err = stmt.ParamName(3)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramName, innerErr = stmt.ParamName(3)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, "", paramName)
 
-		paramType, err := stmt.ParamType(0)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramType, innerErr := stmt.ParamType(0)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		paramType, err = stmt.ParamType(1)
-		// Will be fixed in the next release.
-		// https://github.com/duckdb/duckdb/pull/14952
-		// require.Equal(t, TYPE_VARCHAR, paramType)
-		require.Equal(t, TYPE_INVALID, paramType)
-		require.NoError(t, err)
+		paramType, innerErr = stmt.ParamType(1)
+		require.Equal(t, TYPE_VARCHAR, paramType)
+		require.NoError(t, innerErr)
 
-		paramType, err = stmt.ParamType(2)
-		// Will be fixed in the next release.
-		// https://github.com/duckdb/duckdb/pull/14952
-		// require.Equal(t, TYPE_INTEGER, paramType)
-		require.Equal(t, TYPE_INVALID, paramType)
-		require.NoError(t, err)
+		paramType, innerErr = stmt.ParamType(2)
+		require.Equal(t, TYPE_INTEGER, paramType)
+		require.NoError(t, innerErr)
 
-		paramType, err = stmt.ParamType(3)
-		require.ErrorContains(t, err, paramIndexErrMsg)
+		paramType, innerErr = stmt.ParamType(3)
+		require.ErrorContains(t, innerErr, paramIndexErrMsg)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		result, err := stmt.ExecBound(context.Background())
-		require.Nil(t, result)
-		require.ErrorIs(t, err, errNotBound)
+		r, innerErr := stmt.ExecBound(context.Background())
+		require.Nil(t, r)
+		require.ErrorIs(t, innerErr, errNotBound)
 
-		err = stmt.Bind([]driver.NamedValue{{Name: "bar", Value: "hello"}, {Name: "baz", Value: 0}})
-		require.NoError(t, err)
+		innerErr = stmt.Bind([]driver.NamedValue{{Name: "bar", Value: "hello"}, {Name: "baz", Value: 0}})
+		require.NoError(t, innerErr)
 
-		result, err = stmt.ExecBound(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, result)
+		r, innerErr = stmt.ExecBound(context.Background())
+		require.NoError(t, innerErr)
+		require.NotNil(t, r)
 
 		require.NoError(t, stmt.Close())
 
-		stmtType, err = stmt.StatementType()
-		require.ErrorIs(t, err, errClosedStmt)
+		stmtType, innerErr = stmt.StatementType()
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, STATEMENT_TYPE_INVALID, stmtType)
 
-		paramName, err = stmt.ParamName(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		paramName, innerErr = stmt.ParamName(1)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, "", paramName)
 
-		paramType, err = stmt.ParamType(1)
-		require.ErrorIs(t, err, errClosedStmt)
+		paramType, innerErr = stmt.ParamType(1)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		require.Equal(t, TYPE_INVALID, paramType)
 
-		err = stmt.Bind([]driver.NamedValue{{Name: "bar", Value: "hello"}, {Name: "baz", Value: 0}})
-		require.ErrorIs(t, err, errCouldNotBind)
-		require.ErrorIs(t, err, errClosedStmt)
-
+		innerErr = stmt.Bind([]driver.NamedValue{{Name: "bar", Value: "hello"}, {Name: "baz", Value: 0}})
+		require.ErrorIs(t, innerErr, errCouldNotBind)
+		require.ErrorIs(t, innerErr, errClosedStmt)
 		return nil
 	})
 	require.NoError(t, err)
-
-	require.NoError(t, db.Close())
 }
 
 func TestUninitializedStmt(t *testing.T) {
@@ -346,8 +332,10 @@ func TestUninitializedStmt(t *testing.T) {
 }
 
 func TestPrepareWithError(t *testing.T) {
-	db := openDB(t)
-	createFooTable(db, t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE foo(bar VARCHAR, baz INTEGER)`)
 
 	testCases := []struct {
 		sql string
@@ -374,17 +362,17 @@ func TestPrepareWithError(t *testing.T) {
 				require.Fail(t, "error type is not (*duckdb.Error)")
 			}
 			require.ErrorContains(t, err, tc.err)
-			continue
 		}
-		require.NoError(t, prepared.Close())
+		closePreparedWrapper(t, prepared)
 	}
-	require.NoError(t, db.Close())
 }
 
 func TestPreparePivot(t *testing.T) {
-	db := openDB(t)
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
 	ctx := context.Background()
-	createTable(db, t, `CREATE OR REPLACE TABLE cities(country VARCHAR, name VARCHAR, year INT, population INT)`)
+	createTable(t, db, `CREATE OR REPLACE TABLE cities(country VARCHAR, name VARCHAR, year INT, population INT)`)
 	_, err := db.ExecContext(ctx, `INSERT INTO cities VALUES ('NL', 'Netherlands', '2020', '42')`)
 	require.NoError(t, err)
 
@@ -398,7 +386,7 @@ func TestPreparePivot(t *testing.T) {
 	require.Equal(t, "NL", country)
 	require.Equal(t, "Netherlands", name)
 	require.Equal(t, 42, population)
-	require.NoError(t, prepared.Close())
+	closePreparedWrapper(t, prepared)
 
 	prepared, err = db.PrepareContext(ctx, `PIVOT cities ON year USING SUM(population)`)
 	require.NoError(t, err)
@@ -408,13 +396,13 @@ func TestPreparePivot(t *testing.T) {
 	require.Equal(t, "NL", country)
 	require.Equal(t, "Netherlands", name)
 	require.Equal(t, 42, population)
-	require.NoError(t, prepared.Close())
+	closePreparedWrapper(t, prepared)
 
 	// Prepare on a connection.
-	c, err := db.Conn(ctx)
-	require.NoError(t, err)
+	conn := openConnWrapper(t, db, ctx)
+	defer closeConnWrapper(t, conn)
 
-	prepared, err = c.PrepareContext(ctx, `PIVOT cities ON year USING SUM(population)`)
+	prepared, err = conn.PrepareContext(ctx, `PIVOT cities ON year USING SUM(population)`)
 	require.NoError(t, err)
 
 	row = prepared.QueryRow()
@@ -422,8 +410,127 @@ func TestPreparePivot(t *testing.T) {
 	require.Equal(t, "NL", country)
 	require.Equal(t, "Netherlands", name)
 	require.Equal(t, 42, population)
-	require.NoError(t, prepared.Close())
+	closePreparedWrapper(t, prepared)
+}
 
-	require.NoError(t, c.Close())
-	require.NoError(t, db.Close())
+func TestBindWithoutResolvedParams(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	d := time.Date(2022, 0o2, 0o7, 0, 0, 0, 0, time.UTC)
+
+	r := db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, d, d)
+	require.NoError(t, r.Err())
+
+	var a, b string
+	require.NoError(t, r.Scan(&a, &b))
+	require.Equal(t, "2022-02-07 00:00:00", a)
+	require.Equal(t, "2022-02-07 00:00:00", b)
+
+	// Type without a fallback.
+	s := []int32{1}
+	r = db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, s, s)
+	require.Contains(t, r.Err().Error(), "unsupported data type")
+}
+
+func TestBindTimestampTypes(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE OR REPLACE TABLE foo(a TIMESTAMP, b TIMESTAMP_S, c TIMESTAMP_MS, d TIMESTAMP_NS)`)
+	require.NoError(t, err)
+
+	tm := time.Date(2025, time.May, 7, 11, 45, 10, 123456789, time.UTC)
+	_, err = db.Exec(`INSERT INTO foo VALUES(?, ?, ?, ?)`, tm, tm, tm, tm)
+	require.NoError(t, err)
+
+	r := db.QueryRow(`SELECT a, b, c, d FROM foo`)
+	require.NoError(t, r.Err())
+
+	var a, b, c, d time.Time
+	err = r.Scan(&a, &b, &c, &d)
+	require.NoError(t, err)
+
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123456000, time.UTC), a)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 0, time.UTC), b)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123000000, time.UTC), c)
+	require.Equal(t, time.Date(2025, time.May, 7, 11, 45, 10, 123456789, time.UTC), d)
+}
+
+func TestPrepareComplex(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.Background()
+	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(
+		arr_int INTEGER[2],
+		list_str VARCHAR[],
+		str_col STRUCT(v VARCHAR, i INTEGER)
+	)`)
+
+	// Insert parameters.
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES (?, ?, ?)`,
+		[]int32{7, 1}, []string{"foo", "bar"}, map[string]any{"v": "baz", "i": int32(42)})
+	require.NoError(t, err)
+
+	prepared, err := db.Prepare(`SELECT * FROM arr_test
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?`)
+	defer closePreparedWrapper(t, prepared)
+	require.NoError(t, err)
+
+	var arr Composite[[]int32]
+	var list Composite[[]string]
+	var struc Composite[map[string]any]
+
+	// Test with `any` slice types.
+	err = prepared.QueryRow(
+		[]any{int32(7), int32(1)},
+		[]any{"foo", "bar"},
+		map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+
+	// Test with specific slice types.
+	err = prepared.QueryRow(
+		[]int32{7, 1},
+		[]string{"foo", "bar"},
+		map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+
+	// Test querying without a prepared statement.
+	err = db.QueryRow(`SELECT * FROM arr_test
+		WHERE arr_int = ? AND list_str = ? AND str_col = ?`,
+		[]int32{7, 1}, []string{"foo", "bar"}, map[string]any{"v": "baz", "i": int32(42)},
+	).Scan(&arr, &list, &struc)
+	require.NoError(t, err)
+
+	require.Equal(t, []int32{7, 1}, arr.Get())
+	require.Equal(t, []string{"foo", "bar"}, list.Get())
+	require.Equal(t, map[string]any{"v": "baz", "i": int32(42)}, struc.Get())
+}
+
+func TestBindJSON(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE TABLE tbl (j JSON)`)
+	require.NoError(t, err)
+
+	jsonData := []byte(`{"name": "Jimmy","age": 28}`)
+	_, err = db.Exec(`INSERT INTO tbl VALUES (?)`, jsonData)
+	require.NoError(t, err)
+
+	var str string
+	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl`).Scan(&str)
+	require.NoError(t, err)
+	require.Equal(t, string(jsonData), str)
 }
