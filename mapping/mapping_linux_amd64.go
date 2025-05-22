@@ -169,6 +169,7 @@ const (
 
 type (
 	IdxT              = bindings.IdxT
+	SelT              = bindings.SelT
 	Date              = bindings.Date
 	DateStruct        = bindings.DateStruct
 	Time              = bindings.Time
@@ -249,9 +250,11 @@ type (
 
 type (
 	Vector              = bindings.Vector
+	SelectionVector     = bindings.SelectionVector
 	InstanceCache       = bindings.InstanceCache
 	Database            = bindings.Database
 	Connection          = bindings.Connection
+	ClientContext       = bindings.ClientContext
 	PreparedStatement   = bindings.PreparedStatement
 	ExtractedStatements = bindings.ExtractedStatements
 	PendingResult       = bindings.PendingResult
@@ -277,17 +280,21 @@ type (
 // Open, connect.
 
 var (
-	CreateInstanceCache  = bindings.CreateInstanceCache
-	GetOrCreateFromCache = bindings.GetOrCreateFromCache
-	DestroyInstanceCache = bindings.DestroyInstanceCache
-	Open                 = bindings.Open
-	OpenExt              = bindings.OpenExt
-	Close                = bindings.Close
-	Connect              = bindings.Connect
-	Interrupt            = bindings.Interrupt
-	QueryProgress        = bindings.QueryProgress
-	Disconnect           = bindings.Disconnect
-	LibraryVersion       = bindings.LibraryVersion
+	CreateInstanceCache          = bindings.CreateInstanceCache
+	GetOrCreateFromCache         = bindings.GetOrCreateFromCache
+	DestroyInstanceCache         = bindings.DestroyInstanceCache
+	Open                         = bindings.Open
+	OpenExt                      = bindings.OpenExt
+	Close                        = bindings.Close
+	Connect                      = bindings.Connect
+	Interrupt                    = bindings.Interrupt
+	QueryProgress                = bindings.QueryProgress
+	Disconnect                   = bindings.Disconnect
+	ConnectionGetClientContext   = bindings.ConnectionGetClientContext
+	ClientContextGetConnectionId = bindings.ClientContextGetConnectionId
+	DestroyClientContext         = bindings.DestroyClientContext
+	LibraryVersion               = bindings.LibraryVersion
+	GetTableNames                = bindings.GetTableNames
 )
 
 // Configuration.
@@ -510,6 +517,8 @@ var (
 	CreateStructValue   = bindings.CreateStructValue
 	CreateListValue     = bindings.CreateListValue
 	CreateArrayValue    = bindings.CreateArrayValue
+	CreateMapValue      = bindings.CreateMapValue
+	CreateUnionValue    = bindings.CreateUnionValue
 	GetMapSize          = bindings.GetMapSize
 	GetMapKey           = bindings.GetMapKey
 	GetMapValue         = bindings.GetMapValue
@@ -520,6 +529,7 @@ var (
 	CreateEnumValue     = bindings.CreateEnumValue
 	GetEnumValue        = bindings.GetEnumValue
 	GetStructChild      = bindings.GetStructChild
+	ValueToString       = bindings.ValueToString
 )
 
 // Logical type interface.
@@ -572,6 +582,8 @@ var (
 // Vector interface.
 
 var (
+	CreateVector                 = bindings.CreateVector
+	DestroyVector                = bindings.DestroyVector
 	VectorGetColumnType          = bindings.VectorGetColumnType
 	VectorGetData                = bindings.VectorGetData
 	VectorGetValidity            = bindings.VectorGetValidity
@@ -584,6 +596,9 @@ var (
 	ListVectorReserve            = bindings.ListVectorReserve
 	StructVectorGetChild         = bindings.StructVectorGetChild
 	ArrayVectorGetChild          = bindings.ArrayVectorGetChild
+	SliceVector                  = bindings.SliceVector
+	VectorReferenceValue         = bindings.VectorReferenceValue
+	VectorReferenceVector        = bindings.VectorReferenceVector
 )
 
 // Validity mask functions.
@@ -607,14 +622,27 @@ var (
 	ScalarFunctionAddParameter       = bindings.ScalarFunctionAddParameter
 	ScalarFunctionSetReturnType      = bindings.ScalarFunctionSetReturnType
 	ScalarFunctionSetExtraInfo       = bindings.ScalarFunctionSetExtraInfo
+	ScalarFunctionSetBind            = bindings.ScalarFunctionSetBind
+	ScalarFunctionSetBindData        = bindings.ScalarFunctionSetBindData
+	ScalarFunctionBindSetError       = bindings.ScalarFunctionBindSetError
 	ScalarFunctionSetFunction        = bindings.ScalarFunctionSetFunction
 	RegisterScalarFunction           = bindings.RegisterScalarFunction
 	ScalarFunctionGetExtraInfo       = bindings.ScalarFunctionGetExtraInfo
+	ScalarFunctionGetBindData        = bindings.ScalarFunctionGetBindData
+	ScalarFunctionGetClientContext   = bindings.ScalarFunctionGetClientContext
 	ScalarFunctionSetError           = bindings.ScalarFunctionSetError
 	CreateScalarFunctionSet          = bindings.CreateScalarFunctionSet
 	DestroyScalarFunctionSet         = bindings.DestroyScalarFunctionSet
 	AddScalarFunctionToSet           = bindings.AddScalarFunctionToSet
 	RegisterScalarFunctionSet        = bindings.RegisterScalarFunctionSet
+)
+
+// Selection vector functions.
+
+var (
+	CreateSelectionVector     = bindings.CreateSelectionVector
+	DestroySelectionVector    = bindings.DestroySelectionVector
+	SelectionVectorGetDataPtr = bindings.SelectionVectorGetDataPtr
 )
 
 // Table functions.
