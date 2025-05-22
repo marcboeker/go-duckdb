@@ -32,5 +32,5 @@ test.static.lib.darwin.arm64:
 	mkdir static-dir && \
 	cd static-dir && \
 	curl -OL https://github.com/duckdb/duckdb/releases/download/${VERSION}/static-libs-osx-arm64.zip && \
-	unzip static-lib-osx-arm64.zip && \
+	unzip static-libs-osx-arm64.zip && \
 	cp libduckdb_bundle.a libduckdb.a
