@@ -91,7 +91,7 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Run Dynamic Lib Tests
         run: |
-          make test.dynamic.lib FILENAME=${{ matrix.filename }} VERSION=v1.2.0
+          make test.dynamic.lib FILENAME=${{ matrix.filename }} VERSION=v1.3.0
           CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L${SRCDIR}dynamic-dir" ${{ matrix.ld_path_env_name }}=${SRCDIR}dynamic-dir go test -tags=duckdb_use_lib
   test-static-lib-darwin-arm64:
     name: Static Lib Tests Darwin ARM64
@@ -110,5 +110,5 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Run Static Lib Tests Darwin ARM64
         run: |
-          make test.static.lib.darwin.arm64 VERSION=v1.2.0
+          make test.static.lib.darwin.arm64 VERSION=v1.3.0
           CGO_ENABLED=1 CPPFLAGS="-DDUCKDB_STATIC_BUILD" CGO_LDFLAGS="-lduckdb -lc++ -L${SRCDIR}static-dir" go test -tags=duckdb_use_static_lib
