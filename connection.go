@@ -198,3 +198,28 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 
 	return conn.prepareExtractedStmt(*stmts, count-1)
 }
+
+func GetTableNames(c *sql.Conn, query string, qualified bool) ([]string, error) {
+	var v mapping.Value
+	err := c.Raw(func(driverConn any) error {
+		conn := driverConn.(*Conn)
+		v = mapping.GetTableNames(conn.conn, query, qualified)
+		return nil
+	})
+	defer mapping.DestroyValue(&v)
+	if err != nil {
+		return nil, err
+	}
+
+	var tableNames []string
+	size := mapping.GetListSize(v)
+	for i := mapping.IdxT(0); i < size; i++ {
+		func() {
+			child := mapping.GetListChild(v, i)
+			defer mapping.DestroyValue(&child)
+			tableNames = append(tableNames, mapping.GetVarchar(child))
+		}()
+	}
+
+	return tableNames, nil
+}
