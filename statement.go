@@ -508,25 +508,35 @@ func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 
 	mainDoneCh := make(chan struct{})
 	bgDoneCh := make(chan struct{})
+
+	// go-routine waiting to receive on the context or main channel.
 	go func() {
 		select {
+		// Await an interrupt on the context.
 		case <-ctx.Done():
 			mapping.Interrupt(s.conn.conn)
-			close(bgDoneCh)
-			return
+			break
+		// Await a done-signal on the main channel.
+		// Reading from a closed channel succeeds immediately.
 		case <-mainDoneCh:
-			close(bgDoneCh)
-			return
+			break
 		}
+		close(bgDoneCh)
 	}()
 
 	var res mapping.Result
 	state := mapping.ExecutePending(pendingRes, &res)
+
+	// We finished executing the pending query.
+	// Close the main channel.
 	close(mainDoneCh)
-	// also wait for background goroutine to finish
-	// sometimes the bg goroutine is not scheduled immediately and by that time if another query is running on this connection
-	// it can cancel that query so need to wait for it to finish as well
+
+	// Wait for the background go-routine to finish, too.
+	// Sometimes the go-routine is not scheduled immediately.
+	// By the time it is scheduled, another query might be running on this connection.
+	// If we don't wait for the go-routine to finish, it can cancel that new query.
 	<-bgDoneCh
+
 	if state == mapping.StateError {
 		if ctx.Err() != nil {
 			mapping.DestroyResult(&res)
@@ -537,6 +547,7 @@ func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 		mapping.DestroyResult(&res)
 		return nil, err
 	}
+
 	return &res, nil
 }
 
