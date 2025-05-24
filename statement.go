@@ -5,10 +5,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"math/big"
-	"time"
-
 	"github.com/marcboeker/go-duckdb/mapping"
+	"math/big"
 )
 
 type StmtType mapping.StatementType
@@ -260,21 +258,21 @@ func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, 
 	return state, nil
 }
 
-func (s *Stmt) tryBindComplexValue(val driver.NamedValue, t Type, n int) (mapping.State, error) {
-	switch val.Value.(type) {
-	case time.Time:
-		// Fallback to TIMESTAMP, if we cannot know the exact type.
-		return s.bindTimestamp(val, TYPE_TIMESTAMP, n)
+func (s *Stmt) bindValueByReflection(val driver.NamedValue, n int) (mapping.State, error) {
+	_, mappedVal, err := createValueByReflection(val.Value)
+	defer mapping.DestroyValue(mappedVal)
+	if err != nil {
+		return mapping.StateError, addIndexToError(err, n+1)
 	}
-	name := typeToStringMap[t]
-	return mapping.StateError, addIndexToError(unsupportedTypeError(name), n+1)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *mappedVal)
+	return state, nil
 }
 
 func (s *Stmt) bindComplexValue(val driver.NamedValue, n int, t Type, name string) (mapping.State, error) {
 	// We could not resolve this parameter when binding the query.
 	// Fall back to the Go type.
 	if t == TYPE_INVALID {
-		return s.tryBindComplexValue(val, t, n)
+		return s.bindValueByReflection(val, n)
 	}
 
 	switch t {

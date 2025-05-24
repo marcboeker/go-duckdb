@@ -534,3 +534,28 @@ func TestBindJSON(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, string(jsonData), str)
 }
+
+func TestPrepareComplexQueryParameter(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.Background()
+	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(
+		arr_float float[2]
+	)`)
+
+	// Insert parameters.
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES (?)`,
+		[]float32{7, 1})
+	require.NoError(t, err)
+
+	prepared, err := db.Prepare(`SELECT list_value(?,?), list_cosine_distance(?,?)`)
+	defer closePreparedWrapper(t, prepared)
+	require.NoError(t, err)
+
+	var arr Composite[[][]int32]
+	var dis Composite[float32]
+	// Test with specific slice types.
+	err = prepared.QueryRow([]int{1}, []int64{1}, []float32{0.1, 0.2, 0.3}, []float32{0.2, 0.3, 0.4}).Scan(&arr, &dis)
+	require.NoError(t, err)
+}
