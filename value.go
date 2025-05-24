@@ -3,6 +3,7 @@ package duckdb
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -67,34 +68,11 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 }
 
 func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
-	var vv mapping.Value
-	var err error
-	t := Type(mapping.GetTypeId(lt))
+	t := mapping.GetTypeId(lt)
+	if r := createValueByTypeId(t, v); r != nil {
+		return r, nil
+	}
 	switch t {
-	case TYPE_BOOLEAN:
-		vv, err = mapping.CreateBool(v.(bool)), nil
-	case TYPE_TINYINT:
-		vv, err = mapping.CreateInt8(v.(int8)), nil
-	case TYPE_SMALLINT:
-		vv, err = mapping.CreateInt16(v.(int16)), nil
-	case TYPE_INTEGER:
-		vv, err = mapping.CreateInt32(v.(int32)), nil
-	case TYPE_BIGINT:
-		vv, err = mapping.CreateInt64(v.(int64)), nil
-	case TYPE_UTINYINT:
-		vv, err = mapping.CreateUInt8(v.(uint8)), nil
-	case TYPE_USMALLINT:
-		vv, err = mapping.CreateUInt16(v.(uint16)), nil
-	case TYPE_UINTEGER:
-		vv, err = mapping.CreateUInt32(v.(uint32)), nil
-	case TYPE_UBIGINT:
-		vv, err = mapping.CreateUInt64(v.(uint64)), nil
-	case TYPE_FLOAT:
-		vv, err = mapping.CreateFloat(v.(float32)), nil
-	case TYPE_DOUBLE:
-		vv, err = mapping.CreateDouble(v.(float64)), nil
-	case TYPE_VARCHAR:
-		vv, err = mapping.CreateVarchar(v.(string)), nil
 	case TYPE_ARRAY:
 		return getMappedSliceValue(lt, t, v)
 	case TYPE_LIST:
@@ -104,8 +82,181 @@ func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
 	default:
 		return nil, unsupportedTypeError(reflect.TypeOf(v).Name())
 	}
+}
 
-	return &vv, err
+func createValueByTypeId(t mapping.Type, v any) *mapping.Value {
+	switch t {
+	case TYPE_SQLNULL:
+		return toPtr(mapping.CreateNullValue())
+	case TYPE_BOOLEAN:
+		return toPtr(mapping.CreateBool(v.(bool)))
+	case TYPE_TINYINT:
+		return toPtr(mapping.CreateInt8(v.(int8)))
+	case TYPE_SMALLINT:
+		return toPtr(mapping.CreateInt16(v.(int16)))
+	case TYPE_INTEGER:
+		return toPtr(mapping.CreateInt32(v.(int32)))
+	case TYPE_BIGINT:
+		return toPtr(mapping.CreateInt64(v.(int64)))
+	case TYPE_UTINYINT:
+		return toPtr(mapping.CreateUInt8(v.(uint8)))
+	case TYPE_USMALLINT:
+		return toPtr(mapping.CreateUInt16(v.(uint16)))
+	case TYPE_UINTEGER:
+		return toPtr(mapping.CreateUInt32(v.(uint32)))
+	case TYPE_UBIGINT:
+		return toPtr(mapping.CreateUInt64(v.(uint64)))
+	case TYPE_FLOAT:
+		return toPtr(mapping.CreateFloat(v.(float32)))
+	case TYPE_DOUBLE:
+		return toPtr(mapping.CreateDouble(v.(float64)))
+	case TYPE_VARCHAR:
+		return toPtr(mapping.CreateVarchar(v.(string)))
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		vv, err := getMappedTimestamp(v)
+		if err != nil {
+			return nil
+		}
+		return toPtr(mapping.CreateTimestamp(*vv))
+	case TYPE_TIMESTAMP_S:
+		vv, err := getMappedTimestampS(v)
+		if err != nil {
+			return nil
+		}
+		return toPtr(mapping.CreateTimestampS(*vv))
+	case TYPE_TIMESTAMP_MS:
+		vv, err := getMappedTimestampMS(v)
+		if err != nil {
+			return nil
+		}
+		return toPtr(mapping.CreateTimestampMS(*vv))
+	case TYPE_TIMESTAMP_NS:
+		vv, err := getMappedTimestampNS(v)
+		if err != nil {
+			return nil
+		}
+		return toPtr(mapping.CreateTimestampNS(*vv))
+	}
+	return nil
+}
+
+func toPtr[T any](x T) *T {
+	return &x
+}
+
+func getPointerValue(v any) any {
+	for {
+		if v == nil {
+			return nil
+		}
+		vo := reflect.ValueOf(v)
+		if vo.Kind() == reflect.Ptr {
+			if vo.IsNil() {
+				return nil
+			}
+			v = vo.Elem().Interface()
+			continue
+		}
+		return v
+	}
+}
+
+func createValueByReflection(v any) (Type, *mapping.Value, error) {
+	t := TYPE_INVALID
+	switch v.(type) {
+	case nil:
+		t = TYPE_SQLNULL
+	case bool:
+		t = TYPE_BOOLEAN
+	case int8:
+		t = TYPE_TINYINT
+	case int16:
+		t = TYPE_SMALLINT
+	case int32:
+		t = TYPE_INTEGER
+	case int64:
+		t = TYPE_BIGINT
+	case int:
+		t = TYPE_BIGINT
+		v = int64(v.(int))
+	case uint8:
+		t = TYPE_UTINYINT
+	case uint16:
+		t = TYPE_USMALLINT
+	case uint32:
+		t = TYPE_UINTEGER
+	case uint64:
+		t = TYPE_UBIGINT
+	case uint:
+		t = TYPE_UBIGINT
+		v = uint64(v.(uint))
+	case float32:
+		t = TYPE_FLOAT
+	case float64:
+		t = TYPE_DOUBLE
+	case string:
+		t = TYPE_VARCHAR
+	case []byte:
+		t = TYPE_VARCHAR
+		v = string(v.([]byte))
+	case time.Time:
+		t = TYPE_TIMESTAMP
+	}
+	if t != TYPE_INVALID {
+		return t, createValueByTypeId(t, v), nil
+	}
+	r := reflect.Indirect(reflect.ValueOf(v))
+	if r.IsNil() {
+		t = TYPE_SQLNULL
+		return t, createValueByTypeId(t, v), nil
+	}
+	switch r.Kind() {
+	case reflect.Ptr:
+		return createValueByReflection(getPointerValue(v))
+	case reflect.Slice:
+		vv, err := getMappedSliceValueByReflection(r.Interface(), false)
+		return TYPE_LIST, vv, err
+	case reflect.Array:
+		vv, err := getMappedSliceValueByReflection(r.Interface(), true)
+		return TYPE_ARRAY, vv, err
+	default:
+		return t, nil, unsupportedTypeError(reflect.TypeOf(v).Name())
+	}
+}
+
+func getMappedSliceValueByReflection[T any](val T, isArray bool) (*mapping.Value, error) {
+	createFunc := mapping.CreateListValue
+	if isArray {
+		createFunc = mapping.CreateArrayValue
+	}
+	vSlice, err := extractSlice(val)
+	if err != nil {
+		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
+	}
+	var childValues []mapping.Value
+	defer destroyValueSlice(childValues)
+	if len(vSlice) == 0 {
+		lt := mapping.CreateLogicalType(TYPE_SQLNULL)
+		defer destroyLogicalTypes(toPtr([]mapping.LogicalType{lt}))
+		return toPtr(createFunc(lt, childValues)), nil
+	}
+	elementType := TYPE_INVALID
+	for _, v := range vSlice {
+		et, vv, err := createValueByReflection(v)
+		if err != nil {
+			return nil, err
+		}
+		if elementType == TYPE_INVALID || elementType == TYPE_SQLNULL {
+			elementType = et
+		}
+		childValues = append(childValues, *vv)
+	}
+	if elementType == TYPE_INVALID {
+		return nil, unsupportedTypeError(reflect.TypeOf(val).Name())
+	}
+	lt := mapping.CreateLogicalType(elementType)
+	defer destroyLogicalTypes(toPtr([]mapping.LogicalType{lt}))
+	return toPtr(createFunc(lt, childValues)), nil
 }
 
 func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping.Value, error) {
