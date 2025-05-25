@@ -430,7 +430,9 @@ func TestBindWithoutResolvedParams(t *testing.T) {
 	// Type without a fallback.
 	s := []int32{1}
 	r = db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, s, s)
-	require.Contains(t, r.Err().Error(), "unsupported data type")
+	require.NoError(t, r.Scan(&a, &b))
+	require.Equal(t, "[1]", a)
+	require.Equal(t, "[1]", b)
 }
 
 func TestBindTimestampTypes(t *testing.T) {
