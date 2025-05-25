@@ -558,6 +558,30 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	var arr Composite[[][]int32]
 	var dis Composite[float32]
 	// Test with specific slice types.
-	err = prepared.QueryRow([]int{1}, []int64{1}, []float32{0.1, 0.2, 0.3}, []float32{0.2, 0.3, 0.4}).Scan(&arr, &dis)
+	err = prepared.QueryRow([]int{1, 2}, []int64{1}, []float32{0.1, 0.2, 0.3}, []float32{0.2, 0.3, 0.4}).Scan(&arr, &dis)
 	require.NoError(t, err)
+	require.Equal(t, [][]int32{{1, 2}, {1}}, arr.Get())
+	require.True(t, dis.Get() > 0)
+
+	dynamicPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, dynamicPrepare)
+	require.NoError(t, err)
+
+	var res Composite[[]any]
+	err = dynamicPrepare.QueryRow([]any{}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(res.Get()))
+
+	// The statement type has already been bind as a SQL_NULL LIST in previous query
+	err = dynamicPrepare.QueryRow([]any{1}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, []any{nil}, res.Get())
+
+	ptrPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, ptrPrepare)
+	require.NoError(t, err)
+
+	err = ptrPrepare.QueryRow([]any{toPtr(1)}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, []int64{1}, res.Get())
 }

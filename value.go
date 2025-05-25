@@ -161,6 +161,21 @@ func getPointerValue(v any) any {
 	}
 }
 
+func isNil(i any) bool {
+	if i == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(i)
+	kind := value.Kind()
+
+	switch kind {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.Interface, reflect.Slice:
+		return value.IsNil()
+	}
+	return false
+}
+
 func createValueByReflection(v any) (Type, *mapping.Value, error) {
 	t := TYPE_INVALID
 	switch v.(type) {
@@ -205,11 +220,11 @@ func createValueByReflection(v any) (Type, *mapping.Value, error) {
 	if t != TYPE_INVALID {
 		return t, createValueByTypeId(t, v), nil
 	}
-	r := reflect.Indirect(reflect.ValueOf(v))
-	if r.IsNil() {
+	if isNil(v) {
 		t = TYPE_SQLNULL
 		return t, createValueByTypeId(t, v), nil
 	}
+	r := reflect.ValueOf(v)
 	switch r.Kind() {
 	case reflect.Ptr:
 		return createValueByReflection(getPointerValue(v))
