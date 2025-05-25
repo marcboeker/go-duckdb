@@ -5,10 +5,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"math/big"
-	"reflect"
-
 	"github.com/marcboeker/go-duckdb/mapping"
+	"math/big"
 )
 
 // Conn holds a connection to a DuckDB database.
@@ -39,11 +37,6 @@ func (conn *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 	switch nv.Value.(type) {
 	case *big.Int, Interval, []any, []bool, []int8, []int16, []int32, []int64, []int, []uint8, []uint16,
 		[]uint32, []uint64, []uint, []float32, []float64, []string, map[string]any:
-		return nil
-	}
-	vo := reflect.ValueOf(nv.Value)
-	switch vo.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Array:
 		return nil
 	}
 	return driver.ErrSkip
