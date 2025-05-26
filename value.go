@@ -178,7 +178,7 @@ func isNil(i any) bool {
 
 func createValueByReflection(v any) (Type, *mapping.Value, error) {
 	t := TYPE_INVALID
-	switch v.(type) {
+	switch vv := v.(type) {
 	case nil:
 		t = TYPE_SQLNULL
 	case bool:
@@ -193,7 +193,7 @@ func createValueByReflection(v any) (Type, *mapping.Value, error) {
 		t = TYPE_BIGINT
 	case int:
 		t = TYPE_BIGINT
-		v = int64(v.(int))
+		v = int64(vv)
 	case uint8:
 		t = TYPE_UTINYINT
 	case uint16:
@@ -204,7 +204,7 @@ func createValueByReflection(v any) (Type, *mapping.Value, error) {
 		t = TYPE_UBIGINT
 	case uint:
 		t = TYPE_UBIGINT
-		v = uint64(v.(uint))
+		v = uint64(vv)
 	case float32:
 		t = TYPE_FLOAT
 	case float64:
@@ -213,7 +213,7 @@ func createValueByReflection(v any) (Type, *mapping.Value, error) {
 		t = TYPE_VARCHAR
 	case []byte:
 		t = TYPE_VARCHAR
-		v = string(v.([]byte))
+		v = string(vv)
 	case time.Time:
 		t = TYPE_TIMESTAMP
 	}
