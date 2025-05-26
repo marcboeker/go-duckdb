@@ -276,6 +276,10 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int, t Type, name strin
 	}
 
 	switch t {
+	case TYPE_UUID:
+		if ss, ok := val.Value.(fmt.Stringer); ok {
+			return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), ss.String()), nil
+		}
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
 		return s.bindTimestamp(val, t, n)
 	case TYPE_DATE:

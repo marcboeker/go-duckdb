@@ -220,6 +220,9 @@ func createValueByReflection(v any) (Type, *mapping.Value, error) {
 	if t != TYPE_INVALID {
 		return t, createValueByTypeId(t, v), nil
 	}
+	if ss, ok := v.(fmt.Stringer); ok {
+		return TYPE_VARCHAR, createValueByTypeId(TYPE_VARCHAR, ss.String()), nil
+	}
 	if isNil(v) {
 		t = TYPE_SQLNULL
 		return t, createValueByTypeId(t, v), nil

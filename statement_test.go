@@ -588,4 +588,8 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	arrayPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
 	defer closePreparedWrapper(t, arrayPrepare)
 	require.NoError(t, err)
+
+	err = arrayPrepare.QueryRow([1]any{123}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, []any{int64(123)}, res.Get())
 }
