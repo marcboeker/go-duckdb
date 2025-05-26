@@ -198,3 +198,20 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 
 	return conn.prepareExtractedStmt(*stmts, count-1)
 }
+
+// GetConnectionId returns the connection ID of the internal DuckDB connection.
+// It expects a *sql.Conn connection.
+func GetConnectionId(c *sql.Conn) (uint64, error) {
+	var connId uint64
+
+	err := c.Raw(func(driverConn any) error {
+		conn := driverConn.(*Conn)
+		var ctx mapping.ClientContext
+		mapping.ConnectionGetClientContext(conn.conn, &ctx)
+		defer mapping.DestroyClientContext(&ctx)
+		connId = uint64(mapping.ClientContextGetConnectionId(ctx))
+		return nil
+	})
+
+	return connId, err
+}
