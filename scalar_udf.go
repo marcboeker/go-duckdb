@@ -53,11 +53,6 @@ type BindData struct {
 	ConnId     uint64
 }
 
-type scalarFuncInfo interface {
-	// Config returns ScalarFuncConfig to configure the scalar function.
-	Config() ScalarFuncConfig
-}
-
 type (
 	// RowExecutorFn TODO.
 	RowExecutorFn func(values []driver.Value) (any, error)
@@ -82,7 +77,8 @@ type ScalarFuncExecutor struct {
 // ScalarFunc is the user-defined scalar function interface.
 // Any scalar function must implement a Config function, and an Executor function.
 type ScalarFunc interface {
-	scalarFuncInfo
+	// Config returns ScalarFuncConfig to configure the scalar function.
+	Config() ScalarFuncConfig
 	// Executor returns ScalarFuncExecutor to execute the scalar function.
 	Executor() ScalarFuncExecutor
 }
