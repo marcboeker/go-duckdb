@@ -6,6 +6,9 @@ typedef void (*scalar_udf_callback_t)(void *, void *, void *);
 
 void scalar_udf_delete_callback(void *);
 typedef void (*scalar_udf_delete_callback_t)(void *);
+
+void scalar_udf_bind_callback(void *);
+typedef void (*scalar_udf_bind_callback_t)(void *);
 */
 import "C"
 
@@ -42,12 +45,31 @@ type ScalarFuncConfig struct {
 	SpecialNullHandling bool
 }
 
+// BindData TODO: How should this look like?
+// TODO: In future PRs, clients should be able to set their custom data here during `func Binder(BindInfo) any`,
+// TODO: so they can access is during execution.
+type BindData struct {
+	ClientData any
+	ConnId     int64
+}
+
+// ScalarExecutorType TODO: This is not pretty - should/can we still change the scalar function interface to
+// TODO: something more similar to the table function interface?
+type ScalarExecutorType = int
+
+const (
+	ScalarExecutorTypeRow ScalarExecutorType = iota
+	ScalarExecutorTypeRowWithBindData
+)
+
 // ScalarFuncExecutor contains the callback function to execute a user-defined scalar function.
-// Currently, its only field is a row-based executor.
 type ScalarFuncExecutor struct {
+	t ScalarExecutorType
 	// RowExecutor accepts a row-based execution function.
 	// []driver.Value contains the row values, and it returns the row execution result, or error.
 	RowExecutor func(values []driver.Value) (any, error)
+	// TODO.
+	RowExecutorWithBindData func(bindData BindData, values []driver.Value) (any, error)
 }
 
 // ScalarFunc is the user-defined scalar function interface.
@@ -126,6 +148,9 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 	input := mapping.DataChunk{Ptr: inputPtr}
 	output := mapping.Vector{Ptr: outputPtr}
 
+	bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
+	bindData := getPinned[BindData](bindDataPtr)
+
 	extraInfo := mapping.ScalarFunctionGetExtraInfo(functionInfo)
 	function := getPinned[ScalarFunc](extraInfo)
 
@@ -176,10 +201,19 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 		}
 
 		// Execute the function.
+		// TODO: Perform the switch outside of the loop.
 		var val any
-		if val, err = executor.RowExecutor(values); err != nil {
-			mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
-			return
+		switch executor.t {
+		case ScalarExecutorTypeRow:
+			if val, err = executor.RowExecutor(values); err != nil {
+				mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+				return
+			}
+		case ScalarExecutorTypeRowWithBindData:
+			if val, err = executor.RowExecutorWithBindData(bindData, values); err != nil {
+				mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+				return
+			}
 		}
 
 		// Write the result to the output chunk.
@@ -195,6 +229,34 @@ func scalar_udf_delete_callback(info unsafe.Pointer) {
 	h := (*cgo.Handle)(info)
 	h.Value().(unpinner).unpin()
 	h.Delete()
+}
+
+//export scalar_udf_bind_callback
+func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
+	bindInfo := mapping.BindInfo{Ptr: bindInfoPtr}
+
+	// FIXME: Once available through the duckdb-go-bindings (and the C API),
+	// FIXME: we want to get extraInfo here, to access user-defined `func Binder(BindInfo) any` callbacks.
+	// FIXME: With these callbacks, we can set additional user-defined bind data.
+
+	var ctx mapping.ClientContext
+	mapping.ScalarFunctionGetClientContext(bindInfo, &ctx)
+	defer mapping.DestroyClientContext(&ctx)
+
+	connId := mapping.ClientContextGetConnectionId(ctx)
+	data := BindData{ConnId: connId}
+
+	// Pin the bind data.
+	value := pinnedValue[BindData]{
+		pinner: &runtime.Pinner{},
+		value:  data,
+	}
+	h := cgo.NewHandle(value)
+	value.pinner.Pin(&h)
+
+	// Set the bind data.
+	deleteCallbackPtr := unsafe.Pointer(C.scalar_udf_delete_callback_t(C.scalar_udf_delete_callback))
+	mapping.ScalarFunctionSetBindData(bindInfo, unsafe.Pointer(&h), deleteCallbackPtr)
 }
 
 func registerInputParams(config ScalarFuncConfig, f mapping.ScalarFunction) error {
