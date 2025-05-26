@@ -50,35 +50,52 @@ type ScalarFuncConfig struct {
 // TODO: so they can access is during execution.
 type BindData struct {
 	ClientData any
-	ConnId     int64
+	ConnId     uint64
 }
 
-// ScalarExecutorType TODO: This is not pretty - should/can we still change the scalar function interface to
-// TODO: something more similar to the table function interface?
-type ScalarExecutorType = int
-
-const (
-	ScalarExecutorTypeRow ScalarExecutorType = iota
-	ScalarExecutorTypeRowWithBindData
-)
-
-// ScalarFuncExecutor contains the callback function to execute a user-defined scalar function.
-type ScalarFuncExecutor struct {
-	t ScalarExecutorType
-	// RowExecutor accepts a row-based execution function.
-	// []driver.Value contains the row values, and it returns the row execution result, or error.
-	RowExecutor func(values []driver.Value) (any, error)
-	// TODO.
-	RowExecutorWithBindData func(bindData BindData, values []driver.Value) (any, error)
-}
-
-// ScalarFunc is the user-defined scalar function interface.
-// Any scalar function must implement a Config function, and an Executor function.
-type ScalarFunc interface {
+type scalarFuncInfo interface {
 	// Config returns ScalarFuncConfig to configure the scalar function.
 	Config() ScalarFuncConfig
+}
+
+// ScalarFuncExecutor contains the row-based function to execute a user-defined scalar function.
+type ScalarFuncExecutor struct {
+	// RowExecutor accepts a row-based execution function.
+	// []driver.Value contains the row values.
+	// It returns the row execution result, or error.
+	RowExecutor func(values []driver.Value) (any, error)
+}
+
+// ScalarFunc is the default row-based user-defined scalar function interface.
+// Any scalar function must implement a Config function, and an Executor function.
+type ScalarFunc interface {
+	scalarFuncInfo
 	// Executor returns ScalarFuncExecutor to execute the scalar function.
 	Executor() ScalarFuncExecutor
+}
+
+// ScalarFuncExecutorWithBindData contains the row-based function to execute a user-defined scalar function.
+// It has access to any data set during the binding phase of the scalar function.
+type ScalarFuncExecutorWithBindData struct {
+	// RowExecutor accepts a row-based execution function.
+	// BindData contains any data set during the binding phase.
+	// []driver.Value contains the row values.
+	// It returns the row execution result, or error.
+	RowExecutor func(bindData BindData, values []driver.Value) (any, error)
+}
+
+// ScalarFuncWithBindData is a row-based user-defined scalar function interface.
+// Any scalar function must implement a Config function, and an Executor function.
+// In addition to the default ScalarFunc interface, ScalarFuncWithBindData has
+// access to any data set during the binding phase.
+type ScalarFuncWithBindData interface {
+	scalarFuncInfo
+	// Executor returns ScalarFuncExecutorWithBindData to execute the scalar function.
+	Executor() ScalarFuncExecutorWithBindData
+}
+
+type scalarFuncWrapper struct {
+	f any
 }
 
 // RegisterScalarUDF registers a user-defined scalar function.
@@ -142,17 +159,66 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 	return err
 }
 
+func getColumnValues(inputChunk *DataChunk, outputChunk *DataChunk, values *[]driver.Value,
+	functionInfo *mapping.FunctionInfo, rowIdx int, nullInNullOut bool,
+) (bool, error) {
+	// Get each column value.
+	var err error
+	for colIdx := 0; colIdx < len(*values); colIdx++ {
+		if (*values)[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
+			mapping.ScalarFunctionSetError(*functionInfo, getError(errAPI, err).Error())
+			return false, err
+		}
+
+		// NULL handling.
+		if nullInNullOut && (*values)[colIdx] == nil {
+			if err = outputChunk.SetValue(0, rowIdx, nil); err != nil {
+				mapping.ScalarFunctionSetError(*functionInfo, getError(errAPI, err).Error())
+				return false, err
+			}
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func executeRow(f *ScalarFunc, inputChunk *DataChunk, outputChunk *DataChunk, functionInfo *mapping.FunctionInfo) {
+	executor := (*f).Executor()
+	nullInNullOut := !(*f).Config().SpecialNullHandling
+	values := make([]driver.Value, len(inputChunk.columns))
+	rowCount := inputChunk.GetSize()
+
+	// Execute the user-defined scalar function for each row.
+	var val any
+	var err error
+	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
+		// Get each column value.
+		if nullRow, e := getColumnValues(inputChunk, outputChunk, &values, functionInfo, rowIdx, nullInNullOut); e != nil {
+			return
+		} else if nullRow {
+			continue
+		}
+
+		// Execute the user-defined scalar function.
+		if val, err = executor.RowExecutor(values); err != nil {
+			mapping.ScalarFunctionSetError(*functionInfo, getError(errAPI, err).Error())
+			return
+		}
+
+		// Write the result to the output chunk.
+		if err = outputChunk.SetValue(0, rowIdx, val); err != nil {
+			mapping.ScalarFunctionSetError(*functionInfo, getError(errAPI, err).Error())
+			return
+		}
+	}
+}
+
 //export scalar_udf_callback
 func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
 	functionInfo := mapping.FunctionInfo{Ptr: functionInfoPtr}
 	input := mapping.DataChunk{Ptr: inputPtr}
 	output := mapping.Vector{Ptr: outputPtr}
-
-	bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
-	bindData := getPinned[BindData](bindDataPtr)
-
-	extraInfo := mapping.ScalarFunctionGetExtraInfo(functionInfo)
-	function := getPinned[ScalarFunc](extraInfo)
 
 	// Initialize the input chunk.
 	var inputChunk DataChunk
@@ -168,59 +234,16 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 		return
 	}
 
-	executor := function.Executor()
-	nullInNullOut := !function.Config().SpecialNullHandling
-	values := make([]driver.Value, len(inputChunk.columns))
-	columnCount := len(values)
-	rowCount := inputChunk.GetSize()
+	// bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
+	// bindData := getPinned[BindData](bindDataPtr)
 
-	// Execute the user-defined scalar function for each row.
-	var err error
-	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
-		nullRow := false
+	extraInfo := mapping.ScalarFunctionGetExtraInfo(functionInfo)
+	function := getPinned[scalarFuncWrapper](extraInfo)
 
-		// Get each column value.
-		for colIdx := 0; colIdx < columnCount; colIdx++ {
-			if values[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
-				mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
-				return
-			}
-
-			// NULL handling.
-			if nullInNullOut && values[colIdx] == nil {
-				if err = outputChunk.SetValue(0, rowIdx, nil); err != nil {
-					mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
-					return
-				}
-				nullRow = true
-				break
-			}
-		}
-		if nullRow {
-			continue
-		}
-
-		// Execute the function.
-		// TODO: Perform the switch outside of the loop.
-		var val any
-		switch executor.t {
-		case ScalarExecutorTypeRow:
-			if val, err = executor.RowExecutor(values); err != nil {
-				mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
-				return
-			}
-		case ScalarExecutorTypeRowWithBindData:
-			if val, err = executor.RowExecutorWithBindData(bindData, values); err != nil {
-				mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
-				return
-			}
-		}
-
-		// Write the result to the output chunk.
-		if err = outputChunk.SetValue(0, rowIdx, val); err != nil {
-			mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
-			return
-		}
+	if f, ok := function.f.(ScalarFunc); ok {
+		executeRow(&f, &inputChunk, &outputChunk, &functionInfo)
+	} else {
+		// TODO: set error that function is invalid
 	}
 }
 
@@ -244,7 +267,7 @@ func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
 	defer mapping.DestroyClientContext(&ctx)
 
 	connId := mapping.ClientContextGetConnectionId(ctx)
-	data := BindData{ConnId: connId}
+	data := BindData{ConnId: uint64(connId)}
 
 	// Pin the bind data.
 	value := pinnedValue[BindData]{
@@ -336,9 +359,10 @@ func createScalarFunc(name string, f ScalarFunc) (mapping.ScalarFunction, error)
 	mapping.ScalarFunctionSetFunction(function, callbackPtr)
 
 	// Pin the ScalarFunc f.
-	value := pinnedValue[ScalarFunc]{
+	wrapper := scalarFuncWrapper{f}
+	value := pinnedValue[scalarFuncWrapper]{
 		pinner: &runtime.Pinner{},
-		value:  f,
+		value:  wrapper,
 	}
 	h := cgo.NewHandle(value)
 	value.pinner.Pin(&h)
