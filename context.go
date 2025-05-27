@@ -34,7 +34,7 @@ func (s *contextStore) store(connId uint64, ctx context.Context) func() {
 	s.m.Store(connId, ctx)
 
 	return func() {
-		s.m.Delete(connId)
+		s.delete(connId)
 	}
 }
 

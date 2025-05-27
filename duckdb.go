@@ -47,8 +47,7 @@ type Connector struct {
 	db mapping.Database
 	// Callback to perform additional initialization steps.
 	connInitFn func(execer driver.ExecerContext) error
-	// ctxStore stores the context of the latest query/exec/etc. function
-	// invoked per connection.
+	// ctxStore stores the context of the current query/exec/etc. of a connection.
 	ctxStore *contextStore
 	// True, if the connector has been closed, else false.
 	closed bool

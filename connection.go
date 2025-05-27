@@ -15,7 +15,7 @@ import (
 type Conn struct {
 	// The internal DuckDB connection.
 	conn mapping.Connection
-	// Internal DuckDB connection id.
+	// The internal DuckDB connection id.
 	id uint64
 	// The context store of the connector of this connection.
 	ctxStore *contextStore
@@ -274,7 +274,6 @@ func ConnId(c *sql.Conn) (uint64, error) {
 }
 
 // extractConnId extracts the connection id of a DuckDB connection.
-// It expects a valid and open mapping.Connection and returns the connection id as uint64.
 func extractConnId(conn mapping.Connection) uint64 {
 	var ctx mapping.ClientContext
 	mapping.ConnectionGetClientContext(conn, &ctx)

@@ -46,20 +46,17 @@ type ScalarFuncConfig struct {
 	SpecialNullHandling bool
 }
 
-// bindInfo TODO.
+// bindInfo holds bind data accessible during execution.
 type bindInfo struct {
 	connId uint64
 }
 
 type (
 	// RowExecutorFn is the type for any row-based execution function.
-	// values contains the row values.
-	// It returns the row execution result, or error.
+	// It takes the row values and returns the row execution result, or error.
 	RowExecutorFn func(values []driver.Value) (any, error)
 	// RowContextExecutorFn accepts a row-based execution function using a context.
-	// ctx is the current context of the connection.
-	// values contains the row values.
-	// It returns the row execution result, or error.
+	// It takes a context and the row values, and returns the row execution result, or error.
 	RowContextExecutorFn func(ctx context.Context, values []driver.Value) (any, error)
 )
 
@@ -81,7 +78,7 @@ type ScalarFunc interface {
 	Executor() ScalarFuncExecutor
 }
 
-// scalarFuncContext is a wrapper around a ScalarFunc providing an execution context.
+// scalarFuncContext wraps ScalarFunc and provides an execution context.
 type scalarFuncContext struct {
 	f        ScalarFunc
 	ctxStore *contextStore
@@ -92,8 +89,8 @@ func (s *scalarFuncContext) Config() ScalarFuncConfig {
 	return s.f.Config()
 }
 
-// RowExecutor returns a RowExecutorFn that executes the scalar function.
-// It uses the BindInfo to get the context for execution.
+// RowExecutor returns a RowExecutorFn executing the scalar function.
+// It uses the bindInfo to get the execution context.
 func (s *scalarFuncContext) RowExecutor(info *bindInfo) RowExecutorFn {
 	e := s.f.Executor()
 	if e.RowExecutor != nil {
