@@ -22,6 +22,7 @@ type (
 	anyTypeSUDF       struct{}
 	unionTestSUDF     struct{}
 	getConnIdUDF      struct{}
+	getContextValUDF  struct{}
 	errExecutorSUDF   struct{}
 	errInputNilSUDF   struct{}
 	errResultNilSUDF  struct{}
@@ -70,8 +71,24 @@ func constantError([]driver.Value) (any, error) {
 	return nil, errors.New("test invalid execution")
 }
 
-func getConnId(bindData BindData, values []driver.Value) (any, error) {
-	return bindData.ConnId, nil
+func getConnId(ctx context.Context, values []driver.Value) (any, error) {
+	id, _ := ConnectionId(ctx)
+	return id, nil
+}
+
+type testCtxKeyType string
+
+var testCtxKey testCtxKeyType = "test_context_key"
+
+func getContextVal(ctx context.Context, _ []driver.Value) (any, error) {
+	if ctx == nil {
+		return nil, errors.New("context is nil")
+	}
+	v, ok := ctx.Value(testCtxKey).(string)
+	if !ok {
+		return nil, errors.New("context does not contain test value")
+	}
+	return v, nil
 }
 
 func (*simpleSUDF) Config() ScalarFuncConfig {
@@ -132,7 +149,14 @@ func (*getConnIdUDF) Config() ScalarFuncConfig {
 }
 
 func (*getConnIdUDF) Executor() ScalarFuncExecutor {
-	return ScalarFuncExecutor{RowExecutorWithBindData: getConnId}
+	return ScalarFuncExecutor{RowContextExecutor: getConnId}
+}
+
+func (*getContextValUDF) Config() ScalarFuncConfig {
+	return ScalarFuncConfig{[]TypeInfo{}, currentInfo, nil, false, false}
+}
+func (*getContextValUDF) Executor() ScalarFuncExecutor {
+	return ScalarFuncExecutor{RowContextExecutor: getContextVal}
 }
 
 func (*errExecutorSUDF) Config() ScalarFuncConfig {
@@ -438,7 +462,7 @@ func TestGetConnIdScalarUDF(t *testing.T) {
 
 	conn1 := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn1)
-	conn1Id, err := GetConnectionId(conn1)
+	conn1Id, err := connId(conn1)
 	require.NoError(t, err)
 
 	currentInfo, err = NewTypeInfo(TYPE_UBIGINT)
@@ -450,7 +474,7 @@ func TestGetConnIdScalarUDF(t *testing.T) {
 
 	conn2 := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn2)
-	conn2Id, err := GetConnectionId(conn2)
+	conn2Id, err := connId(conn2)
 	require.NoError(t, err)
 
 	var connId uint64
@@ -461,6 +485,33 @@ func TestGetConnIdScalarUDF(t *testing.T) {
 	row = conn2.QueryRowContext(context.Background(), `SELECT get_conn_id() AS connId`)
 	require.NoError(t, row.Scan(&connId))
 	require.Equal(t, conn2Id, connId)
+}
+
+func TestGetContextValScalarUDF(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	conn := openConnWrapper(t, db, context.Background())
+	var err error
+	currentInfo, err = NewTypeInfo(TYPE_VARCHAR)
+	require.NoError(t, err)
+	var udf *getContextValUDF
+	err = RegisterScalarUDF(conn, "get_context_val", udf)
+	require.NoError(t, err)
+	closeConnWrapper(t, conn)
+
+	var res string
+	row := db.QueryRowContext(
+		context.WithValue(context.Background(), testCtxKey, "test_value1"),
+		`SELECT get_context_val() AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, "test_value1", res)
+
+	row = db.QueryRowContext(
+		context.WithValue(context.Background(), testCtxKey, "test_value2"),
+		`SELECT get_context_val() AS res`)
+	require.NoError(t, row.Scan(&res))
+	require.Equal(t, "test_value2", res)
 }
 
 func TestErrScalarUDF(t *testing.T) {
