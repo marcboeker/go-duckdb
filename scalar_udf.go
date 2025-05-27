@@ -192,9 +192,9 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 	nullInNullOut := !function.Config().SpecialNullHandling
 
 	bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
-	bindInfo := getPinned[bindInfo](bindDataPtr)
+	info := getPinned[bindInfo](bindDataPtr)
 
-	f := function.RowExecutor(&bindInfo)
+	f := function.RowExecutor(&info)
 	values := make([]driver.Value, len(inputChunk.columns))
 
 	// Execute the user-defined scalar function for each row.

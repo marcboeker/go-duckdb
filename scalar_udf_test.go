@@ -70,11 +70,13 @@ func constantError([]driver.Value) (any, error) {
 	return nil, errors.New("test invalid execution")
 }
 
+const connIdKey = "my_conn_id"
+
 func getConnId(ctx context.Context, values []driver.Value) (any, error) {
 	if ctx == nil {
 		return nil, errors.New("context is nil")
 	}
-	id, ok := ctx.Value("my_conn_id").(uint64)
+	id, ok := ctx.Value(connIdKey).(uint64)
 	if !ok {
 		return nil, errors.New("context does not contain the connection id")
 	}
@@ -460,14 +462,14 @@ func TestGetConnIdScalarUDF(t *testing.T) {
 	conn2Id, err := ConnId(conn2)
 	require.NoError(t, err)
 
-	ctx := context.WithValue(context.Background(), "my_conn_id", conn1Id)
+	ctx := context.WithValue(context.Background(), connIdKey, conn1Id)
 
 	var connId uint64
 	row := conn1.QueryRowContext(ctx, `SELECT get_conn_id() AS connId`)
 	require.NoError(t, row.Scan(&connId))
 	require.Equal(t, conn1Id, connId)
 
-	ctx = context.WithValue(context.Background(), "my_conn_id", conn2Id)
+	ctx = context.WithValue(context.Background(), connIdKey, conn2Id)
 
 	row = conn2.QueryRowContext(ctx, `SELECT get_conn_id() AS connId`)
 	require.NoError(t, row.Scan(&connId))
