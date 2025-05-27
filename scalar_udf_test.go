@@ -70,7 +70,7 @@ func constantError([]driver.Value) (any, error) {
 	return nil, errors.New("test invalid execution")
 }
 
-type testCtxKeyType = string
+type testCtxKeyType string
 
 const testCtxKey testCtxKeyType = "my_conn_id"
 
