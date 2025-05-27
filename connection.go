@@ -17,19 +17,19 @@ type Conn struct {
 	conn mapping.Connection
 	// Internal DuckDB connection id.
 	id uint64
-	// The context store of the connection.
-	ctxStore contextStore
+	// The context store of the connector of this connection.
+	ctxStore *contextStore
 	// True, if the connection has been closed, else false.
 	closed bool
 	// True, if the connection has an open transaction.
 	tx bool
 }
 
-func newConn(conn mapping.Connection, store contextStore) *Conn {
+func newConn(conn mapping.Connection, ctxStore *contextStore) *Conn {
 	return &Conn{
 		conn:     conn,
 		id:       extractConnId(conn),
-		ctxStore: store,
+		ctxStore: ctxStore,
 	}
 }
 
@@ -155,7 +155,7 @@ func (conn *Conn) Close() error {
 	}
 	conn.closed = true
 	mapping.Disconnect(&conn.conn)
-	conn.ctxStore.remove(conn.id)
+	conn.ctxStore.delete(conn.id)
 
 	return nil
 }
@@ -278,22 +278,22 @@ func extractConnId(conn mapping.Connection) uint64 {
 
 // setContext sets the current context for the connection.
 func (conn *Conn) setContext(ctx context.Context) {
-	conn.ctxStore.set(conn.id, ctx)
+	conn.ctxStore.store(conn.id, ctx)
 }
 
 // contextStoreFromConn extracts the context store of a *sql.Conn connection.
-func contextStoreFromConn(c *sql.Conn) (contextStore, error) {
-	var store contextStore
+func contextStoreFromConn(c *sql.Conn) (*contextStore, error) {
+	var ctxStore *contextStore
 
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
 		if conn.closed {
 			return errClosedCon
 		}
-		store = conn.ctxStore
+		ctxStore = conn.ctxStore
 
 		return nil
 	})
 
-	return store, err
+	return ctxStore, err
 }

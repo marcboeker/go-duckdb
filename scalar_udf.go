@@ -84,7 +84,7 @@ type ScalarFunc interface {
 // scalarFuncContext is a wrapper around a ScalarFunc providing an execution context.
 type scalarFuncContext struct {
 	f        ScalarFunc
-	ctxStore contextStore
+	ctxStore *contextStore
 }
 
 // Config returns the ScalarFuncConfig of the scalar function.
@@ -99,7 +99,7 @@ func (s *scalarFuncContext) RowExecutor(info *BindInfo) RowExecutorFn {
 	if e.RowExecutor != nil {
 		return e.RowExecutor
 	}
-	ctx := s.ctxStore.context(info.ConnId)
+	ctx := s.ctxStore.load(info.ConnId)
 
 	return func(values []driver.Value) (any, error) {
 		return e.RowContextExecutor(ctx, values)
@@ -355,7 +355,7 @@ func createScalarFunc(c *sql.Conn, name string, f ScalarFunc) (mapping.ScalarFun
 	mapping.ScalarFunctionSetFunction(function, functionPtr)
 
 	// Get the context store of the connection.
-	store, err := contextStoreFromConn(c)
+	ctxStore, err := contextStoreFromConn(c)
 	if err != nil {
 		mapping.DestroyScalarFunction(&function)
 		return function, err
@@ -364,7 +364,7 @@ func createScalarFunc(c *sql.Conn, name string, f ScalarFunc) (mapping.ScalarFun
 	// Pin the ScalarFunc f.
 	value := pinnedValue[*scalarFuncContext]{
 		pinner: &runtime.Pinner{},
-		value:  &scalarFuncContext{f: f, ctxStore: store},
+		value:  &scalarFuncContext{f: f, ctxStore: ctxStore},
 	}
 	h := cgo.NewHandle(value)
 	value.pinner.Pin(&h)
