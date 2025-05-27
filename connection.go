@@ -51,7 +51,9 @@ func (conn *Conn) ExecContext(ctx context.Context, query string, args []driver.N
 		return nil, err
 	}
 
-	conn.setContext(ctx)
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
+
 	res, err := prepared.ExecContext(ctx, args)
 	errClose := prepared.Close()
 	if err != nil {
@@ -75,7 +77,9 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 		return nil, err
 	}
 
-	conn.setContext(ctx)
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
+
 	r, err := prepared.QueryContext(ctx, args)
 	if err != nil {
 		errClose := prepared.Close()
@@ -93,7 +97,8 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 // PrepareContext returns a prepared statement, bound to this connection.
 // It implements the driver.ConnPrepareContext interface.
 func (conn *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
-	conn.setContext(ctx)
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
 
 	return conn.prepareStmts(ctx, query)
 }
@@ -192,7 +197,9 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 	if conn.closed {
 		return nil, errClosedCon
 	}
-	conn.setContext(ctx)
+
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
 
 	stmts, count, errExtract := conn.extractStmts(query)
 	if errExtract != nil {
@@ -277,8 +284,8 @@ func extractConnId(conn mapping.Connection) uint64 {
 }
 
 // setContext sets the current context for the connection.
-func (conn *Conn) setContext(ctx context.Context) {
-	conn.ctxStore.store(conn.id, ctx)
+func (conn *Conn) setContext(ctx context.Context) func() {
+	return conn.ctxStore.store(conn.id, ctx)
 }
 
 // contextStoreFromConn extracts the context store of a *sql.Conn connection.

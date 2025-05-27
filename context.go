@@ -30,8 +30,12 @@ func (s *contextStore) load(connId uint64) context.Context {
 	return ctx
 }
 
-func (s *contextStore) store(connId uint64, ctx context.Context) {
+func (s *contextStore) store(connId uint64, ctx context.Context) func() {
 	s.m.Store(connId, ctx)
+
+	return func() {
+		s.m.Delete(connId)
+	}
 }
 
 func (s *contextStore) delete(connId uint64) {

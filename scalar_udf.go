@@ -46,9 +46,9 @@ type ScalarFuncConfig struct {
 	SpecialNullHandling bool
 }
 
-// BindInfo TODO: private/don't export? set as a key in the context?
-type BindInfo struct {
-	ConnId uint64
+// bindInfo TODO.
+type bindInfo struct {
+	connId uint64
 }
 
 type (
@@ -94,12 +94,12 @@ func (s *scalarFuncContext) Config() ScalarFuncConfig {
 
 // RowExecutor returns a RowExecutorFn that executes the scalar function.
 // It uses the BindInfo to get the context for execution.
-func (s *scalarFuncContext) RowExecutor(info *BindInfo) RowExecutorFn {
+func (s *scalarFuncContext) RowExecutor(info *bindInfo) RowExecutorFn {
 	e := s.f.Executor()
 	if e.RowExecutor != nil {
 		return e.RowExecutor
 	}
-	ctx := s.ctxStore.load(info.ConnId)
+	ctx := s.ctxStore.load(info.connId)
 
 	return func(values []driver.Value) (any, error) {
 		return e.RowContextExecutor(ctx, values)
@@ -192,7 +192,7 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 	nullInNullOut := !function.Config().SpecialNullHandling
 
 	bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
-	bindInfo := getPinned[BindInfo](bindDataPtr)
+	bindInfo := getPinned[bindInfo](bindDataPtr)
 
 	f := function.RowExecutor(&bindInfo)
 	values := make([]driver.Value, len(inputChunk.columns))
@@ -247,21 +247,21 @@ func scalar_udf_delete_callback(info unsafe.Pointer) {
 
 //export scalar_udf_bind_callback
 func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
-	bindInfo := mapping.BindInfo{Ptr: bindInfoPtr}
+	info := mapping.BindInfo{Ptr: bindInfoPtr}
 
 	// FIXME: Once available through the duckdb-go-bindings (and the C API),
 	// FIXME: we want to get extraInfo here, to access user-defined `func Binder(BindInfo) (any, any)` callbacks.
 	// FIXME: With these callbacks, we can set additional user-defined bind data in the context.
 
 	var ctx mapping.ClientContext
-	mapping.ScalarFunctionGetClientContext(bindInfo, &ctx)
+	mapping.ScalarFunctionGetClientContext(info, &ctx)
 	defer mapping.DestroyClientContext(&ctx)
 
 	id := mapping.ClientContextGetConnectionId(ctx)
-	data := BindInfo{ConnId: uint64(id)}
+	data := bindInfo{connId: uint64(id)}
 
 	// Pin the bind data.
-	value := pinnedValue[BindInfo]{
+	value := pinnedValue[bindInfo]{
 		pinner: &runtime.Pinner{},
 		value:  data,
 	}
@@ -270,7 +270,7 @@ func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
 
 	// Set the bind data.
 	deleteCallbackPtr := unsafe.Pointer(C.scalar_udf_delete_callback_t(C.scalar_udf_delete_callback))
-	mapping.ScalarFunctionSetBindData(bindInfo, unsafe.Pointer(&h), deleteCallbackPtr)
+	mapping.ScalarFunctionSetBindData(info, unsafe.Pointer(&h), deleteCallbackPtr)
 }
 
 func registerInputParams(config ScalarFuncConfig, f mapping.ScalarFunction) error {

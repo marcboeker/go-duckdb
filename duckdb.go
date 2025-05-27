@@ -114,7 +114,10 @@ func (c *Connector) Connect(ctx context.Context) (driver.Conn, error) {
 	}
 
 	conn := newConn(mc, c.ctxStore)
-	c.ctxStore.store(conn.id, ctx)
+
+	cleanupCtx := c.ctxStore.store(conn.id, ctx)
+	defer cleanupCtx()
+
 	if c.connInitFn != nil {
 		if err := c.connInitFn(conn); err != nil {
 			return nil, err
