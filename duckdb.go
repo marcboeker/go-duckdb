@@ -87,26 +87,29 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	return &Connector{
 		db:         db,
 		connInitFn: connInitFn,
+		ctxStore:   newContextStore(),
 	}, nil
 }
 
 type Connector struct {
-	closed     bool
 	db         mapping.Database
 	connInitFn func(execer driver.ExecerContext) error
+	ctxStore   contextStore // ctxStore is used to store the last call context for each connection.
+	closed     bool
 }
 
 func (*Connector) Driver() driver.Driver {
 	return Driver{}
 }
 
-func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-	var newConn mapping.Connection
-	if mapping.Connect(c.db, &newConn) == mapping.StateError {
+func (c *Connector) Connect(ctx context.Context) (driver.Conn, error) {
+	var mc mapping.Connection
+	if mapping.Connect(c.db, &mc) == mapping.StateError {
 		return nil, getError(errConnect, nil)
 	}
 
-	conn := &Conn{conn: newConn}
+	conn := newConn(mc, c.ctxStore)
+	c.ctxStore.SetContext(conn.id, ctx)
 	if c.connInitFn != nil {
 		if err := c.connInitFn(conn); err != nil {
 			return nil, err
