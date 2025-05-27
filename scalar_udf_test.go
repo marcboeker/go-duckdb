@@ -76,7 +76,9 @@ func getConnId(ctx context.Context, values []driver.Value) (any, error) {
 	return id, nil
 }
 
-var testCtxKey = "test_context_key"
+type testCtxKeyType string
+
+var testCtxKey testCtxKeyType = "test_context_key"
 
 func getContextVal(ctx context.Context, _ []driver.Value) (any, error) {
 	if ctx == nil {

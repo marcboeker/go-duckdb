@@ -15,7 +15,7 @@ var ctxConnIdKey ctxConnIdKeyType = "duckdb_conn_id"
 type contextStore interface {
 	Context(connId uint64) context.Context
 	SetContext(connId uint64, ctx context.Context)
-	Remove(connId uint64) error
+	Remove(connId uint64)
 }
 
 // ctxStore is a thread-safe implementation of contextStore that uses a map to store contexts by connection ID.
@@ -48,12 +48,10 @@ func (s *ctxStore) SetContext(connId uint64, ctx context.Context) {
 }
 
 // Remove deletes the context associated with the given connection ID.
-func (s *ctxStore) Remove(connId uint64) error {
+func (s *ctxStore) Remove(connId uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.store, connId)
-
-	return nil
 }
 
 // ConnectionId retrieves the connection ID from the context, if it exists.
