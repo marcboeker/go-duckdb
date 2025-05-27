@@ -13,13 +13,16 @@ import (
 // Conn holds a connection to a DuckDB database.
 // It implements the driver.Conn interface.
 type Conn struct {
+	// The internal DuckDB connection.
 	conn mapping.Connection
-
-	id       uint64       // internal DuckDB connection ID
-	ctxStore contextStore // context store for duckdb instance
-
+	// Internal DuckDB connection id.
+	id uint64
+	// The context store of the connection.
+	ctxStore contextStore
+	// True, if the connection has been closed, else false.
 	closed bool
-	tx     bool
+	// True, if the connection has an open transaction.
+	tx bool
 }
 
 func newConn(conn mapping.Connection, store contextStore) *Conn {
@@ -91,6 +94,7 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 // It implements the driver.ConnPrepareContext interface.
 func (conn *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	conn.setContext(ctx)
+
 	return conn.prepareStmts(ctx, query)
 }
 
@@ -151,7 +155,7 @@ func (conn *Conn) Close() error {
 	}
 	conn.closed = true
 	mapping.Disconnect(&conn.conn)
-	conn.ctxStore.Remove(conn.id)
+	conn.ctxStore.remove(conn.id)
 
 	return nil
 }
@@ -245,45 +249,51 @@ func GetTableNames(c *sql.Conn, query string, qualified bool) ([]string, error) 
 	return tableNames, nil
 }
 
-// connId returns the connection ID of the internal DuckDB connection.
+// ConnId returns the connection id of the internal DuckDB connection.
 // It expects a *sql.Conn connection.
-func connId(c *sql.Conn) (uint64, error) {
-	var connId uint64
+func ConnId(c *sql.Conn) (uint64, error) {
+	var id uint64
 
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
-		connId = conn.id
+		if conn.closed {
+			return errClosedCon
+		}
+		id = conn.id
 		return nil
 	})
 
-	return connId, err
+	return id, err
 }
 
-// extractConnId extracts the connection ID from a DuckDB connection.
-// It expects a mapping.Connection and returns the connection ID as uint64.
-// connection should be open and valid, otherwise will be panic.
+// extractConnId extracts the connection id of a DuckDB connection.
+// It expects a valid and open mapping.Connection and returns the connection id as uint64.
 func extractConnId(conn mapping.Connection) uint64 {
 	var ctx mapping.ClientContext
 	mapping.ConnectionGetClientContext(conn, &ctx)
 	defer mapping.DestroyClientContext(&ctx)
-	id := mapping.ClientContextGetConnectionId(ctx)
-	return uint64(id)
+
+	return uint64(mapping.ClientContextGetConnectionId(ctx))
 }
 
-// setContext sets current the context for the connection.
+// setContext sets the current context for the connection.
 func (conn *Conn) setContext(ctx context.Context) {
-	conn.ctxStore.SetContext(conn.id, ctx)
+	conn.ctxStore.set(conn.id, ctx)
 }
 
-// contextStoreFromConn extracts the context store from a *sql.Conn connection.
-// it is used in UDF registration to access the context store.
-func contextStoreFromConn(c *sql.Conn) contextStore {
+// contextStoreFromConn extracts the context store of a *sql.Conn connection.
+func contextStoreFromConn(c *sql.Conn) (contextStore, error) {
 	var store contextStore
-	_ = c.Raw(func(driverConn any) error {
+
+	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
+		if conn.closed {
+			return errClosedCon
+		}
 		store = conn.ctxStore
+
 		return nil
 	})
 
-	return store
+	return store, err
 }

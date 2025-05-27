@@ -92,10 +92,15 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 }
 
 type Connector struct {
-	db         mapping.Database
+	// The internal DuckDB database.
+	db mapping.Database
+	// Callback to perform additional initialization steps.
 	connInitFn func(execer driver.ExecerContext) error
-	ctxStore   contextStore // ctxStore is used to store the last call context for each connection.
-	closed     bool
+	// ctxStore stores the context of the latest query/exec/etc. function
+	// invoked per connection.
+	ctxStore contextStore
+	// True, if the connector has been closed, else false.
+	closed bool
 }
 
 func (*Connector) Driver() driver.Driver {
@@ -109,7 +114,7 @@ func (c *Connector) Connect(ctx context.Context) (driver.Conn, error) {
 	}
 
 	conn := newConn(mc, c.ctxStore)
-	c.ctxStore.SetContext(conn.id, ctx)
+	c.ctxStore.set(conn.id, ctx)
 	if c.connInitFn != nil {
 		if err := c.connInitFn(conn); err != nil {
 			return nil, err
