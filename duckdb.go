@@ -42,6 +42,17 @@ func (Driver) OpenConnector(dsn string) (driver.Connector, error) {
 	})
 }
 
+type Connector struct {
+	// The internal DuckDB database.
+	db mapping.Database
+	// Callback to perform additional initialization steps.
+	connInitFn func(execer driver.ExecerContext) error
+	// ctxStore stores the context of the current query/exec/etc. of a connection.
+	ctxStore *contextStore
+	// True, if the connector has been closed, else false.
+	closed bool
+}
+
 // NewConnector opens a new Connector for a DuckDB database.
 // The user must close the Connector, if it is not passed to the sql.OpenDB function.
 // Otherwise, sql.DB closes the Connector when calling sql.DB.Close().
@@ -87,26 +98,25 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 	return &Connector{
 		db:         db,
 		connInitFn: connInitFn,
+		ctxStore:   newContextStore(),
 	}, nil
-}
-
-type Connector struct {
-	closed     bool
-	db         mapping.Database
-	connInitFn func(execer driver.ExecerContext) error
 }
 
 func (*Connector) Driver() driver.Driver {
 	return Driver{}
 }
 
-func (c *Connector) Connect(context.Context) (driver.Conn, error) {
-	var newConn mapping.Connection
-	if mapping.Connect(c.db, &newConn) == mapping.StateError {
+func (c *Connector) Connect(ctx context.Context) (driver.Conn, error) {
+	var mc mapping.Connection
+	if mapping.Connect(c.db, &mc) == mapping.StateError {
 		return nil, getError(errConnect, nil)
 	}
 
-	conn := &Conn{conn: newConn}
+	conn := newConn(mc, c.ctxStore)
+
+	cleanupCtx := c.ctxStore.store(conn.id, ctx)
+	defer cleanupCtx()
+
 	if c.connInitFn != nil {
 		if err := c.connInitFn(conn); err != nil {
 			return nil, err

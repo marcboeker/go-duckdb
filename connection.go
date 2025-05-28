@@ -13,9 +13,24 @@ import (
 // Conn holds a connection to a DuckDB database.
 // It implements the driver.Conn interface.
 type Conn struct {
-	conn   mapping.Connection
+	// The internal DuckDB connection.
+	conn mapping.Connection
+	// The internal DuckDB connection id.
+	id uint64
+	// The context store of the connector of this connection.
+	ctxStore *contextStore
+	// True, if the connection has been closed, else false.
 	closed bool
-	tx     bool
+	// True, if the connection has an open transaction.
+	tx bool
+}
+
+func newConn(conn mapping.Connection, ctxStore *contextStore) *Conn {
+	return &Conn{
+		conn:     conn,
+		id:       extractConnId(conn),
+		ctxStore: ctxStore,
+	}
 }
 
 // CheckNamedValue implements the driver.NamedValueChecker interface.
@@ -35,6 +50,9 @@ func (conn *Conn) ExecContext(ctx context.Context, query string, args []driver.N
 	if err != nil {
 		return nil, err
 	}
+
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
 
 	res, err := prepared.ExecContext(ctx, args)
 	errClose := prepared.Close()
@@ -59,6 +77,9 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 		return nil, err
 	}
 
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
+
 	r, err := prepared.QueryContext(ctx, args)
 	if err != nil {
 		errClose := prepared.Close()
@@ -76,6 +97,9 @@ func (conn *Conn) QueryContext(ctx context.Context, query string, args []driver.
 // PrepareContext returns a prepared statement, bound to this connection.
 // It implements the driver.ConnPrepareContext interface.
 func (conn *Conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
+
 	return conn.prepareStmts(ctx, query)
 }
 
@@ -136,6 +160,7 @@ func (conn *Conn) Close() error {
 	}
 	conn.closed = true
 	mapping.Disconnect(&conn.conn)
+	conn.ctxStore.delete(conn.id)
 
 	return nil
 }
@@ -172,6 +197,9 @@ func (conn *Conn) prepareStmts(ctx context.Context, query string) (*Stmt, error)
 	if conn.closed {
 		return nil, errClosedCon
 	}
+
+	cleanupCtx := conn.setContext(ctx)
+	defer cleanupCtx()
 
 	stmts, count, errExtract := conn.extractStmts(query)
 	if errExtract != nil {
@@ -226,4 +254,52 @@ func GetTableNames(c *sql.Conn, query string, qualified bool) ([]string, error) 
 	}
 
 	return tableNames, nil
+}
+
+// ConnId returns the connection id of the internal DuckDB connection.
+// It expects a *sql.Conn connection.
+func ConnId(c *sql.Conn) (uint64, error) {
+	var id uint64
+
+	err := c.Raw(func(driverConn any) error {
+		conn := driverConn.(*Conn)
+		if conn.closed {
+			return errClosedCon
+		}
+		id = conn.id
+		return nil
+	})
+
+	return id, err
+}
+
+// extractConnId extracts the connection id of a DuckDB connection.
+func extractConnId(conn mapping.Connection) uint64 {
+	var ctx mapping.ClientContext
+	mapping.ConnectionGetClientContext(conn, &ctx)
+	defer mapping.DestroyClientContext(&ctx)
+
+	return uint64(mapping.ClientContextGetConnectionId(ctx))
+}
+
+// setContext sets the current context for the connection.
+func (conn *Conn) setContext(ctx context.Context) func() {
+	return conn.ctxStore.store(conn.id, ctx)
+}
+
+// contextStoreFromConn extracts the context store of a *sql.Conn connection.
+func contextStoreFromConn(c *sql.Conn) (*contextStore, error) {
+	var ctxStore *contextStore
+
+	err := c.Raw(func(driverConn any) error {
+		conn := driverConn.(*Conn)
+		if conn.closed {
+			return errClosedCon
+		}
+		ctxStore = conn.ctxStore
+
+		return nil
+	})
+
+	return ctxStore, err
 }

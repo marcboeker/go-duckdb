@@ -6,10 +6,14 @@ typedef void (*scalar_udf_callback_t)(void *, void *, void *);
 
 void scalar_udf_delete_callback(void *);
 typedef void (*scalar_udf_delete_callback_t)(void *);
+
+void scalar_udf_bind_callback(void *);
+typedef void (*scalar_udf_bind_callback_t)(void *);
 */
 import "C"
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"runtime"
@@ -42,12 +46,27 @@ type ScalarFuncConfig struct {
 	SpecialNullHandling bool
 }
 
-// ScalarFuncExecutor contains the callback function to execute a user-defined scalar function.
-// Currently, its only field is a row-based executor.
+// bindInfo holds bind data accessible during execution.
+type bindInfo struct {
+	connId uint64
+}
+
+type (
+	// RowExecutorFn is the type for any row-based execution function.
+	// It takes the row values and returns the row execution result, or error.
+	RowExecutorFn func(values []driver.Value) (any, error)
+	// RowContextExecutorFn accepts a row-based execution function using a context.
+	// It takes a context and the row values, and returns the row execution result, or error.
+	RowContextExecutorFn func(ctx context.Context, values []driver.Value) (any, error)
+)
+
+// ScalarFuncExecutor contains the functions to execute a user-defined scalar function.
+// It invokes its first non-nil member.
 type ScalarFuncExecutor struct {
-	// RowExecutor accepts a row-based execution function.
-	// []driver.Value contains the row values, and it returns the row execution result, or error.
-	RowExecutor func(values []driver.Value) (any, error)
+	// RowExecutor accepts a row-based execution function of type RowExecutorFn.
+	RowExecutor RowExecutorFn
+	// RowContextExecutor accepts a row-based execution function of type RowContextExecutorFn.
+	RowContextExecutor RowContextExecutorFn
 }
 
 // ScalarFunc is the user-defined scalar function interface.
@@ -59,12 +78,37 @@ type ScalarFunc interface {
 	Executor() ScalarFuncExecutor
 }
 
+// scalarFuncContext wraps ScalarFunc and provides an execution context.
+type scalarFuncContext struct {
+	f        ScalarFunc
+	ctxStore *contextStore
+}
+
+// Config returns the ScalarFuncConfig of the scalar function.
+func (s *scalarFuncContext) Config() ScalarFuncConfig {
+	return s.f.Config()
+}
+
+// RowExecutor returns a RowExecutorFn executing the scalar function.
+// It uses the bindInfo to get the execution context.
+func (s *scalarFuncContext) RowExecutor(info *bindInfo) RowExecutorFn {
+	e := s.f.Executor()
+	if e.RowExecutor != nil {
+		return e.RowExecutor
+	}
+	ctx := s.ctxStore.load(info.connId)
+
+	return func(values []driver.Value) (any, error) {
+		return e.RowContextExecutor(ctx, values)
+	}
+}
+
 // RegisterScalarUDF registers a user-defined scalar function.
 // *sql.Conn is the SQL connection on which to register the scalar function.
 // name is the function name, and f is the scalar function's interface ScalarFunc.
 // RegisterScalarUDF takes ownership of f, so you must pass it as a pointer.
 func RegisterScalarUDF(c *sql.Conn, name string, f ScalarFunc) error {
-	function, err := createScalarFunc(name, f)
+	function, err := createScalarFunc(c, name, f)
 	if err != nil {
 		return getError(errAPI, err)
 	}
@@ -93,7 +137,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 
 	// Create each function and add it to the set.
 	for i, f := range functions {
-		function, err := createScalarFunc(name, f)
+		function, err := createScalarFunc(c, name, f)
 		if err != nil {
 			mapping.DestroyScalarFunctionSet(&set)
 			return getError(errAPI, err)
@@ -126,9 +170,6 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 	input := mapping.DataChunk{Ptr: inputPtr}
 	output := mapping.Vector{Ptr: outputPtr}
 
-	extraInfo := mapping.ScalarFunctionGetExtraInfo(functionInfo)
-	function := getPinned[ScalarFunc](extraInfo)
-
 	// Initialize the input chunk.
 	var inputChunk DataChunk
 	if err := inputChunk.initFromDuckDataChunk(input, false); err != nil {
@@ -143,19 +184,23 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 		return
 	}
 
-	executor := function.Executor()
+	extraInfo := mapping.ScalarFunctionGetExtraInfo(functionInfo)
+	function := getPinned[*scalarFuncContext](extraInfo)
 	nullInNullOut := !function.Config().SpecialNullHandling
+
+	bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
+	info := getPinned[bindInfo](bindDataPtr)
+
+	f := function.RowExecutor(&info)
 	values := make([]driver.Value, len(inputChunk.columns))
-	columnCount := len(values)
-	rowCount := inputChunk.GetSize()
 
 	// Execute the user-defined scalar function for each row.
-	var err error
-	for rowIdx := 0; rowIdx < rowCount; rowIdx++ {
-		nullRow := false
+	for rowIdx := 0; rowIdx < inputChunk.GetSize(); rowIdx++ {
 
 		// Get each column value.
-		for colIdx := 0; colIdx < columnCount; colIdx++ {
+		var err error
+		nullRow := false
+		for colIdx := 0; colIdx < len(values); colIdx++ {
 			if values[colIdx], err = inputChunk.GetValue(colIdx, rowIdx); err != nil {
 				mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
 				return
@@ -171,21 +216,21 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 				break
 			}
 		}
+
 		if nullRow {
 			continue
 		}
 
-		// Execute the function.
-		var val any
-		if val, err = executor.RowExecutor(values); err != nil {
-			mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+		// Execute the user-defined scalar function.
+		if val, e := f(values); e != nil {
+			mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, e).Error())
 			return
-		}
-
-		// Write the result to the output chunk.
-		if err = outputChunk.SetValue(0, rowIdx, val); err != nil {
-			mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
-			return
+		} else {
+			// Write the result to the output chunk.
+			if err = outputChunk.SetValue(0, rowIdx, val); err != nil {
+				mapping.ScalarFunctionSetError(functionInfo, getError(errAPI, err).Error())
+				return
+			}
 		}
 	}
 }
@@ -195,6 +240,34 @@ func scalar_udf_delete_callback(info unsafe.Pointer) {
 	h := (*cgo.Handle)(info)
 	h.Value().(unpinner).unpin()
 	h.Delete()
+}
+
+//export scalar_udf_bind_callback
+func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
+	info := mapping.BindInfo{Ptr: bindInfoPtr}
+
+	// FIXME: Once available through the duckdb-go-bindings (and the C API),
+	// FIXME: we want to get extraInfo here, to access user-defined `func Binder(BindInfo) (any, any)` callbacks.
+	// FIXME: With these callbacks, we can set additional user-defined bind data in the context.
+
+	var ctx mapping.ClientContext
+	mapping.ScalarFunctionGetClientContext(info, &ctx)
+	defer mapping.DestroyClientContext(&ctx)
+
+	id := mapping.ClientContextGetConnectionId(ctx)
+	data := bindInfo{connId: uint64(id)}
+
+	// Pin the bind data.
+	value := pinnedValue[bindInfo]{
+		pinner: &runtime.Pinner{},
+		value:  data,
+	}
+	h := cgo.NewHandle(value)
+	value.pinner.Pin(&h)
+
+	// Set the bind data.
+	deleteCallbackPtr := unsafe.Pointer(C.scalar_udf_delete_callback_t(C.scalar_udf_delete_callback))
+	mapping.ScalarFunctionSetBindData(info, unsafe.Pointer(&h), deleteCallbackPtr)
 }
 
 func registerInputParams(config ScalarFuncConfig, f mapping.ScalarFunction) error {
@@ -238,14 +311,15 @@ func registerResultParams(config ScalarFuncConfig, f mapping.ScalarFunction) err
 	return nil
 }
 
-func createScalarFunc(name string, f ScalarFunc) (mapping.ScalarFunction, error) {
+func createScalarFunc(c *sql.Conn, name string, f ScalarFunc) (mapping.ScalarFunction, error) {
 	if name == "" {
 		return mapping.ScalarFunction{}, errScalarUDFNoName
 	}
 	if f == nil {
 		return mapping.ScalarFunction{}, errScalarUDFIsNil
 	}
-	if f.Executor().RowExecutor == nil {
+
+	if f.Executor().RowExecutor == nil && f.Executor().RowContextExecutor == nil {
 		return mapping.ScalarFunction{}, errScalarUDFNoExecutor
 	}
 
@@ -269,14 +343,25 @@ func createScalarFunc(name string, f ScalarFunc) (mapping.ScalarFunction, error)
 		mapping.ScalarFunctionSetVolatile(function)
 	}
 
+	// Set the bind callback.
+	bindPtr := unsafe.Pointer(C.scalar_udf_bind_callback_t(C.scalar_udf_bind_callback))
+	mapping.ScalarFunctionSetBind(function, bindPtr)
+
 	// Set the function callback.
-	callbackPtr := unsafe.Pointer(C.scalar_udf_callback_t(C.scalar_udf_callback))
-	mapping.ScalarFunctionSetFunction(function, callbackPtr)
+	functionPtr := unsafe.Pointer(C.scalar_udf_callback_t(C.scalar_udf_callback))
+	mapping.ScalarFunctionSetFunction(function, functionPtr)
+
+	// Get the context store of the connection.
+	ctxStore, err := contextStoreFromConn(c)
+	if err != nil {
+		mapping.DestroyScalarFunction(&function)
+		return function, err
+	}
 
 	// Pin the ScalarFunc f.
-	value := pinnedValue[ScalarFunc]{
+	value := pinnedValue[*scalarFuncContext]{
 		pinner: &runtime.Pinner{},
-		value:  f,
+		value:  &scalarFuncContext{f: f, ctxStore: ctxStore},
 	}
 	h := cgo.NewHandle(value)
 	value.pinner.Pin(&h)
