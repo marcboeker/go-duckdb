@@ -1,0 +1,27 @@
+# Path to coverage profile file (output of `go test -coverprofile` command).
+profile: cover.out
+
+# Holds coverage thresholds percentages, values should be in range [0-100].
+# FIXME: push more tests and increase these values.
+threshold:
+  # Minimum coverage percentage required for individual files.
+  file: 0
+  # Minimum coverage percentage required for each package.
+  package: 0
+  # Minimum overall project coverage percentage required.
+  total: 0
+
+# Holds regexp rules which will exclude matched files or packages from coverage statistics.
+exclude:
+  paths:
+    - examples/.*
+    - examples/*/.*
+
+# File name of go-test-coverage breakdown file, which can be used to
+# analyze coverage difference.
+breakdown-file-name: ''
+
+diff:
+  # File name of go-test-coverage breakdown file which will be used to
+  # report coverage difference.
+  base-breakdown-file-name: ''

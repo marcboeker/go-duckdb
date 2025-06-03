@@ -6,8 +6,8 @@ permissions:
   contents: read
 
 jobs:
-  golangci:
-    name: lint
+  linter:
+    name: Linter
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,3 +20,30 @@ jobs:
         with:
           version: latest
 
+  coverage:
+    name: Go test coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+
+      - name: Generate test coverage
+        run: go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
+
+      - name: Check test coverage
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          config: ./.testcoverage.yml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage out file
+          path: |
+            cover.out
+            - uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage html file
+          path: |
+            cover.html
