@@ -30,8 +30,7 @@ jobs:
       - name: Generate test coverage
         run: |
           go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
-          ls
-          ls ../
+          go tool cover -html=cover.out -o=cover.html
 
       - name: Check test coverage
         uses: vladopajic/go-test-coverage@v2
