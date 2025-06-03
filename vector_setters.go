@@ -87,7 +87,7 @@ func setBool[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 func setTS(vec *vector, rowIdx mapping.IdxT, val any) error {
 	switch vec.Type {
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		ts, err := getMappedTimestamp(val)
+		ts, err := getMappedTimestamp(vec.Type, val)
 		if err != nil {
 			return err
 		}

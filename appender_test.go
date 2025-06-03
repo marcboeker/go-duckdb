@@ -585,7 +585,10 @@ func TestAppenderTimeTZ(t *testing.T) {
 	c, db, conn, a := prepareAppender(t, `CREATE TABLE test (time TIMETZ)`)
 	defer cleanupAppender(t, c, db, conn, a)
 
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	// Test a location east of GMT.
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+
 	ts := time.Date(1996, time.July, 23, 11, 42, 23, 123000, loc)
 	require.NoError(t, a.AppendRow(ts))
 	require.NoError(t, a.Flush())
@@ -596,6 +599,24 @@ func TestAppenderTimeTZ(t *testing.T) {
 	var r time.Time
 	require.NoError(t, res.Scan(&r))
 	base := time.Date(1, time.January, 1, 3, 42, 23, 123000, time.UTC)
+	require.Equal(t, base.UnixMicro(), r.UnixMicro())
+
+	// Reset and test a location west of GMT.
+	_, err = db.Exec(`DELETE FROM test`)
+	require.NoError(t, err)
+
+	loc, err = time.LoadLocation("America/Los_Angeles")
+	require.NoError(t, err)
+
+	ts = time.Date(1996, time.July, 23, 11, 42, 23, 123000, loc)
+	require.NoError(t, a.AppendRow(ts))
+	require.NoError(t, a.Flush())
+
+	// Verify results.
+	res = db.QueryRowContext(context.Background(), `SELECT time FROM test`)
+
+	require.NoError(t, res.Scan(&r))
+	base = time.Date(1, time.January, 1, 18, 42, 23, 123000, time.UTC)
 	require.Equal(t, base.UnixMicro(), r.UnixMicro())
 }
 

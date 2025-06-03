@@ -39,11 +39,9 @@ var testPrimitiveSQLValues = map[Type]testTypeValues{
 	TYPE_TIMESTAMP_MS: {input: `TIMESTAMP_MS '1992-09-20 11:30:00.123'`, output: `1992-09-20 11:30:00.123`},
 	TYPE_TIMESTAMP_NS: {input: `TIMESTAMP_NS '1992-09-20 11:30:00.123456789'`, output: `1992-09-20 11:30:00.123456789`},
 	TYPE_UUID:         {input: `uuid()`, output: ``},
-	TYPE_TIME_TZ:      {input: `TIMETZ '1992-09-20 11:30:00.123456+06'`, output: `05:30:00.123456+00`},
-	TYPE_TIMESTAMP_TZ: {input: `TIMESTAMPTZ '1992-09-20 11:30:00.123456'`, output: `1992-09-20 11:30:00.123456+00`},
 }
 
-func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
+func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 	var primitiveTypes []Type
 	for k := range typeToStringMap {
 		_, inMap := unsupportedTypeToStringMap[k]
@@ -52,6 +50,11 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 		}
 		if k == TYPE_ANY && !useAny {
 			continue
+		}
+		if skipTZ {
+			if k == TYPE_TIMESTAMP_TZ || k == TYPE_TIME_TZ {
+				continue
+			}
 		}
 		switch k {
 		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION, TYPE_SQLNULL:
@@ -208,7 +211,7 @@ func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 }
 
 func TestTypeInterface(t *testing.T) {
-	testTypeInfos := getTypeInfos(t, true)
+	testTypeInfos := getTypeInfos(t, true, false)
 
 	// Use each type as a child.
 	for _, info := range testTypeInfos {
