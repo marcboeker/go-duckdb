@@ -190,7 +190,6 @@ func createValueByReflection(v any) (mapping.LogicalType, mapping.Value, error) 
 	r := reflect.ValueOf(v)
 	switch r.Kind() {
 	case reflect.Ptr:
-
 		return createValueByReflection(getPointerValue(v))
 	case reflect.Slice:
 		return tryGetMappedSliceValue(r.Interface(), false, r.Len())
