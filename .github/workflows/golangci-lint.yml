@@ -36,7 +36,7 @@ jobs:
       - name: Check test coverage
         uses: vladopajic/go-test-coverage@v2
         with:
-          config: ../testcoverage.yml
+          config: ./.github/testcoverage.yml
 
       - uses: actions/upload-artifact@v4
         with:
