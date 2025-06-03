@@ -230,7 +230,7 @@ func getTSTicks(t Type, val any) (int64, error) {
 			return micros, nil
 		}
 
-		// DuckDB expects TIMESTAMP_TZ in the current location.
+		// DuckDB expects TIMESTAMP_TZ in the local location.
 		loc := GetLocalLocation()
 		ti = ti.In(loc)
 
