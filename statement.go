@@ -240,6 +240,13 @@ func (s *Stmt) bindJSON(val driver.NamedValue, n int) (mapping.State, error) {
 	return mapping.StateError, addIndexToError(unsupportedTypeError("JSON interface, need []byte or string"), n+1)
 }
 
+func (s *Stmt) bindUUID(val driver.NamedValue, t Type, n int) (mapping.State, error) {
+	if ss, ok := val.Value.(fmt.Stringer); ok {
+		return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), ss.String()), nil
+	}
+	return mapping.StateError, addIndexToError(unsupportedTypeError(unknownTypeErrMsg), n+1)
+}
+
 // Used for binding Array, List, Struct. In the future, also Map and Union
 func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, error) {
 	lt, err := s.paramLogicalType(n + 1)
@@ -249,22 +256,23 @@ func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, 
 	}
 
 	mappedVal, err := createValue(lt, val.Value)
-	defer mapping.DestroyValue(mappedVal)
+	defer mapping.DestroyValue(&mappedVal)
 	if err != nil {
 		return mapping.StateError, addIndexToError(err, n+1)
 	}
 
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *mappedVal)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), mappedVal)
 	return state, nil
 }
 
-func (s *Stmt) bindValueByReflection(val driver.NamedValue, n int) (mapping.State, error) {
-	_, mappedVal, err := createValueByReflection(val.Value)
-	defer mapping.DestroyValue(mappedVal)
+func (s *Stmt) tryBindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
+	lt, mappedVal, err := createValueByReflection(val.Value)
+	defer mapping.DestroyLogicalType(&lt)
+	defer mapping.DestroyValue(&mappedVal)
 	if err != nil {
 		return mapping.StateError, addIndexToError(err, n+1)
 	}
-	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), *mappedVal)
+	state := mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), mappedVal)
 	return state, nil
 }
 
@@ -272,14 +280,12 @@ func (s *Stmt) bindComplexValue(val driver.NamedValue, n int, t Type, name strin
 	// We could not resolve this parameter when binding the query.
 	// Fall back to the Go type.
 	if t == TYPE_INVALID {
-		return s.bindValueByReflection(val, n)
+		return s.tryBindComplexValue(val, n)
 	}
 
 	switch t {
 	case TYPE_UUID:
-		if ss, ok := val.Value.(fmt.Stringer); ok {
-			return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), ss.String()), nil
-		}
+		return s.bindUUID(val, t, n)
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS:
 		return s.bindTimestamp(val, t, n)
 	case TYPE_DATE:
