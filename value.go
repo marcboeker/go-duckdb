@@ -69,7 +69,11 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 
 func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
 	t := mapping.GetTypeId(lt)
-	if r := createValueByTypeIdOrNull(t, v); r.Ptr != nil {
+	r, err := trCreateValueByTypeId(t, v)
+	if err != nil {
+		return r, err
+	}
+	if r.Ptr != nil {
 		return r, nil
 	}
 	switch t {
@@ -84,60 +88,60 @@ func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
 	}
 }
 
-func createValueByTypeIdOrNull(t mapping.Type, v any) mapping.Value {
+func trCreateValueByTypeId(t mapping.Type, v any) (mapping.Value, error) {
 	switch t {
 	case TYPE_SQLNULL:
-		return mapping.CreateNullValue()
+		return mapping.CreateNullValue(), nil
 	case TYPE_BOOLEAN:
-		return mapping.CreateBool(v.(bool))
+		return mapping.CreateBool(v.(bool)), nil
 	case TYPE_TINYINT:
-		return mapping.CreateInt8(v.(int8))
+		return mapping.CreateInt8(v.(int8)), nil
 	case TYPE_SMALLINT:
-		return mapping.CreateInt16(v.(int16))
+		return mapping.CreateInt16(v.(int16)), nil
 	case TYPE_INTEGER:
-		return mapping.CreateInt32(v.(int32))
+		return mapping.CreateInt32(v.(int32)), nil
 	case TYPE_BIGINT:
-		return mapping.CreateInt64(v.(int64))
+		return mapping.CreateInt64(v.(int64)), nil
 	case TYPE_UTINYINT:
-		return mapping.CreateUInt8(v.(uint8))
+		return mapping.CreateUInt8(v.(uint8)), nil
 	case TYPE_USMALLINT:
-		return mapping.CreateUInt16(v.(uint16))
+		return mapping.CreateUInt16(v.(uint16)), nil
 	case TYPE_UINTEGER:
-		return mapping.CreateUInt32(v.(uint32))
+		return mapping.CreateUInt32(v.(uint32)), nil
 	case TYPE_UBIGINT:
-		return mapping.CreateUInt64(v.(uint64))
+		return mapping.CreateUInt64(v.(uint64)), nil
 	case TYPE_FLOAT:
-		return mapping.CreateFloat(v.(float32))
+		return mapping.CreateFloat(v.(float32)), nil
 	case TYPE_DOUBLE:
-		return mapping.CreateDouble(v.(float64))
+		return mapping.CreateDouble(v.(float64)), nil
 	case TYPE_VARCHAR:
-		return mapping.CreateVarchar(v.(string))
+		return mapping.CreateVarchar(v.(string)), nil
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
 		vv, err := getMappedTimestamp(v)
 		if err != nil {
-			return mapping.Value{}
+			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestamp(*vv)
+		return mapping.CreateTimestamp(*vv), nil
 	case TYPE_TIMESTAMP_S:
 		vv, err := getMappedTimestampS(v)
 		if err != nil {
-			return mapping.Value{}
+			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestampS(*vv)
+		return mapping.CreateTimestampS(*vv), nil
 	case TYPE_TIMESTAMP_MS:
 		vv, err := getMappedTimestampMS(v)
 		if err != nil {
-			return mapping.Value{}
+			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestampMS(*vv)
+		return mapping.CreateTimestampMS(*vv), nil
 	case TYPE_TIMESTAMP_NS:
 		vv, err := getMappedTimestampNS(v)
 		if err != nil {
-			return mapping.Value{}
+			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestampNS(*vv)
+		return mapping.CreateTimestampNS(*vv), nil
 	}
-	return mapping.Value{}
+	return mapping.Value{}, nil
 }
 
 func getPointerValue(v any) any {
@@ -177,14 +181,18 @@ func isNil(i any) bool {
 func createValueByReflection(v any) (mapping.LogicalType, mapping.Value, error) {
 	t, vv := inferTypeId(v)
 	if t != TYPE_INVALID {
-		return mapping.CreateLogicalType(t), createValueByTypeIdOrNull(t, vv), nil
+		retVal, err := trCreateValueByTypeId(t, vv)
+		return mapping.CreateLogicalType(t), retVal, err
 	}
 	if ss, ok := v.(fmt.Stringer); ok {
-		return mapping.CreateLogicalType(TYPE_VARCHAR), createValueByTypeIdOrNull(TYPE_VARCHAR, ss.String()), nil
+		t = TYPE_VARCHAR
+		retVal, err := trCreateValueByTypeId(t, ss.String())
+		return mapping.CreateLogicalType(t), retVal, err
 	}
 	if isNil(v) {
 		t = TYPE_SQLNULL
-		return mapping.CreateLogicalType(TYPE_SQLNULL), createValueByTypeIdOrNull(t, v), nil
+		retVal, err := trCreateValueByTypeId(t, v)
+		return mapping.CreateLogicalType(t), retVal, err
 	}
 	r := reflect.ValueOf(v)
 	switch r.Kind() {
