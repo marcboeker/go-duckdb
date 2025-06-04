@@ -1,0 +1,51 @@
+name: Tidy Checks
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  linter:
+    name: Golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  coverage:
+    name: Go Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+
+      - name: Generate Test Coverage
+        run: |
+          go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
+          go tool cover -html=cover.out -o=cover.html
+
+      - name: Check Test Coverage
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          config: ./.github/testcoverage.yml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cover_out
+          path: |
+            cover.out
+            - uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cover_html
+          path: |
+            cover.html
