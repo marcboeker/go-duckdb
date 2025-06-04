@@ -5,11 +5,11 @@ profile: cover.out
 # FIXME: push more tests and increase these values.
 threshold:
   # Minimum coverage percentage required for individual files.
-  file: 0
+  file: 66
   # Minimum coverage percentage required for each package.
-  package: 0
+  package: 66
   # Minimum overall project coverage percentage required.
-  total: 0
+  total: 66
 
 # Holds regexp rules which will exclude matched files or packages from coverage statistics.
 exclude:
