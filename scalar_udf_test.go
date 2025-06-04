@@ -269,7 +269,7 @@ func TestConstantScalarUDF(t *testing.T) {
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
-	typeInfos := getTypeInfos(t, false)
+	typeInfos := getTypeInfos(t, false, true)
 	for _, info := range typeInfos {
 		func() {
 			currentInfo = info.TypeInfo

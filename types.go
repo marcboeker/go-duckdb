@@ -198,7 +198,7 @@ type Union struct {
 
 func castToTime(val any) (time.Time, error) {
 	var ti time.Time
-	switch v := any(val).(type) {
+	switch v := val.(type) {
 	case time.Time:
 		ti = v
 	default:
@@ -225,7 +225,20 @@ func getTSTicks(t Type, val any) (int64, error) {
 		if year < -290307 || year > 294246 {
 			return 0, conversionError(year, -290307, 294246)
 		}
-		return ti.UnixMicro(), nil
+		micros := ti.UnixMicro()
+		if t == TYPE_TIMESTAMP {
+			return micros, nil
+		}
+
+		// DuckDB expects TIMESTAMP_TZ in the local location.
+		loc := GetLocalLocation()
+		ti = ti.In(loc)
+
+		// Get the offset (in seconds), and convert it to microseconds.
+		_, offset := ti.Zone()
+		offset = offset * 1000000
+
+		return micros + int64(offset), nil
 	}
 
 	// TYPE_TIMESTAMP_NS:
@@ -235,8 +248,8 @@ func getTSTicks(t Type, val any) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getMappedTimestamp(val any) (*mapping.Timestamp, error) {
-	ticks, err := getTSTicks(TYPE_TIMESTAMP, val)
+func getMappedTimestamp(t Type, val any) (*mapping.Timestamp, error) {
+	ticks, err := getTSTicks(t, val)
 	if err != nil {
 		return nil, err
 	}
