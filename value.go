@@ -69,7 +69,7 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 
 func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
 	t := mapping.GetTypeId(lt)
-	r, err := trCreateValueByTypeId(t, v)
+	r, err := tryCreateValueByTypeId(t, v)
 	if err != nil {
 		return r, err
 	}
@@ -88,7 +88,7 @@ func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
 	}
 }
 
-func trCreateValueByTypeId(t mapping.Type, v any) (mapping.Value, error) {
+func tryCreateValueByTypeId(t mapping.Type, v any) (mapping.Value, error) {
 	switch t {
 	case TYPE_SQLNULL:
 		return mapping.CreateNullValue(), nil
@@ -181,17 +181,17 @@ func isNil(i any) bool {
 func createValueByReflection(v any) (mapping.LogicalType, mapping.Value, error) {
 	t, vv := inferTypeId(v)
 	if t != TYPE_INVALID {
-		retVal, err := trCreateValueByTypeId(t, vv)
+		retVal, err := tryCreateValueByTypeId(t, vv)
 		return mapping.CreateLogicalType(t), retVal, err
 	}
 	if ss, ok := v.(fmt.Stringer); ok {
 		t = TYPE_VARCHAR
-		retVal, err := trCreateValueByTypeId(t, ss.String())
+		retVal, err := tryCreateValueByTypeId(t, ss.String())
 		return mapping.CreateLogicalType(t), retVal, err
 	}
 	if isNil(v) {
 		t = TYPE_SQLNULL
-		retVal, err := trCreateValueByTypeId(t, v)
+		retVal, err := tryCreateValueByTypeId(t, v)
 		return mapping.CreateLogicalType(t), retVal, err
 	}
 	r := reflect.ValueOf(v)

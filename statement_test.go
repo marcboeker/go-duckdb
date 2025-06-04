@@ -634,4 +634,21 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, [][][]string{{{"a"}, {"b", "c"}}, {{"1", "2"}, {"3"}}, {{"d", "e", "f"}}}, tripleNestedRes.Get())
 
+	var emptySliceRes Composite[[]any]
+	emptySlicePrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, emptySlicePrepare)
+	require.NoError(t, err)
+
+	err = emptySlicePrepare.QueryRow([]float32{}).Scan(&emptySliceRes)
+	require.NoError(t, err)
+	require.Equal(t, []any{}, emptySliceRes.Get())
+
+	var nestedEmptySliceRes Composite[[][]any]
+	nestedEmptySlicePrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, nestedEmptySlicePrepare)
+	require.NoError(t, err)
+
+	err = nestedEmptySlicePrepare.QueryRow([][]string{}).Scan(&nestedEmptySliceRes)
+	require.NoError(t, err)
+	require.Equal(t, [][]any{}, nestedEmptySliceRes.Get())
 }
