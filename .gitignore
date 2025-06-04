@@ -5,3 +5,5 @@ duckdb/
 .idea
 ./duckdb
 duckdb
+cover.html
+cover.out
