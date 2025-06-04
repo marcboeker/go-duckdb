@@ -2,7 +2,6 @@ package duckdb
 
 import (
 	"fmt"
-	bindings "github.com/duckdb/duckdb-go-bindings/linux-amd64"
 	"reflect"
 	"time"
 
@@ -249,8 +248,8 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 	typeFunc := mapping.CreateListType
 	if isArray {
 		createFunc = mapping.CreateArrayValue
-		typeFunc = func(child bindings.LogicalType) bindings.LogicalType {
-			return mapping.CreateArrayType(child, bindings.IdxT(sliceLength))
+		typeFunc = func(child mapping.LogicalType) mapping.LogicalType {
+			return mapping.CreateArrayType(child, mapping.IdxT(sliceLength))
 		}
 	}
 
