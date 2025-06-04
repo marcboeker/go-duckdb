@@ -117,7 +117,7 @@ func tryCreateValueByTypeId(t mapping.Type, v any) (mapping.Value, error) {
 	case TYPE_VARCHAR:
 		return mapping.CreateVarchar(v.(string)), nil
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		vv, err := getMappedTimestamp(v)
+		vv, err := getMappedTimestamp(t, v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
