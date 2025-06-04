@@ -170,7 +170,7 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.Stat
 	var state mapping.State
 	switch t {
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		v, err := getMappedTimestamp(val.Value)
+		v, err := getMappedTimestamp(t, val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
