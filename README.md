@@ -1,6 +1,6 @@
 # Go SQL Driver For [DuckDB](https://github.com/duckdb/duckdb)
 ![Tests status](https://github.com/marcboeker/go-duckdb/actions/workflows/tests.yaml/badge.svg)
-[![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb)
+[![GoDoc](https://godoc.org/github.com/marcboeker/go-duckdb/v2?status.svg)](https://pkg.go.dev/github.com/marcboeker/go-duckdb/v2)
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
