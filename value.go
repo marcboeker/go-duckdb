@@ -3,6 +3,7 @@ package duckdb
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -66,35 +67,16 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 	}
 }
 
-func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
-	var vv mapping.Value
-	var err error
-	t := Type(mapping.GetTypeId(lt))
+func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
+	t := mapping.GetTypeId(lt)
+	r, err := tryCreateValueByTypeId(t, v)
+	if err != nil {
+		return r, err
+	}
+	if r.Ptr != nil {
+		return r, nil
+	}
 	switch t {
-	case TYPE_BOOLEAN:
-		vv, err = mapping.CreateBool(v.(bool)), nil
-	case TYPE_TINYINT:
-		vv, err = mapping.CreateInt8(v.(int8)), nil
-	case TYPE_SMALLINT:
-		vv, err = mapping.CreateInt16(v.(int16)), nil
-	case TYPE_INTEGER:
-		vv, err = mapping.CreateInt32(v.(int32)), nil
-	case TYPE_BIGINT:
-		vv, err = mapping.CreateInt64(v.(int64)), nil
-	case TYPE_UTINYINT:
-		vv, err = mapping.CreateUInt8(v.(uint8)), nil
-	case TYPE_USMALLINT:
-		vv, err = mapping.CreateUInt16(v.(uint16)), nil
-	case TYPE_UINTEGER:
-		vv, err = mapping.CreateUInt32(v.(uint32)), nil
-	case TYPE_UBIGINT:
-		vv, err = mapping.CreateUInt64(v.(uint64)), nil
-	case TYPE_FLOAT:
-		vv, err = mapping.CreateFloat(v.(float32)), nil
-	case TYPE_DOUBLE:
-		vv, err = mapping.CreateDouble(v.(float64)), nil
-	case TYPE_VARCHAR:
-		vv, err = mapping.CreateVarchar(v.(string)), nil
 	case TYPE_ARRAY:
 		return getMappedSliceValue(lt, t, v)
 	case TYPE_LIST:
@@ -102,13 +84,215 @@ func createValue(lt mapping.LogicalType, v any) (*mapping.Value, error) {
 	case TYPE_STRUCT:
 		return getMappedStructValue(lt, v)
 	default:
-		return nil, unsupportedTypeError(reflect.TypeOf(v).Name())
+		return mapping.Value{}, unsupportedTypeError(reflect.TypeOf(v).Name())
 	}
-
-	return &vv, err
 }
 
-func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping.Value, error) {
+func tryCreateValueByTypeId(t mapping.Type, v any) (mapping.Value, error) {
+	switch t {
+	case TYPE_SQLNULL:
+		return mapping.CreateNullValue(), nil
+	case TYPE_BOOLEAN:
+		return mapping.CreateBool(v.(bool)), nil
+	case TYPE_TINYINT:
+		return mapping.CreateInt8(v.(int8)), nil
+	case TYPE_SMALLINT:
+		return mapping.CreateInt16(v.(int16)), nil
+	case TYPE_INTEGER:
+		return mapping.CreateInt32(v.(int32)), nil
+	case TYPE_BIGINT:
+		return mapping.CreateInt64(v.(int64)), nil
+	case TYPE_UTINYINT:
+		return mapping.CreateUInt8(v.(uint8)), nil
+	case TYPE_USMALLINT:
+		return mapping.CreateUInt16(v.(uint16)), nil
+	case TYPE_UINTEGER:
+		return mapping.CreateUInt32(v.(uint32)), nil
+	case TYPE_UBIGINT:
+		return mapping.CreateUInt64(v.(uint64)), nil
+	case TYPE_FLOAT:
+		return mapping.CreateFloat(v.(float32)), nil
+	case TYPE_DOUBLE:
+		return mapping.CreateDouble(v.(float64)), nil
+	case TYPE_VARCHAR:
+		return mapping.CreateVarchar(v.(string)), nil
+	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+		vv, err := getMappedTimestamp(t, v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTimestamp(*vv), nil
+	case TYPE_TIMESTAMP_S:
+		vv, err := getMappedTimestampS(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTimestampS(*vv), nil
+	case TYPE_TIMESTAMP_MS:
+		vv, err := getMappedTimestampMS(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTimestampMS(*vv), nil
+	case TYPE_TIMESTAMP_NS:
+		vv, err := getMappedTimestampNS(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTimestampNS(*vv), nil
+	}
+	return mapping.Value{}, nil
+}
+
+func getPointerValue(v any) any {
+	for {
+		if v == nil {
+			return nil
+		}
+		vo := reflect.ValueOf(v)
+		if vo.Kind() == reflect.Ptr {
+			if vo.IsNil() {
+				return nil
+			}
+			v = vo.Elem().Interface()
+			continue
+		}
+		return v
+	}
+}
+
+func isNil(i any) bool {
+	if i == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(i)
+	kind := value.Kind()
+
+	switch kind {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.Interface, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
+// leave the logic type clean up call to caller
+func createValueByReflection(v any) (mapping.LogicalType, mapping.Value, error) {
+	t, vv := inferTypeId(v)
+	if t != TYPE_INVALID {
+		retVal, err := tryCreateValueByTypeId(t, vv)
+		return mapping.CreateLogicalType(t), retVal, err
+	}
+	if ss, ok := v.(fmt.Stringer); ok {
+		t = TYPE_VARCHAR
+		retVal, err := tryCreateValueByTypeId(t, ss.String())
+		return mapping.CreateLogicalType(t), retVal, err
+	}
+	if isNil(v) {
+		t = TYPE_SQLNULL
+		retVal, err := tryCreateValueByTypeId(t, v)
+		return mapping.CreateLogicalType(t), retVal, err
+	}
+	r := reflect.ValueOf(v)
+	switch r.Kind() {
+	case reflect.Ptr:
+		return createValueByReflection(getPointerValue(v))
+	case reflect.Slice:
+		return tryGetMappedSliceValue(r.Interface(), false, r.Len())
+	case reflect.Array:
+		return tryGetMappedSliceValue(r.Interface(), true, r.Len())
+	default:
+		return mapping.LogicalType{}, mapping.Value{}, unsupportedTypeError(reflect.TypeOf(v).Name())
+	}
+}
+
+func inferTypeId(v any) (Type, any) {
+	t := TYPE_INVALID
+	switch vv := v.(type) {
+	case nil:
+		t = TYPE_SQLNULL
+	case bool:
+		t = TYPE_BOOLEAN
+	case int8:
+		t = TYPE_TINYINT
+	case int16:
+		t = TYPE_SMALLINT
+	case int32:
+		t = TYPE_INTEGER
+	case int64:
+		t = TYPE_BIGINT
+	case int:
+		t = TYPE_BIGINT
+		v = int64(vv)
+	case uint8:
+		t = TYPE_UTINYINT
+	case uint16:
+		t = TYPE_USMALLINT
+	case uint32:
+		t = TYPE_UINTEGER
+	case uint64:
+		t = TYPE_UBIGINT
+	case uint:
+		t = TYPE_UBIGINT
+		v = uint64(vv)
+	case float32:
+		t = TYPE_FLOAT
+	case float64:
+		t = TYPE_DOUBLE
+	case string:
+		t = TYPE_VARCHAR
+	case []byte:
+		t = TYPE_VARCHAR
+		v = string(vv)
+	case time.Time:
+		t = TYPE_TIMESTAMP
+	}
+	return t, v
+}
+
+func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mapping.LogicalType, mapping.Value, error) {
+	createFunc := mapping.CreateListValue
+	typeFunc := mapping.CreateListType
+	if isArray {
+		createFunc = mapping.CreateArrayValue
+		typeFunc = func(child mapping.LogicalType) mapping.LogicalType {
+			return mapping.CreateArrayType(child, mapping.IdxT(sliceLength))
+		}
+	}
+
+	vSlice, err := extractSlice(val)
+	if err != nil {
+		return mapping.LogicalType{}, mapping.Value{}, fmt.Errorf("could not cast %T to []any: %s", val, err)
+	}
+	childValues := make([]mapping.Value, 0, sliceLength)
+	defer destroyValueSlice(childValues)
+	childLogicTypes := make([]mapping.LogicalType, 0, sliceLength)
+	defer destroyLogicalTypes(&childLogicTypes)
+	if len(vSlice) == 0 {
+		lt := mapping.CreateLogicalType(TYPE_SQLNULL)
+		defer mapping.DestroyLogicalType(&lt)
+		return typeFunc(lt), createFunc(lt, childValues), nil
+	}
+	elementLogicType := mapping.LogicalType{}
+	for _, v := range vSlice {
+		et, vv, err := createValueByReflection(v)
+		if err != nil {
+			return mapping.LogicalType{}, mapping.Value{}, err
+		}
+		if et.Ptr != nil {
+			elementLogicType = et
+		}
+		childValues = append(childValues, vv)
+		childLogicTypes = append(childLogicTypes, et)
+	}
+	if elementLogicType.Ptr == nil {
+		return elementLogicType, mapping.Value{}, unsupportedTypeError(reflect.TypeOf(val).Name())
+	}
+	return typeFunc(elementLogicType), createFunc(elementLogicType, childValues), nil
+}
+
+func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.Value, error) {
 	var childType mapping.LogicalType
 	if t == TYPE_ARRAY {
 		childType = mapping.ArrayTypeChildType(lt)
@@ -119,7 +303,7 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping
 
 	vSlice, err := extractSlice(val)
 	if err != nil {
-		return nil, fmt.Errorf("could not cast %T to []any: %s", val, err)
+		return mapping.Value{}, fmt.Errorf("could not cast %T to []any: %s", val, err)
 	}
 
 	var childValues []mapping.Value
@@ -128,9 +312,9 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping
 	for _, v := range vSlice {
 		vv, err := createValue(childType, v)
 		if err != nil {
-			return nil, fmt.Errorf("could not create value %s", err)
+			return mapping.Value{}, fmt.Errorf("could not create value %s", err)
 		}
-		childValues = append(childValues, *vv)
+		childValues = append(childValues, vv)
 	}
 
 	var v mapping.Value
@@ -140,13 +324,13 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (*mapping
 		v = mapping.CreateListValue(childType, childValues)
 	}
 
-	return &v, nil
+	return v, nil
 }
 
-func getMappedStructValue(lt mapping.LogicalType, val any) (*mapping.Value, error) {
+func getMappedStructValue(lt mapping.LogicalType, val any) (mapping.Value, error) {
 	vMap, ok := val.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("could not cast %T to map[string]any", val)
+		return mapping.Value{}, fmt.Errorf("could not cast %T to map[string]any", val)
 	}
 
 	var values []mapping.Value
@@ -162,16 +346,14 @@ func getMappedStructValue(lt mapping.LogicalType, val any) (*mapping.Value, erro
 		if exists {
 			vv, err := createValue(childType, v)
 			if err != nil {
-				return nil, fmt.Errorf("could not create value %s", err)
+				return mapping.Value{}, fmt.Errorf("could not create value %s", err)
 			}
-			values = append(values, *vv)
+			values = append(values, vv)
 		} else {
 			values = append(values, mapping.CreateNullValue())
 		}
 	}
-
-	structValue := mapping.CreateStructValue(lt, values)
-	return &structValue, nil
+	return mapping.CreateStructValue(lt, values), nil
 }
 
 func destroyValueSlice(values []mapping.Value) {

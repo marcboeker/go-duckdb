@@ -427,10 +427,16 @@ func TestBindWithoutResolvedParams(t *testing.T) {
 	require.Equal(t, "2022-02-07 00:00:00", a)
 	require.Equal(t, "2022-02-07 00:00:00", b)
 
-	// Type without a fallback.
 	s := []int32{1}
 	r = db.QueryRow(`SELECT a::VARCHAR, b::VARCHAR FROM (VALUES (?, ?)) t(a, b)`, s, s)
-	require.Contains(t, r.Err().Error(), "unsupported data type")
+	require.NoError(t, r.Scan(&a, &b))
+	require.Equal(t, "[1]", a)
+	require.Equal(t, "[1]", b)
+
+	// Type without a fallback.
+	r = db.QueryRow(`SELECT a.strA FROM (VALUES (?),(?)) t(a)`, Union{Tag: "strA", Value: "a"}, Union{Tag: "strB", Value: "b"})
+	require.Contains(t, r.Err().Error(), "unsupported type")
+
 }
 
 func TestBindTimestampTypes(t *testing.T) {
@@ -533,4 +539,116 @@ func TestBindJSON(t *testing.T) {
 	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl`).Scan(&str)
 	require.NoError(t, err)
 	require.Equal(t, string(jsonData), str)
+}
+
+func TestPrepareComplexQueryParameter(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx := context.Background()
+	createTable(t, db, `CREATE OR REPLACE TABLE arr_test(
+		arr_float float[2]
+	)`)
+
+	// Insert parameters.
+	_, err := db.ExecContext(ctx, `INSERT INTO arr_test VALUES (?)`,
+		[]float32{7, 1})
+	require.NoError(t, err)
+
+	prepared, err := db.Prepare(`SELECT list_value(?,?), list_cosine_distance(?,?)`)
+	defer closePreparedWrapper(t, prepared)
+	require.NoError(t, err)
+
+	var arr Composite[[][]int32]
+	var dis Composite[float32]
+	// Test with specific slice types.
+	err = prepared.QueryRow([]int{1, 2}, []int64{1}, []float32{0.1, 0.2, 0.3}, []float32{0.2, 0.3, 0.4}).Scan(&arr, &dis)
+	require.NoError(t, err)
+	require.Equal(t, [][]int32{{1, 2}, {1}}, arr.Get())
+	require.True(t, dis.Get() > 0)
+
+	dynamicPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, dynamicPrepare)
+	require.NoError(t, err)
+
+	var res Composite[[]any]
+	err = dynamicPrepare.QueryRow([]any{}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(res.Get()))
+
+	// The statement type has already been bind as a SQL_NULL LIST in previous query
+	err = dynamicPrepare.QueryRow([]any{1}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, []any{nil}, res.Get())
+
+	ptr := &([]int64{1})[0]
+	ptrPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, ptrPrepare)
+	require.NoError(t, err)
+
+	err = ptrPrepare.QueryRow([]any{&([]int64{1})[0]}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, []any{int64(1)}, res.Get())
+
+	nestedPtr := &ptr
+	nestedPtrPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, nestedPtrPrepare)
+	require.NoError(t, err)
+
+	err = nestedPtrPrepare.QueryRow([]any{nestedPtr}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, []any{int64(1)}, res.Get())
+
+	arrayPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, arrayPrepare)
+	require.NoError(t, err)
+
+	err = arrayPrepare.QueryRow([1]any{123}).Scan(&res)
+	require.NoError(t, err)
+	require.Equal(t, []any{int64(123)}, res.Get())
+
+	var nestedListRes Composite[[][]any]
+	nestedListStmt, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, nestedListStmt)
+	require.NoError(t, err)
+
+	err = nestedListStmt.QueryRow([][]float32{{0.1}, {0.2, 0.3}}).Scan(&nestedListRes)
+	require.NoError(t, err)
+	require.Equal(t, [][]any{{float32(0.1)}, {float32(0.2), float32(0.3)}}, nestedListRes.Get())
+
+	var nestedRes Composite[[][]any]
+	nestedArrayPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, arrayPrepare)
+	require.NoError(t, err)
+
+	err = nestedArrayPrepare.QueryRow([2][2]float32{{0.1, 0.2}, {0.3, 0.4}}).Scan(&nestedRes)
+	require.NoError(t, err)
+	require.Equal(t, [][]any{{float32(0.1), float32(0.2)}, {float32(0.3), float32(0.4)}}, nestedRes.Get())
+
+	var tripleNestedRes Composite[[][][]string]
+	tripleNestedPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, tripleNestedPrepare)
+	require.NoError(t, err)
+
+	err = tripleNestedPrepare.QueryRow([][][]string{{{"a"}, {"b", "c"}}, {{"1", "2"}, {"3"}}, {{"d", "e", "f"}}}).Scan(&tripleNestedRes)
+	require.NoError(t, err)
+	require.Equal(t, [][][]string{{{"a"}, {"b", "c"}}, {{"1", "2"}, {"3"}}, {{"d", "e", "f"}}}, tripleNestedRes.Get())
+
+	var emptySliceRes Composite[[]any]
+	emptySlicePrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, emptySlicePrepare)
+	require.NoError(t, err)
+
+	err = emptySlicePrepare.QueryRow([]float32{}).Scan(&emptySliceRes)
+	require.NoError(t, err)
+	require.Equal(t, []any{}, emptySliceRes.Get())
+
+	var nestedEmptySliceRes Composite[[][]any]
+	nestedEmptySlicePrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
+	defer closePreparedWrapper(t, nestedEmptySlicePrepare)
+	require.NoError(t, err)
+
+	err = nestedEmptySlicePrepare.QueryRow([][]string{}).Scan(&nestedEmptySliceRes)
+	require.NoError(t, err)
+	require.Equal(t, [][]any{}, nestedEmptySliceRes.Get())
 }
