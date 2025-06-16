@@ -73,7 +73,7 @@ const (
 	structFieldErrMsg      = "invalid STRUCT field"
 	columnCountErrMsg      = "invalid column count"
 	unsupportedTypeErrMsg  = "unsupported data type"
-	invalidatedAppenderMsg = "appended data has been invalidated due to corrupt row"
+	invalidatedAppenderMsg = "appended and not yet flushed data has been invalidated due to error"
 	tryOtherFuncErrMsg     = "please try this function instead"
 	indexErrMsg            = "index"
 	unknownTypeErrMsg      = "unknown type"
