@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"github.com/marcboeker/go-duckdb/mapping"
 	"math/big"
 	"reflect"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 // Conn holds a connection to a DuckDB database.

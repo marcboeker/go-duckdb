@@ -436,7 +436,6 @@ func TestBindWithoutResolvedParams(t *testing.T) {
 	// Type without a fallback.
 	r = db.QueryRow(`SELECT a.strA FROM (VALUES (?),(?)) t(a)`, Union{Tag: "strA", Value: "a"}, Union{Tag: "strB", Value: "b"})
 	require.Contains(t, r.Err().Error(), "unsupported type")
-
 }
 
 func TestBindTimestampTypes(t *testing.T) {

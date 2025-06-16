@@ -9,10 +9,11 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/marcboeker/go-duckdb/mapping"
 	"net/url"
 	"strings"
 	"sync"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](

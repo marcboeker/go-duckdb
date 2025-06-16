@@ -99,17 +99,7 @@ func getTimeTZ(ti *mapping.TimeTZ) time.Time {
 	hour, minute, sec, micro := mapping.TimeStructMembers(&timeStruct)
 	nanos := int(micro) * 1000
 	loc := time.FixedZone("", int(offset))
-	//otherTs := time.Date(1, time.January, 1, int(hour), int(minute), int(sec), nanos)
-	//other := time.Unix(int64(hour)*60*60+int64(minute)*60+int64(sec), int64(nanos))
-	//t := other.In(loc)
-	//fmt.Println(other)
-	//fmt.Println(t)
-
-	//loc, _ := time.LoadLocation("UTC")
-
-	d := time.Date(1, time.January, 1, int(hour), int(minute), int(sec), nanos, loc)
-	utc := d.UTC()
-	return utc
+	return time.Date(1, time.January, 1, int(hour), int(minute), int(sec), nanos, loc).UTC()
 }
 
 func (vec *vector) getInterval(rowIdx mapping.IdxT) Interval {

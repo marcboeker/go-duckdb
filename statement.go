@@ -5,8 +5,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"github.com/marcboeker/go-duckdb/mapping"
 	"math/big"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 type StmtType mapping.StatementType

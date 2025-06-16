@@ -6,8 +6,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var currentInfo TypeInfo
@@ -271,7 +272,6 @@ func TestAllTypesScalarUDF(t *testing.T) {
 	typeInfos := getTypeInfos(t, false)
 	for _, info := range typeInfos {
 		func() {
-
 			currentInfo = info.TypeInfo
 
 			db := openDbWrapper(t, ``)
