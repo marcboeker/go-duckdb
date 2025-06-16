@@ -54,6 +54,8 @@ type testTypesRow struct {
 	Struct_col       Composite[testTypesStruct]
 	Map_col          Map
 	Array_col        Composite[[3]int32]
+	Time_tz_col      time.Time
+	Timestamp_tz_col time.Time
 	Json_col_map     Composite[map[string]any]
 	Json_col_array   Composite[[]any]
 	Json_col_string  string
@@ -88,6 +90,8 @@ const testTypesTableSQL = `CREATE TABLE test (
 	Struct_col STRUCT(A INTEGER, B VARCHAR),
 	Map_col MAP(INTEGER, VARCHAR),
 	Array_col INTEGER[3],
+	Time_tz_col TIMETZ,
+	Timestamp_tz_col TIMESTAMPTZ,
 	Json_col_map JSON,
 	Json_col_array JSON,
 	Json_col_string JSON,
@@ -100,6 +104,8 @@ func (r *testTypesRow) toUTC() {
 	r.Timestamp_s_col = r.Timestamp_s_col.UTC()
 	r.Timestamp_ms_col = r.Timestamp_ms_col.UTC()
 	r.Timestamp_ns_col = r.Timestamp_ns_col.UTC()
+	r.Time_tz_col = r.Time_tz_col.UTC()
+	r.Timestamp_tz_col = r.Timestamp_tz_col.UTC()
 }
 
 func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
@@ -114,6 +120,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	// Get the DATE, TIME, and TIMETZ column values.
 	dateUTC := time.Date(1992, time.September, 20, 0, 0, 0, 0, time.UTC)
 	timeUTC := time.Date(1, time.January, 1, 11, 42, 7, 0, time.UTC)
+	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
 
 	var buffer bytes.Buffer
 	for j := 0; j < i; j++ {
@@ -170,6 +177,8 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 		structCol,
 		mapCol,
 		arrayCol,
+		timeTZ,
+		ts,
 		jsonMapCol,
 		jsonArrayCol,
 		varcharCol,
@@ -223,6 +232,8 @@ func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []
 			r.Struct_col.Get(),
 			r.Map_col,
 			r.Array_col.Get(),
+			r.Time_tz_col,
+			r.Timestamp_tz_col,
 			r.Json_col_map.Get(),
 			r.Json_col_array.Get(),
 			r.Json_col_string,
@@ -267,6 +278,8 @@ func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []
 			&r.Struct_col,
 			&r.Map_col,
 			&r.Array_col,
+			&r.Time_tz_col,
+			&r.Timestamp_tz_col,
 			&r.Json_col_map,
 			&r.Json_col_array,
 			&r.Json_col_string,
@@ -822,6 +835,33 @@ func TestTimestampTZ(t *testing.T) {
 	err = db.QueryRow(`SELECT tz FROM tbl`).Scan(&tz)
 	require.NoError(t, err)
 	require.Equal(t, ts.UTC(), tz.UTC())
+
+	// Test other time zone.
+	ti := time.Now().UTC().Truncate(time.Microsecond)
+
+	_, err = db.Exec(`SET TimeZone = 'Etc/UTC'`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE ts_tbl (t TIMESTAMPTZ)`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO ts_tbl VALUES (?)`, ti)
+	require.NoError(t, err)
+
+	var newTime time.Time
+	require.NoError(t, db.QueryRow(`SELECT t FROM ts_tbl`).Scan(&newTime))
+	require.Equal(t, ti, newTime)
+
+	// Test disabling TIMESTAMP_TZ casts.
+
+	_, err = db.Exec(`SET disable_timestamptz_casts = true`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE times (t TIMESTAMPTZ)`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO times VALUES (?)`, ti)
+	require.NoError(t, err)
 }
 
 func TestBoolean(t *testing.T) {

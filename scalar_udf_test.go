@@ -6,9 +6,8 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"testing"
-
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 var currentInfo TypeInfo
@@ -269,29 +268,33 @@ func TestConstantScalarUDF(t *testing.T) {
 }
 
 func TestAllTypesScalarUDF(t *testing.T) {
-	typeInfos := getTypeInfos(t, false, true)
+	typeInfos := getTypeInfos(t, false)
 	for _, info := range typeInfos {
 		func() {
+
 			currentInfo = info.TypeInfo
 
 			db := openDbWrapper(t, ``)
 			defer closeDbWrapper(t, db)
 
+			_, err := db.Exec(`SET TimeZone = 'UTC'`)
+			require.NoError(t, err)
+
 			conn := openConnWrapper(t, db, context.Background())
 			defer closeConnWrapper(t, conn)
 
-			_, err := conn.ExecContext(context.Background(), `CREATE TYPE greeting AS ENUM ('hello', 'world')`)
+			_, err = conn.ExecContext(context.Background(), `CREATE TYPE greeting AS ENUM ('hello', 'world')`)
 			require.NoError(t, err)
 
 			var udf *typesSUDF
 			err = RegisterScalarUDF(conn, "my_identity", udf)
 			require.NoError(t, err)
 
-			var res string
-			row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s)::VARCHAR AS res`, info.input))
+			var res any
+			row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s) AS res`, info.input))
 			require.NoError(t, row.Scan(&res))
 			if info.TypeInfo.InternalType() != TYPE_UUID {
-				require.Equal(t, info.output, res, `output does not match expected output, input: %s`, info.input)
+				require.Equal(t, info.output, fmt.Sprint(res), `output does not match expected output, input: %s`, info.input)
 			} else {
 				require.NotEqual(t, "", res, "uuid empty")
 			}

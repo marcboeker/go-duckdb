@@ -28,20 +28,22 @@ var testPrimitiveSQLValues = map[Type]testTypeValues{
 	TYPE_UBIGINT:      {input: `43::UBIGINT`, output: `43`},
 	TYPE_FLOAT:        {input: `1.7::FLOAT`, output: `1.7`},
 	TYPE_DOUBLE:       {input: `1.7::DOUBLE`, output: `1.7`},
-	TYPE_TIMESTAMP:    {input: `TIMESTAMP '1992-09-20 11:30:00.123456'`, output: `1992-09-20 11:30:00.123456`},
-	TYPE_DATE:         {input: `DATE '1992-09-20 11:30:00.123456789'`, output: `1992-09-20`},
-	TYPE_TIME:         {input: `TIME '1992-09-20 11:30:00.123456'`, output: `11:30:00.123456`},
-	TYPE_INTERVAL:     {input: `INTERVAL 1 YEAR`, output: `1 year`},
+	TYPE_TIMESTAMP:    {input: `TIMESTAMP '1992-09-20 11:30:00.123456'`, output: `1992-09-20 11:30:00.123456 +0000 UTC`},
+	TYPE_DATE:         {input: `DATE '1992-09-20 11:30:00.123456789'`, output: `1992-09-20 00:00:00 +0000 UTC`},
+	TYPE_TIME:         {input: `TIME '1992-09-20 11:30:00.123456'`, output: `0001-01-01 11:30:00.123456 +0000 UTC`},
+	TYPE_INTERVAL:     {input: `INTERVAL 1 YEAR`, output: `{0 12 0}`},
 	TYPE_HUGEINT:      {input: `44::HUGEINT`, output: `44`},
 	TYPE_VARCHAR:      {input: `'hello world'::VARCHAR`, output: `hello world`},
-	TYPE_BLOB:         {input: `'\xAA'::BLOB`, output: `\xAA`},
-	TYPE_TIMESTAMP_S:  {input: `TIMESTAMP_S '1992-09-20 11:30:00'`, output: `1992-09-20 11:30:00`},
-	TYPE_TIMESTAMP_MS: {input: `TIMESTAMP_MS '1992-09-20 11:30:00.123'`, output: `1992-09-20 11:30:00.123`},
-	TYPE_TIMESTAMP_NS: {input: `TIMESTAMP_NS '1992-09-20 11:30:00.123456789'`, output: `1992-09-20 11:30:00.123456789`},
+	TYPE_BLOB:         {input: `'\xAA'::BLOB`, output: `[170]`},
+	TYPE_TIMESTAMP_S:  {input: `TIMESTAMP_S '1992-09-20 11:30:00'`, output: `1992-09-20 11:30:00 +0000 UTC`},
+	TYPE_TIMESTAMP_MS: {input: `TIMESTAMP_MS '1992-09-20 11:30:00.123'`, output: `1992-09-20 11:30:00.123 +0000 UTC`},
+	TYPE_TIMESTAMP_NS: {input: `TIMESTAMP_NS '1992-09-20 11:30:00.123456789'`, output: `1992-09-20 11:30:00.123456789 +0000 UTC`},
 	TYPE_UUID:         {input: `uuid()`, output: ``},
+	TYPE_TIME_TZ:      {input: `'11:30:00.123456+06'::TIMETZ`, output: `0001-01-01 05:30:00.123456 +0000 UTC`},
+	TYPE_TIMESTAMP_TZ: {input: `TIMESTAMPTZ '1992-09-20 11:30:00.123456+04'`, output: `1992-09-20 07:30:00.123456 +0000 UTC`},
 }
 
-func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
+func getTypeInfos(t *testing.T, useAny bool) []testTypeInfo {
 	var primitiveTypes []Type
 	for k := range typeToStringMap {
 		_, inMap := unsupportedTypeToStringMap[k]
@@ -50,11 +52,6 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		}
 		if k == TYPE_ANY && !useAny {
 			continue
-		}
-		if skipTZ {
-			if k == TYPE_TIMESTAMP_TZ || k == TYPE_TIME_TZ {
-				continue
-			}
 		}
 		switch k {
 		case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION, TYPE_SQLNULL:
@@ -83,7 +80,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `4::DECIMAL(3, 2)`,
-			output: `4.00`,
+			output: `4`,
 		},
 	}
 
@@ -103,7 +100,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `[4::DECIMAL(3, 2)]`,
-			output: `[4.00]`,
+			output: `[4]`,
 		},
 	}
 
@@ -113,7 +110,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `[[4::DECIMAL(3, 2)]]`,
-			output: `[[4.00]]`,
+			output: `[[4]]`,
 		},
 	}
 
@@ -127,7 +124,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `{'hello': 'hello'::greeting, 'world': [[4::DECIMAL(3, 2)]]}`,
-			output: `{'hello': hello, 'world': [[4.00]]}`,
+			output: `map[hello:hello world:[[4]]]`,
 		},
 	}
 
@@ -144,7 +141,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 						'hello': {'hello': 'hello'::greeting, 'world': [[4::DECIMAL(3, 2)]]},
 						'world': [4::DECIMAL(3, 2)]
 					}`,
-			output: `{'hello': {'hello': hello, 'world': [[4.00]]}, 'world': [4.00]}`,
+			output: `map[hello:map[hello:hello world:[[4]]] world:[4]]`,
 		},
 	}
 
@@ -159,7 +156,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 						'world': [4::DECIMAL(3, 2)]
 					}
 					}`,
-			output: `{4.00={'hello': {'hello': hello, 'world': [[4.00]]}, 'world': [4.00]}}`,
+			output: `map[4:map[hello:map[hello:hello world:[[4]]] world:[4]]]`,
 		},
 	}
 
@@ -172,7 +169,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `[4::INT, 8::INT, 16::INT]`,
-			output: `[4, 8, 16]`,
+			output: `[4 8 16]`,
 		},
 	}
 
@@ -182,7 +179,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `[[4::INT, 8::INT, 16::INT], [3::INT, 6::INT, 9::INT]]`,
-			output: `[[4, 8, 16], [3, 6, 9]]`,
+			output: `[[4 8 16] [3 6 9]]`,
 		},
 	}
 
@@ -200,7 +197,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 		TypeInfo: info,
 		testTypeValues: testTypeValues{
 			input:  `UNION_VALUE(int_val := 1::INTEGER)`,
-			output: `1`,
+			output: `{1 int_val}`,
 		},
 	}
 
@@ -211,7 +208,7 @@ func getTypeInfos(t *testing.T, useAny bool, skipTZ bool) []testTypeInfo {
 }
 
 func TestTypeInterface(t *testing.T) {
-	testTypeInfos := getTypeInfos(t, true, false)
+	testTypeInfos := getTypeInfos(t, true)
 
 	// Use each type as a child.
 	for _, info := range testTypeInfos {
