@@ -357,3 +357,7 @@ Additionally, automatic extension loading is enabled.
 git tag <tagname>
 git push origin <tagname>
 ```
+
+Example PRs: 
+- Update the Mappings: https://github.com/marcboeker/go-duckdb/pull/473
+- Update the Main Module: https://github.com/marcboeker/go-duckdb/pull/474
