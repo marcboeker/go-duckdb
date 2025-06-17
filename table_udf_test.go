@@ -233,7 +233,7 @@ var (
 		{
 			udf:         &constTableUDF[time.Time]{value: time.Date(2006, 7, 8, 12, 34, 59, 123456000, time.UTC), t: TYPE_TIMESTAMP_TZ},
 			name:        "constTableUDF_timestamp_tz",
-			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789' AS TIMESTAMPTZ))`,
+			query:       `SELECT * FROM %s(CAST('2006-07-08 12:34:59.123456789+00' AS TIMESTAMPTZ))`,
 			resultCount: 1,
 		},
 		{

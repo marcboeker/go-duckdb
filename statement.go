@@ -5,8 +5,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"github.com/marcboeker/go-duckdb/mapping"
 	"math/big"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 type StmtType mapping.StatementType
@@ -167,12 +168,18 @@ func (s *Stmt) bindHugeint(val *big.Int, n int) (mapping.State, error) {
 func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.State, error) {
 	var state mapping.State
 	switch t {
-	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
+	case TYPE_TIMESTAMP:
 		v, err := getMappedTimestamp(t, val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
 		state = mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), *v)
+	case TYPE_TIMESTAMP_TZ:
+		v, err := getMappedTimestamp(t, val.Value)
+		if err != nil {
+			return mapping.StateError, err
+		}
+		state = mapping.BindTimestampTZ(*s.preparedStmt, mapping.IdxT(n+1), *v)
 	case TYPE_TIMESTAMP_S:
 		v, err := getMappedTimestampS(val.Value)
 		if err != nil {

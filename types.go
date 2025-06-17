@@ -225,20 +225,7 @@ func getTSTicks(t Type, val any) (int64, error) {
 		if year < -290307 || year > 294246 {
 			return 0, conversionError(year, -290307, 294246)
 		}
-		micros := ti.UnixMicro()
-		if t == TYPE_TIMESTAMP {
-			return micros, nil
-		}
-
-		// DuckDB expects TIMESTAMP_TZ in the local location.
-		loc := GetLocalLocation()
-		ti = ti.In(loc)
-
-		// Get the offset (in seconds), and convert it to microseconds.
-		_, offset := ti.Zone()
-		offset = offset * 1000000
-
-		return micros + int64(offset), nil
+		return ti.UnixMicro(), nil
 	}
 
 	// TYPE_TIMESTAMP_NS:

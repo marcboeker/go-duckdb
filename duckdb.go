@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -20,15 +19,6 @@ import (
 var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](
 	func() mapping.InstanceCache {
 		return mapping.CreateInstanceCache()
-	})
-
-var GetLocalLocation = sync.OnceValue[*time.Location](
-	func() *time.Location {
-		loc, err := time.LoadLocation(time.Local.String())
-		if err != nil {
-			panic(err)
-		}
-		return loc
 	})
 
 func init() {
