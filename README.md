@@ -332,3 +332,28 @@ for rdr.Next() {
 `go-duckdb` relies on the [`duckdb-go-bindings` module](https://github.com/duckdb/duckdb-go-bindings).
 Any pre-built library in `duckdb-go-bindings` statically links the default extensions: ICU, JSON, Parquet, and Autocomplete.
 Additionally, automatic extension loading is enabled.
+
+## Releasing a New DuckDB Version
+
+#### Update the Mappings
+
+1. Create a new branch.
+2. Update the `duckdb-go-bindings` dependencies in `mapping/mod.go` and `arrowmapping/mod.go`.
+3. Run `go mod tidy` inside `mapping` and inside `arrowmapping`.
+4. Commit and PR changes.
+5. Push two new tagged releases, `mapping/vx.x.x` and `arrowmapping/vx.x.x`.
+
+#### Update the Main Module
+
+1. Create a new branch.
+2. Update the `mapping` and `arrowmapping` dependencies in `mod.go`.
+3. Run `go mod tidy`.
+4. Update `VERSION=` in `tests.yaml`.
+5. Update the latest version in `README.md`.
+6. Commit and PR changes.
+7. Push a new tagged release, `vx.x.x`.
+
+```
+git tag <tagname>
+git push origin <tagname>
+```
