@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"sync"
 	"testing"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -194,6 +195,53 @@ func TestArrow(t *testing.T) {
 			return nil
 		})
 		require.NoError(t, err)
+	})
+
+	t.Run("concurrent arrow reader", func(t *testing.T) {
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		innerConn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &innerConn)
+
+		ar, err := NewArrowFromConn(innerConn)
+		require.NoError(t, err)
+
+		rdr, err := ar.QueryContext(context.Background(), `SELECT * FROM generate_series(1, 100000)`)
+		require.NoError(t, err)
+		defer rdr.Release()
+
+		readCh := make(chan int64)
+		wg := sync.WaitGroup{}
+		wg.Add(10)
+		for range 10 {
+			go func() {
+				defer wg.Done()
+				for rdr.Next() {
+					if rdr.Err() != nil {
+						t.Errorf("Error in goroutine: %v", rdr.Err())
+						return
+					}
+					rec := rdr.Record()
+					if rec == nil {
+						return
+					}
+					rec.Retain()
+					readCh <- rec.NumRows()
+					rec.Release()
+				}
+			}()
+		}
+		var totalRows int64
+		go func() {
+			for rows := range readCh {
+				totalRows += rows
+			}
+		}()
+		wg.Wait()
+		close(readCh)
+		require.Equal(t, int64(100000), totalRows)
+		require.NoError(t, rdr.Err())
 	})
 }
 

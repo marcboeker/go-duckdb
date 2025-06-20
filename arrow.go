@@ -63,7 +63,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"sync/atomic"
+	"sync"
 	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/arrowmapping"
@@ -95,13 +95,13 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 
 // arrowStreamReader implements array.RecordReader for streaming DuckDB results.
 type arrowStreamReader struct {
-	refCount int64
+	ctx      context.Context
+	res      *arrowmapping.Arrow
+	schema   *arrow.Schema
+	rowCount uint64
 
-	ctx        context.Context
-	stmt       *Stmt
-	res        *arrowmapping.Arrow
-	schema     *arrow.Schema
-	rowCount   uint64
+	mu         sync.Mutex // protects readCount and currentRec
+	refCount   int64
 	readCount  uint64
 	currentRec arrow.Record
 	err        error
@@ -110,26 +110,37 @@ type arrowStreamReader struct {
 // Retain increases the reference count by 1.
 // Retain may be called simultaneously from multiple goroutines.
 func (r *arrowStreamReader) Retain() {
-	atomic.AddInt64(&r.refCount, 1)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.err != nil {
+		return // Do not increase refCount if there is an error.
+	}
+	r.refCount++
 }
 
 // Release decreases the reference count by 1.
 // When the reference count goes to zero, the memory is freed.
 // Release may be called simultaneously from multiple goroutines.
 func (r *arrowStreamReader) Release() {
-	if atomic.AddInt64(&r.refCount, -1) == 0 {
-		if r.currentRec != nil {
-			r.currentRec.Release()
-			r.currentRec = nil
-		}
-		if r.res != nil {
-			arrowmapping.DestroyArrow(r.res)
-			r.res = nil
-		}
-		if r.stmt != nil {
-			r.stmt.Close()
-			r.stmt = nil
-		}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.err != nil {
+		return // Do not decrease refCount if there is an error.
+	}
+	if r.refCount <= 0 {
+		return // Do not release if refCount is already zero.
+	}
+	r.refCount--
+	if r.refCount != 0 {
+		return // Do not release if there are still references.
+	}
+	// If this is the last reference, we need to clean up.
+	if r.currentRec != nil {
+		r.currentRec.Release()
+	}
+	if r.res != nil {
+		arrowmapping.DestroyArrow(r.res)
+		r.res = nil
 	}
 }
 
@@ -138,12 +149,10 @@ func (r *arrowStreamReader) Schema() *arrow.Schema {
 }
 
 func (r *arrowStreamReader) Next() bool {
-	if r.currentRec != nil {
-		r.currentRec.Release()
-		r.currentRec = nil
-	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	if r.readCount >= r.rowCount {
+	if r.readCount >= r.rowCount || r.err != nil {
 		return false
 	}
 
@@ -152,24 +161,30 @@ func (r *arrowStreamReader) Next() bool {
 		r.err = r.ctx.Err()
 		return false
 	default:
+		if r.currentRec != nil {
+			r.currentRec.Release()
+			r.currentRec = nil
+		}
+		rec, err := queryArrowArray(r.res, r.schema)
+		if err != nil {
+			r.err = err
+			return false
+		}
+		r.currentRec = rec
+		r.readCount += uint64(rec.NumRows())
+		return true
 	}
-
-	rec, err := queryArrowArray(r.res, r.schema)
-	if err != nil {
-		r.err = err
-		return false
-	}
-
-	r.currentRec = rec
-	r.readCount += uint64(rec.NumRows())
-	return true
 }
 
 func (r *arrowStreamReader) Record() arrow.Record {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.currentRec
 }
 
 func (r *arrowStreamReader) Err() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.err
 }
 
@@ -212,6 +227,7 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		stmt.Close()
 		return nil, err
 	}
+	defer stmt.Close()
 
 	sc, err := a.queryArrowSchema(res)
 	if err != nil {
@@ -223,7 +239,6 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	return &arrowStreamReader{
 		refCount: 1,
 		ctx:      ctx,
-		stmt:     stmt,
 		res:      res,
 		schema:   sc,
 		rowCount: uint64(arrowmapping.ArrowRowCount(*res)),
