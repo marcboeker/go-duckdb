@@ -161,15 +161,11 @@ func (r *arrowStreamReader) Next() bool {
 		r.err = r.ctx.Err()
 		return false
 	default:
-		if r.currentRec != nil {
-			r.currentRec.Release()
-		}
 		rec, err := queryArrowArray(r.res, r.schema)
 		if err != nil {
 			r.err = err
 			return false
 		}
-		rec.Retain()
 		r.currentRec = rec
 		r.readCount += uint64(rec.NumRows())
 		return true
