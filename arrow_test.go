@@ -243,13 +243,16 @@ func TestArrow(t *testing.T) {
 			}()
 		}
 		var totalRows int64
+		stop := make(chan struct{})
 		go func() {
+			defer close(stop)
 			for rows := range readCh {
 				totalRows += rows
 			}
 		}()
 		wg.Wait()
 		close(readCh)
+		<-stop
 		require.Equal(t, int64(100000), totalRows)
 		require.NoError(t, rdr.Err())
 
