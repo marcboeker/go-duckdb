@@ -163,13 +163,13 @@ func (r *arrowStreamReader) Next() bool {
 	default:
 		if r.currentRec != nil {
 			r.currentRec.Release()
-			r.currentRec = nil
 		}
 		rec, err := queryArrowArray(r.res, r.schema)
 		if err != nil {
 			r.err = err
 			return false
 		}
+		rec.Retain()
 		r.currentRec = rec
 		r.readCount += uint64(rec.NumRows())
 		return true

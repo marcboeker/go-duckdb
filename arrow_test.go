@@ -207,7 +207,7 @@ func TestArrow(t *testing.T) {
 		ar, err := NewArrowFromConn(innerConn)
 		require.NoError(t, err)
 
-		rdr, err := ar.QueryContext(context.Background(), `SELECT * FROM generate_series(1, 100000)`)
+		rdr, err := ar.QueryContext(t.Context(), `SELECT * FROM generate_series(1, 100000)`)
 		require.NoError(t, err)
 		defer rdr.Release()
 
@@ -217,6 +217,8 @@ func TestArrow(t *testing.T) {
 		for range 10 {
 			go func() {
 				defer wg.Done()
+				rdr.Retain()
+				defer rdr.Release()
 				for rdr.Next() {
 					if rdr.Err() != nil {
 						t.Errorf("Error in goroutine: %v", rdr.Err())
@@ -242,6 +244,15 @@ func TestArrow(t *testing.T) {
 		close(readCh)
 		require.Equal(t, int64(100000), totalRows)
 		require.NoError(t, rdr.Err())
+
+		rdr.Retain()
+		require.Equal(t, int64(2), rdr.(*arrowStreamReader).refCount)
+		rdr.Release()
+		require.Equal(t, int64(1), rdr.(*arrowStreamReader).refCount)
+		rdr.Release()
+		require.Equal(t, int64(0), rdr.(*arrowStreamReader).refCount)
+		rdr.Release()
+		require.Equal(t, int64(0), rdr.(*arrowStreamReader).refCount)
 	})
 }
 
