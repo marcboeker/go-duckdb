@@ -213,24 +213,32 @@ func TestArrow(t *testing.T) {
 
 		readCh := make(chan int64)
 		wg := sync.WaitGroup{}
+		mu := sync.Mutex{} // we use a mutex to synchronize Next and Record calls across goroutines
 		wg.Add(10)
 		for range 10 {
 			go func() {
 				defer wg.Done()
 				rdr.Retain()
 				defer rdr.Release()
-				for rdr.Next() {
+				for {
+					mu.Lock()
+					if !rdr.Next() {
+						mu.Unlock()
+						return
+					}
 					if rdr.Err() != nil {
 						t.Errorf("Error in goroutine: %v", rdr.Err())
+						mu.Unlock()
 						return
 					}
 					rec := rdr.Record()
-					if rec == nil {
+					select {
+					case <-t.Context().Done():
+						mu.Unlock()
 						return
+					case readCh <- rec.NumRows():
 					}
-					rec.Retain()
-					readCh <- rec.NumRows()
-					rec.Release()
+					mu.Unlock()
 				}
 			}()
 		}
