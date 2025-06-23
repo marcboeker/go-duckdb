@@ -237,10 +237,10 @@ rows, err := conn.QueryContext(context.Background(), "SELECT 42")
 // Alternatively, rows.Next() has to return false.
 rows.Close()
 
-appender, err := NewAppenderFromConn(conn, "", "test")
+appender, err := duckdb.NewAppenderFromConn(conn, "", "test")
 defer appender.Close()
 
-c, err := NewConnector("", nil)
+c, err := duckdb.NewConnector("", nil)
 // Optional, if passed to sql.OpenDB.
 defer c.Close()
 ```
