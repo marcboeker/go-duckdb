@@ -67,11 +67,6 @@ type (
 		RowTableFunction | ParallelRowTableFunction | ChunkTableFunction | ParallelChunkTableFunction
 	}
 
-	// sequentialTableFunction implements different table function types:
-	// RowTableFunction and ChunkTableFunction.
-	sequentialTableFunction interface {
-		RowTableFunction | ChunkTableFunction
-	}
 	// parallelTableFunction implements different table function types:
 	// ParallelRowTableFunction and ParallelChunkTableFunction.
 	parallelTableFunction interface {
