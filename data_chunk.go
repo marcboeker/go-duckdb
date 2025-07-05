@@ -2,6 +2,8 @@ package duckdb
 
 import "C"
 import (
+	"sync"
+
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
@@ -18,9 +20,9 @@ type DataChunk struct {
 }
 
 // GetDataChunkCapacity returns the capacity of a data chunk.
-func GetDataChunkCapacity() int {
+var GetDataChunkCapacity = sync.OnceValue(func() int {
 	return int(mapping.VectorSize())
-}
+})
 
 // GetSize returns the internal size of the data chunk.
 func (chunk *DataChunk) GetSize() int {
