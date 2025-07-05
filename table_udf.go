@@ -12,8 +12,7 @@ void table_udf_init(void *);
 void table_udf_local_init(void *);
 typedef void (*table_udf_init_t)(void *);
 
-void table_udf_row_callback(void *, void *);
-void table_udf_chunk_callback(void *, void *);
+void table_udf_callback(void *, void *);
 typedef void (*table_udf_callback_t)(void *, void *, void *);
 
 void table_udf_delete_callback(void *);
@@ -233,49 +232,12 @@ func table_udf_local_init(infoPtr unsafe.Pointer) {
 	mapping.InitSetInitData(info, unsafe.Pointer(&h), deleteCallbackPtr)
 }
 
-//export table_udf_row_callback
-func table_udf_row_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
+//export table_udf_callback
+func table_udf_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
 	info := mapping.FunctionInfo{Ptr: infoPtr}
 	output := mapping.DataChunk{Ptr: outputPtr}
 
 	instance := getPinned[tableFunctionData](mapping.FunctionGetBindData(info))
-	fun := instance.fun.(ParallelRowTableSource)
-
-	var chunk DataChunk
-	err := chunk.initFromDuckDataChunk(output, true)
-	if err != nil {
-		mapping.FunctionSetError(info, err.Error())
-		return
-	}
-
-	row := Row{
-		chunk:      &chunk,
-		projection: instance.projection,
-	}
-	maxSize := mapping.IdxT(GetDataChunkCapacity())
-
-	// At the end of the loop row.r must be the index of the last row.
-	localState := getPinned[any](mapping.FunctionGetLocalInitData(info))
-	for row.r = 0; row.r < maxSize; row.r++ {
-		next, errRow := fun.FillRow(localState, row)
-		if errRow != nil {
-			mapping.FunctionSetError(info, errRow.Error())
-			break
-		}
-		if !next {
-			break
-		}
-	}
-	mapping.DataChunkSetSize(output, row.r)
-}
-
-//export table_udf_chunk_callback
-func table_udf_chunk_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
-	info := mapping.FunctionInfo{Ptr: infoPtr}
-	output := mapping.DataChunk{Ptr: outputPtr}
-
-	instance := getPinned[tableFunctionData](mapping.FunctionGetBindData(info))
-	fun := instance.fun.(ParallelChunkTableSource)
 
 	var chunk DataChunk
 	err := chunk.initFromDuckDataChunk(output, true)
@@ -285,9 +247,32 @@ func table_udf_chunk_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) 
 	}
 
 	localState := getPinned[any](mapping.FunctionGetLocalInitData(info))
-	err = fun.FillChunk(localState, chunk)
-	if err != nil {
-		mapping.FunctionSetError(info, err.Error())
+
+	switch fun := instance.fun.(type) {
+	case ParallelRowTableSource:
+		row := Row{
+			chunk:      &chunk,
+			projection: instance.projection,
+		}
+		maxSize := mapping.IdxT(GetDataChunkCapacity())
+
+		// At the end of the loop row.r must be the index of the last row.
+		for row.r = 0; row.r < maxSize; row.r++ {
+			next, errRow := fun.FillRow(localState, row)
+			if errRow != nil {
+				mapping.FunctionSetError(info, errRow.Error())
+				break
+			}
+			if !next {
+				break
+			}
+		}
+		mapping.DataChunkSetSize(output, row.r)
+	case ParallelChunkTableSource:
+		err = fun.FillChunk(localState, chunk)
+		if err != nil {
+			mapping.FunctionSetError(info, err.Error())
+		}
 	}
 }
 
@@ -344,24 +329,27 @@ func registerParallelTableUDF[TFT parallelTableFunction](conn *sql.Conn, name st
 	initCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_init))
 	mapping.TableFunctionSetInit(function, initCallbackPtr)
 
-	bindCallbackPtr := unsafe.Pointer(C.table_udf_bind_t(C.table_udf_bind_row))
-	mapping.TableFunctionSetBind(function, bindCallbackPtr)
-
-	callbackPtr := unsafe.Pointer(C.table_udf_callback_t(C.table_udf_row_callback))
-	mapping.TableFunctionSetFunction(function, callbackPtr)
-
 	localInitCallbackPtr := unsafe.Pointer(C.table_udf_init_t(C.table_udf_local_init))
 	mapping.TableFunctionSetLocalInit(function, localInitCallbackPtr)
+
+	callbackPtr := unsafe.Pointer(C.table_udf_callback_t(C.table_udf_callback))
+	mapping.TableFunctionSetFunction(function, callbackPtr)
 
 	var x any = f
 	switch tableFunc := x.(type) {
 	case ParallelRowTableFunction:
+		bindCallbackPtr := unsafe.Pointer(C.table_udf_bind_t(C.table_udf_bind_row))
+		mapping.TableFunctionSetBind(function, bindCallbackPtr)
+
 		config = tableFunc.Config
 		if tableFunc.BindArguments == nil {
 			return getError(errAPI, errTableUDFMissingBindArgs)
 		}
 
 	case ParallelChunkTableFunction:
+		bindCallbackPtr := unsafe.Pointer(C.table_udf_bind_t(C.table_udf_bind_chunk))
+		mapping.TableFunctionSetBind(function, bindCallbackPtr)
+
 		config = tableFunc.Config
 		if tableFunc.BindArguments == nil {
 			return getError(errAPI, errTableUDFMissingBindArgs)
