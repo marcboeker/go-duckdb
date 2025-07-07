@@ -1442,19 +1442,19 @@ func BenchmarkAppenderSingle(b *testing.B) {
 	b.Run("int8", benchmarkAppenderSingle[int8](0))
 }
 
-func BenchmarkAppenderRowSingle2(b *testing.B) {
+func BenchmarkAppenderRowSingle(b *testing.B) {
 	b.Run("int8", benchmarkAppenderRowSingle[int8](0))
 }
 
-func BenchmarkAppenderParallelRowSingle2(b *testing.B) {
+func BenchmarkAppenderParallelRowSingle(b *testing.B) {
 	b.Run("int8", benchmarkAppenderParallelRowSingle[int8](0))
 }
 
-func BenchmarkAppenderChunkSingle2(b *testing.B) {
+func BenchmarkAppenderChunkSingle(b *testing.B) {
 	b.Run("int8", benchmarkAppenderChunkSingle[int8](0))
 }
 
-func BenchmarkAppenderParallelChunkSingle2(b *testing.B) {
+func BenchmarkAppenderParallelChunkSingle(b *testing.B) {
 	b.Run("int8", benchmarkAppenderParallelChunkSingle[int8](0))
 }
 
