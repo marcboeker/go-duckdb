@@ -63,6 +63,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"sync"
 	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/arrowmapping"
@@ -90,6 +91,95 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	}
 
 	return &Arrow{conn: conn}, nil
+}
+
+// arrowStreamReader implements array.RecordReader for streaming DuckDB results.
+type arrowStreamReader struct {
+	ctx      context.Context
+	res      *arrowmapping.Arrow
+	schema   *arrow.Schema
+	rowCount uint64
+
+	mu         sync.Mutex // protects readCount and currentRec
+	refCount   int64
+	readCount  uint64
+	currentRec arrow.Record
+	err        error
+}
+
+// Retain increases the reference count by 1.
+// Retain may be called simultaneously from multiple goroutines.
+func (r *arrowStreamReader) Retain() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.err != nil {
+		return // Do not increase refCount if there is an error.
+	}
+	r.refCount++
+}
+
+// Release decreases the reference count by 1.
+// When the reference count goes to zero, the memory is freed.
+// Release may be called simultaneously from multiple goroutines.
+func (r *arrowStreamReader) Release() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.refCount <= 0 {
+		return // Do not release if refCount is already zero.
+	}
+	r.refCount--
+	if r.refCount != 0 {
+		return // Do not release if there are still references.
+	}
+	// If this is the last reference, we need to clean up.
+	if r.res != nil {
+		arrowmapping.DestroyArrow(r.res)
+		r.res = nil
+	}
+	if r.currentRec != nil {
+		r.currentRec.Release()
+	}
+}
+
+func (r *arrowStreamReader) Schema() *arrow.Schema {
+	return r.schema
+}
+
+func (r *arrowStreamReader) Next() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.readCount >= r.rowCount || r.err != nil {
+		return false
+	}
+
+	select {
+	case <-r.ctx.Done():
+		r.err = r.ctx.Err()
+		return false
+	default:
+		rec, err := queryArrowArray(r.res, r.schema)
+		if err != nil {
+			r.err = err
+			r.currentRec = nil
+			return false
+		}
+		r.currentRec = rec
+		r.readCount += uint64(rec.NumRows())
+		return true
+	}
+}
+
+func (r *arrowStreamReader) Record() arrow.Record {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.currentRec
+}
+
+func (r *arrowStreamReader) Err() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.err
 }
 
 // QueryContext prepares statements, executes them, returns Apache Arrow array.RecordReader as a result of the last
@@ -125,45 +215,28 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	if err != nil {
 		return nil, err
 	}
-	defer stmt.Close()
 
 	res, err := a.execute(stmt, a.anyArgsToNamedArgs(args))
 	if err != nil {
+		stmt.Close()
 		return nil, err
 	}
-	defer arrowmapping.DestroyArrow(res)
+	defer stmt.Close()
 
 	sc, err := a.queryArrowSchema(res)
 	if err != nil {
+		arrowmapping.DestroyArrow(res)
+		stmt.Close()
 		return nil, err
 	}
 
-	var recs []arrow.Record
-	defer func() {
-		for _, r := range recs {
-			r.Release()
-		}
-	}()
-
-	rowCount := uint64(arrowmapping.ArrowRowCount(*res))
-	var retrievedRows uint64
-	for retrievedRows < rowCount {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		rec, err := a.queryArrowArray(res, sc)
-		if err != nil {
-			return nil, err
-		}
-
-		recs = append(recs, rec)
-		retrievedRows += uint64(rec.NumRows())
-	}
-
-	return array.NewRecordReader(sc, recs)
+	return &arrowStreamReader{
+		refCount: 1,
+		ctx:      ctx,
+		res:      res,
+		schema:   sc,
+		rowCount: uint64(arrowmapping.ArrowRowCount(*res)),
+	}, nil
 }
 
 // queryArrowSchema fetches the internal arrow schema from the arrow result.
@@ -193,7 +266,7 @@ func (a *Arrow) queryArrowSchema(res *arrowmapping.Arrow) (*arrow.Schema, error)
 //
 // This function can be called multiple time to get next chunks,
 // which will free the previous out_array.
-func (a *Arrow) queryArrowArray(res *arrowmapping.Arrow, sc *arrow.Schema) (arrow.Record, error) {
+func queryArrowArray(res *arrowmapping.Arrow, sc *arrow.Schema) (arrow.Record, error) {
 	arr := C.calloc(1, C.sizeof_struct_ArrowArray)
 	defer func() {
 		cdata.ReleaseCArrowArray((*cdata.CArrowArray)(arr))

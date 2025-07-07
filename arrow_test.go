@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"sync"
 	"testing"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -194,6 +195,78 @@ func TestArrow(t *testing.T) {
 			return nil
 		})
 		require.NoError(t, err)
+	})
+
+	// Test concurrent reading from an Arrow stream.
+	// This test creates a large Arrow stream and reads it concurrently from multiple goroutines.
+	// It's not really used test case but it helps to ensure that the Arrow reader can handle concurrent access correctly.
+	t.Run("concurrent arrow reader", func(t *testing.T) {
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		innerConn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &innerConn)
+
+		ar, err := NewArrowFromConn(innerConn)
+		require.NoError(t, err)
+
+		rdr, err := ar.QueryContext(t.Context(), `SELECT * FROM generate_series(1, 100000)`)
+		require.NoError(t, err)
+		defer rdr.Release()
+
+		readCh := make(chan int64)
+		wg := sync.WaitGroup{}
+		mu := sync.Mutex{} // we use a mutex to synchronize Next and Record calls across goroutines
+		wg.Add(10)
+		for range 10 {
+			go func() {
+				defer wg.Done()
+				rdr.Retain()
+				defer rdr.Release()
+				for {
+					mu.Lock()
+					if !rdr.Next() {
+						mu.Unlock()
+						return
+					}
+					if rdr.Err() != nil {
+						t.Errorf("Error in goroutine: %v", rdr.Err())
+						mu.Unlock()
+						return
+					}
+					rec := rdr.Record()
+					select {
+					case <-t.Context().Done():
+						mu.Unlock()
+						return
+					case readCh <- rec.NumRows():
+					}
+					mu.Unlock()
+				}
+			}()
+		}
+		var totalRows int64
+		stop := make(chan struct{})
+		go func() {
+			defer close(stop)
+			for rows := range readCh {
+				totalRows += rows
+			}
+		}()
+		wg.Wait()
+		close(readCh)
+		<-stop
+		require.Equal(t, int64(100000), totalRows)
+		require.NoError(t, rdr.Err())
+
+		rdr.Retain()
+		require.Equal(t, int64(2), rdr.(*arrowStreamReader).refCount)
+		rdr.Release()
+		require.Equal(t, int64(1), rdr.(*arrowStreamReader).refCount)
+		rdr.Release()
+		require.Equal(t, int64(0), rdr.(*arrowStreamReader).refCount)
+		rdr.Release()
+		require.Equal(t, int64(0), rdr.(*arrowStreamReader).refCount)
 	})
 }
 
