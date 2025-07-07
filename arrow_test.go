@@ -197,6 +197,9 @@ func TestArrow(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	// Test concurrent reading from an Arrow stream.
+	// This test creates a large Arrow stream and reads it concurrently from multiple goroutines.
+	// It's not really used test case but it helps to ensure that the Arrow reader can handle concurrent access correctly.
 	t.Run("concurrent arrow reader", func(t *testing.T) {
 		c := newConnectorWrapper(t, ``, nil)
 		defer closeConnectorWrapper(t, c)
