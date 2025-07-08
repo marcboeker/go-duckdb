@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -650,4 +651,76 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	err = nestedEmptySlicePrepare.QueryRow([][]string{}).Scan(&nestedEmptySliceRes)
 	require.NoError(t, err)
 	require.Equal(t, [][]any{}, nestedEmptySliceRes.Get())
+}
+
+// TestBindUUID tests the binding of UUIDs to the database.
+func TestBindUUID(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Create table with nullable UUID column
+	_, err := db.Exec(`CREATE TABLE uuid_test (id INTEGER, uuid_col UUID)`)
+	require.NoError(t, err)
+
+	// // Test 1: Insert a NULL UUID using (*uuid.UUID)(nil)
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 1, (*uuid.UUID)(nil))
+	require.NoError(t, err)
+
+	// Test 2: Insert a NULL UUID using nil
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 2, nil)
+	require.NoError(t, err)
+
+	// Test 3: Insert a valid UUID ptr, to test complex value binding
+	u3 := uuid.New()
+	testUUID := UUID(u3)
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 3, &testUUID)
+	require.NoError(t, err)
+
+	// Test 4: Insert a uuid.UUID pointer containing a value, to test Stringer interface
+	u4 := uuid.New()
+	ptrToUUID := &u4
+	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 4, ptrToUUID)
+	require.NoError(t, err)
+
+	// Verify results by scanning back
+	rows, err := db.Query(`SELECT id, uuid_col FROM uuid_test ORDER BY id`)
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, rows)
+
+	expectedResults := []struct {
+		id       int
+		uuid     *uuid.UUID
+		expected string
+	}{
+		{1, nil, "NULL"},
+		{2, nil, "NULL"},
+		{3, &u3, "valid UUID"},
+		{4, &u4, "valid UUID pointer"},
+	}
+
+	resultIndex := 0
+	for rows.Next() {
+		var id int
+		var retrievedUUID *uuid.UUID
+		err = rows.Scan(&id, &retrievedUUID)
+		require.NoError(t, err)
+
+		expected := expectedResults[resultIndex]
+		require.Equal(t, expected.id, id, "incorrect id")
+
+		if expected.uuid == nil {
+			require.Nil(t, retrievedUUID)
+		} else {
+			require.NotNil(t, retrievedUUID)
+			require.Equal(t, *expected.uuid, *retrievedUUID)
+		}
+		resultIndex++
+	}
+	require.Equal(t, 4, resultIndex, "incorrect count of results")
+
+	// Verify NULL count
+	var nullCount int
+	err = db.QueryRow(`SELECT COUNT(*) FROM uuid_test WHERE uuid_col IS NULL`).Scan(&nullCount)
+	require.NoError(t, err)
+	require.Equal(t, 2, nullCount, "incorrect count of NULLs")
 }
