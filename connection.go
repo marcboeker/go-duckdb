@@ -44,7 +44,7 @@ func (conn *Conn) CheckNamedValue(nv *driver.NamedValue) error {
 
 	vo := reflect.ValueOf(nv.Value)
 	switch vo.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Slice, reflect.Map, reflect.Array:
+	case reflect.Interface, reflect.Slice, reflect.Map, reflect.Array:
 		return nil
 	}
 	return driver.ErrSkip
