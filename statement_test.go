@@ -722,3 +722,33 @@ func TestBindUUID(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, nullCount, "incorrect count of NULLs")
 }
+
+// Define a custom type that shadows the string type
+type String256 string
+
+// Test that a custom type pointer is handled correctly by the DefaultParameterConverter
+func TestInsertCustomTypePtr(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Create a table with a VARCHAR column
+	createTable(t, db, `CREATE TABLE test_custom_type_ptr(id INTEGER, name VARCHAR)`)
+
+	// Create a value of our custom type
+	expected := String256("test string")
+
+	// Insert the custom type pointer into the VARCHAR column
+	// Ensures that the custom type is handled by the DefaultParameterConverter
+	_, err := db.Exec(`INSERT INTO test_custom_type_ptr VALUES (?, ?)`, 1, &expected)
+	require.NoError(t, err)
+
+	// Query the inserted value back
+	var id int
+	var actual String256
+	err = db.QueryRow(`SELECT id, name FROM test_custom_type_ptr WHERE id = ?`, 1).Scan(&id, &actual)
+	require.NoError(t, err)
+
+	// Verify the values
+	require.Equal(t, 1, id, "incorrect id")
+	require.Equal(t, expected, actual, "incorrect value")
+}
