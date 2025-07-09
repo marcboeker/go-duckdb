@@ -653,7 +653,6 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	require.Equal(t, [][]any{}, nestedEmptySliceRes.Get())
 }
 
-// TestBindUUID tests the binding of UUIDs to the database.
 func TestBindUUID(t *testing.T) {
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
@@ -662,7 +661,7 @@ func TestBindUUID(t *testing.T) {
 	_, err := db.Exec(`CREATE TABLE uuid_test (id INTEGER, uuid_col UUID)`)
 	require.NoError(t, err)
 
-	// // Test 1: Insert a NULL UUID using (*uuid.UUID)(nil)
+	// Test 1: Insert a NULL UUID using (*uuid.UUID)(nil)
 	_, err = db.Exec(`INSERT INTO uuid_test VALUES (?, ?)`, 1, (*uuid.UUID)(nil))
 	require.NoError(t, err)
 
@@ -683,26 +682,25 @@ func TestBindUUID(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify results by scanning back
-	rows, err := db.Query(`SELECT id, uuid_col FROM uuid_test ORDER BY id`)
+	r, err := db.Query(`SELECT id, uuid_col FROM uuid_test ORDER BY id`)
 	require.NoError(t, err)
-	defer closeRowsWrapper(t, rows)
+	defer closeRowsWrapper(t, r)
 
 	expectedResults := []struct {
-		id       int
-		uuid     *uuid.UUID
-		expected string
+		id   int
+		uuid *uuid.UUID
 	}{
-		{1, nil, "NULL"},
-		{2, nil, "NULL"},
-		{3, &u3, "valid UUID"},
-		{4, &u4, "valid UUID pointer"},
+		{1, nil},
+		{2, nil},
+		{3, &u3},
+		{4, &u4},
 	}
 
 	resultIndex := 0
-	for rows.Next() {
+	for r.Next() {
 		var id int
 		var retrievedUUID *uuid.UUID
-		err = rows.Scan(&id, &retrievedUUID)
+		err = r.Scan(&id, &retrievedUUID)
 		require.NoError(t, err)
 
 		expected := expectedResults[resultIndex]
