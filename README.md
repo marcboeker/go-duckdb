@@ -4,14 +4,15 @@
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
-**Current DuckDB version: `v1.3.1`.**
+**Current DuckDB version: `v1.3.2`.**
 
-The first go-duckdb tag with that version is `v2.3.2`.
+The first go-duckdb tag with that version is `v2.3.3`.
 
 Previous DuckDB versions:
 
 | DuckDB   | go-duckdb |
 |----------|-----------|
+| `v1.3.2` | `v2.3.3`  |
 | `v1.3.1` | `v2.3.2`  |
 | `v1.3.0` | `v2.3.0`  |
 | `v1.2.2` | `v2.2.0`  |
