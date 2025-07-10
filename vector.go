@@ -107,6 +107,7 @@ func (vec *vector) resizeListVector(newLength mapping.IdxT) {
 func (vec *vector) resetChildData() {
 	for i := range vec.childVectors {
 		vec.childVectors[i].dataPtr = mapping.VectorGetData(vec.childVectors[i].vec)
+		vec.childVectors[i].maskPtr = mapping.VectorGetValidity(vec.childVectors[i].vec)
 		vec.childVectors[i].resetChildData()
 	}
 }
