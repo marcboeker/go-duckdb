@@ -328,6 +328,7 @@ func (a *Arrow) RegisterView(reader array.RecordReader, name string) (release fu
 
 	stream := C.calloc(1, C.sizeof_struct_ArrowArrayStream)
 	release = func() {
+		cdata.ReleaseCArrowArrayStream((*cdata.CArrowArrayStream)(stream))
 		C.free(stream)
 	}
 	cdata.ExportRecordReader(reader, (*cdata.CArrowArrayStream)(stream))
