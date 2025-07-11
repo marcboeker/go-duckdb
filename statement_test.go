@@ -752,3 +752,43 @@ func TestInsertCustomTypePtr(t *testing.T) {
 	require.Equal(t, 1, id, "incorrect id")
 	require.Equal(t, expected, actual, "incorrect value")
 }
+
+func TestBindNullableValue(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	// Create a table with a nullable BIGINT/VARCHAR column
+	createTable(t, db, `CREATE TABLE nullable_int_test(id BIGINT, name VARCHAR)`)
+
+	// Test inserting a NULL value
+	var nullID *int64
+	var nullName *string
+	_, err := db.Exec(`INSERT INTO nullable_int_test (id, name) VALUES (?, ?) RETURNING id, name`, nil, nil)
+	require.NoError(t, err)
+
+	// Query the inserted value back
+	err = db.QueryRow(`SELECT id, name FROM nullable_int_test WHERE id IS NULL`).Scan(&nullID, &nullName)
+	require.NoError(t, err)
+
+	// Verify the values
+	require.Nil(t, nullID, "expected id to be nil")
+	require.Nil(t, nullName, "expected name to be nil")
+
+	// Test inserting value pointer
+	id := int64(42)
+	name := "test name"
+	var nonNullID *int64
+	var nonNullName *string
+	_, err = db.Exec(`INSERT INTO nullable_int_test (id, name) VALUES (?, ?) RETURNING id, name`, &id, &name)
+	require.NoError(t, err)
+
+	// Query the inserted value back
+	err = db.QueryRow(`SELECT id, name FROM nullable_int_test WHERE id = ?`, id).Scan(&nonNullID, &nonNullName)
+	require.NoError(t, err)
+
+	// Verify the values
+	require.NotNil(t, nonNullID, "expected id to not be nil")
+	require.Equal(t, id, *nonNullID, "incorrect id value")
+	require.NotNil(t, nonNullName, "expected name to not be nil")
+	require.Equal(t, name, *nonNullName, "incorrect name value")
+}
