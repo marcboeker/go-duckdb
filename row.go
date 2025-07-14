@@ -28,10 +28,8 @@ func SetRowValue[T any](row Row, colIdx int, val T) error {
 	return setVectorVal(&vec, row.r, val)
 }
 
-// SetRowValue sets the value at colIdx to val. Returns an error on failure.
+// SetRowValue sets the value at colIdx to val.
+// Returns an error on failure, and nil for non-projected columns.
 func (r Row) SetRowValue(colIdx int, val any) error {
-	if !r.IsProjected(colIdx) {
-		return nil
-	}
-	return r.chunk.SetValue(colIdx, int(r.r), val)
+	return SetRowValue(r, colIdx, val)
 }
