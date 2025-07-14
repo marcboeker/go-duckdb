@@ -385,7 +385,6 @@ func (udf *parallelIncTableUDF) FillRow(localState any, row Row) (bool, error) {
 		udf.claimed += remaining
 		udf.lock.Unlock()
 	}
-
 	state.start++
 	err := SetRowValue(row, 0, state.start)
 	return true, err
@@ -444,7 +443,7 @@ func (udf *parallelChunkIncTableUDF) FillChunk(localState any, chunk DataChunk) 
 	if remaining <= 0 {
 		// No more work.
 		udf.lock.Unlock()
-		return nil
+		return chunk.SetSize(int(remaining))
 	} else if remaining >= 2048 {
 		remaining = 2048
 	}
@@ -454,7 +453,7 @@ func (udf *parallelChunkIncTableUDF) FillChunk(localState any, chunk DataChunk) 
 	udf.lock.Unlock()
 
 	for i := 0; i < int(remaining); i++ {
-		err := chunk.SetValue(0, i, int64(i)+state.start+1)
+		err := SetChunkValue(chunk, 0, i, int64(i)+state.start+1)
 		if err != nil {
 			return err
 		}
@@ -712,7 +711,7 @@ func (udf *chunkIncTableUDF) FillChunk(chunk DataChunk) error {
 			return err
 		}
 		udf.count++
-		err := chunk.SetValue(0, i, udf.count)
+		err := SetChunkValue(chunk, 0, i, udf.count)
 		if err != nil {
 			return err
 		}
