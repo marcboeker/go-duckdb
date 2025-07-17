@@ -535,10 +535,18 @@ func TestBindJSON(t *testing.T) {
 	_, err = db.Exec(`INSERT INTO tbl VALUES (?)`, jsonData)
 	require.NoError(t, err)
 
+	_, err = db.Exec(`INSERT INTO tbl VALUES (?)`, nil)
+	require.NoError(t, err)
+
 	var str string
-	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl`).Scan(&str)
+	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl WHERE j IS NOT NULL`).Scan(&str)
 	require.NoError(t, err)
 	require.Equal(t, string(jsonData), str)
+
+	var nilStr *string
+	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl WHERE j IS NULL`).Scan(&nilStr)
+	require.NoError(t, err)
+	require.Nil(t, nilStr)
 }
 
 func TestPrepareComplexQueryParameter(t *testing.T) {

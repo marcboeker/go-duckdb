@@ -244,8 +244,10 @@ func (s *Stmt) bindJSON(val driver.NamedValue, n int) (mapping.State, error) {
 		return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), string(v)), nil
 	case string:
 		return mapping.BindVarchar(*s.preparedStmt, mapping.IdxT(n+1), v), nil
+	case nil:
+		return mapping.BindNull(*s.preparedStmt, mapping.IdxT(n+1)), nil
 	}
-	return mapping.StateError, addIndexToError(unsupportedTypeError("JSON interface, need []byte or string"), n+1)
+	return mapping.StateError, addIndexToError(unsupportedTypeError("JSON interface, need []byte, string or nil"), n+1)
 }
 
 func (s *Stmt) bindUUID(val driver.NamedValue, n int) (mapping.State, error) {
