@@ -57,7 +57,7 @@ type (
 	ChunkTableSource interface {
 		sequentialTableSource
 		// FillChunk takes a Chunk and fills it with values.
-		// Set the chunk size to 0 for end the function.
+		// Set the chunk size to 0 to end the function.
 		FillChunk(DataChunk) error
 	}
 
@@ -70,7 +70,7 @@ type (
 	ParallelChunkTableSource interface {
 		parallelTableSource
 		// FillChunk takes a Chunk and fills it with values.
-		// Set the chunk size to 0 for end the function
+		// Set the chunk size to 0 to end the function
 		FillChunk(any, DataChunk) error
 	}
 
