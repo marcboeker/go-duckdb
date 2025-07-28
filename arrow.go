@@ -158,6 +158,9 @@ func (r *arrowStreamReader) Next() bool {
 		r.err = r.ctx.Err()
 		return false
 	default:
+		if r.currentRec != nil {
+			r.currentRec.Release() // Release the previous record.
+		}
 		rec, err := queryArrowArray(r.res, r.schema)
 		if err != nil {
 			r.err = err
@@ -189,6 +192,9 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 		return nil, errClosedCon
 	}
 
+	cleanupCtx := a.conn.setContext(ctx)
+	defer cleanupCtx()
+
 	stmts, size, errExtract := a.conn.extractStmts(query)
 	if errExtract != nil {
 		return nil, errExtract
@@ -215,18 +221,16 @@ func (a *Arrow) QueryContext(ctx context.Context, query string, args ...any) (ar
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 
 	res, err := a.execute(stmt, a.anyArgsToNamedArgs(args))
 	if err != nil {
-		stmt.Close()
 		return nil, err
 	}
-	defer stmt.Close()
 
 	sc, err := a.queryArrowSchema(res)
 	if err != nil {
 		arrowmapping.DestroyArrow(res)
-		stmt.Close()
 		return nil, err
 	}
 
