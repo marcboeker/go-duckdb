@@ -1072,14 +1072,14 @@ func TestUnionTypes(t *testing.T) {
 	// Test column type information.
 	t.Run("UNION column type info", func(t *testing.T) {
 		r, err := db.Query(`
-            SELECT (123)::UNION(num INTEGER, str VARCHAR) AS union_col
+            SELECT (123)::UNION(num INTEGER, "a str" VARCHAR) AS union_col
         `)
 		require.NoError(t, err)
 		defer closeRowsWrapper(t, r)
 
 		types, err := r.ColumnTypes()
 		require.NoError(t, err)
-		require.Equal(t, "UNION(num INTEGER, str VARCHAR)", types[0].DatabaseTypeName())
+		require.Equal(t, "UNION(\"num\" INTEGER, \"a str\" VARCHAR)", types[0].DatabaseTypeName())
 	})
 
 	// Test multiple UNION members.
