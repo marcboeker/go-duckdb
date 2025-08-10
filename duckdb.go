@@ -16,10 +16,32 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](
-	func() mapping.InstanceCache {
-		return mapping.CreateInstanceCache()
-	})
+var (
+    instanceCache mapping.InstanceCache
+    cacheMutex    sync.Mutex
+    cacheCreated  bool
+)
+
+func GetInstanceCache() mapping.InstanceCache {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	
+	if !cacheCreated {
+		instanceCache = mapping.CreateInstanceCache()
+		cacheCreated = true
+	}
+	return instanceCache
+}
+
+func InvalidateInstanceCache() {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	
+	if cacheCreated {
+		mapping.DestroyInstanceCache(&instanceCache)
+		cacheCreated = false
+	}
+}
 
 func init() {
 	sql.Register("duckdb", Driver{})
@@ -132,6 +154,8 @@ func (c *Connector) Close() error {
 	}
 	mapping.Close(&c.db)
 	c.closed = true
+
+    InvalidateInstanceCache()
 
 	return nil
 }
