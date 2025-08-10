@@ -334,6 +334,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 
 	if t != TYPE_INVALID {
 		lt, e := s.paramLogicalType(n + 1)
+		defer mapping.DestroyLogicalType(&lt)
 		if e != nil {
 			return mapping.StateError, e
 		}
