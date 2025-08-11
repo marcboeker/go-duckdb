@@ -22,7 +22,7 @@ var (
     cacheCreated  bool
 )
 
-func GetInstanceCache() mapping.InstanceCache {
+func getInstanceCache() mapping.InstanceCache {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
 	
@@ -33,7 +33,7 @@ func GetInstanceCache() mapping.InstanceCache {
 	return instanceCache
 }
 
-func InvalidateInstanceCache() {
+func destroyInstanceCache() {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
 	
@@ -110,7 +110,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 		state = mapping.OpenExt("", &db, config, &errMsg)
 	} else {
 		// Open a file-backed database.
-		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
+		state = mapping.GetOrCreateFromCache(getInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
 	}
 	if state == mapping.StateError {
 		mapping.Close(&db)
@@ -155,7 +155,7 @@ func (c *Connector) Close() error {
 	mapping.Close(&c.db)
 	c.closed = true
 
-    InvalidateInstanceCache()
+    destroyInstanceCache()
 
 	return nil
 }
