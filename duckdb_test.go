@@ -611,22 +611,22 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		{
 			sql:      `SELECT (123)::UNION(num INTEGER, str VARCHAR) AS col`,
 			value:    Union{Tag: "num", Value: int32(123)},
-			typeName: "UNION(num INTEGER, str VARCHAR)",
+			typeName: "UNION(\"num\" INTEGER, \"str\" VARCHAR)",
 		},
 		{
 			sql:      `SELECT ('hello')::UNION(num INTEGER, str VARCHAR) AS col`,
 			value:    Union{Tag: "str", Value: "hello"},
-			typeName: "UNION(num INTEGER, str VARCHAR)",
+			typeName: "UNION(\"num\" INTEGER, \"str\" VARCHAR)",
 		},
 		{
 			sql:      `SELECT (1.5)::UNION(d DOUBLE, i INTEGER, s VARCHAR) AS col`,
 			value:    Union{Tag: "d", Value: float64(1.5)},
-			typeName: "UNION(d DOUBLE, i INTEGER, s VARCHAR)",
+			typeName: "UNION(\"d\" DOUBLE, \"i\" INTEGER, \"s\" VARCHAR)",
 		},
 		{
 			sql:      `SELECT ('2024-01-01'::DATE)::UNION(d DATE, s VARCHAR) AS col`,
 			value:    Union{Tag: "d", Value: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-			typeName: "UNION(d DATE, s VARCHAR)",
+			typeName: "UNION(\"d\" DATE, \"s\" VARCHAR)",
 		},
 	}
 

@@ -271,7 +271,7 @@ func logicalTypeNameUnion(logicalType mapping.LogicalType) string {
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 
 		// Add comma if not at the end of the list
-		name += memberName + " " + logicalTypeName(memberType)
+		name += escapeStructFieldName(memberName) + " " + logicalTypeName(memberType)
 		if i != count-1 {
 			name += ", "
 		}
