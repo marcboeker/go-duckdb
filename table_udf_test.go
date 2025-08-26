@@ -642,7 +642,7 @@ func (udf *constTableUDF[T]) GetFunction() RowTableFunction {
 	}
 }
 
-func bindConstTableUDF[T any](val T, t Type) func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
+func bindConstTableUDF[T any](_ T, t Type) func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 	return func(namedArgs map[string]any, args ...interface{}) (RowTableSource, error) {
 		return &constTableUDF[T]{
 			count: 0,
