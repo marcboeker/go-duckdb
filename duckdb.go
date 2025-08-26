@@ -16,7 +16,7 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](
+var GetInstanceCache = sync.OnceValue(
 	func() mapping.InstanceCache {
 		return mapping.CreateInstanceCache()
 	})
