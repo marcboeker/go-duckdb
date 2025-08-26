@@ -23,7 +23,7 @@ func main() {
 	var err error
 	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
 	check(err)
-	defer db.Close()
+	defer func() { check(db.Close()) }()
 
 	check(db.Ping())
 
@@ -44,7 +44,7 @@ func main() {
 		"macgyver", "marc", 30, true,
 	)
 	check(err)
-	defer rows.Close()
+	defer func() { check(rows.Close()) }()
 
 	for rows.Next() {
 		u := new(user)
@@ -109,7 +109,7 @@ func runTransaction() {
 func testPreparedStmt() {
 	stmt, err := db.PrepareContext(context.Background(), "INSERT INTO users VALUES(?, ?, ?, ?, ?)")
 	check(err)
-	defer stmt.Close()
+	defer func() { check(stmt.Close()) }()
 
 	check(stmt.ExecContext(context.Background(), "Kevin", 11, 0.55, true, "2013-07-06"))
 	check(stmt.ExecContext(context.Background(), "Bob", 12, 0.73, true, "2012-11-04"))
@@ -120,7 +120,7 @@ func testPreparedStmt() {
 
 	rows, err := stmt.QueryContext(context.Background(), 1)
 	check(err)
-	defer rows.Close()
+	defer func() { check(rows.Close()) }()
 
 	for rows.Next() {
 		u := new(user)

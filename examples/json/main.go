@@ -14,7 +14,7 @@ func main() {
 	db, err = sql.Open("duckdb", "?access_mode=READ_WRITE")
 
 	check(err)
-	defer db.Close()
+	defer func() { check(db.Close()) }()
 
 	check(db.Ping())
 
