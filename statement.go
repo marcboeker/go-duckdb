@@ -345,7 +345,19 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 		}
 	}
 
-	switch v := val.Value.(type) {
+	// Check for driver.Valuer interface first (takes precedence over type switching)
+	valueToBind := val.Value
+	isDriverValue := false
+	if valuer, ok := val.Value.(driver.Valuer); ok {
+		driverVal, err := valuer.Value()
+		if err != nil {
+			return mapping.StateError, addIndexToError(err, n+1)
+		}
+		valueToBind = driverVal
+		isDriverValue = true
+	}
+
+	switch v := valueToBind.(type) {
 	case bool:
 		return mapping.BindBoolean(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case int8:
@@ -386,6 +398,16 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	case nil:
 		return mapping.BindNull(*s.preparedStmt, mapping.IdxT(n+1)), nil
 	}
+
+	// For other types after driver.Valuer conversion, fall back to reflection-based binding
+	if isDriverValue {
+		return s.tryBindComplexValue(driver.NamedValue{
+			Name:    val.Name,
+			Ordinal: val.Ordinal,
+			Value:   valueToBind,
+		}, n)
+	}
+
 	return s.bindComplexValue(val, n, t, name)
 }
 
