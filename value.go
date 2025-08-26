@@ -294,9 +294,10 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 
 func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.Value, error) {
 	var childType mapping.LogicalType
-	if t == TYPE_ARRAY {
+	switch t {
+	case TYPE_ARRAY:
 		childType = mapping.ArrayTypeChildType(lt)
-	} else if t == TYPE_LIST {
+	case TYPE_LIST:
 		childType = mapping.ListTypeChildType(lt)
 	}
 	defer mapping.DestroyLogicalType(&childType)
@@ -318,12 +319,12 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.
 	}
 
 	var v mapping.Value
-	if t == TYPE_ARRAY {
+	switch t {
+	case TYPE_ARRAY:
 		v = mapping.CreateArrayValue(childType, childValues)
-	} else if t == TYPE_LIST {
+	case TYPE_LIST:
 		v = mapping.CreateListValue(childType, childValues)
 	}
-
 	return v, nil
 }
 

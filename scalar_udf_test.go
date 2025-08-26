@@ -293,7 +293,7 @@ func TestAllTypesScalarUDF(t *testing.T) {
 			var res any
 			row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s) AS res`, info.input))
 			require.NoError(t, row.Scan(&res))
-			if info.TypeInfo.InternalType() != TYPE_UUID {
+			if info.InternalType() != TYPE_UUID {
 				require.Equal(t, info.output, fmt.Sprint(res), `output does not match expected output, input: %s`, info.input)
 			} else {
 				require.NotEqual(t, "", res, "uuid empty")
