@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -799,4 +801,46 @@ func TestBindNullableValue(t *testing.T) {
 	require.Equal(t, id, *nonNullID, "incorrect id value")
 	require.NotNil(t, nonNullName, "expected name to not be nil")
 	require.Equal(t, name, *nonNullName, "incorrect name value")
+}
+
+type testUUID string
+
+func (u testUUID) String() string {
+	return string(u)
+}
+
+type testUUIDList []testUUID
+
+// Value implements driver.Valuer interface
+func (l testUUIDList) Value() (driver.Value, error) {
+	ss := make([]string, 0, len(l))
+	for _, v := range l {
+		ss = append(ss, v.String())
+	}
+	return fmt.Sprintf("[%s]", strings.Join(ss, ",")), nil
+}
+
+func TestDriverValuer(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE valuer_test (ids UUID [])`)
+
+	list := testUUIDList{
+		testUUID("123e4567-e89b-12d3-a456-426614174000"),
+		testUUID("3a92e387-4b7d-4098-b273-967d48f6925f"),
+	}
+	_, err := db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, list)
+	require.NoError(t, err, "driver.Valuer should work for UUID arrays")
+
+	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, "[123e4567-e89b-12d3-a456-426614174000,3a92e387-4b7d-4098-b273-967d48f6925f]")
+	require.NoError(t, err, "string parameter should work for UUID arrays")
+
+	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, any("[123e4567-e89b-12d3-a456-426614174000,3a92e387-4b7d-4098-b273-967d48f6925f]"))
+	require.NoError(t, err, "any parameter should work for UUID arrays")
+
+	// Expected to fail - no driver.Valuer implementation
+	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, []uuid.UUID{uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"), uuid.MustParse("3a92e387-4b7d-4098-b273-967d48f6925f")})
+	require.Error(t, err, "[]uuid.UUID should fail without driver.Valuer")
+	require.Contains(t, err.Error(), "unsupported data type: UUID")
 }
