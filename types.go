@@ -31,7 +31,7 @@ func (u *UUID) Scan(v any) error {
 		if len(val) != uuidLength {
 			return u.Scan(string(val))
 		}
-		copy(u[:], val[:])
+		copy(u[:], val)
 	case string:
 		id, err := uuid.Parse(val)
 		if err != nil {
