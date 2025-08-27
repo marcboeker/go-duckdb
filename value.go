@@ -263,7 +263,7 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 
 	vSlice, err := extractSlice(val)
 	if err != nil {
-		return mapping.LogicalType{}, mapping.Value{}, fmt.Errorf("could not cast %T to []any: %s", val, err)
+		return mapping.LogicalType{}, mapping.Value{}, fmt.Errorf("could not cast %T to []any: %w", val, err)
 	}
 	childValues := make([]mapping.Value, 0, sliceLength)
 	defer destroyValueSlice(childValues)
@@ -304,7 +304,7 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.
 
 	vSlice, err := extractSlice(val)
 	if err != nil {
-		return mapping.Value{}, fmt.Errorf("could not cast %T to []any: %s", val, err)
+		return mapping.Value{}, fmt.Errorf("could not cast %T to []any: %w", val, err)
 	}
 
 	var childValues []mapping.Value
@@ -313,7 +313,7 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.
 	for _, v := range vSlice {
 		vv, err := createValue(childType, v)
 		if err != nil {
-			return mapping.Value{}, fmt.Errorf("could not create value %s", err)
+			return mapping.Value{}, fmt.Errorf("could not create value %w", err)
 		}
 		childValues = append(childValues, vv)
 	}
@@ -347,7 +347,7 @@ func getMappedStructValue(lt mapping.LogicalType, val any) (mapping.Value, error
 		if exists {
 			vv, err := createValue(childType, v)
 			if err != nil {
-				return mapping.Value{}, fmt.Errorf("could not create value %s", err)
+				return mapping.Value{}, fmt.Errorf("could not create value %w", err)
 			}
 			values = append(values, vv)
 		} else {
