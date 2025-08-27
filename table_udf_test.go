@@ -453,7 +453,7 @@ func (udf *parallelChunkIncTableUDF) FillChunk(localState any, chunk DataChunk) 
 	udf.claimed += remaining
 	udf.lock.Unlock()
 
-	for i := 0; i < int(remaining); i++ {
+	for i := range int(remaining) {
 		err := chunk.SetValue(0, i, int64(i)+state.start+1)
 		if err != nil {
 			return err
@@ -922,7 +922,7 @@ func BenchmarkRowTableUDF(b *testing.B) {
 	require.NoError(b, err)
 
 	b.StartTimer()
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		res, errQuery := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
 		require.NoError(b, errQuery)
 		closeRowsWrapper(b, res)
@@ -942,7 +942,7 @@ func BenchmarkChunkTableUDF(b *testing.B) {
 	require.NoError(b, err)
 
 	b.StartTimer()
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		res, errQuery := db.QueryContext(context.Background(), "SELECT * FROM whoo(2048*64)")
 		require.NoError(b, errQuery)
 		closeRowsWrapper(b, res)

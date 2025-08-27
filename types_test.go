@@ -123,7 +123,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
 
 	var buffer bytes.Buffer
-	for j := 0; j < i; j++ {
+	for range i {
 		buffer.WriteString("hello!")
 	}
 	varcharCol := buffer.String()
@@ -189,7 +189,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 
 func testTypesGenerateRows[T require.TestingT](t T, rowCount int) []testTypesRow {
 	var expectedRows []testTypesRow
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		r := testTypesGenerateRow(t, i)
 		expectedRows = append(expectedRows, r)
 	}
@@ -203,7 +203,7 @@ func testTypesReset[T require.TestingT](t T, c *Connector) {
 
 func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []testTypesRow) []testTypesRow {
 	// Append the rows. We cannot append Composite types.
-	for i := 0; i < len(expectedRows); i++ {
+	for i := range expectedRows {
 		r := &expectedRows[i]
 		err := a.AppendRow(
 			r.Boolean_col,
@@ -318,7 +318,7 @@ func BenchmarkTypes(b *testing.B) {
 
 	var r []testTypesRow
 	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		r = testTypes(b, db, a, expectedRows)
 		testTypesReset(b, c)
 	}
@@ -609,7 +609,7 @@ func TestList(t *testing.T) {
 	var row Composite[[]int]
 	require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
 	require.Len(t, row.Get(), n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		require.Equal(t, i, row.Get()[i])
 	}
 }

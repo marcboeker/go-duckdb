@@ -416,7 +416,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 	}
 
 	// relaxed length check allow for unused parameters.
-	for i := 0; i < s.NumInput(); i++ {
+	for i := range s.NumInput() {
 		name := mapping.ParameterName(*s.preparedStmt, mapping.IdxT(i+1))
 
 		// fallback on index position

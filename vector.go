@@ -127,7 +127,7 @@ func (vec *vector) initChildVectors(v mapping.Vector, writable bool) {
 		child := mapping.ListVectorGetChild(v)
 		vec.childVectors[0].initVectors(child, writable)
 	case TYPE_STRUCT, TYPE_UNION:
-		for i := 0; i < len(vec.childVectors); i++ {
+		for i := range vec.childVectors {
 			child := mapping.StructVectorGetChild(v, mapping.IdxT(i))
 			vec.childVectors[i].initVectors(child, writable)
 		}
@@ -324,7 +324,7 @@ func (vec *vector) initEnum(logicalType mapping.LogicalType, colIdx int) error {
 	dictSize := mapping.EnumDictionarySize(logicalType)
 	vec.namesDict = make(map[string]uint32)
 
-	for i := uint32(0); i < dictSize; i++ {
+	for i := range dictSize {
 		str := mapping.EnumDictionaryValue(logicalType, mapping.IdxT(i))
 		vec.namesDict[str] = i
 	}
@@ -514,7 +514,7 @@ func (vec *vector) initUnion(logicalType mapping.LogicalType, colIdx int) error 
 	// Initialize the members and the dictionaries.
 	vec.namesDict = make(map[string]uint32)
 	vec.tagDict = make(map[uint32]string)
-	for i := 0; i < memberCount; i++ {
+	for i := range memberCount {
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 		err := vec.childVectors[i+1].init(memberType, colIdx)
 		mapping.DestroyLogicalType(&memberType)

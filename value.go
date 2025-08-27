@@ -387,7 +387,7 @@ func extractSlice[S any](val S) ([]any, error) {
 		rv := reflect.ValueOf(val)
 		s = make([]any, rv.Len())
 
-		for i := 0; i < rv.Len(); i++ {
+		for i := range rv.Len() {
 			idx := rv.Index(i)
 			if canNil(idx) && idx.IsNil() {
 				s[i] = nil

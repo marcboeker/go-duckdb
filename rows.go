@@ -73,7 +73,7 @@ func (r *rows) Next(dst []driver.Value) error {
 	}
 
 	columnCount := len(r.chunk.columns)
-	for colIdx := 0; colIdx < columnCount; colIdx++ {
+	for colIdx := range columnCount {
 		var err error
 		if dst[colIdx], err = r.chunk.GetValue(colIdx, r.rowCount); err != nil {
 			return err
@@ -264,7 +264,7 @@ func logicalTypeNameUnion(logicalType mapping.LogicalType) string {
 	count := int(mapping.UnionTypeMemberCount(logicalType))
 	name := "UNION("
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 

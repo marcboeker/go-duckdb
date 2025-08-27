@@ -18,7 +18,7 @@ type fnSetVectorValue func(vec *vector, rowIdx mapping.IdxT, val any) error
 func (vec *vector) setNull(rowIdx mapping.IdxT) {
 	mapping.ValiditySetRowInvalid(vec.maskPtr, rowIdx)
 	if vec.Type == TYPE_STRUCT || vec.Type == TYPE_UNION {
-		for i := 0; i < len(vec.childVectors); i++ {
+		for i := range vec.childVectors {
 			vec.childVectors[i].setNull(rowIdx)
 		}
 	}
@@ -311,7 +311,7 @@ func setStruct[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		rv := reflect.ValueOf(val)
 		structType := rv.Type()
 
-		for i := 0; i < structType.NumField(); i++ {
+		for i := range structType.NumField() {
 			if !rv.Field(i).CanInterface() {
 				continue
 			}
@@ -326,7 +326,7 @@ func setStruct[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		}
 	}
 
-	for i := 0; i < len(vec.childVectors); i++ {
+	for i := range vec.childVectors {
 		child := &vec.childVectors[i]
 		name := vec.structEntries[i].Name()
 		v, ok := m[name]
@@ -395,7 +395,7 @@ func setUUID[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		if len(v) != uuidLength {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(uuid).String())
 		}
-		for i := 0; i < uuidLength; i++ {
+		for i := range uuidLength {
 			uuid[i] = v[i]
 		}
 	default:
