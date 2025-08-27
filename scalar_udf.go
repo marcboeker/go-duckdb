@@ -196,7 +196,6 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 
 	// Execute the user-defined scalar function for each row.
 	for rowIdx := range inputChunk.GetSize() {
-
 		// Get each column value.
 		var err error
 		nullRow := false
