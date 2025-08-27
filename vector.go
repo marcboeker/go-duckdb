@@ -8,6 +8,9 @@ import (
 
 // vector storage of a DuckDB column.
 type vector struct {
+	// The vector's type information.
+	vectorTypeInfo
+
 	// The underlying DuckDB vector.
 	vec mapping.Vector
 	// The underlying data ptr.
@@ -20,9 +23,6 @@ type vector struct {
 	setFn fnSetVectorValue
 	// The child vectors of nested data types.
 	childVectors []vector
-
-	// The vector's type information.
-	vectorTypeInfo
 }
 
 func (vec *vector) init(logicalType mapping.LogicalType, colIdx int) error {
