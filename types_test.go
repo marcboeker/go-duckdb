@@ -290,7 +290,7 @@ func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []
 	}
 
 	require.NoError(t, err)
-	require.Equal(t, len(expectedRows), len(actualRows))
+	require.Len(t, actualRows, len(expectedRows))
 	return actualRows
 }
 
@@ -304,7 +304,7 @@ func TestTypes(t *testing.T) {
 		expectedRows[i].toUTC()
 		require.Equal(t, expectedRows[i], actualRows[i])
 	}
-	require.Equal(t, len(expectedRows), len(actualRows))
+	require.Len(t, actualRows, len(expectedRows))
 }
 
 // NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
@@ -1007,7 +1007,7 @@ func TestJSONColType(t *testing.T) {
 	columnTypes, err := res.ColumnTypes()
 	require.NoError(t, err)
 
-	require.Equal(t, 2, len(columnTypes))
+	require.Len(t, columnTypes, 2)
 	require.Equal(t, aliasJSON, columnTypes[0].DatabaseTypeName())
 	require.Equal(t, typeToStringMap[TYPE_BIGINT], columnTypes[1].DatabaseTypeName())
 	require.Equal(t, reflect.TypeOf((*any)(nil)).Elem(), columnTypes[0].ScanType())

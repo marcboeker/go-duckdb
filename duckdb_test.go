@@ -338,7 +338,7 @@ func TestQuery(t *testing.T) {
 			require.Equal(t, 12345, baz)
 			found = true
 		}
-		require.Equal(t, true, found)
+		require.True(t, found)
 	})
 
 	t.Run("large number of rows", func(t *testing.T) {
