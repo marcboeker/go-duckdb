@@ -42,7 +42,7 @@ func newRowsWithStmt(res mapping.Result, stmt *Stmt) *rows {
 	}
 
 	for i := mapping.IdxT(0); i < columnCount; i++ {
-		columnName := mapping.ColumnName(&res, mapping.IdxT(i))
+		columnName := mapping.ColumnName(&res, i)
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
 
@@ -94,7 +94,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 		return reflect.TypeFor[any]()
 	}
 
-	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
+	t := mapping.ColumnType(&r.res, mapping.IdxT(index))
 	switch t {
 	case TYPE_INVALID:
 		return nil
@@ -159,7 +159,7 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 		return aliasJSON
 	}
 
-	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
+	t := mapping.ColumnType(&r.res, mapping.IdxT(index))
 	switch t {
 	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		return logicalTypeName(logicalType)
@@ -187,7 +187,7 @@ func (r *rows) Close() error {
 }
 
 func logicalTypeName(logicalType mapping.LogicalType) string {
-	t := Type(mapping.GetTypeId(logicalType))
+	t := mapping.GetTypeId(logicalType)
 	switch t {
 	case TYPE_DECIMAL:
 		return logicalTypeNameDecimal(logicalType)

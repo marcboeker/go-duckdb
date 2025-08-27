@@ -26,10 +26,10 @@ type vector struct {
 }
 
 func (vec *vector) init(logicalType mapping.LogicalType, colIdx int) error {
-	t := Type(mapping.GetTypeId(logicalType))
+	t := mapping.GetTypeId(logicalType)
 	name, inMap := unsupportedTypeToStringMap[t]
 	if inMap {
-		return addIndexToError(unsupportedTypeError(name), int(colIdx))
+		return addIndexToError(unsupportedTypeError(name), colIdx)
 	}
 
 	alias := mapping.LogicalTypeGetAlias(logicalType)
@@ -294,7 +294,7 @@ func (vec *vector) initDecimal(logicalType mapping.LogicalType, colIdx int) erro
 	vec.decimalWidth = mapping.DecimalWidth(logicalType)
 	vec.decimalScale = mapping.DecimalScale(logicalType)
 
-	t := Type(mapping.DecimalInternalType(logicalType))
+	t := mapping.DecimalInternalType(logicalType)
 	switch t {
 	case TYPE_SMALLINT, TYPE_INTEGER, TYPE_BIGINT, TYPE_HUGEINT:
 		vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
@@ -329,7 +329,7 @@ func (vec *vector) initEnum(logicalType mapping.LogicalType, colIdx int) error {
 		vec.namesDict[str] = i
 	}
 
-	t := Type(mapping.EnumInternalType(logicalType))
+	t := mapping.EnumInternalType(logicalType)
 	switch t {
 	case TYPE_UTINYINT, TYPE_USMALLINT, TYPE_UINTEGER, TYPE_UBIGINT:
 		vec.getFn = func(vec *vector, rowIdx mapping.IdxT) any {
@@ -444,7 +444,7 @@ func (vec *vector) initMap(logicalType mapping.LogicalType, colIdx int) error {
 	keyType := mapping.MapTypeKeyType(logicalType)
 	defer mapping.DestroyLogicalType(&keyType)
 
-	t := Type(mapping.GetTypeId(keyType))
+	t := mapping.GetTypeId(keyType)
 	switch t {
 	case TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		return addIndexToError(errUnsupportedMapKeyType, colIdx)

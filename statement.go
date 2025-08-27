@@ -112,7 +112,7 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	}
 
 	t := mapping.ParamType(*s.preparedStmt, mapping.IdxT(n))
-	return Type(t), nil
+	return t, nil
 }
 
 func (s *Stmt) paramLogicalType(n int) (mapping.LogicalType, error) {
