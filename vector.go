@@ -33,8 +33,7 @@ func (vec *vector) init(logicalType mapping.LogicalType, colIdx int) error {
 	}
 
 	alias := mapping.LogicalTypeGetAlias(logicalType)
-	switch alias {
-	case aliasJSON:
+	if alias == aliasJSON {
 		vec.initJSON()
 		return nil
 	}

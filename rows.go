@@ -90,8 +90,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	defer mapping.DestroyLogicalType(&logicalType)
 
 	alias := mapping.LogicalTypeGetAlias(logicalType)
-	switch alias {
-	case aliasJSON:
+	if alias == aliasJSON {
 		return reflect.TypeFor[any]()
 	}
 
@@ -156,8 +155,7 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	defer mapping.DestroyLogicalType(&logicalType)
 
 	alias := mapping.LogicalTypeGetAlias(logicalType)
-	switch alias {
-	case aliasJSON:
+	if alias == aliasJSON {
 		return aliasJSON
 	}
 

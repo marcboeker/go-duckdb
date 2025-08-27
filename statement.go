@@ -339,8 +339,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 			return mapping.StateError, e
 		}
 		alias := mapping.LogicalTypeGetAlias(lt)
-		switch alias {
-		case aliasJSON:
+		if alias == aliasJSON {
 			return s.bindJSON(val, n)
 		}
 	}
