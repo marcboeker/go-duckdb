@@ -16,10 +16,32 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](
-	func() mapping.InstanceCache {
-		return mapping.CreateInstanceCache()
-	})
+var (
+    instanceCache mapping.InstanceCache
+    cacheMutex    sync.Mutex
+    cacheCreated  bool
+)
+
+func getInstanceCache() mapping.InstanceCache {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	
+	if !cacheCreated {
+		instanceCache = mapping.CreateInstanceCache()
+		cacheCreated = true
+	}
+	return instanceCache
+}
+
+func destroyInstanceCache() {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	
+	if cacheCreated {
+		mapping.DestroyInstanceCache(&instanceCache)
+		cacheCreated = false
+	}
+}
 
 func init() {
 	sql.Register("duckdb", Driver{})
@@ -88,7 +110,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 		state = mapping.OpenExt("", &db, config, &errMsg)
 	} else {
 		// Open a file-backed database.
-		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
+		state = mapping.GetOrCreateFromCache(getInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
 	}
 	if state == mapping.StateError {
 		mapping.Close(&db)
@@ -132,6 +154,8 @@ func (c *Connector) Close() error {
 	}
 	mapping.Close(&c.db)
 	c.closed = true
+
+    destroyInstanceCache()
 
 	return nil
 }
