@@ -182,7 +182,7 @@ func (vec *vector) getList(rowIdx mapping.IdxT) []any {
 
 func (vec *vector) getStruct(rowIdx mapping.IdxT) map[string]any {
 	m := map[string]any{}
-	for i := 0; i < len(vec.childVectors); i++ {
+	for i := range vec.childVectors {
 		child := &vec.childVectors[i]
 		val := child.getFn(child, rowIdx)
 		m[vec.structEntries[i].Name()] = val
@@ -194,7 +194,7 @@ func (vec *vector) getMap(rowIdx mapping.IdxT) Map {
 	list := vec.getList(rowIdx)
 
 	m := Map{}
-	for i := 0; i < len(list); i++ {
+	for i := range list {
 		mapItem := list[i].(map[string]any)
 		key := mapItem[mapKeysField()]
 		val := mapItem[mapValuesField()]
@@ -213,7 +213,7 @@ func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
 	child := &vec.childVectors[0]
 
 	// Fill the slice with all child values.
-	for i := uint64(0); i < length; i++ {
+	for i := range length {
 		val := child.getFn(child, mapping.IdxT(i+offset))
 		slice = append(slice, val)
 	}

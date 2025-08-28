@@ -77,7 +77,7 @@ func (chunk *DataChunk) initFromTypes(types []mapping.LogicalType, writable bool
 	// Initialize the callback functions to read and write values.
 	chunk.columns = make([]vector, columnCount)
 	var err error
-	for i := 0; i < columnCount; i++ {
+	for i := range columnCount {
 		if err = chunk.columns[i].init(types[i], i); err != nil {
 			break
 		}
@@ -100,7 +100,7 @@ func (chunk *DataChunk) reset(writable bool) {
 func (chunk *DataChunk) initVectors(writable bool) {
 	mapping.DataChunkSetSize(chunk.chunk, mapping.IdxT(GetDataChunkCapacity()))
 
-	for i := 0; i < len(chunk.columns); i++ {
+	for i := range len(chunk.columns) {
 		v := mapping.DataChunkGetVector(chunk.chunk, mapping.IdxT(i))
 		chunk.columns[i].initVectors(v, writable)
 	}

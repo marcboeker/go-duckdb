@@ -263,7 +263,7 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 
 	vSlice, err := extractSlice(val)
 	if err != nil {
-		return mapping.LogicalType{}, mapping.Value{}, fmt.Errorf("could not cast %T to []any: %s", val, err)
+		return mapping.LogicalType{}, mapping.Value{}, fmt.Errorf("could not cast %T to []any: %w", val, err)
 	}
 	childValues := make([]mapping.Value, 0, sliceLength)
 	defer destroyValueSlice(childValues)
@@ -294,16 +294,17 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 
 func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.Value, error) {
 	var childType mapping.LogicalType
-	if t == TYPE_ARRAY {
+	switch t {
+	case TYPE_ARRAY:
 		childType = mapping.ArrayTypeChildType(lt)
-	} else if t == TYPE_LIST {
+	case TYPE_LIST:
 		childType = mapping.ListTypeChildType(lt)
 	}
 	defer mapping.DestroyLogicalType(&childType)
 
 	vSlice, err := extractSlice(val)
 	if err != nil {
-		return mapping.Value{}, fmt.Errorf("could not cast %T to []any: %s", val, err)
+		return mapping.Value{}, fmt.Errorf("could not cast %T to []any: %w", val, err)
 	}
 
 	var childValues []mapping.Value
@@ -312,18 +313,18 @@ func getMappedSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.
 	for _, v := range vSlice {
 		vv, err := createValue(childType, v)
 		if err != nil {
-			return mapping.Value{}, fmt.Errorf("could not create value %s", err)
+			return mapping.Value{}, fmt.Errorf("could not create value %w", err)
 		}
 		childValues = append(childValues, vv)
 	}
 
 	var v mapping.Value
-	if t == TYPE_ARRAY {
+	switch t {
+	case TYPE_ARRAY:
 		v = mapping.CreateArrayValue(childType, childValues)
-	} else if t == TYPE_LIST {
+	case TYPE_LIST:
 		v = mapping.CreateListValue(childType, childValues)
 	}
-
 	return v, nil
 }
 
@@ -346,7 +347,7 @@ func getMappedStructValue(lt mapping.LogicalType, val any) (mapping.Value, error
 		if exists {
 			vv, err := createValue(childType, v)
 			if err != nil {
-				return mapping.Value{}, fmt.Errorf("could not create value %s", err)
+				return mapping.Value{}, fmt.Errorf("could not create value %w", err)
 			}
 			values = append(values, vv)
 		} else {
@@ -386,7 +387,7 @@ func extractSlice[S any](val S) ([]any, error) {
 		rv := reflect.ValueOf(val)
 		s = make([]any, rv.Len())
 
-		for i := 0; i < rv.Len(); i++ {
+		for i := range rv.Len() {
 			idx := rv.Index(i)
 			if canNil(idx) && idx.IsNil() {
 				s[i] = nil

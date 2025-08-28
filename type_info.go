@@ -10,6 +10,7 @@ import (
 
 type structEntry struct {
 	TypeInfo
+
 	name string
 }
 
@@ -46,6 +47,7 @@ func (entry *structEntry) Name() string {
 
 type baseTypeInfo struct {
 	Type
+
 	structEntries []StructEntry
 	decimalWidth  uint8
 	decimalScale  uint8
@@ -56,12 +58,14 @@ type baseTypeInfo struct {
 
 type vectorTypeInfo struct {
 	baseTypeInfo
+
 	namesDict map[string]uint32
 	tagDict   map[uint32]string
 }
 
 type typeInfo struct {
 	baseTypeInfo
+
 	// Member or child types for LIST, MAP, ARRAY, and UNION.
 	types []TypeInfo
 	// Enum names or UNION member names.

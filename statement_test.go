@@ -141,7 +141,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 
 		paramName, innerErr := stmt.ParamName(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.NoError(t, innerErr)
@@ -153,7 +153,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(3)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr := stmt.ParamType(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
@@ -190,7 +190,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr = stmt.ParamType(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
@@ -248,7 +248,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 
 		paramName, innerErr := stmt.ParamName(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.NoError(t, innerErr)
@@ -260,7 +260,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(3)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr := stmt.ParamType(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
@@ -297,7 +297,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr = stmt.ParamType(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
@@ -324,7 +324,7 @@ func TestUninitializedStmt(t *testing.T) {
 
 	paramName, err := stmt.ParamName(1)
 	require.ErrorIs(t, err, errUninitializedStmt)
-	require.Equal(t, "", paramName)
+	require.Empty(t, paramName)
 
 	err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
 	require.ErrorIs(t, err, errCouldNotBind)
@@ -543,7 +543,7 @@ func TestBindJSON(t *testing.T) {
 	var str string
 	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl WHERE j IS NOT NULL`).Scan(&str)
 	require.NoError(t, err)
-	require.Equal(t, string(jsonData), str)
+	require.JSONEq(t, string(jsonData), str)
 
 	var nilStr *string
 	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl WHERE j IS NULL`).Scan(&nilStr)
@@ -575,7 +575,7 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	err = prepared.QueryRow([]int{1, 2}, []int64{1}, []float32{0.1, 0.2, 0.3}, []float32{0.2, 0.3, 0.4}).Scan(&arr, &dis)
 	require.NoError(t, err)
 	require.Equal(t, [][]int32{{1, 2}, {1}}, arr.Get())
-	require.True(t, dis.Get() > 0)
+	require.Positive(t, dis.Get())
 
 	dynamicPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
 	defer closePreparedWrapper(t, dynamicPrepare)
@@ -584,7 +584,7 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	var res Composite[[]any]
 	err = dynamicPrepare.QueryRow([]any{}).Scan(&res)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(res.Get()))
+	require.Empty(t, res.Get())
 
 	// The statement type has already been bind as a SQL_NULL LIST in previous query
 	err = dynamicPrepare.QueryRow([]any{1}).Scan(&res)

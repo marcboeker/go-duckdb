@@ -66,7 +66,6 @@ func duplicateNameError(name string) error {
 
 const (
 	driverErrMsg           = "database/sql/driver"
-	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
 	convertErrMsg          = "conversion error"
 	invalidInputErrMsg     = "invalid input"

@@ -112,7 +112,7 @@ func (s *Stmt) ParamType(n int) (Type, error) {
 	}
 
 	t := mapping.ParamType(*s.preparedStmt, mapping.IdxT(n))
-	return Type(t), nil
+	return t, nil
 }
 
 func (s *Stmt) paramLogicalType(n int) (mapping.LogicalType, error) {
@@ -339,8 +339,7 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 			return mapping.StateError, e
 		}
 		alias := mapping.LogicalTypeGetAlias(lt)
-		switch alias {
-		case aliasJSON:
+		if alias == aliasJSON {
 			return s.bindJSON(val, n)
 		}
 	}
@@ -417,7 +416,7 @@ func (s *Stmt) bind(args []driver.NamedValue) error {
 	}
 
 	// relaxed length check allow for unused parameters.
-	for i := 0; i < s.NumInput(); i++ {
+	for i := range s.NumInput() {
 		name := mapping.ParameterName(*s.preparedStmt, mapping.IdxT(i+1))
 
 		// fallback on index position
