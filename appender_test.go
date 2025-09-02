@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
 	_ "time/tzdata"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -115,7 +114,7 @@ func castMapToStruct[T any](t *testing.T, val any) T {
 	return res
 }
 
-func randInt(lo int64, hi int64) int64 {
+func randInt(lo, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
 }
 

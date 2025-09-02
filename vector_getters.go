@@ -208,7 +208,7 @@ func (vec *vector) getArray(rowIdx mapping.IdxT) []any {
 	return vec.getSliceChild(uint64(rowIdx)*length, length)
 }
 
-func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
+func (vec *vector) getSliceChild(offset, length uint64) []any {
 	slice := make([]any, 0, length)
 	child := &vec.childVectors[0]
 

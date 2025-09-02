@@ -33,7 +33,7 @@ func replacement_scan_delete_callback(info unsafe.Pointer) {
 }
 
 //export replacement_scan_callback
-func replacement_scan_callback(infoPtr unsafe.Pointer, tableNamePtr unsafe.Pointer, data unsafe.Pointer) {
+func replacement_scan_callback(infoPtr, tableNamePtr, data unsafe.Pointer) {
 	info := mapping.ReplacementScanInfo{Ptr: infoPtr}
 	tableName := C.GoString((*C.char)(tableNamePtr))
 

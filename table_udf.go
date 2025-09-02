@@ -233,7 +233,7 @@ func table_udf_local_init(infoPtr unsafe.Pointer) {
 }
 
 //export table_udf_callback
-func table_udf_callback(infoPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
+func table_udf_callback(infoPtr, outputPtr unsafe.Pointer) {
 	info := mapping.FunctionInfo{Ptr: infoPtr}
 	output := mapping.DataChunk{Ptr: outputPtr}
 
