@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"reflect"
 	"strconv"
+	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -25,8 +26,10 @@ func (vec *vector) setNull(rowIdx mapping.IdxT) {
 }
 
 func setPrimitive[T any](vec *vector, rowIdx mapping.IdxT, v T) {
-	xs := (*[1 << 31]T)(vec.dataPtr)
-	xs[rowIdx] = v
+	elementSize := unsafe.Sizeof(v)
+	offset := uintptr(rowIdx) * elementSize
+	ptr := unsafe.Add(vec.dataPtr, offset)
+	*(*T)(ptr) = v
 }
 
 func setNumeric[S any, T numericType](vec *vector, rowIdx mapping.IdxT, val S) error {
