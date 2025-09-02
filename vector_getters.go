@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"time"
+	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -19,8 +20,11 @@ func (vec *vector) getNull(rowIdx mapping.IdxT) bool {
 }
 
 func getPrimitive[T any](vec *vector, rowIdx mapping.IdxT) T {
-	xs := (*[1 << 31]T)(vec.dataPtr)
-	return xs[rowIdx]
+	var zero T
+	elementSize := unsafe.Sizeof(zero)
+	offset := uintptr(rowIdx) * elementSize
+	ptr := unsafe.Add(vec.dataPtr, offset)
+	return *(*T)(ptr)
 }
 
 func (vec *vector) getTS(t Type, rowIdx mapping.IdxT) time.Time {
