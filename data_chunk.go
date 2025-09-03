@@ -38,7 +38,7 @@ func (chunk *DataChunk) SetSize(size int) error {
 }
 
 // GetValue returns a single value of a column.
-func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
+func (chunk *DataChunk) GetValue(colIdx, rowIdx int) (any, error) {
 	if colIdx >= len(chunk.columns) {
 		return nil, getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
@@ -50,7 +50,7 @@ func (chunk *DataChunk) GetValue(colIdx int, rowIdx int) (any, error) {
 // SetValue writes a single value to a column in a data chunk.
 // Note that this requires casting the type for each invocation.
 // NOTE: Custom ENUM types must be passed as string.
-func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
+func (chunk *DataChunk) SetValue(colIdx, rowIdx int, val any) error {
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}
@@ -63,7 +63,7 @@ func (chunk *DataChunk) SetValue(colIdx int, rowIdx int, val any) error {
 // The difference with `chunk.SetValue` is that `SetChunkValue` does not
 // require casting the value to `any` (implicitly).
 // NOTE: Custom ENUM types must be passed as string.
-func SetChunkValue[T any](chunk DataChunk, colIdx int, rowIdx int, val T) error {
+func SetChunkValue[T any](chunk DataChunk, colIdx, rowIdx int, val T) error {
 	if colIdx >= len(chunk.columns) {
 		return getError(errAPI, columnCountError(colIdx, len(chunk.columns)))
 	}

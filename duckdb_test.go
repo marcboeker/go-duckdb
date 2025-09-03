@@ -86,7 +86,7 @@ func closePreparedWrapper[T require.TestingT](t T, stmt *sql.Stmt) {
 	require.NoError(t, stmt.Close())
 }
 
-func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema string, table string) *Appender {
+func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema, table string) *Appender {
 	a, err := NewAppenderFromConn(*conn, schema, table)
 	require.NoError(t, err)
 	return a

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marcboeker/go-duckdb/mapping"
-
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 type numericType interface {

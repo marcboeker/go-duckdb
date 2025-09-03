@@ -122,7 +122,7 @@ func NewTypeInfo(t Type) (TypeInfo, error) {
 
 // NewDecimalInfo returns DECIMAL type information.
 // Its input parameters are the width and scale of the DECIMAL type.
-func NewDecimalInfo(width uint8, scale uint8) (TypeInfo, error) {
+func NewDecimalInfo(width, scale uint8) (TypeInfo, error) {
 	if width < 1 || width > max_decimal_width {
 		return nil, getError(errAPI, errInvalidDecimalWidth)
 	}
@@ -224,7 +224,7 @@ func NewStructInfo(firstEntry StructEntry, others ...StructEntry) (TypeInfo, err
 // NewMapInfo returns MAP type information.
 // keyInfo contains the type information of the MAP keys.
 // valueInfo contains the type information of the MAP values.
-func NewMapInfo(keyInfo TypeInfo, valueInfo TypeInfo) (TypeInfo, error) {
+func NewMapInfo(keyInfo, valueInfo TypeInfo) (TypeInfo, error) {
 	if keyInfo == nil {
 		return nil, getError(errAPI, interfaceIsNilError("keyInfo"))
 	}

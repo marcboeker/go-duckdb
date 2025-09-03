@@ -328,7 +328,7 @@ func BenchmarkTypes(b *testing.B) {
 	benchmarkTypesResult = r
 }
 
-func compareDecimal(t *testing.T, want Decimal, got Decimal) {
+func compareDecimal(t *testing.T, want, got Decimal) {
 	require.Equal(t, want.Scale, got.Scale)
 	require.Equal(t, want.Width, got.Width)
 	require.Equal(t, want.Value.String(), got.Value.String())

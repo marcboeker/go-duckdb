@@ -1,4 +1,5 @@
 version: "2"
+
 linters:
   default: all
   disable:
@@ -48,3 +49,20 @@ linters:
         - encoded-compare
         - float-compare
         - go-require
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/marcboeker/go-duckdb)
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/marcboeker/go-duckdb
