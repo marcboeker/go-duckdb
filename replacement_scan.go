@@ -10,6 +10,7 @@ typedef void (*replacement_scan_delete_callback_t)(void *);
 import "C"
 
 import (
+	"runtime"
 	"runtime/cgo"
 	"unsafe"
 
@@ -19,7 +20,13 @@ import (
 type ReplacementScanCallback func(tableName string) (string, []any, error)
 
 func RegisterReplacementScan(c *Connector, callback ReplacementScanCallback) {
-	h := cgo.NewHandle(callback)
+	pinnedCallback := pinnedValue[ReplacementScanCallback]{
+		pinner: &runtime.Pinner{},
+		value:  callback,
+	}
+	h := cgo.NewHandle(pinnedCallback)
+	pinnedCallback.pinner.Pin(&h)
+
 	callbackPtr := unsafe.Pointer(C.replacement_scan_callback_t(C.replacement_scan_callback))
 	deleteCallbackPtr := unsafe.Pointer(C.replacement_scan_delete_callback_t(C.replacement_scan_delete_callback))
 	mapping.AddReplacementScan(c.db, callbackPtr, unsafe.Pointer(&h), deleteCallbackPtr)
@@ -28,7 +35,7 @@ func RegisterReplacementScan(c *Connector, callback ReplacementScanCallback) {
 //export replacement_scan_delete_callback
 func replacement_scan_delete_callback(info unsafe.Pointer) {
 	h := *(*cgo.Handle)(info)
-	// FIXME: Should this go through the unpinner?
+	h.Value().(unpinner).unpin()
 	h.Delete()
 }
 
@@ -37,8 +44,8 @@ func replacement_scan_callback(infoPtr, tableNamePtr, data unsafe.Pointer) {
 	info := mapping.ReplacementScanInfo{Ptr: infoPtr}
 	tableName := C.GoString((*C.char)(tableNamePtr))
 
-	h := *(*cgo.Handle)(data)
-	scanner := h.Value().(ReplacementScanCallback)
+	scanner := getPinned[ReplacementScanCallback](data)
+
 	functionName, params, err := scanner(tableName)
 	if err != nil {
 		mapping.ReplacementScanSetError(info, err.Error())
