@@ -93,6 +93,8 @@ func NewArrowFromConn(driverConn driver.Conn) (*Arrow, error) {
 	return &Arrow{conn: conn}, nil
 }
 
+var _ array.RecordReader = (*arrowStreamReader)(nil)
+
 // arrowStreamReader implements array.RecordReader for streaming DuckDB results.
 type arrowStreamReader struct {
 	ctx      context.Context
@@ -173,7 +175,12 @@ func (r *arrowStreamReader) Next() bool {
 	}
 }
 
+// Deprecated: use RecordBatch() instead.
 func (r *arrowStreamReader) Record() arrow.Record {
+	return r.RecordBatch()
+}
+
+func (r *arrowStreamReader) RecordBatch() arrow.RecordBatch {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.currentRec
