@@ -11,7 +11,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"net/url"
-	"sort"
 	"strings"
 	"sync"
 
@@ -170,10 +169,10 @@ func getCacheKey(dsn string, parsedDSN *url.URL) string {
 		return basePath
 	}
 
-	relevantParams := make(map[string]string)
+	relevantParams := url.Values{}
 	for _, param := range cacheKeyParams {
 		if values := parsedDSN.Query()[param]; len(values) > 0 {
-			relevantParams[param] = values[0]
+			relevantParams.Set(param, values[0])
 		}
 	}
 
@@ -181,14 +180,8 @@ func getCacheKey(dsn string, parsedDSN *url.URL) string {
 		return basePath
 	}
 
-	// Create a sorted list of key-value pairs for consistent hashing
-	var pairs []string
-	for k, v := range relevantParams {
-		pairs = append(pairs, fmt.Sprintf("%s=%s", k, v))
-	}
-	sort.Strings(pairs)
-
-	paramString := strings.Join(pairs, "&")
+	// Creates a sorted list of key-value pairs for consistent hashing
+	paramString := relevantParams.Encode()
 	hash := sha256.Sum256([]byte(paramString))
 
 	return fmt.Sprintf("%s#%x", basePath, hash[:8]) // Use first 8 bytes of hash
