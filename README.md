@@ -328,6 +328,9 @@ for rdr.Next() {
 }
 ```
 
+> [!WARNING]  
+> Arrow connections are not safe for concurrent use, and do not benefit from `database/sql` connection pooling.
+
 ## DuckDB Extensions
 
 `go-duckdb` relies on the [`duckdb-go-bindings` module](https://github.com/duckdb/duckdb-go-bindings).
