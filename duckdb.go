@@ -6,10 +6,12 @@ package duckdb
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 
@@ -88,7 +90,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 		state = mapping.OpenExt("", &db, config, &errMsg)
 	} else {
 		// Open a file-backed database.
-		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getDBPath(dsn), &db, config, &errMsg)
+		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getCacheKey(dsn, parsedDSN), &db, config, &errMsg)
 	}
 	if state == mapping.StateError {
 		mapping.Close(&db)
@@ -142,6 +144,54 @@ func getDBPath(dsn string) string {
 		idx = len(dsn)
 	}
 	return dsn[0:idx]
+}
+
+// Configuration parameters that should affect cache keys. These are authentication
+// and session parameters that distinguish different connections to the same database.
+var cacheKeyParams = []string{
+	"access_token",
+	"api_key",
+	"auth_token",
+	"motherduck_token",
+	"password",
+	"secret",
+	"session_hint",
+	"session_id",
+	"token",
+	"user",
+}
+
+// getCacheKey generates a cache key in a way that prevents cache collisions
+// when the same database path is used with different parameters.
+func getCacheKey(dsn string, parsedDSN *url.URL) string {
+	basePath := getDBPath(dsn)
+
+	if len(parsedDSN.RawQuery) == 0 {
+		return basePath
+	}
+
+	relevantParams := make(map[string]string)
+	for _, param := range cacheKeyParams {
+		if values := parsedDSN.Query()[param]; len(values) > 0 {
+			relevantParams[param] = values[0]
+		}
+	}
+
+	if len(relevantParams) == 0 {
+		return basePath
+	}
+
+	// Create a sorted list of key-value pairs for consistent hashing
+	var pairs []string
+	for k, v := range relevantParams {
+		pairs = append(pairs, fmt.Sprintf("%s=%s", k, v))
+	}
+	sort.Strings(pairs)
+
+	paramString := strings.Join(pairs, "&")
+	hash := sha256.Sum256([]byte(paramString))
+
+	return fmt.Sprintf("%s#%x", basePath, hash[:8]) // Use first 8 bytes of hash
 }
 
 func prepareConfig(parsedDSN *url.URL) (mapping.Config, error) {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net/url"
 	"os"
 	"reflect"
 	"sync"
@@ -875,4 +876,50 @@ func Example_simpleConnection() {
 
 	fmt.Printf("Inserted %d row(s) into users table", rowsAffected)
 	// Output: Inserted 1 row(s) into users table
+}
+
+func TestGetCacheKey(t *testing.T) {
+	tests := []struct {
+		dsn      string
+		expected string
+	}{
+		{
+			dsn:      "md:my_db",
+			expected: "md:my_db",
+		},
+		{
+			dsn:      "md:my_db?timeout=30&retry=5",
+			expected: "md:my_db",
+		},
+		{
+			dsn:      "md:my_db?session_hint=user1",
+			expected: "md:my_db#1682e8aa1ced9420",
+		},
+		{
+			dsn:      "md:my_db?auth_token=token123",
+			expected: "md:my_db#d484093645abd9eb",
+		},
+		{
+			dsn:      "md:my_db?timeout=30&auth_token=token123&retry=5",
+			expected: "md:my_db#d484093645abd9eb",
+		},
+		{
+			dsn:      "md:my_db?user=user123&password=password123",
+			expected: "md:my_db#f648129cdb5e895d",
+		},
+		{
+			dsn:      "md:my_db?password=password123&user=user123",
+			expected: "md:my_db#f648129cdb5e895d",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.dsn, func(t *testing.T) {
+			parsedDSN, err := url.Parse(tt.dsn)
+			require.NoError(t, err)
+
+			key := getCacheKey(tt.dsn, parsedDSN)
+			require.Equal(t, tt.expected, key)
+		})
+	}
 }
