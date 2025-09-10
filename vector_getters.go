@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"time"
+	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -19,8 +20,11 @@ func (vec *vector) getNull(rowIdx mapping.IdxT) bool {
 }
 
 func getPrimitive[T any](vec *vector, rowIdx mapping.IdxT) T {
-	xs := (*[1 << 31]T)(vec.dataPtr)
-	return xs[rowIdx]
+	var zero T
+	elementSize := unsafe.Sizeof(zero)
+	offset := uintptr(rowIdx) * elementSize
+	ptr := unsafe.Add(vec.dataPtr, offset)
+	return *(*T)(ptr)
 }
 
 func (vec *vector) getTS(t Type, rowIdx mapping.IdxT) time.Time {
@@ -182,7 +186,7 @@ func (vec *vector) getList(rowIdx mapping.IdxT) []any {
 
 func (vec *vector) getStruct(rowIdx mapping.IdxT) map[string]any {
 	m := map[string]any{}
-	for i := 0; i < len(vec.childVectors); i++ {
+	for i := range vec.childVectors {
 		child := &vec.childVectors[i]
 		val := child.getFn(child, rowIdx)
 		m[vec.structEntries[i].Name()] = val
@@ -194,7 +198,7 @@ func (vec *vector) getMap(rowIdx mapping.IdxT) Map {
 	list := vec.getList(rowIdx)
 
 	m := Map{}
-	for i := 0; i < len(list); i++ {
+	for i := range list {
 		mapItem := list[i].(map[string]any)
 		key := mapItem[mapKeysField()]
 		val := mapItem[mapValuesField()]
@@ -208,12 +212,12 @@ func (vec *vector) getArray(rowIdx mapping.IdxT) []any {
 	return vec.getSliceChild(uint64(rowIdx)*length, length)
 }
 
-func (vec *vector) getSliceChild(offset uint64, length uint64) []any {
+func (vec *vector) getSliceChild(offset, length uint64) []any {
 	slice := make([]any, 0, length)
 	child := &vec.childVectors[0]
 
 	// Fill the slice with all child values.
-	for i := uint64(0); i < length; i++ {
+	for i := range length {
 		val := child.getFn(child, mapping.IdxT(i+offset))
 		slice = append(slice, val)
 	}

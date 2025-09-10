@@ -293,10 +293,10 @@ func TestAllTypesScalarUDF(t *testing.T) {
 			var res any
 			row := db.QueryRow(fmt.Sprintf(`SELECT my_identity(%s) AS res`, info.input))
 			require.NoError(t, row.Scan(&res))
-			if info.TypeInfo.InternalType() != TYPE_UUID {
+			if info.InternalType() != TYPE_UUID {
 				require.Equal(t, info.output, fmt.Sprint(res), `output does not match expected output, input: %s`, info.input)
 			} else {
-				require.NotEqual(t, "", res, "uuid empty")
+				require.NotEmpty(t, res, "uuid empty")
 			}
 		}()
 	}
@@ -445,7 +445,7 @@ func TestUnionScalarUDF(t *testing.T) {
 	// Test with NULL input.
 	row = db.QueryRow(`SELECT union_identity(NULL::number_or_string) AS res`)
 	require.NoError(t, row.Scan(&res))
-	require.Equal(t, nil, res)
+	require.Nil(t, res)
 }
 
 func TestGetConnIdScalarUDF(t *testing.T) {

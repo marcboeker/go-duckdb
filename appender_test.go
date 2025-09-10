@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
 	_ "time/tzdata"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -115,7 +114,7 @@ func castMapToStruct[T any](t *testing.T, val any) T {
 	return res
 }
 
-func randInt(lo int64, hi int64) int64 {
+func randInt(lo, hi int64) int64 {
 	return rand.Int63n(hi-lo+1) + lo
 }
 
@@ -160,7 +159,7 @@ func TestAppendChunks(t *testing.T) {
 	}
 
 	rowsToAppend := make([]row, rowCount)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		rowsToAppend[i] = row{ID: int64(i), UInt8: uint8(randInt(0, 255))}
 		require.NoError(t, a.AppendRow(rowsToAppend[i].ID, rowsToAppend[i].UInt8))
 	}
@@ -190,7 +189,7 @@ func TestAppenderList(t *testing.T) {
 	defer cleanupAppender(t, c, db, conn, a)
 
 	rowsToAppend := make([]nestedDataRow, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		rowsToAppend[i].stringList = []string{"a", "b", "c"}
 		rowsToAppend[i].intList = []int32{1, 2, 3}
 	}
@@ -222,7 +221,7 @@ func TestAppenderArray(t *testing.T) {
 
 	count := 10
 	expected := Composite[[3]string]{[3]string{"a", "b", "c"}}
-	for i := 0; i < count; i++ {
+	for range count {
 		require.NoError(t, a.AppendRow([]string{"a", "b", "c"}))
 		require.NoError(t, a.AppendRow(expected.Get()))
 	}
@@ -957,7 +956,7 @@ func TestAppenderAppendDataChunk(t *testing.T) {
 	defer cleanupAppender(t, c, db, conn, a)
 
 	// Add enough rows to overflow several chunks.
-	for i := 0; i < GetDataChunkCapacity()*3; i++ {
+	for i := range GetDataChunkCapacity() * 3 {
 		require.NoError(t, a.AppendRow(i, Union{Value: "str2", Tag: "s"}))
 		require.NoError(t, a.AppendRow(i, nil))
 	}
@@ -972,7 +971,7 @@ func BenchmarkAppenderNested(b *testing.B) {
 	rowsToAppend := prepareNestedData(rowCount)
 
 	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		appendNestedData(b, a, rowsToAppend)
 	}
 	b.StopTimer()
@@ -1030,7 +1029,7 @@ func prepareNestedData(rowCount int) []nestedDataRow {
 	}
 
 	rowsToAppend := make([]nestedDataRow, rowCount)
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		rowsToAppend[i].ID = int64(i)
 		rowsToAppend[i].stringList = []string{"a", "b", "c"}
 		rowsToAppend[i].intList = []int32{1, 2, 3}

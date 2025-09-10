@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"reflect"
 	"strconv"
+	"unsafe"
 
 	"github.com/marcboeker/go-duckdb/mapping"
 )
@@ -18,15 +19,17 @@ type fnSetVectorValue func(vec *vector, rowIdx mapping.IdxT, val any) error
 func (vec *vector) setNull(rowIdx mapping.IdxT) {
 	mapping.ValiditySetRowInvalid(vec.maskPtr, rowIdx)
 	if vec.Type == TYPE_STRUCT || vec.Type == TYPE_UNION {
-		for i := 0; i < len(vec.childVectors); i++ {
+		for i := range vec.childVectors {
 			vec.childVectors[i].setNull(rowIdx)
 		}
 	}
 }
 
 func setPrimitive[T any](vec *vector, rowIdx mapping.IdxT, v T) {
-	xs := (*[1 << 31]T)(vec.dataPtr)
-	xs[rowIdx] = v
+	elementSize := unsafe.Sizeof(v)
+	offset := uintptr(rowIdx) * elementSize
+	ptr := unsafe.Add(vec.dataPtr, offset)
+	*(*T)(ptr) = v
 }
 
 func setNumeric[S any, T numericType](vec *vector, rowIdx mapping.IdxT, val S) error {
@@ -311,7 +314,7 @@ func setStruct[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		rv := reflect.ValueOf(val)
 		structType := rv.Type()
 
-		for i := 0; i < structType.NumField(); i++ {
+		for i := range structType.NumField() {
 			if !rv.Field(i).CanInterface() {
 				continue
 			}
@@ -326,7 +329,7 @@ func setStruct[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		}
 	}
 
-	for i := 0; i < len(vec.childVectors); i++ {
+	for i := range vec.childVectors {
 		child := &vec.childVectors[i]
 		name := vec.structEntries[i].Name()
 		v, ok := m[name]
@@ -395,7 +398,7 @@ func setUUID[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 		if len(v) != uuidLength {
 			return castError(reflect.TypeOf(val).String(), reflect.TypeOf(uuid).String())
 		}
-		for i := 0; i < uuidLength; i++ {
+		for i := range uuidLength {
 			uuid[i] = v[i]
 		}
 	default:
@@ -478,7 +481,7 @@ func setVectorVal[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 
 	switch vec.Type {
 	case TYPE_BOOLEAN:
-		return setBool[S](vec, rowIdx, val)
+		return setBool(vec, rowIdx, val)
 	case TYPE_TINYINT:
 		return setNumeric[S, int8](vec, rowIdx, val)
 	case TYPE_SMALLINT:
@@ -502,32 +505,32 @@ func setVectorVal[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_S, TYPE_TIMESTAMP_MS, TYPE_TIMESTAMP_NS, TYPE_TIMESTAMP_TZ:
 		return setTS(vec, rowIdx, val)
 	case TYPE_DATE:
-		return setDate[S](vec, rowIdx, val)
+		return setDate(vec, rowIdx, val)
 	case TYPE_TIME, TYPE_TIME_TZ:
-		return setTime[S](vec, rowIdx, val)
+		return setTime(vec, rowIdx, val)
 	case TYPE_INTERVAL:
-		return setInterval[S](vec, rowIdx, val)
+		return setInterval(vec, rowIdx, val)
 	case TYPE_HUGEINT:
-		return setHugeint[S](vec, rowIdx, val)
+		return setHugeint(vec, rowIdx, val)
 	case TYPE_VARCHAR:
-		return setBytes[S](vec, rowIdx, val)
+		return setBytes(vec, rowIdx, val)
 	case TYPE_BLOB:
-		return setBytes[S](vec, rowIdx, val)
+		return setBytes(vec, rowIdx, val)
 	case TYPE_DECIMAL:
-		return setDecimal[S](vec, rowIdx, val)
+		return setDecimal(vec, rowIdx, val)
 	case TYPE_ENUM:
-		return setEnum[S](vec, rowIdx, val)
+		return setEnum(vec, rowIdx, val)
 	case TYPE_LIST:
-		return setList[S](vec, rowIdx, val)
+		return setList(vec, rowIdx, val)
 	case TYPE_STRUCT:
-		return setStruct[S](vec, rowIdx, val)
+		return setStruct(vec, rowIdx, val)
 	case TYPE_MAP, TYPE_ARRAY:
 		// FIXME: Is this already supported? And tested?
 		return unsupportedTypeError(unsupportedTypeToStringMap[vec.Type])
 	case TYPE_UUID:
-		return setUUID[S](vec, rowIdx, val)
+		return setUUID(vec, rowIdx, val)
 	case TYPE_UNION:
-		return setUnion[S](vec, rowIdx, val)
+		return setUnion(vec, rowIdx, val)
 	default:
 		return unsupportedTypeError(unknownTypeErrMsg)
 	}

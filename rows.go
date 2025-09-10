@@ -42,7 +42,7 @@ func newRowsWithStmt(res mapping.Result, stmt *Stmt) *rows {
 	}
 
 	for i := mapping.IdxT(0); i < columnCount; i++ {
-		columnName := mapping.ColumnName(&res, mapping.IdxT(i))
+		columnName := mapping.ColumnName(&res, i)
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
 	}
 
@@ -73,7 +73,7 @@ func (r *rows) Next(dst []driver.Value) error {
 	}
 
 	columnCount := len(r.chunk.columns)
-	for colIdx := 0; colIdx < columnCount; colIdx++ {
+	for colIdx := range columnCount {
 		var err error
 		if dst[colIdx], err = r.chunk.GetValue(colIdx, r.rowCount); err != nil {
 			return err
@@ -90,12 +90,11 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	defer mapping.DestroyLogicalType(&logicalType)
 
 	alias := mapping.LogicalTypeGetAlias(logicalType)
-	switch alias {
-	case aliasJSON:
+	if alias == aliasJSON {
 		return reflect.TypeFor[any]()
 	}
 
-	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
+	t := mapping.ColumnType(&r.res, mapping.IdxT(index))
 	switch t {
 	case TYPE_INVALID:
 		return nil
@@ -156,12 +155,11 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	defer mapping.DestroyLogicalType(&logicalType)
 
 	alias := mapping.LogicalTypeGetAlias(logicalType)
-	switch alias {
-	case aliasJSON:
+	if alias == aliasJSON {
 		return aliasJSON
 	}
 
-	t := Type(mapping.ColumnType(&r.res, mapping.IdxT(index)))
+	t := mapping.ColumnType(&r.res, mapping.IdxT(index))
 	switch t {
 	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		return logicalTypeName(logicalType)
@@ -189,7 +187,7 @@ func (r *rows) Close() error {
 }
 
 func logicalTypeName(logicalType mapping.LogicalType) string {
-	t := Type(mapping.GetTypeId(logicalType))
+	t := mapping.GetTypeId(logicalType)
 	switch t {
 	case TYPE_DECIMAL:
 		return logicalTypeNameDecimal(logicalType)
@@ -266,12 +264,12 @@ func logicalTypeNameUnion(logicalType mapping.LogicalType) string {
 	count := int(mapping.UnionTypeMemberCount(logicalType))
 	name := "UNION("
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 
 		// Add comma if not at the end of the list
-		name += memberName + " " + logicalTypeName(memberType)
+		name += escapeStructFieldName(memberName) + " " + logicalTypeName(memberType)
 		if i != count-1 {
 			name += ", "
 		}

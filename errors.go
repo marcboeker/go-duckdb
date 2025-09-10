@@ -6,30 +6,30 @@ import (
 	"strings"
 )
 
-func getError(errDriver error, err error) error {
+func getError(errDriver, err error) error {
 	if err == nil {
 		return fmt.Errorf("%s: %w", driverErrMsg, errDriver)
 	}
 	return fmt.Errorf("%s: %w: %s", driverErrMsg, errDriver, err.Error())
 }
 
-func castError(actual string, expected string) error {
+func castError(actual, expected string) error {
 	return fmt.Errorf("%s: cannot cast %s to %s", castErrMsg, actual, expected)
 }
 
-func conversionError(actual int, min int, max int) error {
+func conversionError(actual, min, max int) error {
 	return fmt.Errorf("%s: cannot convert %d, minimum: %d, maximum: %d", convertErrMsg, actual, min, max)
 }
 
-func invalidInputError(actual string, expected string) error {
+func invalidInputError(actual, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", invalidInputErrMsg, expected, actual)
 }
 
-func structFieldError(actual string, expected string) error {
+func structFieldError(actual, expected string) error {
 	return fmt.Errorf("%s: expected %s, got %s", structFieldErrMsg, expected, actual)
 }
 
-func columnCountError(actual int, expected int) error {
+func columnCountError(actual, expected int) error {
 	return fmt.Errorf("%s: expected %d, got %d", columnCountErrMsg, expected, actual)
 }
 
@@ -66,7 +66,6 @@ func duplicateNameError(name string) error {
 
 const (
 	driverErrMsg           = "database/sql/driver"
-	duckdbErrMsg           = "duckdb error"
 	castErrMsg             = "cast error"
 	convertErrMsg          = "conversion error"
 	invalidInputErrMsg     = "invalid input"

@@ -123,7 +123,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 	timeTZ := time.Date(1, time.January, 1, 11, 42, 7, 0, IST)
 
 	var buffer bytes.Buffer
-	for j := 0; j < i; j++ {
+	for range i {
 		buffer.WriteString("hello!")
 	}
 	varcharCol := buffer.String()
@@ -189,7 +189,7 @@ func testTypesGenerateRow[T require.TestingT](t T, i int) testTypesRow {
 
 func testTypesGenerateRows[T require.TestingT](t T, rowCount int) []testTypesRow {
 	var expectedRows []testTypesRow
-	for i := 0; i < rowCount; i++ {
+	for i := range rowCount {
 		r := testTypesGenerateRow(t, i)
 		expectedRows = append(expectedRows, r)
 	}
@@ -203,7 +203,7 @@ func testTypesReset[T require.TestingT](t T, c *Connector) {
 
 func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []testTypesRow) []testTypesRow {
 	// Append the rows. We cannot append Composite types.
-	for i := 0; i < len(expectedRows); i++ {
+	for i := range expectedRows {
 		r := &expectedRows[i]
 		err := a.AppendRow(
 			r.Boolean_col,
@@ -290,7 +290,7 @@ func testTypes[T require.TestingT](t T, db *sql.DB, a *Appender, expectedRows []
 	}
 
 	require.NoError(t, err)
-	require.Equal(t, len(expectedRows), len(actualRows))
+	require.Len(t, actualRows, len(expectedRows))
 	return actualRows
 }
 
@@ -304,7 +304,7 @@ func TestTypes(t *testing.T) {
 		expectedRows[i].toUTC()
 		require.Equal(t, expectedRows[i], actualRows[i])
 	}
-	require.Equal(t, len(expectedRows), len(actualRows))
+	require.Len(t, actualRows, len(expectedRows))
 }
 
 // NOTE: go-duckdb only contains very few benchmarks. The purpose of those benchmarks is to avoid regressions
@@ -318,7 +318,7 @@ func BenchmarkTypes(b *testing.B) {
 
 	var r []testTypesRow
 	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		r = testTypes(b, db, a, expectedRows)
 		testTypesReset(b, c)
 	}
@@ -328,7 +328,7 @@ func BenchmarkTypes(b *testing.B) {
 	benchmarkTypesResult = r
 }
 
-func compareDecimal(t *testing.T, want Decimal, got Decimal) {
+func compareDecimal(t *testing.T, want, got Decimal) {
 	require.Equal(t, want.Scale, got.Scale)
 	require.Equal(t, want.Width, got.Width)
 	require.Equal(t, want.Value.String(), got.Value.String())
@@ -609,7 +609,7 @@ func TestList(t *testing.T) {
 	var row Composite[[]int]
 	require.NoError(t, db.QueryRow("SELECT range(0, ?, 1)", n).Scan(&row))
 	require.Len(t, row.Get(), n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		require.Equal(t, i, row.Get()[i])
 	}
 }
@@ -1007,7 +1007,7 @@ func TestJSONColType(t *testing.T) {
 	columnTypes, err := res.ColumnTypes()
 	require.NoError(t, err)
 
-	require.Equal(t, 2, len(columnTypes))
+	require.Len(t, columnTypes, 2)
 	require.Equal(t, aliasJSON, columnTypes[0].DatabaseTypeName())
 	require.Equal(t, typeToStringMap[TYPE_BIGINT], columnTypes[1].DatabaseTypeName())
 	require.Equal(t, reflect.TypeOf((*any)(nil)).Elem(), columnTypes[0].ScanType())
@@ -1072,14 +1072,14 @@ func TestUnionTypes(t *testing.T) {
 	// Test column type information.
 	t.Run("UNION column type info", func(t *testing.T) {
 		r, err := db.Query(`
-            SELECT (123)::UNION(num INTEGER, str VARCHAR) AS union_col
+            SELECT (123)::UNION(num INTEGER, "a str" VARCHAR) AS union_col
         `)
 		require.NoError(t, err)
 		defer closeRowsWrapper(t, r)
 
 		types, err := r.ColumnTypes()
 		require.NoError(t, err)
-		require.Equal(t, "UNION(num INTEGER, str VARCHAR)", types[0].DatabaseTypeName())
+		require.Equal(t, "UNION(\"num\" INTEGER, \"a str\" VARCHAR)", types[0].DatabaseTypeName())
 	})
 
 	// Test multiple UNION members.

@@ -76,7 +76,7 @@ func (udf *parallelIncrementTableUDF) FillRow(localState any, row duckdb.Row) (b
 	return true, err
 }
 
-func (udf *parallelIncrementTableUDF) GetValue(r, c int) any {
+func (udf *parallelIncrementTableUDF) GetValue(r, _ int) any {
 	return int64(r + 1)
 }
 

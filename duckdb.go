@@ -16,7 +16,7 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-var GetInstanceCache = sync.OnceValue[mapping.InstanceCache](
+var GetInstanceCache = sync.OnceValue(
 	func() mapping.InstanceCache {
 		return mapping.CreateInstanceCache()
 	})
@@ -172,7 +172,7 @@ func prepareConfig(parsedDSN *url.URL) (mapping.Config, error) {
 	return config, nil
 }
 
-func setConfigOption(config mapping.Config, name string, option string) error {
+func setConfigOption(config mapping.Config, name, option string) error {
 	if mapping.SetConfig(config, name, option) == mapping.StateError {
 		mapping.DestroyConfig(&config)
 		return getError(errSetConfig, fmt.Errorf("%s=%s", name, option))

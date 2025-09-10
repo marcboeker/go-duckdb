@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marcboeker/go-duckdb/mapping"
-
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 type numericType interface {
@@ -31,7 +31,7 @@ func (u *UUID) Scan(v any) error {
 		if len(val) != uuidLength {
 			return u.Scan(string(val))
 		}
-		copy(u[:], val[:])
+		copy(u[:], val)
 	case string:
 		id, err := uuid.Parse(val)
 		if err != nil {

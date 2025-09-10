@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,7 +141,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 
 		paramName, innerErr := stmt.ParamName(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.NoError(t, innerErr)
@@ -151,7 +153,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(3)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr := stmt.ParamType(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
@@ -188,7 +190,7 @@ func TestPrepareQueryPositional(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr = stmt.ParamType(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
@@ -246,7 +248,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 
 		paramName, innerErr := stmt.ParamName(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.NoError(t, innerErr)
@@ -258,7 +260,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(3)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr := stmt.ParamType(0)
 		require.ErrorContains(t, innerErr, paramIndexErrMsg)
@@ -295,7 +297,7 @@ func TestPrepareQueryNamed(t *testing.T) {
 
 		paramName, innerErr = stmt.ParamName(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
-		require.Equal(t, "", paramName)
+		require.Empty(t, paramName)
 
 		paramType, innerErr = stmt.ParamType(1)
 		require.ErrorIs(t, innerErr, errClosedStmt)
@@ -322,7 +324,7 @@ func TestUninitializedStmt(t *testing.T) {
 
 	paramName, err := stmt.ParamName(1)
 	require.ErrorIs(t, err, errUninitializedStmt)
-	require.Equal(t, "", paramName)
+	require.Empty(t, paramName)
 
 	err = stmt.Bind([]driver.NamedValue{{Ordinal: 1, Value: 0}})
 	require.ErrorIs(t, err, errCouldNotBind)
@@ -541,7 +543,7 @@ func TestBindJSON(t *testing.T) {
 	var str string
 	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl WHERE j IS NOT NULL`).Scan(&str)
 	require.NoError(t, err)
-	require.Equal(t, string(jsonData), str)
+	require.JSONEq(t, string(jsonData), str)
 
 	var nilStr *string
 	err = db.QueryRow(`SELECT j::VARCHAR FROM tbl WHERE j IS NULL`).Scan(&nilStr)
@@ -573,7 +575,7 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	err = prepared.QueryRow([]int{1, 2}, []int64{1}, []float32{0.1, 0.2, 0.3}, []float32{0.2, 0.3, 0.4}).Scan(&arr, &dis)
 	require.NoError(t, err)
 	require.Equal(t, [][]int32{{1, 2}, {1}}, arr.Get())
-	require.True(t, dis.Get() > 0)
+	require.Positive(t, dis.Get())
 
 	dynamicPrepare, err := db.Prepare(`SELECT * from (VALUES (?))`)
 	defer closePreparedWrapper(t, dynamicPrepare)
@@ -582,7 +584,7 @@ func TestPrepareComplexQueryParameter(t *testing.T) {
 	var res Composite[[]any]
 	err = dynamicPrepare.QueryRow([]any{}).Scan(&res)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(res.Get()))
+	require.Empty(t, res.Get())
 
 	// The statement type has already been bind as a SQL_NULL LIST in previous query
 	err = dynamicPrepare.QueryRow([]any{1}).Scan(&res)
@@ -799,4 +801,46 @@ func TestBindNullableValue(t *testing.T) {
 	require.Equal(t, id, *nonNullID, "incorrect id value")
 	require.NotNil(t, nonNullName, "expected name to not be nil")
 	require.Equal(t, name, *nonNullName, "incorrect name value")
+}
+
+type testUUID string
+
+func (u testUUID) String() string {
+	return string(u)
+}
+
+type testUUIDList []testUUID
+
+// Value implements driver.Valuer interface
+func (l testUUIDList) Value() (driver.Value, error) {
+	ss := make([]string, 0, len(l))
+	for _, v := range l {
+		ss = append(ss, v.String())
+	}
+	return fmt.Sprintf("[%s]", strings.Join(ss, ",")), nil
+}
+
+func TestDriverValuer(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE valuer_test (ids UUID [])`)
+
+	list := testUUIDList{
+		testUUID("123e4567-e89b-12d3-a456-426614174000"),
+		testUUID("3a92e387-4b7d-4098-b273-967d48f6925f"),
+	}
+	_, err := db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, list)
+	require.NoError(t, err, "driver.Valuer should work for UUID arrays")
+
+	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, "[123e4567-e89b-12d3-a456-426614174000,3a92e387-4b7d-4098-b273-967d48f6925f]")
+	require.NoError(t, err, "string parameter should work for UUID arrays")
+
+	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, any("[123e4567-e89b-12d3-a456-426614174000,3a92e387-4b7d-4098-b273-967d48f6925f]"))
+	require.NoError(t, err, "any parameter should work for UUID arrays")
+
+	// Expected to fail - no driver.Valuer implementation
+	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, []uuid.UUID{uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"), uuid.MustParse("3a92e387-4b7d-4098-b273-967d48f6925f")})
+	require.Error(t, err, "[]uuid.UUID should fail without driver.Valuer")
+	require.Contains(t, err.Error(), "unsupported data type: UUID")
 }

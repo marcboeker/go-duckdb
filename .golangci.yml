@@ -1,0 +1,68 @@
+version: "2"
+
+linters:
+  default: all
+  disable:
+    - depguard
+    - dupword
+    - err113
+    - exhaustive
+    - exhaustruct
+    - forbidigo
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - godot
+    - godox
+    - inamedparam
+    - ireturn
+    - lll
+    - nlreturn
+    - noinlineerr
+    - paralleltest
+    - testpackage
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - wsl_v5
+    # TODO: The following are worth another look.
+    # Run each with: golangci-lint run --enable-only <linter>
+    - cyclop
+    - forcetypeassert
+    - funcorder
+    - gocognit
+    - gocritic
+    - gosec # integer overflow conversions
+    - mnd
+    - nilnil
+    - noctx
+    - perfsprint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - thelper
+  settings:
+    testifylint:
+      disable:
+        - encoded-compare
+        - float-compare
+        - go-require
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/marcboeker/go-duckdb)
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/marcboeker/go-duckdb

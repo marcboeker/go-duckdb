@@ -86,7 +86,7 @@ func closePreparedWrapper[T require.TestingT](t T, stmt *sql.Stmt) {
 	require.NoError(t, stmt.Close())
 }
 
-func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema string, table string) *Appender {
+func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema, table string) *Appender {
 	a, err := NewAppenderFromConn(*conn, schema, table)
 	require.NoError(t, err)
 	return a
@@ -338,7 +338,7 @@ func TestQuery(t *testing.T) {
 			require.Equal(t, 12345, baz)
 			found = true
 		}
-		require.Equal(t, true, found)
+		require.True(t, found)
 	})
 
 	t.Run("large number of rows", func(t *testing.T) {
@@ -611,22 +611,22 @@ func TestTypeNamesAndScanTypes(t *testing.T) {
 		{
 			sql:      `SELECT (123)::UNION(num INTEGER, str VARCHAR) AS col`,
 			value:    Union{Tag: "num", Value: int32(123)},
-			typeName: "UNION(num INTEGER, str VARCHAR)",
+			typeName: "UNION(\"num\" INTEGER, \"str\" VARCHAR)",
 		},
 		{
 			sql:      `SELECT ('hello')::UNION(num INTEGER, str VARCHAR) AS col`,
 			value:    Union{Tag: "str", Value: "hello"},
-			typeName: "UNION(num INTEGER, str VARCHAR)",
+			typeName: "UNION(\"num\" INTEGER, \"str\" VARCHAR)",
 		},
 		{
 			sql:      `SELECT (1.5)::UNION(d DOUBLE, i INTEGER, s VARCHAR) AS col`,
 			value:    Union{Tag: "d", Value: float64(1.5)},
-			typeName: "UNION(d DOUBLE, i INTEGER, s VARCHAR)",
+			typeName: "UNION(\"d\" DOUBLE, \"i\" INTEGER, \"s\" VARCHAR)",
 		},
 		{
 			sql:      `SELECT ('2024-01-01'::DATE)::UNION(d DATE, s VARCHAR) AS col`,
 			value:    Union{Tag: "d", Value: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-			typeName: "UNION(d DATE, s VARCHAR)",
+			typeName: "UNION(\"d\" DATE, \"s\" VARCHAR)",
 		},
 	}
 
@@ -788,7 +788,7 @@ func TestQueryTimeout(t *testing.T) {
 
 func TestInstanceCache(t *testing.T) {
 	// We loop a few times to try and trigger different concurrent behavior.
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		db := openDbWrapper(t, `instance_cache.db`)
@@ -824,12 +824,12 @@ func TestHugeUnionQuery(t *testing.T) {
 
 	part := ` UNION SELECT 1`
 	query := `SELECT 1`
-	for i := 0; i < 350; i++ {
+	for range 350 {
 		query += part
 	}
 
 	wg := sync.WaitGroup{}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

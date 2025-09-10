@@ -165,7 +165,7 @@ func RegisterScalarUDFSet(c *sql.Conn, name string, functions ...ScalarFunc) err
 }
 
 //export scalar_udf_callback
-func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer, outputPtr unsafe.Pointer) {
+func scalar_udf_callback(functionInfoPtr, inputPtr, outputPtr unsafe.Pointer) {
 	functionInfo := mapping.FunctionInfo{Ptr: functionInfoPtr}
 	input := mapping.DataChunk{Ptr: inputPtr}
 	output := mapping.Vector{Ptr: outputPtr}
@@ -195,8 +195,7 @@ func scalar_udf_callback(functionInfoPtr unsafe.Pointer, inputPtr unsafe.Pointer
 	values := make([]driver.Value, len(inputChunk.columns))
 
 	// Execute the user-defined scalar function for each row.
-	for rowIdx := 0; rowIdx < inputChunk.GetSize(); rowIdx++ {
-
+	for rowIdx := range inputChunk.GetSize() {
 		// Get each column value.
 		var err error
 		nullRow := false
