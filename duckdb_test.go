@@ -911,6 +911,10 @@ func TestGetInstancePath(t *testing.T) {
 			dsn:      "md:my_db?password=password123&user=user123",
 			expected: "md:my_db#f648129cdb5e895d",
 		},
+		{
+			dsn:      "airport:grpc://localhost:50003/test1?auth_token=abc",
+			expected: "airport:grpc://localhost:50003/test1#3e62b24070d0991e",
+		},
 	}
 
 	for _, tt := range tests {
