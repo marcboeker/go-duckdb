@@ -36,3 +36,21 @@ func TestReplacementScan(t *testing.T) {
 	require.NoError(t, res.Err())
 	require.Equal(t, 0, rangeRows)
 }
+
+func TestReplacementScanList(t *testing.T) {
+	c := newConnectorWrapper(t, ``, func(execer driver.ExecerContext) error {
+		return nil
+	})
+	defer closeConnectorWrapper(t, c)
+
+	RegisterReplacementScan(c, func(tableName string) (string, []any, error) {
+		return "read_text", []any{[]string{"testdata/testA.txt", "testdata/testB.txt"}}, nil
+	})
+
+	db := sql.OpenDB(c)
+	defer closeDbWrapper(t, db)
+
+	var length int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM any_table").Scan(&length))
+	require.Equal(t, 2, length)
+}
