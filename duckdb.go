@@ -89,7 +89,7 @@ func NewConnector(dsn string, connInitFn func(execer driver.ExecerContext) error
 		state = mapping.OpenExt("", &db, config, &errMsg)
 	} else {
 		// Open a file-backed database.
-		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getCacheKey(dsn, parsedDSN), &db, config, &errMsg)
+		state = mapping.GetOrCreateFromCache(GetInstanceCache(), getInstancePath(dsn, parsedDSN), &db, config, &errMsg)
 	}
 	if state == mapping.StateError {
 		mapping.Close(&db)
@@ -160,9 +160,9 @@ var cacheKeyParams = []string{
 	"user",
 }
 
-// getCacheKey generates a cache key in a way that prevents cache collisions
+// getInstancePath generates a cache key in a way that prevents cache collisions
 // when the same database path is used with different parameters.
-func getCacheKey(dsn string, parsedDSN *url.URL) string {
+func getInstancePath(dsn string, parsedDSN *url.URL) string {
 	basePath := getDBPath(dsn)
 
 	if len(parsedDSN.RawQuery) == 0 {

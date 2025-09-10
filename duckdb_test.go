@@ -878,7 +878,7 @@ func Example_simpleConnection() {
 	// Output: Inserted 1 row(s) into users table
 }
 
-func TestGetCacheKey(t *testing.T) {
+func TestGetInstancePath(t *testing.T) {
 	tests := []struct {
 		dsn      string
 		expected string
@@ -918,8 +918,8 @@ func TestGetCacheKey(t *testing.T) {
 			parsedDSN, err := url.Parse(tt.dsn)
 			require.NoError(t, err)
 
-			key := getCacheKey(tt.dsn, parsedDSN)
-			require.Equal(t, tt.expected, key)
+			path := getInstancePath(tt.dsn, parsedDSN)
+			require.Equal(t, tt.expected, path)
 		})
 	}
 }
