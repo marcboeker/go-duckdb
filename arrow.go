@@ -153,6 +153,11 @@ func (r *arrowStreamReader) Next() bool {
 		return false
 	}
 
+	if r.res == nil {
+		r.err = errors.New("arrow result has already been released")
+		return false
+	}
+
 	select {
 	case <-r.ctx.Done():
 		r.err = r.ctx.Err()
