@@ -104,6 +104,7 @@ type arrowStreamReader struct {
 	refCount   int64
 	readCount  uint64
 	currentRec arrow.Record
+	closed     bool // tracks if the reader has been closed/released
 	err        error
 }
 
@@ -112,8 +113,8 @@ type arrowStreamReader struct {
 func (r *arrowStreamReader) Retain() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.err != nil {
-		return // Do not increase refCount if there is an error.
+	if r.err != nil || r.closed {
+		return // Do not increase refCount if there is an error or if closed.
 	}
 	r.refCount++
 }
@@ -124,6 +125,7 @@ func (r *arrowStreamReader) Retain() {
 func (r *arrowStreamReader) Release() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	if r.refCount <= 0 {
 		return // Do not release if refCount is already zero.
 	}
@@ -131,7 +133,9 @@ func (r *arrowStreamReader) Release() {
 	if r.refCount != 0 {
 		return // Do not release if there are still references.
 	}
+
 	// If this is the last reference, we need to clean up.
+	r.closed = true
 	if r.res != nil {
 		arrowmapping.DestroyArrow(r.res)
 		r.res = nil
@@ -150,6 +154,11 @@ func (r *arrowStreamReader) Next() bool {
 	defer r.mu.Unlock()
 
 	if r.readCount >= r.rowCount || r.err != nil {
+		return false
+	}
+
+	if r.closed {
+		r.err = errors.New("arrow reader has been closed")
 		return false
 	}
 
