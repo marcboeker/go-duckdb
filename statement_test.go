@@ -844,3 +844,21 @@ func TestDriverValuer(t *testing.T) {
 	require.Error(t, err, "[]uuid.UUID should fail without driver.Valuer")
 	require.Contains(t, err.Error(), "unsupported data type: UUID")
 }
+
+func TestMixedTypeSliceBinding(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE mixed_slice_test (foo TEXT)`)
+	_, err := db.Exec(`INSERT INTO mixed_slice_test VALUES ('hello this is text'), ('other')`)
+	require.NoError(t, err)
+
+	mixedSlice := []any{"hello this is text", 2}
+
+	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", mixedSlice)
+	require.ErrorContains(t, err, "mixed types in slice at index 0: cannot bind BIGINT and VARCHAR together: index: 1")
+
+	// Same test with named parameters
+	_, err = db.Query("FROM mixed_slice_test WHERE foo IN $foo", sql.Named("foo", mixedSlice))
+	require.ErrorContains(t, err, "mixed types in slice at index 0: cannot bind BIGINT and VARCHAR together: index: 1")
+}

@@ -289,6 +289,20 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 	if elementLogicType.Ptr == nil {
 		return elementLogicType, mapping.Value{}, unsupportedTypeError(reflect.TypeOf(val).Name())
 	}
+
+	// Validate that all non-null elements have the same type to prevent mixed-type crashes
+	expectedType := mapping.GetTypeId(elementLogicType)
+	for i, lt := range childLogicTypes {
+		if lt.Ptr != nil {
+			currentType := mapping.GetTypeId(lt)
+			if currentType != expectedType {
+				return mapping.LogicalType{}, mapping.Value{},
+					fmt.Errorf("mixed types in slice at index %d: cannot bind %s and %s together",
+						i, typeToStringMap[expectedType], typeToStringMap[currentType])
+			}
+		}
+	}
+
 	return typeFunc(elementLogicType), createFunc(elementLogicType, childValues), nil
 }
 
