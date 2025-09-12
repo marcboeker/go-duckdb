@@ -242,17 +242,25 @@ func GetTableNames(c *sql.Conn, query string, qualified bool) ([]string, error) 
 	var v mapping.Value
 	err := c.Raw(func(driverConn any) error {
 		conn := driverConn.(*Conn)
+
+		// Validate query syntax first
+		stmts, _, errExtract := conn.extractStmts(query)
+		if errExtract != nil {
+			return errExtract
+		}
+		defer mapping.DestroyExtracted(stmts)
+
 		v = mapping.GetTableNames(conn.conn, query, qualified)
 		return nil
 	})
 	defer mapping.DestroyValue(&v)
+
 	if err != nil {
 		return nil, err
 	}
 
 	var tableNames []string
-	size := mapping.GetListSize(v)
-	for i := mapping.IdxT(0); i < size; i++ {
+	for i := range mapping.GetListSize(v) {
 		func() {
 			child := mapping.GetListChild(v, i)
 			defer mapping.DestroyValue(&child)
