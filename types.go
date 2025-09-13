@@ -16,6 +16,32 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
+// Precomputed reflect type values to avoid repeated allocations.
+var (
+	reflectTypeBool      = reflect.TypeOf(true)
+	reflectTypeInt8      = reflect.TypeOf(int8(0))
+	reflectTypeInt16     = reflect.TypeOf(int16(0))
+	reflectTypeInt32     = reflect.TypeOf(int32(0))
+	reflectTypeInt64     = reflect.TypeOf(int64(0))
+	reflectTypeUint8     = reflect.TypeOf(uint8(0))
+	reflectTypeUint16    = reflect.TypeOf(uint16(0))
+	reflectTypeUint32    = reflect.TypeOf(uint32(0))
+	reflectTypeUint64    = reflect.TypeOf(uint64(0))
+	reflectTypeFloat32   = reflect.TypeOf(float32(0))
+	reflectTypeFloat64   = reflect.TypeOf(float64(0))
+	reflectTypeTime      = reflect.TypeOf(time.Time{})
+	reflectTypeInterval  = reflect.TypeOf(Interval{})
+	reflectTypeBigInt    = reflect.TypeOf(big.NewInt(0))
+	reflectTypeString    = reflect.TypeOf("")
+	reflectTypeBytes     = reflect.TypeOf([]byte{})
+	reflectTypeDecimal   = reflect.TypeOf(Decimal{})
+	reflectTypeSliceAny  = reflect.TypeOf([]any{})
+	reflectTypeMapString = reflect.TypeOf(map[string]any{})
+	reflectTypeMap       = reflect.TypeOf(Map{})
+	reflectTypeUnion     = reflect.TypeOf(Union{})
+	reflectTypeAny       = reflect.TypeFor[any]()
+)
+
 type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }
