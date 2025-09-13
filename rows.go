@@ -17,6 +17,30 @@ import (
 	"unsafe"
 )
 
+// Precomputed reflect type values to avoid repeated allocations.
+var (
+	reflectTypeBool      = reflect.TypeOf(true)
+	reflectTypeInt8      = reflect.TypeOf(int8(0))
+	reflectTypeInt16     = reflect.TypeOf(int16(0))
+	reflectTypeInt32     = reflect.TypeOf(int32(0))
+	reflectTypeInt64     = reflect.TypeOf(int64(0))
+	reflectTypeUint8     = reflect.TypeOf(uint8(0))
+	reflectTypeUint16    = reflect.TypeOf(uint16(0))
+	reflectTypeUint32    = reflect.TypeOf(uint32(0))
+	reflectTypeUint64    = reflect.TypeOf(uint64(0))
+	reflectTypeFloat32   = reflect.TypeOf(float32(0))
+	reflectTypeFloat64   = reflect.TypeOf(float64(0))
+	reflectTypeTime      = reflect.TypeOf(time.Time{})
+	reflectTypeInterval  = reflect.TypeOf(Interval{})
+	reflectTypeBigInt    = reflect.TypeOf(big.NewInt(0))
+	reflectTypeString    = reflect.TypeOf("")
+	reflectTypeBytes     = reflect.TypeOf([]byte{})
+	reflectTypeDecimal   = reflect.TypeOf(Decimal{})
+	reflectTypeSliceAny  = reflect.TypeOf([]any{})
+	reflectTypeMapString = reflect.TypeOf(map[string]any{})
+	reflectTypeMap       = reflect.TypeOf(Map{})
+)
+
 type rows struct {
 	res           C.duckdb_result
 	stmt          *stmt
@@ -184,61 +208,47 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	case C.DUCKDB_TYPE_INVALID:
 		return nil
 	case C.DUCKDB_TYPE_BOOLEAN:
-		return reflect.TypeOf(true)
+		return reflectTypeBool
 	case C.DUCKDB_TYPE_TINYINT:
-		return reflect.TypeOf(int8(0))
+		return reflectTypeInt8
 	case C.DUCKDB_TYPE_SMALLINT:
-		return reflect.TypeOf(int16(0))
+		return reflectTypeInt16
 	case C.DUCKDB_TYPE_INTEGER:
-		return reflect.TypeOf(int32(0))
+		return reflectTypeInt32
 	case C.DUCKDB_TYPE_BIGINT:
-		return reflect.TypeOf(int64(0))
+		return reflectTypeInt64
 	case C.DUCKDB_TYPE_UTINYINT:
-		return reflect.TypeOf(uint8(0))
+		return reflectTypeUint8
 	case C.DUCKDB_TYPE_USMALLINT:
-		return reflect.TypeOf(uint16(0))
+		return reflectTypeUint16
 	case C.DUCKDB_TYPE_UINTEGER:
-		return reflect.TypeOf(uint32(0))
+		return reflectTypeUint32
 	case C.DUCKDB_TYPE_UBIGINT:
-		return reflect.TypeOf(uint64(0))
+		return reflectTypeUint64
 	case C.DUCKDB_TYPE_FLOAT:
-		return reflect.TypeOf(float32(0))
+		return reflectTypeFloat32
 	case C.DUCKDB_TYPE_DOUBLE:
-		return reflect.TypeOf(float64(0))
-	case C.DUCKDB_TYPE_TIMESTAMP:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_DATE:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_TIME:
-		return reflect.TypeOf(time.Time{})
+		return reflectTypeFloat64
+	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_DATE, C.DUCKDB_TYPE_TIME,
+		C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS, C.DUCKDB_TYPE_TIMESTAMP_NS,
+		C.DUCKDB_TYPE_TIMESTAMP_TZ:
+		return reflectTypeTime
 	case C.DUCKDB_TYPE_INTERVAL:
-		return reflect.TypeOf(Interval{})
+		return reflectTypeInterval
 	case C.DUCKDB_TYPE_HUGEINT:
-		return reflect.TypeOf(big.NewInt(0))
-	case C.DUCKDB_TYPE_VARCHAR:
-		return reflect.TypeOf("")
-	case C.DUCKDB_TYPE_ENUM:
-		return reflect.TypeOf("")
-	case C.DUCKDB_TYPE_BLOB:
-		return reflect.TypeOf([]byte{})
+		return reflectTypeBigInt
+	case C.DUCKDB_TYPE_VARCHAR, C.DUCKDB_TYPE_ENUM:
+		return reflectTypeString
+	case C.DUCKDB_TYPE_BLOB, C.DUCKDB_TYPE_UUID:
+		return reflectTypeBytes
 	case C.DUCKDB_TYPE_DECIMAL:
-		return reflect.TypeOf(Decimal{})
-	case C.DUCKDB_TYPE_TIMESTAMP_S:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_TIMESTAMP_MS:
-		return reflect.TypeOf(time.Time{})
-	case C.DUCKDB_TYPE_TIMESTAMP_NS:
-		return reflect.TypeOf(time.Time{})
+		return reflectTypeDecimal
 	case C.DUCKDB_TYPE_LIST:
-		return reflect.TypeOf([]any{})
+		return reflectTypeSliceAny
 	case C.DUCKDB_TYPE_STRUCT:
-		return reflect.TypeOf(map[string]any{})
+		return reflectTypeMapString
 	case C.DUCKDB_TYPE_MAP:
-		return reflect.TypeOf(Map{})
-	case C.DUCKDB_TYPE_UUID:
-		return reflect.TypeOf([]byte{})
-	case C.DUCKDB_TYPE_TIMESTAMP_TZ:
-		return reflect.TypeOf(time.Time{})
+		return reflectTypeMap
 	default:
 		return nil
 	}
