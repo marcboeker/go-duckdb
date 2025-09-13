@@ -58,12 +58,12 @@ func (vec *vector) tryCast(val any) (any, error) {
 	case C.DUCKDB_TYPE_VARCHAR:
 		return tryPrimitiveCast[string](val, reflect.String.String())
 	case C.DUCKDB_TYPE_BLOB:
-		return tryPrimitiveCast[[]byte](val, reflect.TypeOf([]byte{}).String())
+		return tryPrimitiveCast[[]byte](val, reflectTypeBytes.String())
 	case C.DUCKDB_TYPE_TIMESTAMP, C.DUCKDB_TYPE_TIMESTAMP_S, C.DUCKDB_TYPE_TIMESTAMP_MS,
 		C.DUCKDB_TYPE_TIMESTAMP_NS, C.DUCKDB_TYPE_TIMESTAMP_TZ, C.DUCKDB_TYPE_DATE:
-		return tryPrimitiveCast[time.Time](val, reflect.TypeOf(time.Time{}).String())
+		return tryPrimitiveCast[time.Time](val, reflectTypeTime.String())
 	case C.DUCKDB_TYPE_UUID:
-		return tryPrimitiveCast[UUID](val, reflect.TypeOf(UUID{}).String())
+		return tryPrimitiveCast[UUID](val, reflectTypeUUID.String())
 	case C.DUCKDB_TYPE_LIST:
 		return vec.tryCastList(val)
 	case C.DUCKDB_TYPE_STRUCT:
