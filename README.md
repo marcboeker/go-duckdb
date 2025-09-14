@@ -22,10 +22,9 @@ Previous DuckDB versions:
 
 ### Breaking Changes
 
-```diff
-! Starting with v2.0.0, go-duckdb supports DuckDB v1.2.0 and upward.
-! Moving to v2 includes the following breaking changes:
-```
+> [!WARNING]
+> Starting with `v2.0.0`, go-duckdb supports DuckDB `v1.2.0` and upward.
+> Moving to `v2` includes the following list of breaking changes.
 
 #### Dropping pre-built FreeBSD support
 
