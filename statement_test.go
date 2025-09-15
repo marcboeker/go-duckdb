@@ -853,6 +853,10 @@ func TestMixedTypeSliceBinding(t *testing.T) {
 	_, err := db.Exec(`INSERT INTO mixed_slice_test VALUES ('hello this is text'), ('other')`)
 	require.NoError(t, err)
 
+	sameTypeSlice := []any{"hello this is text", "other"}
+	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", sameTypeSlice)
+	require.NoError(t, err)
+
 	mixedSlice := []any{"hello this is text", 2}
 
 	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", mixedSlice)
