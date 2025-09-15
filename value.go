@@ -251,33 +251,6 @@ func inferTypeId(v any) (Type, any) {
 	return t, v
 }
 
-// logicalTypesEqual recursively compares two logical types for equality
-func logicalTypesEqual(lt1, lt2 mapping.LogicalType) bool {
-	type1 := mapping.GetTypeId(lt1)
-	type2 := mapping.GetTypeId(lt2)
-	if type1 != type2 {
-		return false
-	}
-
-	// For complex types, compare child types recursively
-	switch type1 {
-	case TYPE_LIST:
-		child1 := mapping.ListTypeChildType(lt1)
-		child2 := mapping.ListTypeChildType(lt2)
-		defer mapping.DestroyLogicalType(&child1)
-		defer mapping.DestroyLogicalType(&child2)
-		return logicalTypesEqual(child1, child2)
-	case TYPE_ARRAY:
-		child1 := mapping.ArrayTypeChildType(lt1)
-		child2 := mapping.ArrayTypeChildType(lt2)
-		defer mapping.DestroyLogicalType(&child1)
-		defer mapping.DestroyLogicalType(&child2)
-		return logicalTypesEqual(child1, child2)
-	}
-
-	return true
-}
-
 func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mapping.LogicalType, mapping.Value, error) {
 	createFunc := mapping.CreateListValue
 	typeFunc := mapping.CreateListType
@@ -315,8 +288,8 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 				expectedIndex = i
 				expectedType = mapping.GetTypeId(elementLogicType)
 			} else {
-				// Validate this element matches the expected type
-				if !logicalTypesEqual(elementLogicType, et) {
+				// Check if this element's type matches the first non-null element's type
+				if logicalTypeString(elementLogicType) != logicalTypeString(et) {
 					currentType := mapping.GetTypeId(et)
 					return mapping.LogicalType{}, mapping.Value{},
 						fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",

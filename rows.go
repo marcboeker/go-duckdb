@@ -153,19 +153,7 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
 	defer mapping.DestroyLogicalType(&logicalType)
-
-	alias := mapping.LogicalTypeGetAlias(logicalType)
-	if alias == aliasJSON {
-		return aliasJSON
-	}
-
-	t := mapping.ColumnType(&r.res, mapping.IdxT(index))
-	switch t {
-	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
-		return logicalTypeName(logicalType)
-	default:
-		return typeToStringMap[t]
-	}
+	return logicalTypeString(logicalType)
 }
 
 func (r *rows) Close() error {
@@ -184,6 +172,22 @@ func (r *rows) Close() error {
 	}
 
 	return err
+}
+
+// logicalTypeString converts a LogicalType to its string representation.
+func logicalTypeString(logicalType mapping.LogicalType) string {
+	alias := mapping.LogicalTypeGetAlias(logicalType)
+	if alias == aliasJSON {
+		return aliasJSON
+	}
+
+	t := mapping.GetTypeId(logicalType)
+	switch t {
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
+		return logicalTypeName(logicalType)
+	default:
+		return typeToStringMap[t]
+	}
 }
 
 func logicalTypeName(logicalType mapping.LogicalType) string {
