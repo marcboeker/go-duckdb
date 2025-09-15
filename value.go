@@ -275,13 +275,15 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 		return typeFunc(lt), createFunc(lt, childValues), nil
 	}
 	elementLogicType := mapping.LogicalType{}
-	for _, v := range vSlice {
+	expectedIndex := -1
+	for i, v := range vSlice {
 		et, vv, err := createValueByReflection(v)
 		if err != nil {
 			return mapping.LogicalType{}, mapping.Value{}, err
 		}
 		if et.Ptr != nil {
 			elementLogicType = et
+			expectedIndex = i
 		}
 		childValues = append(childValues, vv)
 		childLogicTypes = append(childLogicTypes, et)
@@ -297,8 +299,8 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 			currentType := mapping.GetTypeId(lt)
 			if currentType != expectedType {
 				return mapping.LogicalType{}, mapping.Value{},
-					fmt.Errorf("mixed types in slice at index %d: cannot bind %s and %s together",
-						i, typeToStringMap[expectedType], typeToStringMap[currentType])
+					fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
+						typeToStringMap[expectedType], expectedIndex, typeToStringMap[currentType], i)
 			}
 		}
 	}
