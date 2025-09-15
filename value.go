@@ -276,33 +276,32 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 	}
 	elementLogicType := mapping.LogicalType{}
 	expectedIndex := -1
+	expectedType := mapping.Type(0)
 	for i, v := range vSlice {
 		et, vv, err := createValueByReflection(v)
 		if err != nil {
 			return mapping.LogicalType{}, mapping.Value{}, err
 		}
 		if et.Ptr != nil {
-			elementLogicType = et
-			expectedIndex = i
+			if elementLogicType.Ptr == nil {
+				elementLogicType = et
+				expectedIndex = i
+				expectedType = mapping.GetTypeId(elementLogicType)
+			} else {
+				// Validate this element matches the expected type
+				currentType := mapping.GetTypeId(et)
+				if currentType != expectedType {
+					return mapping.LogicalType{}, mapping.Value{},
+						fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
+							typeToStringMap[expectedType], expectedIndex, typeToStringMap[currentType], i)
+				}
+			}
 		}
 		childValues = append(childValues, vv)
 		childLogicTypes = append(childLogicTypes, et)
 	}
 	if elementLogicType.Ptr == nil {
 		return elementLogicType, mapping.Value{}, unsupportedTypeError(reflect.TypeOf(val).Name())
-	}
-
-	// Validate that all non-null elements have the same type to prevent mixed-type crashes
-	expectedType := mapping.GetTypeId(elementLogicType)
-	for i, lt := range childLogicTypes {
-		if lt.Ptr != nil {
-			currentType := mapping.GetTypeId(lt)
-			if currentType != expectedType {
-				return mapping.LogicalType{}, mapping.Value{},
-					fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
-						typeToStringMap[expectedType], expectedIndex, typeToStringMap[currentType], i)
-			}
-		}
 	}
 
 	return typeFunc(elementLogicType), createFunc(elementLogicType, childValues), nil
