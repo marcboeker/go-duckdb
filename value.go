@@ -121,25 +121,25 @@ func tryCreateValueByTypeId(t mapping.Type, v any) (mapping.Value, error) {
 		if err != nil {
 			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestamp(*vv), nil
+		return mapping.CreateTimestamp(vv), nil
 	case TYPE_TIMESTAMP_S:
 		vv, err := getMappedTimestampS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestampS(*vv), nil
+		return mapping.CreateTimestampS(vv), nil
 	case TYPE_TIMESTAMP_MS:
 		vv, err := getMappedTimestampMS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestampMS(*vv), nil
+		return mapping.CreateTimestampMS(vv), nil
 	case TYPE_TIMESTAMP_NS:
 		vv, err := getMappedTimestampNS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
-		return mapping.CreateTimestampNS(*vv), nil
+		return mapping.CreateTimestampNS(vv), nil
 	}
 	return mapping.Value{}, nil
 }

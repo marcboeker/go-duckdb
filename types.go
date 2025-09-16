@@ -78,7 +78,7 @@ func hugeIntToUUID(hugeInt *mapping.HugeInt) []byte {
 	return val[:]
 }
 
-func uuidToHugeInt(uuid UUID) *mapping.HugeInt {
+func uuidToHugeInt(uuid UUID) mapping.HugeInt {
 	// Flip the sign bit.
 	lower := binary.BigEndian.Uint64(uuid[8:])
 	upper := binary.BigEndian.Uint64(uuid[:8])
@@ -93,7 +93,7 @@ func hugeIntToNative(hugeInt *mapping.HugeInt) *big.Int {
 	return i
 }
 
-func hugeIntFromNative(i *big.Int) (*mapping.HugeInt, error) {
+func hugeIntFromNative(i *big.Int) (mapping.HugeInt, error) {
 	d := big.NewInt(1)
 	d.Lsh(d, 64)
 
@@ -102,7 +102,7 @@ func hugeIntFromNative(i *big.Int) (*mapping.HugeInt, error) {
 	q.DivMod(i, d, r)
 
 	if !q.IsInt64() {
-		return nil, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
+		return mapping.HugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
 	}
 
 	return mapping.NewHugeInt(r.Uint64(), q.Int64()), nil
@@ -134,7 +134,7 @@ type Interval struct {
 	Micros int64 `json:"micros"`
 }
 
-func (i *Interval) getMappedInterval() *mapping.Interval {
+func (i *Interval) getMappedInterval() mapping.Interval {
 	return mapping.NewInterval(i.Months, i.Days, i.Micros)
 }
 
@@ -242,46 +242,34 @@ func getTSTicks(t Type, val any) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getMappedTimestamp(t Type, val any) (*mapping.Timestamp, error) {
+func getMappedTimestamp(t Type, val any) (mapping.Timestamp, error) {
 	ticks, err := getTSTicks(t, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestamp(ticks), nil
+	return mapping.NewTimestamp(ticks), err
 }
 
-func getMappedTimestampS(val any) (*mapping.TimestampS, error) {
+func getMappedTimestampS(val any) (mapping.TimestampS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_S, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestampS(ticks), nil
+	return mapping.NewTimestampS(ticks), err
 }
 
-func getMappedTimestampMS(val any) (*mapping.TimestampMS, error) {
+func getMappedTimestampMS(val any) (mapping.TimestampMS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_MS, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestampMS(ticks), nil
+	return mapping.NewTimestampMS(ticks), err
 }
 
-func getMappedTimestampNS(val any) (*mapping.TimestampNS, error) {
+func getMappedTimestampNS(val any) (mapping.TimestampNS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_NS, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestampNS(ticks), nil
+	return mapping.NewTimestampNS(ticks), err
 }
 
-func getMappedDate[T any](val T) (*mapping.Date, error) {
+func getMappedDate[T any](val T) (mapping.Date, error) {
 	ti, err := castToTime(val)
 	if err != nil {
-		return nil, err
+		return mapping.Date{}, err
 	}
 
 	date := mapping.NewDate(int32(ti.Unix() / secondsPerDay))
-	return date, nil
+	return date, err
 }
 
 func getTimeTicks[T any](val T) (int64, error) {
