@@ -11,43 +11,46 @@ import (
 type Type = bindings.Type
 
 const (
-	TypeInvalid     = bindings.TypeInvalid
-	TypeBoolean     = bindings.TypeBoolean
-	TypeTinyInt     = bindings.TypeTinyInt
-	TypeSmallInt    = bindings.TypeSmallInt
-	TypeInteger     = bindings.TypeInteger
-	TypeBigInt      = bindings.TypeBigInt
-	TypeUTinyInt    = bindings.TypeUTinyInt
-	TypeUSmallInt   = bindings.TypeUSmallInt
-	TypeUInteger    = bindings.TypeUInteger
-	TypeUBigInt     = bindings.TypeUBigInt
-	TypeFloat       = bindings.TypeFloat
-	TypeDouble      = bindings.TypeDouble
-	TypeTimestamp   = bindings.TypeTimestamp
-	TypeDate        = bindings.TypeDate
-	TypeTime        = bindings.TypeTime
-	TypeInterval    = bindings.TypeInterval
-	TypeHugeInt     = bindings.TypeHugeInt
-	TypeUHugeInt    = bindings.TypeUHugeInt
-	TypeVarchar     = bindings.TypeVarchar
-	TypeBlob        = bindings.TypeBlob
-	TypeDecimal     = bindings.TypeDecimal
-	TypeTimestampS  = bindings.TypeTimestampS
-	TypeTimestampMS = bindings.TypeTimestampMS
-	TypeTimestampNS = bindings.TypeTimestampNS
-	TypeEnum        = bindings.TypeEnum
-	TypeList        = bindings.TypeList
-	TypeStruct      = bindings.TypeStruct
-	TypeMap         = bindings.TypeMap
-	TypeArray       = bindings.TypeArray
-	TypeUUID        = bindings.TypeUUID
-	TypeUnion       = bindings.TypeUnion
-	TypeBit         = bindings.TypeBit
-	TypeTimeTZ      = bindings.TypeTimeTZ
-	TypeTimestampTZ = bindings.TypeTimestampTZ
-	TypeAny         = bindings.TypeAny
-	TypeVarInt      = bindings.TypeVarInt
-	TypeSQLNull     = bindings.TypeSQLNull
+	TypeInvalid        = bindings.TypeInvalid
+	TypeBoolean        = bindings.TypeBoolean
+	TypeTinyInt        = bindings.TypeTinyInt
+	TypeSmallInt       = bindings.TypeSmallInt
+	TypeInteger        = bindings.TypeInteger
+	TypeBigInt         = bindings.TypeBigInt
+	TypeUTinyInt       = bindings.TypeUTinyInt
+	TypeUSmallInt      = bindings.TypeUSmallInt
+	TypeUInteger       = bindings.TypeUInteger
+	TypeUBigInt        = bindings.TypeUBigInt
+	TypeFloat          = bindings.TypeFloat
+	TypeDouble         = bindings.TypeDouble
+	TypeTimestamp      = bindings.TypeTimestamp
+	TypeDate           = bindings.TypeDate
+	TypeTime           = bindings.TypeTime
+	TypeInterval       = bindings.TypeInterval
+	TypeHugeInt        = bindings.TypeHugeInt
+	TypeUHugeInt       = bindings.TypeUHugeInt
+	TypeVarchar        = bindings.TypeVarchar
+	TypeBlob           = bindings.TypeBlob
+	TypeDecimal        = bindings.TypeDecimal
+	TypeTimestampS     = bindings.TypeTimestampS
+	TypeTimestampMS    = bindings.TypeTimestampMS
+	TypeTimestampNS    = bindings.TypeTimestampNS
+	TypeEnum           = bindings.TypeEnum
+	TypeList           = bindings.TypeList
+	TypeStruct         = bindings.TypeStruct
+	TypeMap            = bindings.TypeMap
+	TypeArray          = bindings.TypeArray
+	TypeUUID           = bindings.TypeUUID
+	TypeUnion          = bindings.TypeUnion
+	TypeBit            = bindings.TypeBit
+	TypeTimeTZ         = bindings.TypeTimeTZ
+	TypeTimestampTZ    = bindings.TypeTimestampTZ
+	TypeAny            = bindings.TypeAny
+	TypeBigNum         = bindings.TypeBigNum
+	TypeSQLNull        = bindings.TypeSQLNull
+	TypeStringLiteral  = bindings.TypeStringLiteral
+	TypeIntegerLiteral = bindings.TypeIntegerLiteral
+	TypeTimeNS         = bindings.TypeTimeNS
 )
 
 type State = bindings.State
@@ -174,6 +177,7 @@ type (
 	DateStruct        = bindings.DateStruct
 	Time              = bindings.Time
 	TimeStruct        = bindings.TimeStruct
+	TimeNS            = bindings.TimeNS
 	TimeTZ            = bindings.TimeTZ
 	TimeTZStruct      = bindings.TimeTZStruct
 	Timestamp         = bindings.Timestamp
@@ -189,7 +193,7 @@ type (
 	ListEntry         = bindings.ListEntry
 	Blob              = bindings.Blob
 	Bit               = bindings.Bit
-	VarInt            = bindings.VarInt
+	BigNum            = bindings.BigNum
 )
 
 // Helper functions for types without internal pointers.
@@ -203,6 +207,8 @@ var (
 	TimeMembers              = bindings.TimeMembers
 	NewTimeStruct            = bindings.NewTimeStruct
 	TimeStructMembers        = bindings.TimeStructMembers
+	NewTimeNS                = bindings.NewTimeNS
+	TimeNSMembers            = bindings.TimeNSMembers
 	NewTimeTZ                = bindings.NewTimeTZ
 	TimeTZMembers            = bindings.TimeTZMembers
 	NewTimeTZStruct          = bindings.NewTimeTZStruct
@@ -236,7 +242,7 @@ var (
 var (
 	DestroyBlob   = bindings.DestroyBlob
 	DestroyBit    = bindings.DestroyBit
-	DestroyVarInt = bindings.DestroyVarInt
+	DestroyBigNum = bindings.DestroyBigNum
 )
 
 // Types with internal pointers.
@@ -266,6 +272,8 @@ type (
 	DataChunk           = bindings.DataChunk
 	Value               = bindings.Value
 	ProfilingInfo       = bindings.ProfilingInfo
+	ErrorData           = bindings.ErrorData
+	Expression          = bindings.Expression
 	FunctionInfo        = bindings.FunctionInfo
 	ScalarFunction      = bindings.ScalarFunction
 	ScalarFunctionSet   = bindings.ScalarFunctionSet
@@ -305,6 +313,16 @@ var (
 	GetConfigFlag = bindings.GetConfigFlag
 	SetConfig     = bindings.SetConfig
 	DestroyConfig = bindings.DestroyConfig
+)
+
+// Error data.
+
+var (
+	CreateErrorData    = bindings.CreateErrorData
+	DestroyErrorData   = bindings.DestroyErrorData
+	ErrorDataErrorType = bindings.ErrorDataErrorType
+	ErrorDataMessage   = bindings.ErrorDataMessage
+	ErrorDataHasError  = bindings.ErrorDataHasError
 )
 
 // Query execution.
@@ -386,15 +404,19 @@ var (
 // Prepared statements.
 
 var (
-	Prepare               = bindings.Prepare
-	DestroyPrepare        = bindings.DestroyPrepare
-	PrepareError          = bindings.PrepareError
-	NParams               = bindings.NParams
-	ParameterName         = bindings.ParameterName
-	ParamType             = bindings.ParamType
-	ParamLogicalType      = bindings.ParamLogicalType
-	ClearBindings         = bindings.ClearBindings
-	PreparedStatementType = bindings.PreparedStatementType
+	Prepare                            = bindings.Prepare
+	DestroyPrepare                     = bindings.DestroyPrepare
+	PrepareError                       = bindings.PrepareError
+	NParams                            = bindings.NParams
+	ParameterName                      = bindings.ParameterName
+	ParamType                          = bindings.ParamType
+	ParamLogicalType                   = bindings.ParamLogicalType
+	ClearBindings                      = bindings.ClearBindings
+	PreparedStatementType              = bindings.PreparedStatementType
+	PreparedStatementColumnCount       = bindings.PreparedStatementColumnCount
+	PreparedStatementColumnName        = bindings.PreparedStatementColumnName
+	PreparedStatementColumnLogicalType = bindings.PreparedStatementColumnLogicalType
+	PreparedStatementColumnType        = bindings.PreparedStatementColumnType
 )
 
 // Bind values to prepared statements.
@@ -469,12 +491,13 @@ var (
 	CreateInt64         = bindings.CreateInt64
 	CreateHugeInt       = bindings.CreateHugeInt
 	CreateUHugeInt      = bindings.CreateUHugeInt
-	CreateVarint        = bindings.CreateVarint
+	CreateBigNum        = bindings.CreateBigNum
 	CreateDecimal       = bindings.CreateDecimal
 	CreateFloat         = bindings.CreateFloat
 	CreateDouble        = bindings.CreateDouble
 	CreateDate          = bindings.CreateDate
 	CreateTime          = bindings.CreateTime
+	CreateTimeNS        = bindings.CreateTimeNS
 	CreateTimeTZValue   = bindings.CreateTimeTZValue
 	CreateTimestamp     = bindings.CreateTimestamp
 	CreateTimestampTZ   = bindings.CreateTimestampTZ
@@ -496,12 +519,13 @@ var (
 	GetUInt64           = bindings.GetUInt64
 	GetHugeInt          = bindings.GetHugeInt
 	GetUHugeInt         = bindings.GetUHugeInt
-	GetVarInt           = bindings.GetVarInt
+	GetBigNum           = bindings.GetBigNum
 	GetDecimal          = bindings.GetDecimal
 	GetFloat            = bindings.GetFloat
 	GetDouble           = bindings.GetDouble
 	GetDate             = bindings.GetDate
 	GetTime             = bindings.GetTime
+	GetTimeNS           = bindings.GetTimeNS
 	GetTimeTZ           = bindings.GetTimeTZ
 	GetTimestamp        = bindings.GetTimestamp
 	GetTimestampTZ      = bindings.GetTimestampTZ
@@ -597,6 +621,7 @@ var (
 	StructVectorGetChild         = bindings.StructVectorGetChild
 	ArrayVectorGetChild          = bindings.ArrayVectorGetChild
 	SliceVector                  = bindings.SliceVector
+	VectorCopySel                = bindings.VectorCopySel
 	VectorReferenceValue         = bindings.VectorReferenceValue
 	VectorReferenceVector        = bindings.VectorReferenceVector
 )
@@ -613,28 +638,32 @@ var (
 // Scalar functions.
 
 var (
-	CreateScalarFunction             = bindings.CreateScalarFunction
-	DestroyScalarFunction            = bindings.DestroyScalarFunction
-	ScalarFunctionSetName            = bindings.ScalarFunctionSetName
-	ScalarFunctionSetVarargs         = bindings.ScalarFunctionSetVarargs
-	ScalarFunctionSetSpecialHandling = bindings.ScalarFunctionSetSpecialHandling
-	ScalarFunctionSetVolatile        = bindings.ScalarFunctionSetVolatile
-	ScalarFunctionAddParameter       = bindings.ScalarFunctionAddParameter
-	ScalarFunctionSetReturnType      = bindings.ScalarFunctionSetReturnType
-	ScalarFunctionSetExtraInfo       = bindings.ScalarFunctionSetExtraInfo
-	ScalarFunctionSetBind            = bindings.ScalarFunctionSetBind
-	ScalarFunctionSetBindData        = bindings.ScalarFunctionSetBindData
-	ScalarFunctionBindSetError       = bindings.ScalarFunctionBindSetError
-	ScalarFunctionSetFunction        = bindings.ScalarFunctionSetFunction
-	RegisterScalarFunction           = bindings.RegisterScalarFunction
-	ScalarFunctionGetExtraInfo       = bindings.ScalarFunctionGetExtraInfo
-	ScalarFunctionGetBindData        = bindings.ScalarFunctionGetBindData
-	ScalarFunctionGetClientContext   = bindings.ScalarFunctionGetClientContext
-	ScalarFunctionSetError           = bindings.ScalarFunctionSetError
-	CreateScalarFunctionSet          = bindings.CreateScalarFunctionSet
-	DestroyScalarFunctionSet         = bindings.DestroyScalarFunctionSet
-	AddScalarFunctionToSet           = bindings.AddScalarFunctionToSet
-	RegisterScalarFunctionSet        = bindings.RegisterScalarFunctionSet
+	CreateScalarFunction               = bindings.CreateScalarFunction
+	DestroyScalarFunction              = bindings.DestroyScalarFunction
+	ScalarFunctionSetName              = bindings.ScalarFunctionSetName
+	ScalarFunctionSetVarargs           = bindings.ScalarFunctionSetVarargs
+	ScalarFunctionSetSpecialHandling   = bindings.ScalarFunctionSetSpecialHandling
+	ScalarFunctionSetVolatile          = bindings.ScalarFunctionSetVolatile
+	ScalarFunctionAddParameter         = bindings.ScalarFunctionAddParameter
+	ScalarFunctionSetReturnType        = bindings.ScalarFunctionSetReturnType
+	ScalarFunctionSetExtraInfo         = bindings.ScalarFunctionSetExtraInfo
+	ScalarFunctionSetBind              = bindings.ScalarFunctionSetBind
+	ScalarFunctionSetBindData          = bindings.ScalarFunctionSetBindData
+	ScalarFunctionSetBindDataCopy      = bindings.ScalarFunctionSetBindDataCopy
+	ScalarFunctionBindSetError         = bindings.ScalarFunctionBindSetError
+	ScalarFunctionSetFunction          = bindings.ScalarFunctionSetFunction
+	RegisterScalarFunction             = bindings.RegisterScalarFunction
+	ScalarFunctionGetExtraInfo         = bindings.ScalarFunctionGetExtraInfo
+	ScalarFunctionBindGetExtraInfo     = bindings.ScalarFunctionBindGetExtraInfo
+	ScalarFunctionGetBindData          = bindings.ScalarFunctionGetBindData
+	ScalarFunctionGetClientContext     = bindings.ScalarFunctionGetClientContext
+	ScalarFunctionSetError             = bindings.ScalarFunctionSetError
+	CreateScalarFunctionSet            = bindings.CreateScalarFunctionSet
+	DestroyScalarFunctionSet           = bindings.DestroyScalarFunctionSet
+	AddScalarFunctionToSet             = bindings.AddScalarFunctionToSet
+	RegisterScalarFunctionSet          = bindings.RegisterScalarFunctionSet
+	ScalarFunctionBindGetArgumentCount = bindings.ScalarFunctionBindGetArgumentCount
+	ScalarFunctionBindGetArgument      = bindings.ScalarFunctionBindGetArgument
 )
 
 // Selection vector functions.
@@ -665,14 +694,15 @@ var (
 // Table function bind.
 
 var (
-	BindGetExtraInfo      = bindings.BindGetExtraInfo
-	BindAddResultColumn   = bindings.BindAddResultColumn
-	BindGetParameterCount = bindings.BindGetParameterCount
-	BindGetParameter      = bindings.BindGetParameter
-	BindGetNamedParameter = bindings.BindGetNamedParameter
-	BindSetBindData       = bindings.BindSetBindData
-	BindSetCardinality    = bindings.BindSetCardinality
-	BindSetError          = bindings.BindSetError
+	BindGetExtraInfo              = bindings.BindGetExtraInfo
+	TableFunctionGetClientContext = bindings.TableFunctionGetClientContext
+	BindAddResultColumn           = bindings.BindAddResultColumn
+	BindGetParameterCount         = bindings.BindGetParameterCount
+	BindGetParameter              = bindings.BindGetParameter
+	BindGetNamedParameter         = bindings.BindGetNamedParameter
+	BindSetBindData               = bindings.BindSetBindData
+	BindSetCardinality            = bindings.BindSetCardinality
+	BindSetError                  = bindings.BindSetError
 )
 
 // Table function init.
@@ -721,9 +751,11 @@ var (
 var (
 	AppenderCreate       = bindings.AppenderCreate
 	AppenderCreateExt    = bindings.AppenderCreateExt
+	AppenderCreateQuery  = bindings.AppenderCreateQuery
 	AppenderColumnCount  = bindings.AppenderColumnCount
 	AppenderColumnType   = bindings.AppenderColumnType
 	AppenderError        = bindings.AppenderError
+	AppenderErrorData    = bindings.AppenderErrorData
 	AppenderFlush        = bindings.AppenderFlush
 	AppenderClose        = bindings.AppenderClose
 	AppenderDestroy      = bindings.AppenderDestroy
@@ -742,6 +774,15 @@ var (
 	TableDescriptionError         = bindings.TableDescriptionError
 	ColumnHasDefault              = bindings.ColumnHasDefault
 	TableDescriptionGetColumnName = bindings.TableDescriptionGetColumnName
+)
+
+// Expression.
+
+var (
+	DestroyExpression    = bindings.DestroyExpression
+	ExpressionReturnType = bindings.ExpressionReturnType
+	ExpressionIsFoldable = bindings.ExpressionIsFoldable
+	ExpressionFold       = bindings.ExpressionFold
 )
 
 // Go bindings helper.
