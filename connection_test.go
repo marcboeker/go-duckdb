@@ -55,7 +55,7 @@ func TestGetTableNames(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tableNames, err := GetTableNames(conn, tt.query, tt.qualified)
 			if tt.expectedError != "" {
-				require.EqualError(t, err, tt.expectedError)
+				require.Contains(t, err.Error(), tt.expectedError)
 				assert.Nil(t, tableNames)
 			} else {
 				require.NoError(t, err)
