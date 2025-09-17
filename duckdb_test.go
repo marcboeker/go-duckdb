@@ -225,7 +225,7 @@ func ExampleNewConnector() {
 	}()
 
 	var value string
-	row := db.QueryRow(`SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'`)
+	row := db.QueryRow(`SELECT value FROM duckdb_settings() WHERE name = 'max_memory'`)
 	if row.Scan(&value) != nil {
 		log.Fatalf("failed to scan row: %s", err)
 	}
