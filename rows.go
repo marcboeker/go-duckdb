@@ -26,22 +26,33 @@ type rows struct {
 	chunkIdx mapping.IdxT
 	// rowCount is the number of scanned rows.
 	rowCount int
+	// cached column metadata to avoid repeated CGO calls
+	scanTypes   []reflect.Type
+	dbTypeNames []string
 }
 
 func newRowsWithStmt(res mapping.Result, stmt *Stmt) *rows {
 	columnCount := mapping.ColumnCount(&res)
 	r := rows{
-		res:        res,
-		stmt:       stmt,
-		chunk:      DataChunk{},
-		chunkCount: mapping.ResultChunkCount(res),
-		chunkIdx:   0,
-		rowCount:   0,
+		res:         res,
+		stmt:        stmt,
+		chunk:       DataChunk{},
+		chunkCount:  mapping.ResultChunkCount(res),
+		chunkIdx:    0,
+		rowCount:    0,
+		scanTypes:   make([]reflect.Type, columnCount),
+		dbTypeNames: make([]string, columnCount),
 	}
 
 	for i := mapping.IdxT(0); i < columnCount; i++ {
 		columnName := mapping.ColumnName(&res, i)
 		r.chunk.columnNames = append(r.chunk.columnNames, columnName)
+
+		// Cache column metadata
+		logicalType := mapping.ColumnLogicalType(&res, i)
+		r.scanTypes[i] = r.getScanType(logicalType, i)
+		r.dbTypeNames[i] = r.getDBTypeName(logicalType, i)
+		mapping.DestroyLogicalType(&logicalType)
 	}
 
 	return &r
@@ -84,15 +95,16 @@ func (r *rows) Next(dst []driver.Value) error {
 
 // ColumnTypeScanType implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
-	logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
-	defer mapping.DestroyLogicalType(&logicalType)
+	return r.scanTypes[index]
+}
 
+func (r *rows) getScanType(logicalType mapping.LogicalType, index mapping.IdxT) reflect.Type {
 	alias := mapping.LogicalTypeGetAlias(logicalType)
 	if alias == aliasJSON {
 		return reflectTypeAny
 	}
 
-	t := mapping.ColumnType(&r.res, mapping.IdxT(index))
+	t := mapping.ColumnType(&r.res, index)
 	switch t {
 	case TYPE_INVALID:
 		return nil
@@ -149,15 +161,16 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 
 // ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
-	logicalType := mapping.ColumnLogicalType(&r.res, mapping.IdxT(index))
-	defer mapping.DestroyLogicalType(&logicalType)
+	return r.dbTypeNames[index]
+}
 
+func (r *rows) getDBTypeName(logicalType mapping.LogicalType, index mapping.IdxT) string {
 	alias := mapping.LogicalTypeGetAlias(logicalType)
 	if alias == aliasJSON {
 		return aliasJSON
 	}
 
-	t := mapping.ColumnType(&r.res, mapping.IdxT(index))
+	t := mapping.ColumnType(&r.res, index)
 	switch t {
 	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		return logicalTypeName(logicalType)
