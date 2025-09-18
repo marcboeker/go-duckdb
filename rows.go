@@ -234,22 +234,29 @@ func logicalTypeNameList(logicalType mapping.LogicalType) string {
 }
 
 func logicalTypeNameStruct(logicalType mapping.LogicalType) string {
+	var sb strings.Builder
+	sb.WriteString("STRUCT(")
+
 	count := mapping.StructTypeChildCount(logicalType)
-	name := "STRUCT("
 
 	for i := mapping.IdxT(0); i < count; i++ {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+
 		childName := mapping.StructTypeChildName(logicalType, i)
 		childType := mapping.StructTypeChildType(logicalType, i)
 
-		// Add comma if not at the end of the list.
-		name += escapeStructFieldName(childName) + " " + logicalTypeName(childType)
-		if i != count-1 {
-			name += ", "
-		}
+		sb.WriteString(escapeStructFieldName(childName))
+		sb.WriteByte(' ')
+		sb.WriteString(logicalTypeName(childType))
+
 		mapping.DestroyLogicalType(&childType)
 	}
 
-	return name + ")"
+	sb.WriteByte(')')
+
+	return sb.String()
 }
 
 func logicalTypeNameMap(logicalType mapping.LogicalType) string {
@@ -272,22 +279,28 @@ func logicalTypeNameArray(logicalType mapping.LogicalType) string {
 }
 
 func logicalTypeNameUnion(logicalType mapping.LogicalType) string {
+	var sb strings.Builder
+	sb.WriteString("UNION(")
+
 	count := int(mapping.UnionTypeMemberCount(logicalType))
-	name := "UNION("
 
 	for i := range count {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+
 		memberName := mapping.UnionTypeMemberName(logicalType, mapping.IdxT(i))
 		memberType := mapping.UnionTypeMemberType(logicalType, mapping.IdxT(i))
 
-		// Add comma if not at the end of the list
-		name += escapeStructFieldName(memberName) + " " + logicalTypeName(memberType)
-		if i != count-1 {
-			name += ", "
-		}
+		sb.WriteString(escapeStructFieldName(memberName))
+		sb.WriteByte(' ')
+		sb.WriteString(logicalTypeName(memberType))
 
 		mapping.DestroyLogicalType(&memberType)
 	}
-	return name + ")"
+
+	sb.WriteByte(')')
+	return sb.String()
 }
 
 func escapeStructFieldName(s string) string {
