@@ -91,6 +91,18 @@ func TestErrAppender(t *testing.T) {
 		testError(t, err, errAppenderCreation.Error())
 	})
 
+	t.Run(errAppenderEmptyTypes.Error(), func(t *testing.T) {
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
+
+		a, err := NewQueryAppender(conn, "", []TypeInfo{}, "", []string{})
+		defer closeAppenderWrapper(t, a)
+		testError(t, err, errAppenderEmptyTypes.Error())
+	})
+
 	t.Run(errAppenderDoubleClose.Error(), func(t *testing.T) {
 		c := newConnectorWrapper(t, ``, nil)
 		defer closeConnectorWrapper(t, c)

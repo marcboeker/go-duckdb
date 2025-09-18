@@ -3,6 +3,7 @@ package duckdb
 import (
 	"errors"
 	"fmt"
+	"github.com/marcboeker/go-duckdb/mapping"
 	"strings"
 )
 
@@ -114,6 +115,7 @@ var (
 	errAppenderAppendRow        = errors.New("could not append row")
 	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
 	errAppenderFlush            = errors.New("could not flush appender")
+	errAppenderEmptyTypes       = errors.New("empty appender types")
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 	errEmptyName             = errors.New("empty name")
@@ -144,49 +146,49 @@ var (
 type ErrorType int
 
 const (
-	ErrorTypeInvalid              ErrorType = iota // invalid type
-	ErrorTypeOutOfRange                            // value out of range error
-	ErrorTypeConversion                            // conversion/casting error
-	ErrorTypeUnknownType                           // unknown type error
-	ErrorTypeDecimal                               // decimal related
-	ErrorTypeMismatchType                          // type mismatch
-	ErrorTypeDivideByZero                          // divide by 0
-	ErrorTypeObjectSize                            // object size exceeded
-	ErrorTypeInvalidType                           // incompatible for operation
-	ErrorTypeSerialization                         // serialization
-	ErrorTypeTransaction                           // transaction management
-	ErrorTypeNotImplemented                        // method not implemented
-	ErrorTypeExpression                            // expression parsing
-	ErrorTypeCatalog                               // catalog related
-	ErrorTypeParser                                // parser related
-	ErrorTypePlanner                               // planner related
-	ErrorTypeScheduler                             // scheduler related
-	ErrorTypeExecutor                              // executor related
-	ErrorTypeConstraint                            // constraint related
-	ErrorTypeIndex                                 // index related
-	ErrorTypeStat                                  // stat related
-	ErrorTypeConnection                            // connection related
-	ErrorTypeSyntax                                // syntax related
-	ErrorTypeSettings                              // settings related
-	ErrorTypeBinder                                // binder related
-	ErrorTypeNetwork                               // network related
-	ErrorTypeOptimizer                             // optimizer related
-	ErrorTypeNullPointer                           // nullptr exception
-	ErrorTypeIO                                    // IO exception
-	ErrorTypeInterrupt                             // interrupt
-	ErrorTypeFatal                                 // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
-	ErrorTypeInternal                              // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
-	ErrorTypeInvalidInput                          // Input or arguments error
-	ErrorTypeOutOfMemory                           // out of memory
-	ErrorTypePermission                            // insufficient permissions
-	ErrorTypeParameterNotResolved                  // parameter types could not be resolved
-	ErrorTypeParameterNotAllowed                   // parameter types not allowed
-	ErrorTypeDependency                            // dependency
-	ErrorTypeHTTP
-	ErrorTypeMissingExtension // Thrown when an extension is used but not loaded
-	ErrorTypeAutoLoad         // Thrown when an extension is used but not loaded
-	ErrorTypeSequence
-	ErrorTypeInvalidConfiguration // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
+	ErrorTypeInvalid              = ErrorType(mapping.ErrorTypeInvalid)              // Invalid type.
+	ErrorTypeOutOfRange           = ErrorType(mapping.ErrorTypeOutOfRange)           // The type's value is out of range.
+	ErrorTypeConversion           = ErrorType(mapping.ErrorTypeConversion)           // Conversion/casting error.
+	ErrorTypeUnknownType          = ErrorType(mapping.ErrorTypeUnknownType)          // The type is unknown.
+	ErrorTypeDecimal              = ErrorType(mapping.TypeDecimal)                   // Decimal-related error.
+	ErrorTypeMismatchType         = ErrorType(mapping.ErrorTypeMismatchType)         // Types don't match.
+	ErrorTypeDivideByZero         = ErrorType(mapping.ErrorTypeDivideByZero)         // Division by zero.
+	ErrorTypeObjectSize           = ErrorType(mapping.ErrorTypeObjectSize)           // Exceeds object size.
+	ErrorTypeInvalidType          = ErrorType(mapping.ErrorTypeInvalidType)          // Incompatible types.
+	ErrorTypeSerialization        = ErrorType(mapping.ErrorTypeSerialization)        // Type serialization error.
+	ErrorTypeTransaction          = ErrorType(mapping.ErrorTypeTransaction)          // Transaction conflict.
+	ErrorTypeNotImplemented       = ErrorType(mapping.ErrorTypeNotImplemented)       // Missing functionality.
+	ErrorTypeExpression           = ErrorType(mapping.ErrorTypeExpression)           // Expression error.
+	ErrorTypeCatalog              = ErrorType(mapping.ErrorTypeCatalog)              // Catalog error.
+	ErrorTypeParser               = ErrorType(mapping.ErrorTypeParser)               // Error during parsing.
+	ErrorTypePlanner              = ErrorType(mapping.ErrorTypePlanner)              // Error during planning.
+	ErrorTypeScheduler            = ErrorType(mapping.ErrorTypeScheduler)            // Scheduling error.
+	ErrorTypeExecutor             = ErrorType(mapping.ErrorTypeExecutor)             // Executor error.
+	ErrorTypeConstraint           = ErrorType(mapping.ErrorTypeConstraint)           // Constraint violation.
+	ErrorTypeIndex                = ErrorType(mapping.ErrorTypeIndex)                // Index error.
+	ErrorTypeStat                 = ErrorType(mapping.ErrorTypeStat)                 // Statistics error.
+	ErrorTypeConnection           = ErrorType(mapping.ErrorTypeConnection)           // Connection error.
+	ErrorTypeSyntax               = ErrorType(mapping.ErrorTypeSyntax)               // Invalid syntax.
+	ErrorTypeSettings             = ErrorType(mapping.ErrorTypeSettings)             // Settings-related error.
+	ErrorTypeBinder               = ErrorType(mapping.ErrorTypeBinder)               // Binding error.
+	ErrorTypeNetwork              = ErrorType(mapping.ErrorTypeNetwork)              // Network error.
+	ErrorTypeOptimizer            = ErrorType(mapping.ErrorTypeOptimizer)            // Optimizer error.
+	ErrorTypeNullPointer          = ErrorType(mapping.ErrorTypeNullPointer)          // Null-pointer exception.
+	ErrorTypeIO                   = ErrorType(mapping.ErrorTypeErrorIO)              // IO exception.
+	ErrorTypeInterrupt            = ErrorType(mapping.ErrorTypeInterrupt)            // Query interruption.
+	ErrorTypeFatal                = ErrorType(mapping.ErrorTypeFatal)                // Fatal exception. Non-recoverable. The DB enters an invalid state and must be restarted.
+	ErrorTypeInternal             = ErrorType(mapping.ErrorTypeInternal)             // Internal exception. Indicates a bug, and should be reported.
+	ErrorTypeInvalidInput         = ErrorType(mapping.ErrorTypeInvalidInput)         // Invalid input.
+	ErrorTypeOutOfMemory          = ErrorType(mapping.ErrorTypeOutOfMemory)          // Out-of-memory error.
+	ErrorTypePermission           = ErrorType(mapping.ErrorTypePermission)           // Invalid permissions.
+	ErrorTypeParameterNotResolved = ErrorType(mapping.ErrorTypeParameterNotResolved) // Error when resolving types.
+	ErrorTypeParameterNotAllowed  = ErrorType(mapping.ErrorTypeParameterNotAllowed)  // Invalid parameter.
+	ErrorTypeDependency           = ErrorType(mapping.ErrorTypeDependency)           // Dependency error.
+	ErrorTypeHTTP                 = ErrorType(mapping.ErrorTypeHTTP)                 // HTTP error.
+	ErrorTypeMissingExtension     = ErrorType(mapping.ErrorTypeMissingExtension)     // Usage of a non-loaded extension.
+	ErrorTypeAutoLoad             = ErrorType(mapping.ErrorTypeAutoload)             // Usage of a non-loaded extension that cannot be loaded automatically.
+	ErrorTypeSequence             = ErrorType(mapping.ErrorTypeSequence)             // Sequence error.
+	ErrorTypeInvalidConfiguration = ErrorType(mapping.ErrorTypeInvalidConfiguration) // Indicates an invalid configuration, e.g., a missing Secret parameter, or a mandatory setting is not provided.
 )
 
 var errorPrefixMap = map[string]ErrorType{
@@ -249,6 +251,18 @@ func (e *Error) Is(err error) bool {
 		return other.Msg == e.Msg
 	}
 	return false
+}
+
+func errorDataError(errorData mapping.ErrorData) error {
+	defer mapping.DestroyErrorData(&errorData)
+	if !mapping.ErrorDataHasError(errorData) {
+		return nil
+	}
+
+	t := mapping.ErrorDataErrorType(errorData)
+	msg := mapping.ErrorDataMessage(errorData)
+
+	return &Error{ErrorType(t), msg}
 }
 
 func getDuckDBError(errMsg string) error {

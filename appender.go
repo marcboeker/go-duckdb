@@ -10,8 +10,6 @@ import (
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
 type Appender struct {
 	conn     *Conn
-	schema   string
-	table    string
 	appender mapping.Appender
 	closed   bool
 
@@ -30,28 +28,22 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 
 // NewAppender returns a new Appender from a DuckDB driver connection.
 func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
-	conn, ok := driverConn.(*Conn)
-	if !ok {
-		return nil, getError(errInvalidCon, nil)
-	}
-	if conn.closed {
-		return nil, getError(errClosedCon, nil)
+	conn, err := appenderConn(driverConn)
+	if err != nil {
+		return nil, err
 	}
 
 	var appender mapping.Appender
 	state := mapping.AppenderCreateExt(conn.conn, catalog, schema, table, &appender)
 	if state == mapping.StateError {
-		err := getDuckDBError(mapping.AppenderError(appender))
+		err = errorDataError(mapping.AppenderErrorData(appender))
 		mapping.AppenderDestroy(&appender)
 		return nil, getError(errAppenderCreation, err)
 	}
 
 	a := &Appender{
 		conn:     conn,
-		schema:   schema,
-		table:    table,
 		appender: appender,
-		rowCount: 0,
 	}
 
 	// Get the column types.
@@ -64,22 +56,53 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 		t := mapping.GetTypeId(colType)
 		name, found := unsupportedTypeToStringMap[t]
 		if found {
-			err := addIndexToError(unsupportedTypeError(name), int(i)+1)
+			err = addIndexToError(unsupportedTypeError(name), int(i)+1)
 			destroyTypeSlice(a.types)
 			mapping.AppenderDestroy(&appender)
 			return nil, getError(errAppenderCreation, err)
 		}
 	}
 
-	// Initialize the data chunk.
-	if err := a.chunk.initFromTypes(a.types, true); err != nil {
-		a.chunk.close()
-		destroyTypeSlice(a.types)
+	return a.initAppenderChunk()
+}
+
+// NewQueryAppender returns a new query Appender from a DuckDB driver connection.
+// driverConn: the raw connection of sql.Conn.
+// query: the query to execute, can be a INSERT, DELETE, UPDATE, or MERGE INTO statement.
+// columnTypes: the column types of the appended data.
+// go-duckdb tries to cast the values received via `AppendRow` to these types.
+// tableName: (optional) table name to refer to the appended data, defaults to `appended_data`.
+// columnNames: (optional) the column names of the table, defaults to `col1`, `col2`, ...
+func NewQueryAppender(driverConn driver.Conn, query string, columnTypes []TypeInfo,
+	tableName string, columnNames []string) (*Appender, error) {
+
+	conn, err := appenderConn(driverConn)
+	if err != nil {
+		return nil, err
+	}
+	if len(columnTypes) == 0 {
+		return nil, getError(errAppenderEmptyTypes, nil)
+	}
+
+	a := &Appender{
+		conn: conn,
+	}
+
+	// Get the logical types via the type infos.
+	for _, ct := range columnTypes {
+		a.types = append(a.types, ct.logicalType())
+	}
+
+	var appender mapping.Appender
+	state := mapping.AppenderCreateQuery(conn.conn, query, a.types, tableName, columnNames, &appender)
+	if state == mapping.StateError {
+		err = errorDataError(mapping.AppenderErrorData(appender))
 		mapping.AppenderDestroy(&appender)
 		return nil, getError(errAppenderCreation, err)
 	}
+	a.appender = appender
 
-	return a, nil
+	return a.initAppenderChunk()
 }
 
 // Flush the data chunks to the underlying table and clear the internal cache.
@@ -143,6 +166,28 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	}
 
 	return nil
+}
+
+func appenderConn(driverConn driver.Conn) (*Conn, error) {
+	conn, ok := driverConn.(*Conn)
+	if !ok {
+		return nil, getError(errInvalidCon, nil)
+	}
+	if conn.closed {
+		return nil, getError(errClosedCon, nil)
+	}
+	return conn, nil
+}
+
+func (a *Appender) initAppenderChunk() (*Appender, error) {
+	if err := a.chunk.initFromTypes(a.types, true); err != nil {
+		a.chunk.close()
+		destroyTypeSlice(a.types)
+		mapping.AppenderDestroy(&a.appender)
+		return nil, getError(errAppenderCreation, err)
+	}
+
+	return a, nil
 }
 
 func (a *Appender) appendRowSlice(args []driver.Value) error {
