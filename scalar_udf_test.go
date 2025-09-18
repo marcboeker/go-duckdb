@@ -141,7 +141,7 @@ func (*anyTypeSUDF) Executor() ScalarFuncExecutor {
 }
 
 func (*getConnIdUDF) Config() ScalarFuncConfig {
-	return ScalarFuncConfig{[]TypeInfo{}, currentInfo, nil, false, false}
+	return ScalarFuncConfig{[]TypeInfo{}, currentInfo, nil, true, false}
 }
 
 func (*getConnIdUDF) Executor() ScalarFuncExecutor {
@@ -481,6 +481,11 @@ func TestGetConnIdScalarUDF(t *testing.T) {
 	row = conn2.QueryRowContext(ctx, `SELECT get_conn_id() AS connId`)
 	require.NoError(t, row.Scan(&connId))
 	require.Equal(t, conn2Id, connId)
+
+	var res bool
+	row = conn2.QueryRowContext(ctx, fmt.Sprintf(`SELECT true AS res WHERE get_conn_id() = %d`, conn2Id))
+	require.NoError(t, row.Scan(&res))
+	require.True(t, res)
 }
 
 func TestErrScalarUDF(t *testing.T) {
