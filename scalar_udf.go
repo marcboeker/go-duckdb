@@ -7,6 +7,9 @@ typedef void (*scalar_udf_callback_t)(void *, void *, void *);
 void scalar_udf_delete_callback(void *);
 typedef void (*scalar_udf_delete_callback_t)(void *);
 
+void *scalar_udf_bind_copy_callback(void *);
+typedef void *(*scalar_udf_bind_copy_callback_t)(void *);
+
 void scalar_udf_bind_callback(void *);
 typedef void (*scalar_udf_bind_callback_t)(void *);
 */
@@ -189,9 +192,9 @@ func scalar_udf_callback(functionInfoPtr, inputPtr, outputPtr unsafe.Pointer) {
 	nullInNullOut := !function.Config().SpecialNullHandling
 
 	bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
-	info := getPinned[bindInfo](bindDataPtr)
+	info := getPinned[*bindInfo](bindDataPtr)
 
-	f := function.RowExecutor(&info)
+	f := function.RowExecutor(info)
 	values := make([]driver.Value, len(inputChunk.columns))
 
 	// Execute the user-defined scalar function for each row.
@@ -241,6 +244,22 @@ func scalar_udf_delete_callback(info unsafe.Pointer) {
 	h.Delete()
 }
 
+//export scalar_udf_bind_copy_callback
+func scalar_udf_bind_copy_callback(dataPtr unsafe.Pointer) unsafe.Pointer {
+	// Copy and pin the bind data.
+	data := getPinned[*bindInfo](dataPtr)
+	dataCopy := *data
+
+	value := pinnedValue[*bindInfo]{
+		pinner: &runtime.Pinner{},
+		value:  &dataCopy,
+	}
+	h := cgo.NewHandle(value)
+	value.pinner.Pin(&h)
+
+	return unsafe.Pointer(&h)
+}
+
 //export scalar_udf_bind_callback
 func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
 	info := mapping.BindInfo{Ptr: bindInfoPtr}
@@ -256,10 +275,14 @@ func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
 	id := mapping.ClientContextGetConnectionId(ctx)
 	data := bindInfo{connId: uint64(id)}
 
+	// Set the copy callback of the bind info.
+	copyPtr := unsafe.Pointer(C.scalar_udf_bind_copy_callback_t(C.scalar_udf_bind_copy_callback))
+	mapping.ScalarFunctionSetBindDataCopy(info, copyPtr)
+
 	// Pin the bind data.
-	value := pinnedValue[bindInfo]{
+	value := pinnedValue[*bindInfo]{
 		pinner: &runtime.Pinner{},
-		value:  data,
+		value:  &data,
 	}
 	h := cgo.NewHandle(value)
 	value.pinner.Pin(&h)
