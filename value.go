@@ -275,13 +275,27 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 		return typeFunc(lt), createFunc(lt, childValues), nil
 	}
 	elementLogicType := mapping.LogicalType{}
-	for _, v := range vSlice {
+	expectedIndex := -1
+	expectedType := mapping.Type(0)
+	for i, v := range vSlice {
 		et, vv, err := createValueByReflection(v)
 		if err != nil {
 			return mapping.LogicalType{}, mapping.Value{}, err
 		}
 		if et.Ptr != nil {
-			elementLogicType = et
+			if elementLogicType.Ptr == nil {
+				elementLogicType = et
+				expectedIndex = i
+				expectedType = mapping.GetTypeId(elementLogicType)
+			} else {
+				// Check if this element's type matches the first non-null element's type
+				if logicalTypeString(elementLogicType) != logicalTypeString(et) {
+					currentType := mapping.GetTypeId(et)
+					return mapping.LogicalType{}, mapping.Value{},
+						fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
+							typeToStringMap[expectedType], expectedIndex, typeToStringMap[currentType], i)
+				}
+			}
 		}
 		childValues = append(childValues, vv)
 		childLogicTypes = append(childLogicTypes, et)
@@ -289,6 +303,7 @@ func tryGetMappedSliceValue[T any](val T, isArray bool, sliceLength int) (mappin
 	if elementLogicType.Ptr == nil {
 		return elementLogicType, mapping.Value{}, unsupportedTypeError(reflect.TypeOf(val).Name())
 	}
+
 	return typeFunc(elementLogicType), createFunc(elementLogicType, childValues), nil
 }
 
