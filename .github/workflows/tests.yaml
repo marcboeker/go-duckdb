@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest, macos-13, ubuntu-24.04-arm]
-        go: [1.23, 1.24]
+        go: [1.24]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: [1.23, 1.24]
+        go: [1.24]
     defaults:
       run:
         shell: bash
@@ -51,7 +51,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: [1.23, 1.24]
+        go: [1.24]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        go: [1.23, 1.24]
+        go: [1.24]
         os: [macos-13, macos-14, ubuntu-latest, ubuntu-24.04-arm]
         include:
           - os: "macos-13"
@@ -101,7 +101,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        go: [1.23, 1.24]
+        go: [1.24]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
