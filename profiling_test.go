@@ -13,7 +13,10 @@ func TestProfiling(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
-	_, err := conn.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
+	info, err := GetProfilingInfo(conn)
+	require.ErrorContains(t, err, errProfilingInfoEmpty.Error())
+
+	_, err = conn.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
 	require.NoError(t, err)
 	_, err = conn.ExecContext(context.Background(), `PRAGMA profiling_mode = 'detailed'`)
 	require.NoError(t, err)
@@ -22,16 +25,19 @@ func TestProfiling(t *testing.T) {
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
 
-	info, err := GetProfilingInfo(conn)
-	require.NoError(t, err)
-
-	_, err = conn.ExecContext(context.Background(), `PRAGMA disable_profiling`)
+	info, err = GetProfilingInfo(conn)
 	require.NoError(t, err)
 
 	// Verify the metrics.
 	require.NotEmpty(t, info.Metrics, "metrics must not be empty")
 	require.NotEmpty(t, info.Children, "children must not be empty")
 	require.NotEmpty(t, info.Children[0].Metrics, "child metrics must not be empty")
+
+	_, err = conn.ExecContext(context.Background(), `PRAGMA disable_profiling`)
+	require.NoError(t, err)
+
+	info, err = GetProfilingInfo(conn)
+	require.ErrorContains(t, err, errProfilingInfoEmpty.Error())
 }
 
 func TestErrProfiling(t *testing.T) {
