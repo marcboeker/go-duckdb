@@ -13,7 +13,7 @@ func TestProfiling(t *testing.T) {
 	conn := openConnWrapper(t, db, context.Background())
 	defer closeConnWrapper(t, conn)
 
-	info, err := GetProfilingInfo(conn)
+	_, err := GetProfilingInfo(conn)
 	require.ErrorContains(t, err, errProfilingInfoEmpty.Error())
 
 	_, err = conn.ExecContext(context.Background(), `PRAGMA enable_profiling = 'no_output'`)
@@ -25,7 +25,7 @@ func TestProfiling(t *testing.T) {
 	require.NoError(t, err)
 	defer closeRowsWrapper(t, res)
 
-	info, err = GetProfilingInfo(conn)
+	info, err := GetProfilingInfo(conn)
 	require.NoError(t, err)
 
 	// Verify the metrics.
