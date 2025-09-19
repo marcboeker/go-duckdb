@@ -74,8 +74,8 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 // tableName: (optional) table name to refer to the appended data, defaults to `appended_data`.
 // columnNames: (optional) the column names of the table, defaults to `col1`, `col2`, ...
 func NewQueryAppender(driverConn driver.Conn, query string, columnTypes []TypeInfo,
-	tableName string, columnNames []string) (*Appender, error) {
-
+	tableName string, columnNames []string,
+) (*Appender, error) {
 	conn, err := appenderConn(driverConn)
 	if err != nil {
 		return nil, err

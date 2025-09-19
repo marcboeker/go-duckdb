@@ -3,8 +3,9 @@ package duckdb
 import (
 	"errors"
 	"fmt"
-	"github.com/marcboeker/go-duckdb/mapping"
 	"strings"
+
+	"github.com/marcboeker/go-duckdb/mapping"
 )
 
 func getError(errDriver, err error) error {
