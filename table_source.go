@@ -93,6 +93,7 @@ type (
 )
 
 // ParallelRow wrapper
+
 func (s parallelRowTSWrapper) ColumnInfos() []ColumnInfo {
 	return s.s.ColumnInfos()
 }
@@ -117,6 +118,7 @@ func (s parallelRowTSWrapper) FillRow(ls any, chunk Row) (bool, error) {
 }
 
 // ParallelChunk wrapper
+
 func (s parallelChunkTSWrapper) ColumnInfos() []ColumnInfo {
 	return s.s.ColumnInfos()
 }
