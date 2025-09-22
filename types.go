@@ -164,7 +164,7 @@ func (i *Interval) getMappedInterval() mapping.Interval {
 	return mapping.NewInterval(i.Months, i.Days, i.Micros)
 }
 
-// Use as the `Scanner` type for any composite types (maps, lists, structs)
+// Composite can be used as the `Scanner` type for any composite types (maps, lists, structs).
 type Composite[T any] struct {
 	t T
 }
