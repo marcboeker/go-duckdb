@@ -10,8 +10,6 @@ import (
 // Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
 type Appender struct {
 	conn     *Conn
-	schema   string
-	table    string
 	appender mapping.Appender
 	closed   bool
 
@@ -30,28 +28,22 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 
 // NewAppender returns a new Appender from a DuckDB driver connection.
 func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
-	conn, ok := driverConn.(*Conn)
-	if !ok {
-		return nil, getError(errInvalidCon, nil)
-	}
-	if conn.closed {
-		return nil, getError(errClosedCon, nil)
+	conn, err := appenderConn(driverConn)
+	if err != nil {
+		return nil, err
 	}
 
 	var appender mapping.Appender
 	state := mapping.AppenderCreateExt(conn.conn, catalog, schema, table, &appender)
 	if state == mapping.StateError {
-		err := getDuckDBError(mapping.AppenderError(appender))
+		err = errorDataError(mapping.AppenderErrorData(appender))
 		mapping.AppenderDestroy(&appender)
 		return nil, getError(errAppenderCreation, err)
 	}
 
 	a := &Appender{
 		conn:     conn,
-		schema:   schema,
-		table:    table,
 		appender: appender,
-		rowCount: 0,
 	}
 
 	// Get the column types.
@@ -64,7 +56,7 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 		t := mapping.GetTypeId(colType)
 		name, found := unsupportedTypeToStringMap[t]
 		if found {
-			err := addIndexToError(unsupportedTypeError(name), int(i)+1)
+			err = addIndexToError(unsupportedTypeError(name), int(i)+1)
 			destroyTypeSlice(a.types)
 			mapping.AppenderDestroy(&appender)
 			return nil, getError(errAppenderCreation, err)
@@ -72,14 +64,7 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 	}
 
 	// Initialize the data chunk.
-	if err := a.chunk.initFromTypes(a.types, true); err != nil {
-		a.chunk.close()
-		destroyTypeSlice(a.types)
-		mapping.AppenderDestroy(&appender)
-		return nil, getError(errAppenderCreation, err)
-	}
-
-	return a, nil
+	return a.initAppenderChunk()
 }
 
 // Flush the data chunks to the underlying table and clear the internal cache.
@@ -143,6 +128,28 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 	}
 
 	return nil
+}
+
+func appenderConn(driverConn driver.Conn) (*Conn, error) {
+	conn, ok := driverConn.(*Conn)
+	if !ok {
+		return nil, getError(errInvalidCon, nil)
+	}
+	if conn.closed {
+		return nil, getError(errClosedCon, nil)
+	}
+	return conn, nil
+}
+
+func (a *Appender) initAppenderChunk() (*Appender, error) {
+	if err := a.chunk.initFromTypes(a.types, true); err != nil {
+		a.chunk.close()
+		destroyTypeSlice(a.types)
+		mapping.AppenderDestroy(&a.appender)
+		return nil, getError(errAppenderCreation, err)
+	}
+
+	return a, nil
 }
 
 func (a *Appender) appendRowSlice(args []driver.Value) error {
