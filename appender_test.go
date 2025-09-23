@@ -965,9 +965,11 @@ func TestAppenderAppendDataChunk(t *testing.T) {
 
 func TestAppenderUpsert(t *testing.T) {
 	c := newConnectorWrapper(t, ``, nil)
+	defer closeConnectorWrapper(t, c)
 
 	// Create a table with a PK for UPSERT.
 	db := sql.OpenDB(c)
+	defer closeDbWrapper(t, db)
 	_, err := db.Exec(`
 		CREATE TABLE test (
 			id INT PRIMARY KEY,
@@ -976,6 +978,7 @@ func TestAppenderUpsert(t *testing.T) {
 	require.NoError(t, err)
 
 	conn := openDriverConnWrapper(t, c)
+	defer closeDriverConnWrapper(t, &conn)
 
 	// Create the types.
 	intType, err := NewTypeInfo(TYPE_INTEGER)
@@ -989,10 +992,20 @@ func TestAppenderUpsert(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create the INSERT query appender.
-	query := `INSERT INTO test SELECT * FROM appended_data`
+	query := `INSERT INTO test SELECT col1, col2 FROM appended_data`
 	columnTypes := []TypeInfo{intType, unionType}
 	aInsert := newQueryAppenderWrapper(t, &conn, query, columnTypes, "", []string{})
-	defer cleanupAppender(t, c, db, conn, aInsert)
+
+	// Close without appending anything.
+	closeAppenderWrapper(t, aInsert)
+
+	// Create again and try to append with mismatching column names.
+	aInsert = newQueryAppenderWrapper(t, &conn, query, columnTypes, "", []string{"a", "b"})
+	require.NoError(t, aInsert.AppendRow(0, Union{Value: "str1", Tag: "str"}))
+	require.ErrorContains(t, aInsert.Close(), "Referenced column \"col1\" not found in FROM clause!")
+
+	// Now re-create and test "normally".
+	aInsert = newQueryAppenderWrapper(t, &conn, query, columnTypes, "", []string{})
 
 	// Append and insert (flush) two rows.
 	require.NoError(t, aInsert.AppendRow(0, Union{Value: "str1", Tag: "str"}))

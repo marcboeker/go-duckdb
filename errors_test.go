@@ -91,7 +91,7 @@ func TestErrAppender(t *testing.T) {
 		testError(t, err, errAppenderCreation.Error())
 	})
 
-	t.Run(errAppenderEmptyTypes.Error(), func(t *testing.T) {
+	t.Run(errAppenderEmptyQuery.Error(), func(t *testing.T) {
 		c := newConnectorWrapper(t, ``, nil)
 		defer closeConnectorWrapper(t, c)
 
@@ -100,7 +100,21 @@ func TestErrAppender(t *testing.T) {
 
 		a, err := NewQueryAppender(conn, "", []TypeInfo{}, "", []string{})
 		defer closeAppenderWrapper(t, a)
-		testError(t, err, errAppenderEmptyTypes.Error())
+		testError(t, err, errAppenderEmptyQuery.Error())
+	})
+
+	t.Run(errAppenderColumnMismatch.Error(), func(t *testing.T) {
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
+
+		info, err := NewTypeInfo(TYPE_INTEGER)
+
+		a, err := NewQueryAppender(conn, `INSERT INTO test SELECT * FROM appended_data`, []TypeInfo{info}, "", []string{"c1", "c2"})
+		defer closeAppenderWrapper(t, a)
+		testError(t, err, errAppenderColumnMismatch.Error())
 	})
 
 	t.Run(errAppenderDoubleClose.Error(), func(t *testing.T) {

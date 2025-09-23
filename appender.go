@@ -76,12 +76,23 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 func NewQueryAppender(driverConn driver.Conn, query string, columnTypes []TypeInfo,
 	tableName string, columnNames []string,
 ) (*Appender, error) {
+
 	conn, err := appenderConn(driverConn)
 	if err != nil {
 		return nil, err
 	}
+
+	if query == "" {
+		return nil, getError(errAppenderEmptyQuery, nil)
+	}
+	if len(columnNames) != 0 && len(columnTypes) != 0 {
+		if len(columnNames) != len(columnTypes) {
+			return nil, getError(errAppenderColumnMismatch, nil)
+		}
+	}
+
 	if len(columnTypes) == 0 {
-		return nil, getError(errAppenderEmptyTypes, nil)
+		// TODO: infer from first row instead.
 	}
 
 	a := &Appender{
