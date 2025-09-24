@@ -111,6 +111,7 @@ func TestErrAppender(t *testing.T) {
 		defer closeDriverConnWrapper(t, &conn)
 
 		info, err := NewTypeInfo(TYPE_INTEGER)
+		require.NoError(t, err)
 
 		a, err := NewQueryAppender(conn, `INSERT INTO test SELECT * FROM appended_data`, "", []TypeInfo{info}, []string{"c1", "c2"})
 		defer closeAppenderWrapper(t, a)
