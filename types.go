@@ -16,7 +16,10 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-// Precomputed reflect type values to avoid repeated allocations.
+// go-duckdb exports the following type wrappers:
+// UUID, Map, Interval, Decimal, Union, Composite (optional, used to scan LIST and STRUCT).
+
+// Pre-computed reflect type values to avoid repeated allocations.
 var (
 	reflectTypeBool      = reflect.TypeOf(true)
 	reflectTypeInt8      = reflect.TypeOf(int8(0))
