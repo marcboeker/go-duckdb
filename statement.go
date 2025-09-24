@@ -282,7 +282,7 @@ func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, 
 }
 
 func (s *Stmt) tryBindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
-	lt, mappedVal, err := createValueByReflection(val.Value)
+	lt, mappedVal, err := inferLogicalTypeAndValue(val.Value)
 	defer mapping.DestroyLogicalType(&lt)
 	defer mapping.DestroyValue(&mappedVal)
 	if err != nil {
