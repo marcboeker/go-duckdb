@@ -98,7 +98,7 @@ func TestErrAppender(t *testing.T) {
 		conn := openDriverConnWrapper(t, c)
 		defer closeDriverConnWrapper(t, &conn)
 
-		a, err := NewQueryAppender(conn, "", []TypeInfo{}, "", []string{})
+		a, err := NewQueryAppender(conn, "", "", []TypeInfo{}, []string{})
 		defer closeAppenderWrapper(t, a)
 		testError(t, err, errAppenderEmptyQuery.Error())
 	})
@@ -112,7 +112,7 @@ func TestErrAppender(t *testing.T) {
 
 		info, err := NewTypeInfo(TYPE_INTEGER)
 
-		a, err := NewQueryAppender(conn, `INSERT INTO test SELECT * FROM appended_data`, []TypeInfo{info}, "", []string{"c1", "c2"})
+		a, err := NewQueryAppender(conn, `INSERT INTO test SELECT * FROM appended_data`, "", []TypeInfo{info}, []string{"c1", "c2"})
 		defer closeAppenderWrapper(t, a)
 		testError(t, err, errAppenderColumnMismatch.Error())
 	})

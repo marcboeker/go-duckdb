@@ -7,11 +7,15 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
-// Appender holds the DuckDB appender. It allows efficient bulk loading into a DuckDB database.
+// Appender wraps functionality around the DuckDB appender.
+// It enables efficient bulk transformations.
 type Appender struct {
-	conn     *Conn
+	// The raw sql.Conn's driver connection.
+	conn *Conn
+	// The DuckDB appender.
 	appender mapping.Appender
-	closed   bool
+	// True, if the appender has been closed.
+	closed bool
 
 	// The chunk to append to.
 	chunk DataChunk
@@ -19,37 +23,58 @@ type Appender struct {
 	types []mapping.LogicalType
 	// The number of appended rows.
 	rowCount int
+
+	// True, if the appender has been initialized.
+	initialized bool
+	// (Optional) appender initialization information.
+	initInfo appenderInitInfo
 }
 
-// NewAppenderFromConn returns a new Appender for the default catalog from a DuckDB driver connection.
+// appenderInitInfo is necessary, if we postpone appender creation to the first
+// call to AppendRow. This can happen when creating a query Appender without
+// specifying its column types.
+type appenderInitInfo struct {
+	query    string
+	table    string
+	colNames []string
+}
+
+// NewAppenderFromConn returns a new Appender for the default catalog.
+// The Appender batches rows via AppendRow. Upon reading the auto-flush threshold or
+// upon calling Flush or Close, it appends these rows to the table.
+// Thus, it can be used instead of INSERT INTO statements to enable bulk insertions.
+// `driverConn` is the raw sql.Conn's driver connection.
+// `schema` and `table` specify the table (`schema.table`) to append to.
 func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appender, error) {
 	return NewAppender(driverConn, "", schema, table)
 }
 
-// NewAppender returns a new Appender from a DuckDB driver connection.
+// NewAppender returns a new Appender.
+// The Appender batches rows via AppendRow. Upon reading the auto-flush threshold or
+// upon calling Flush or Close, it appends these rows to the table.
+// Thus, it can be used instead of INSERT INTO statements to enable bulk insertions.
+// `driverConn` is the raw sql.Conn's driver connection.
+// `catalog`, `schema` and `table` specify the table (`catalog.schema.table`) to append to.
 func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
 	conn, err := appenderConn(driverConn)
 	if err != nil {
 		return nil, err
 	}
+	a := &Appender{
+		conn: conn,
+	}
 
-	var appender mapping.Appender
-	state := mapping.AppenderCreateExt(conn.conn, catalog, schema, table, &appender)
+	state := mapping.AppenderCreateExt(conn.conn, catalog, schema, table, &a.appender)
 	if state == mapping.StateError {
-		err = errorDataError(mapping.AppenderErrorData(appender))
-		mapping.AppenderDestroy(&appender)
+		err = errorDataError(mapping.AppenderErrorData(a.appender))
+		mapping.AppenderDestroy(&a.appender)
 		return nil, getError(errAppenderCreation, err)
 	}
 
-	a := &Appender{
-		conn:     conn,
-		appender: appender,
-	}
-
 	// Get the column types.
-	columnCount := mapping.AppenderColumnCount(appender)
+	columnCount := mapping.AppenderColumnCount(a.appender)
 	for i := mapping.IdxT(0); i < columnCount; i++ {
-		colType := mapping.AppenderColumnType(appender, i)
+		colType := mapping.AppenderColumnType(a.appender, i)
 		a.types = append(a.types, colType)
 
 		// Ensure that we only create an appender for supported column types.
@@ -58,25 +83,27 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 		if found {
 			err = addIndexToError(unsupportedTypeError(name), int(i)+1)
 			destroyTypeSlice(a.types)
-			mapping.AppenderDestroy(&appender)
+			mapping.AppenderDestroy(&a.appender)
 			return nil, getError(errAppenderCreation, err)
 		}
 	}
 
+	a.initialized = true
 	return a.initAppenderChunk()
 }
 
-// NewQueryAppender returns a new query Appender from a DuckDB driver connection.
-// driverConn: the raw connection of sql.Conn.
-// query: the query to execute, can be a INSERT, DELETE, UPDATE, or MERGE INTO statement.
-// columnTypes: the column types of the appended data.
-// go-duckdb tries to cast the values received via `AppendRow` to these types.
-// tableName: (optional) table name to refer to the appended data, defaults to `appended_data`.
-// columnNames: (optional) the column names of the table, defaults to `col1`, `col2`, ...
-func NewQueryAppender(driverConn driver.Conn, query string, columnTypes []TypeInfo,
-	tableName string, columnNames []string,
-) (*Appender, error) {
-
+// NewQueryAppender returns a new query Appender.
+// The Appender batches rows via AppendRow. Upon reading the auto-flush threshold or
+// upon calling Flush or Close, it executes the query, treating the batched rows as a temporary table.
+// `driverConn` is the raw sql.Conn's driver connection.
+// `query` is the query to execute. It can be a INSERT, DELETE, UPDATE or MERGE INTO statement.
+// `table` is the (optional) table name of the temporary table containing the batched rows.
+// It defaults to `appended_data`.
+// `colTypes` are the (optional) column types of the temporary table.
+// If left empty, go-duckdb infers the column types on the first call to `AppendRow` using reflection.
+// `colNames` are the (optional) names of the columns of the temporary table containing the batched rows.
+// They default to `col1`, `col2`, ...
+func NewQueryAppender(driverConn driver.Conn, query, table string, colTypes []TypeInfo, colNames []string) (*Appender, error) {
 	conn, err := appenderConn(driverConn)
 	if err != nil {
 		return nil, err
@@ -85,34 +112,39 @@ func NewQueryAppender(driverConn driver.Conn, query string, columnTypes []TypeIn
 	if query == "" {
 		return nil, getError(errAppenderEmptyQuery, nil)
 	}
-	if len(columnNames) != 0 && len(columnTypes) != 0 {
-		if len(columnNames) != len(columnTypes) {
+	if len(colNames) != 0 && len(colTypes) != 0 {
+		if len(colNames) != len(colTypes) {
 			return nil, getError(errAppenderColumnMismatch, nil)
 		}
-	}
-
-	if len(columnTypes) == 0 {
-		// TODO: infer from first row instead.
 	}
 
 	a := &Appender{
 		conn: conn,
 	}
 
+	// Infer the types during the first call to AppendRow.
+	if len(colTypes) == 0 {
+		a.initInfo = appenderInitInfo{
+			query:    query,
+			table:    table,
+			colNames: colNames,
+		}
+		return a, nil
+	}
+
 	// Get the logical types via the type infos.
-	for _, ct := range columnTypes {
+	for _, ct := range colTypes {
 		a.types = append(a.types, ct.logicalType())
 	}
 
-	var appender mapping.Appender
-	state := mapping.AppenderCreateQuery(conn.conn, query, a.types, tableName, columnNames, &appender)
+	state := mapping.AppenderCreateQuery(conn.conn, query, a.types, table, colNames, &a.appender)
 	if state == mapping.StateError {
-		err = errorDataError(mapping.AppenderErrorData(appender))
-		mapping.AppenderDestroy(&appender)
+		err = errorDataError(mapping.AppenderErrorData(a.appender))
+		mapping.AppenderDestroy(&a.appender)
 		return nil, getError(errAppenderCreation, err)
 	}
-	a.appender = appender
 
+	a.initialized = true
 	return a.initAppenderChunk()
 }
 

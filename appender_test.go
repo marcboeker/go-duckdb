@@ -993,19 +993,19 @@ func TestAppenderUpsert(t *testing.T) {
 
 	// Create the INSERT query appender.
 	query := `INSERT INTO test SELECT col1, col2 FROM appended_data`
-	columnTypes := []TypeInfo{intType, unionType}
-	aInsert := newQueryAppenderWrapper(t, &conn, query, columnTypes, "", []string{})
+	colTypes := []TypeInfo{intType, unionType}
+	aInsert := newQueryAppenderWrapper(t, &conn, query, "", colTypes, []string{})
 
 	// Close without appending anything.
 	closeAppenderWrapper(t, aInsert)
 
 	// Create again and try to append with mismatching column names.
-	aInsert = newQueryAppenderWrapper(t, &conn, query, columnTypes, "", []string{"a", "b"})
+	aInsert = newQueryAppenderWrapper(t, &conn, query, "", colTypes, []string{"a", "b"})
 	require.NoError(t, aInsert.AppendRow(0, Union{Value: "str1", Tag: "str"}))
 	require.ErrorContains(t, aInsert.Close(), "Referenced column \"col1\" not found in FROM clause!")
 
 	// Now re-create and test "normally".
-	aInsert = newQueryAppenderWrapper(t, &conn, query, columnTypes, "", []string{})
+	aInsert = newQueryAppenderWrapper(t, &conn, query, "", colTypes, []string{})
 
 	// Append and insert (flush) two rows.
 	require.NoError(t, aInsert.AppendRow(0, Union{Value: "str1", Tag: "str"}))
@@ -1014,9 +1014,9 @@ func TestAppenderUpsert(t *testing.T) {
 
 	// Create another INSERT appender selecting only some columns.
 	query = `INSERT INTO test SELECT id + 10, u FROM appended_data`
-	columnTypes = []TypeInfo{intType, unionType, intType}
-	columnNames := []string{"id", "u", "other"}
-	aInsertOther := newQueryAppenderWrapper(t, &conn, query, columnTypes, "", columnNames)
+	colTypes = []TypeInfo{intType, unionType, intType}
+	colNames := []string{"id", "u", "other"}
+	aInsertOther := newQueryAppenderWrapper(t, &conn, query, "", colTypes, colNames)
 	defer closeAppenderWrapper(t, aInsertOther)
 
 	// Append and insert (flush) two rows.
@@ -1026,8 +1026,8 @@ func TestAppenderUpsert(t *testing.T) {
 
 	// Create the UPSERT query appender.
 	query = `INSERT INTO test SELECT * FROM my_append_tbl ON CONFLICT DO UPDATE SET u = EXCLUDED.u;`
-	columnTypes = []TypeInfo{intType, unionType}
-	aUpsert := newQueryAppenderWrapper(t, &conn, query, columnTypes, "my_append_tbl", []string{})
+	colTypes = []TypeInfo{intType, unionType}
+	aUpsert := newQueryAppenderWrapper(t, &conn, query, "my_append_tbl", colTypes, []string{})
 	defer closeAppenderWrapper(t, aUpsert)
 
 	// Append and upsert (flush) two rows.
