@@ -173,12 +173,6 @@ func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateHugeInt(vv), nil
-	case TYPE_DECIMAL:
-		vv, err := getMappedDecimal(v)
-		if err != nil {
-			return mapping.Value{}, err
-		}
-		mapping.CreateDecimal(vv)
 	case TYPE_UUID:
 		vv, err := getMappedUUID(v)
 		if err != nil {
@@ -187,7 +181,7 @@ func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 		lower, upper := mapping.HugeIntMembers(&vv)
 		uHugeInt := mapping.NewUHugeInt(lower, uint64(upper))
 		return mapping.CreateUUID(uHugeInt), nil
-	case TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
 		return mapping.Value{}, nil
 	}
 	return mapping.Value{}, unsupportedTypeError(typeToStringMap[t])
@@ -231,13 +225,14 @@ func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error)
 	// We special-case TYPE_MAP to disambiguate with structs passed as map[string]any or map[any]any.
 	// We also special-case UNION, as its logical type and value creation is more complex.
 	t, vv := inferPrimitiveType(v)
-	if t != TYPE_INVALID && t != TYPE_MAP && t != TYPE_UNION {
+	if t != TYPE_INVALID && t != TYPE_MAP && t != TYPE_UNION && t != TYPE_DECIMAL {
 		val, err := createPrimitiveValue(t, vv)
 		return mapping.CreateLogicalType(t), val, err
 	}
 
 	// User-provided type with a Stringer interface:
 	// We create a string and return a VARCHAR value.
+	// TYPE_DECIMAL has a Stringer interface.
 	if ss, ok := v.(fmt.Stringer); ok {
 		t = TYPE_VARCHAR
 		val, err := createPrimitiveValue(t, ss.String())
@@ -278,8 +273,7 @@ func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error)
 
 func inferPrimitiveType(v any) (Type, any) {
 	// Return TYPE_INVALID for
-	// TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_ARRAY, TYPE_UNION,
-	// and for the unsupported types.
+	// TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_ARRAY, and for the unsupported types.
 	t := TYPE_INVALID
 
 	switch vv := v.(type) {

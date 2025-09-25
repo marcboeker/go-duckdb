@@ -1103,8 +1103,6 @@ func TestInferPrimitiveType(t *testing.T) {
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
 
-	return
-
 	// TODO: test the same for a query where we can infer the logical type.
 
 	//testCases := []struct {
@@ -1139,7 +1137,12 @@ func TestInferPrimitiveType(t *testing.T) {
 		input any
 	}{
 		//{[]time.Time{time.Now()}},
-		{[]Interval{{22, 10, 7}}},
+		//{[]Interval{{22, 10, 7}}},
+		//{[]*big.Int{big.NewInt(22)}},
+		{[]Decimal{{2, 2, big.NewInt(7)}}},
+		//	{[]UUID{UUID(uuid.New())}},
+		//	{[]Map{map[any]any{"hello": "world", "beautiful": "day"}}},
+		//{[]Union{{42, "n"}}},
 	}
 
 	for _, tc := range testCases {
