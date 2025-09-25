@@ -120,61 +120,61 @@ func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 	case TYPE_VARCHAR:
 		return mapping.CreateVarchar(v.(string)), nil
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		vv, err := getMappedTimestamp(t, v)
+		vv, err := inferTimestamp(t, v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestamp(vv), nil
 	case TYPE_TIMESTAMP_S:
-		vv, err := getMappedTimestampS(v)
+		vv, err := inferTimestampS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestampS(vv), nil
 	case TYPE_TIMESTAMP_MS:
-		vv, err := getMappedTimestampMS(v)
+		vv, err := inferTimestampMS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestampMS(vv), nil
 	case TYPE_TIMESTAMP_NS:
-		vv, err := getMappedTimestampNS(v)
+		vv, err := inferTimestampNS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestampNS(vv), nil
 	case TYPE_DATE:
-		vv, err := getMappedDate(v)
+		vv, err := inferDate(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateDate(vv), nil
 	case TYPE_TIME:
-		vv, err := getMappedTime(v)
+		vv, err := inferTime(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTime(vv), nil
 	case TYPE_TIME_TZ:
-		vv, err := getMappedTimeTZ(v)
+		vv, err := inferTimeTZ(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimeTZValue(vv), nil
 	case TYPE_INTERVAL:
-		vv, err := getMappedInterval(v)
+		vv, err := inferInterval(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateInterval(vv), nil
 	case TYPE_HUGEINT:
-		vv, err := getMappedHugeInt(v)
+		vv, err := inferHugeInt(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateHugeInt(vv), nil
 	case TYPE_UUID:
-		vv, err := getMappedUUID(v)
+		vv, err := inferUUID(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}

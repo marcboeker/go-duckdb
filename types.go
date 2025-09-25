@@ -95,7 +95,7 @@ func (u *UUID) Value() (driver.Value, error) {
 	return u.String(), nil
 }
 
-func getMappedUUID(val any) (mapping.HugeInt, error) {
+func inferUUID(val any) (mapping.HugeInt, error) {
 	var id UUID
 	switch v := val.(type) {
 	case UUID:
@@ -158,7 +158,7 @@ func hugeIntFromNative(i *big.Int) (mapping.HugeInt, error) {
 	return mapping.NewHugeInt(r.Uint64(), q.Int64()), nil
 }
 
-func getMappedHugeInt(val any) (mapping.HugeInt, error) {
+func inferHugeInt(val any) (mapping.HugeInt, error) {
 	var err error
 	var fv mapping.HugeInt
 	switch v := val.(type) {
@@ -245,7 +245,7 @@ type Interval struct {
 	Micros int64 `json:"micros"`
 }
 
-func getMappedInterval(val any) (mapping.Interval, error) {
+func inferInterval(val any) (mapping.Interval, error) {
 	var i Interval
 	switch v := val.(type) {
 	case Interval:
@@ -316,21 +316,6 @@ func (d Decimal) String() string {
 	return signStr + zeroTrimmed[:len(zeroTrimmed)-scale] + "." + zeroTrimmed[len(zeroTrimmed)-scale:]
 }
 
-func getMappedDecimal(val any) (mapping.Decimal, error) {
-	var d Decimal
-	switch v := val.(type) {
-	case Decimal:
-		d = v
-	default:
-		return mapping.Decimal{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(d).String())
-	}
-	hi, err := hugeIntFromNative(d.Value)
-	if err != nil {
-		return mapping.Decimal{}, err
-	}
-	return mapping.NewDecimal(d.Width, d.Scale, hi), nil
-}
-
 type Union struct {
 	Value driver.Value `json:"value"`
 	Tag   string       `json:"tag"`
@@ -375,27 +360,27 @@ func getTSTicks(t Type, val any) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getMappedTimestamp(t Type, val any) (mapping.Timestamp, error) {
+func inferTimestamp(t Type, val any) (mapping.Timestamp, error) {
 	ticks, err := getTSTicks(t, val)
 	return mapping.NewTimestamp(ticks), err
 }
 
-func getMappedTimestampS(val any) (mapping.TimestampS, error) {
+func inferTimestampS(val any) (mapping.TimestampS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_S, val)
 	return mapping.NewTimestampS(ticks), err
 }
 
-func getMappedTimestampMS(val any) (mapping.TimestampMS, error) {
+func inferTimestampMS(val any) (mapping.TimestampMS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_MS, val)
 	return mapping.NewTimestampMS(ticks), err
 }
 
-func getMappedTimestampNS(val any) (mapping.TimestampNS, error) {
+func inferTimestampNS(val any) (mapping.TimestampNS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_NS, val)
 	return mapping.NewTimestampNS(ticks), err
 }
 
-func getMappedDate[T any](val T) (mapping.Date, error) {
+func inferDate[T any](val T) (mapping.Date, error) {
 	ti, err := castToTime(val)
 	if err != nil {
 		return mapping.Date{}, err
@@ -405,7 +390,7 @@ func getMappedDate[T any](val T) (mapping.Date, error) {
 	return date, err
 }
 
-func getMappedTime(val any) (mapping.Time, error) {
+func inferTime(val any) (mapping.Time, error) {
 	ticks, err := getTimeTicks(val)
 	if err != nil {
 		return mapping.Time{}, err
@@ -413,7 +398,7 @@ func getMappedTime(val any) (mapping.Time, error) {
 	return mapping.NewTime(ticks), nil
 }
 
-func getMappedTimeTZ(val any) (mapping.TimeTZ, error) {
+func inferTimeTZ(val any) (mapping.TimeTZ, error) {
 	ticks, err := getTimeTicks(val)
 	if err != nil {
 		return mapping.TimeTZ{}, err

@@ -89,25 +89,25 @@ func setBool[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 func setTS(vec *vector, rowIdx mapping.IdxT, val any) error {
 	switch vec.Type {
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		ts, err := getMappedTimestamp(vec.Type, val)
+		ts, err := inferTimestamp(vec.Type, val)
 		if err != nil {
 			return err
 		}
 		setPrimitive(vec, rowIdx, ts)
 	case TYPE_TIMESTAMP_S:
-		ts, err := getMappedTimestampS(val)
+		ts, err := inferTimestampS(val)
 		if err != nil {
 			return err
 		}
 		setPrimitive(vec, rowIdx, ts)
 	case TYPE_TIMESTAMP_MS:
-		ts, err := getMappedTimestampMS(val)
+		ts, err := inferTimestampMS(val)
 		if err != nil {
 			return err
 		}
 		setPrimitive(vec, rowIdx, ts)
 	case TYPE_TIMESTAMP_NS:
-		ts, err := getMappedTimestampNS(val)
+		ts, err := inferTimestampNS(val)
 		if err != nil {
 			return err
 		}
@@ -119,7 +119,7 @@ func setTS(vec *vector, rowIdx mapping.IdxT, val any) error {
 }
 
 func setDate[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	date, err := getMappedDate(val)
+	date, err := inferDate(val)
 	if err != nil {
 		return err
 	}
@@ -130,14 +130,14 @@ func setDate[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 func setTime[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	switch vec.Type {
 	case TYPE_TIME:
-		ti, err := getMappedTime(val)
+		ti, err := inferTime(val)
 		if err != nil {
 			return err
 		}
 		setPrimitive(vec, rowIdx, ti)
 	case TYPE_TIME_TZ:
 		// The UTC offset is 0.
-		ti, err := getMappedTimeTZ(val)
+		ti, err := inferTimeTZ(val)
 		if err != nil {
 			return err
 		}
@@ -147,7 +147,7 @@ func setTime[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 }
 
 func setInterval[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	i, err := getMappedInterval(val)
+	i, err := inferInterval(val)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func setInterval[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 }
 
 func setHugeint[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	hi, err := getMappedHugeInt(val)
+	hi, err := inferHugeInt(val)
 	if err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func setSliceChildren(vec *vector, s []any, offset mapping.IdxT) error {
 }
 
 func setUUID[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
-	id, err := getMappedUUID(val)
+	id, err := inferUUID(val)
 	if err != nil {
 		return err
 	}
