@@ -1098,3 +1098,50 @@ func TestUnionTypes(t *testing.T) {
 		require.Equal(t, int32(123), val.Value)
 	})
 }
+
+func TestInferPrimitiveType(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	testCases := []struct {
+		input any
+	}{
+		{[]Map{nil}},
+		{[]bool{true, false}},
+		{[]int8{-7}},
+		{[]int16{-42}},
+		{[]int32{-4}},
+		{[]int64{-6}},
+		{[]int{-22}},
+		{[]uint8{7}},
+		{[]uint16{42}},
+		{[]uint32{4}},
+		{[]uint64{6}},
+		{[]uint{22}},
+		{[]float32{7.8}},
+		{[]float64{22.3}},
+		{[]string{"Hello from Amsterdam!"}},
+		{[][]byte{{71, 111}}},
+		{[]time.Time{time.Now()}},
+		{[]Interval{{22, 10, 7}}},
+		{[]*big.Int{big.NewInt(22)}},
+		{[]Decimal{{2, 2, big.NewInt(7)}}},
+		{[]UUID{UUID(uuid.New())}},
+	}
+	for _, tc := range testCases {
+		_, err := db.Exec(`SELECT a FROM (VALUES (?)) t(a)`, tc.input)
+		require.NoError(t, err)
+	}
+
+	// Not yet supported.
+	testCases = []struct {
+		input any
+	}{
+		{[]Union{{42, "n"}}},
+		{[]Map{map[any]any{"hello": "world", "beautiful": "day"}}},
+	}
+	for _, tc := range testCases {
+		_, err := db.Exec(`SELECT a FROM (VALUES (?)) t(a)`, tc.input)
+		require.ErrorContains(t, err, unsupportedTypeErrMsg)
+	}
+}

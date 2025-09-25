@@ -120,40 +120,71 @@ func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 	case TYPE_VARCHAR:
 		return mapping.CreateVarchar(v.(string)), nil
 	case TYPE_TIMESTAMP, TYPE_TIMESTAMP_TZ:
-		vv, err := getMappedTimestamp(t, v)
+		vv, err := inferTimestamp(t, v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestamp(vv), nil
 	case TYPE_TIMESTAMP_S:
-		vv, err := getMappedTimestampS(v)
+		vv, err := inferTimestampS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestampS(vv), nil
 	case TYPE_TIMESTAMP_MS:
-		vv, err := getMappedTimestampMS(v)
+		vv, err := inferTimestampMS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestampMS(vv), nil
 	case TYPE_TIMESTAMP_NS:
-		vv, err := getMappedTimestampNS(v)
+		vv, err := inferTimestampNS(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateTimestampNS(vv), nil
 	case TYPE_DATE:
-		vv, err := getMappedDate(v)
+		vv, err := inferDate(v)
 		if err != nil {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateDate(vv), nil
+	case TYPE_TIME:
+		vv, err := inferTime(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTime(vv), nil
+	case TYPE_TIME_TZ:
+		vv, err := inferTimeTZ(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTimeTZValue(vv), nil
+	case TYPE_INTERVAL:
+		vv, err := inferInterval(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateInterval(vv), nil
+	case TYPE_HUGEINT:
+		vv, err := inferHugeInt(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateHugeInt(vv), nil
+	case TYPE_UUID:
+		vv, err := inferUUID(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		lower, upper := mapping.HugeIntMembers(&vv)
+		uHugeInt := mapping.NewUHugeInt(lower, uint64(upper))
+		return mapping.CreateUUID(uHugeInt), nil
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
+		return mapping.Value{}, nil
 	}
-
-	// TODO: support all primitive types.
-	// NOTE: skips unsupported primitive types.
-	return mapping.Value{}, nil
+	return mapping.Value{}, unsupportedTypeError(typeToStringMap[t])
 }
 
 func getPointerValue(v any) any {
@@ -194,13 +225,14 @@ func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error)
 	// We special-case TYPE_MAP to disambiguate with structs passed as map[string]any or map[any]any.
 	// We also special-case UNION, as its logical type and value creation is more complex.
 	t, vv := inferPrimitiveType(v)
-	if t != TYPE_INVALID && t != TYPE_MAP && t != TYPE_UNION {
+	if t != TYPE_INVALID && t != TYPE_MAP && t != TYPE_UNION && t != TYPE_DECIMAL {
 		val, err := createPrimitiveValue(t, vv)
 		return mapping.CreateLogicalType(t), val, err
 	}
 
 	// User-provided type with a Stringer interface:
 	// We create a string and return a VARCHAR value.
+	// TYPE_DECIMAL has a Stringer interface.
 	if ss, ok := v.(fmt.Stringer); ok {
 		t = TYPE_VARCHAR
 		val, err := createPrimitiveValue(t, ss.String())
@@ -241,8 +273,7 @@ func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error)
 
 func inferPrimitiveType(v any) (Type, any) {
 	// Return TYPE_INVALID for
-	// TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_ARRAY, TYPE_UNION,
-	// and for the unsupported types.
+	// TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_ARRAY, and for the unsupported types.
 	t := TYPE_INVALID
 
 	switch vv := v.(type) {
