@@ -149,11 +149,48 @@ func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 			return mapping.Value{}, err
 		}
 		return mapping.CreateDate(vv), nil
+	case TYPE_TIME:
+		vv, err := getMappedTime(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTime(vv), nil
+	case TYPE_TIME_TZ:
+		vv, err := getMappedTimeTZ(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateTimeTZValue(vv), nil
+	case TYPE_INTERVAL:
+		vv, err := getMappedInterval(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateInterval(vv), nil
+	case TYPE_HUGEINT:
+		vv, err := getMappedHugeInt(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		return mapping.CreateHugeInt(vv), nil
+	case TYPE_DECIMAL:
+		vv, err := getMappedDecimal(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		mapping.CreateDecimal(vv)
+	case TYPE_UUID:
+		vv, err := getMappedUUID(v)
+		if err != nil {
+			return mapping.Value{}, err
+		}
+		lower, upper := mapping.HugeIntMembers(&vv)
+		uHugeInt := mapping.NewUHugeInt(lower, uint64(upper))
+		return mapping.CreateUUID(uHugeInt), nil
+	case TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
+		return mapping.Value{}, nil
 	}
-
-	// TODO: support all primitive types.
-	// NOTE: skips unsupported primitive types.
-	return mapping.Value{}, nil
+	return mapping.Value{}, unsupportedTypeError(typeToStringMap[t])
 }
 
 func getPointerValue(v any) any {

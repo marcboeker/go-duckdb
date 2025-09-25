@@ -95,6 +95,27 @@ func (u *UUID) Value() (driver.Value, error) {
 	return u.String(), nil
 }
 
+func getMappedUUID(val any) (mapping.HugeInt, error) {
+	var id UUID
+	switch v := val.(type) {
+	case UUID:
+		id = v
+	case *UUID:
+		id = *v
+	case []uint8:
+		if len(v) != uuidLength {
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(id).String())
+		}
+		for i := range uuidLength {
+			id[i] = v[i]
+		}
+	default:
+		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(id).String())
+	}
+	hi := uuidToHugeInt(id)
+	return hi, nil
+}
+
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
@@ -137,6 +158,67 @@ func hugeIntFromNative(i *big.Int) (mapping.HugeInt, error) {
 	return mapping.NewHugeInt(r.Uint64(), q.Int64()), nil
 }
 
+func getMappedHugeInt(val any) (mapping.HugeInt, error) {
+	var err error
+	var fv mapping.HugeInt
+	switch v := val.(type) {
+	case uint8:
+		fv = mapping.NewHugeInt(uint64(v), 0)
+	case int8:
+		fv = mapping.NewHugeInt(uint64(v), 0)
+	case uint16:
+		fv = mapping.NewHugeInt(uint64(v), 0)
+	case int16:
+		fv = mapping.NewHugeInt(uint64(v), 0)
+	case uint32:
+		fv = mapping.NewHugeInt(uint64(v), 0)
+	case int32:
+		fv = mapping.NewHugeInt(uint64(v), 0)
+	case uint64:
+		fv = mapping.NewHugeInt(v, 0)
+	case int64:
+		fv, err = hugeIntFromNative(big.NewInt(v))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case uint:
+		fv = mapping.NewHugeInt(uint64(v), 0)
+	case int:
+		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case float32:
+		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case float64:
+		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case *big.Int:
+		if v == nil {
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
+		if fv, err = hugeIntFromNative(v); err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case Decimal:
+		if v.Value == nil {
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		}
+		if fv, err = hugeIntFromNative(v.Value); err != nil {
+			return mapping.HugeInt{}, err
+		}
+	default:
+		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+	}
+
+	return fv, nil
+}
+
 type Map map[any]any
 
 func (m *Map) Scan(v any) error {
@@ -163,8 +245,15 @@ type Interval struct {
 	Micros int64 `json:"micros"`
 }
 
-func (i *Interval) getMappedInterval() mapping.Interval {
-	return mapping.NewInterval(i.Months, i.Days, i.Micros)
+func getMappedInterval(val any) (mapping.Interval, error) {
+	var i Interval
+	switch v := val.(type) {
+	case Interval:
+		i = v
+	default:
+		return mapping.Interval{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(i).String())
+	}
+	return mapping.NewInterval(i.Months, i.Days, i.Micros), nil
 }
 
 // Composite can be used as the `Scanner` type for any composite types (maps, lists, structs).
@@ -225,6 +314,21 @@ func (d Decimal) String() string {
 		return fmt.Sprintf("%s0.%s%s", signStr, strings.Repeat("0", scale-len(zeroTrimmed)), zeroTrimmed)
 	}
 	return signStr + zeroTrimmed[:len(zeroTrimmed)-scale] + "." + zeroTrimmed[len(zeroTrimmed)-scale:]
+}
+
+func getMappedDecimal(val any) (mapping.Decimal, error) {
+	var d Decimal
+	switch v := val.(type) {
+	case Decimal:
+		d = v
+	default:
+		return mapping.Decimal{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(d).String())
+	}
+	hi, err := hugeIntFromNative(d.Value)
+	if err != nil {
+		return mapping.Decimal{}, err
+	}
+	return mapping.NewDecimal(d.Width, d.Scale, hi), nil
 }
 
 type Union struct {
@@ -299,6 +403,23 @@ func getMappedDate[T any](val T) (mapping.Date, error) {
 
 	date := mapping.NewDate(int32(ti.Unix() / secondsPerDay))
 	return date, err
+}
+
+func getMappedTime(val any) (mapping.Time, error) {
+	ticks, err := getTimeTicks(val)
+	if err != nil {
+		return mapping.Time{}, err
+	}
+	return mapping.NewTime(ticks), nil
+}
+
+func getMappedTimeTZ(val any) (mapping.TimeTZ, error) {
+	ticks, err := getTimeTicks(val)
+	if err != nil {
+		return mapping.TimeTZ{}, err
+	}
+	// The UTC offset is 0.
+	return mapping.CreateTimeTZ(ticks, 0), nil
 }
 
 func getTimeTicks[T any](val T) (int64, error) {

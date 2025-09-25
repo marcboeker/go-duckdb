@@ -393,7 +393,11 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	case []byte:
 		return mapping.BindBlob(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case Interval:
-		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), v.getMappedInterval()), nil
+		i, inferErr := getMappedInterval(v)
+		if inferErr != nil {
+			return mapping.StateError, inferErr
+		}
+		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), i), nil
 	case nil:
 		return mapping.BindNull(*s.preparedStmt, mapping.IdxT(n+1)), nil
 	}
