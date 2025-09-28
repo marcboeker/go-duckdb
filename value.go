@@ -91,6 +91,7 @@ func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
 	}
 }
 
+//nolint:gocyclo
 func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 	switch t {
 	case TYPE_SQLNULL:
@@ -221,11 +222,9 @@ func isNil(i any) bool {
 }
 
 func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error) {
-	// Primitive type creation is straightforward.
-	// We special-case TYPE_MAP to disambiguate with structs passed as map[string]any or map[any]any.
-	// We also special-case UNION, as its logical type and value creation is more complex.
+	// Try to create a primitive type.
 	t, vv := inferPrimitiveType(v)
-	if t != TYPE_INVALID && t != TYPE_MAP && t != TYPE_UNION && t != TYPE_DECIMAL {
+	if isPrimitiveType(t) {
 		val, err := createPrimitiveValue(t, vv)
 		return mapping.CreateLogicalType(t), val, err
 	}
@@ -334,6 +333,18 @@ func inferPrimitiveType(v any) (Type, any) {
 	}
 
 	return t, v
+}
+
+func isPrimitiveType(t Type) bool {
+	switch t {
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
+		// Complex type.
+		return false
+	case TYPE_INVALID, TYPE_UHUGEINT, TYPE_BIT, TYPE_ANY, TYPE_BIGNUM, TYPE_SQLNULL:
+		// Invalid or unsupported.
+		return false
+	}
+	return true
 }
 
 func inferSliceLogicalTypeAndValue[T any](val T, array bool, length int) (mapping.LogicalType, mapping.Value, error) {
