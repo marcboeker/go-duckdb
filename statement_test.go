@@ -842,5 +842,5 @@ func TestDriverValuer(t *testing.T) {
 	// Expected to fail - no driver.Valuer implementation
 	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, []uuid.UUID{uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"), uuid.MustParse("3a92e387-4b7d-4098-b273-967d48f6925f")})
 	require.Error(t, err, "[]uuid.UUID should fail without driver.Valuer")
-	require.Contains(t, err.Error(), "cannot cast uuid.UUID to duckdb.UUID")
+	require.Contains(t, err.Error(), castErrMsg)
 }
