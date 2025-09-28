@@ -170,19 +170,19 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.Stat
 	var state mapping.State
 	switch t {
 	case TYPE_TIMESTAMP:
-		v, err := getMappedTimestamp(t, val.Value)
+		v, err := inferTimestamp(t, val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
 		state = mapping.BindTimestamp(*s.preparedStmt, mapping.IdxT(n+1), v)
 	case TYPE_TIMESTAMP_TZ:
-		v, err := getMappedTimestamp(t, val.Value)
+		v, err := inferTimestamp(t, val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
 		state = mapping.BindTimestampTZ(*s.preparedStmt, mapping.IdxT(n+1), v)
 	case TYPE_TIMESTAMP_S:
-		v, err := getMappedTimestampS(val.Value)
+		v, err := inferTimestampS(val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
@@ -190,7 +190,7 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.Stat
 		state = mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), tS)
 		mapping.DestroyValue(&tS)
 	case TYPE_TIMESTAMP_MS:
-		v, err := getMappedTimestampMS(val.Value)
+		v, err := inferTimestampMS(val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
@@ -198,7 +198,7 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.Stat
 		state = mapping.BindValue(*s.preparedStmt, mapping.IdxT(n+1), tMS)
 		mapping.DestroyValue(&tMS)
 	case TYPE_TIMESTAMP_NS:
-		v, err := getMappedTimestampNS(val.Value)
+		v, err := inferTimestampNS(val.Value)
 		if err != nil {
 			return mapping.StateError, err
 		}
@@ -210,7 +210,7 @@ func (s *Stmt) bindTimestamp(val driver.NamedValue, t Type, n int) (mapping.Stat
 }
 
 func (s *Stmt) bindDate(val driver.NamedValue, n int) (mapping.State, error) {
-	date, err := getMappedDate(val.Value)
+	date, err := inferDate(val.Value)
 	if err != nil {
 		return mapping.StateError, err
 	}
@@ -282,7 +282,7 @@ func (s *Stmt) bindCompositeValue(val driver.NamedValue, n int) (mapping.State, 
 }
 
 func (s *Stmt) tryBindComplexValue(val driver.NamedValue, n int) (mapping.State, error) {
-	lt, mappedVal, err := createValueByReflection(val.Value)
+	lt, mappedVal, err := inferLogicalTypeAndValue(val.Value)
 	defer mapping.DestroyLogicalType(&lt)
 	defer mapping.DestroyValue(&mappedVal)
 	if err != nil {
@@ -393,7 +393,11 @@ func (s *Stmt) bindValue(val driver.NamedValue, n int) (mapping.State, error) {
 	case []byte:
 		return mapping.BindBlob(*s.preparedStmt, mapping.IdxT(n+1), v), nil
 	case Interval:
-		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), v.getMappedInterval()), nil
+		i, inferErr := inferInterval(v)
+		if inferErr != nil {
+			return mapping.StateError, inferErr
+		}
+		return mapping.BindInterval(*s.preparedStmt, mapping.IdxT(n+1), i), nil
 	case nil:
 		return mapping.BindNull(*s.preparedStmt, mapping.IdxT(n+1)), nil
 	}

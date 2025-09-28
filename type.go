@@ -45,6 +45,7 @@ const (
 	TYPE_ANY          = mapping.TypeAny
 	TYPE_BIGNUM       = mapping.TypeBigNum
 	TYPE_SQLNULL      = mapping.TypeSQLNull
+	// TODO: add TYPE_TIME_NS here, or support it.
 )
 
 // FIXME: Implement support for these types.
