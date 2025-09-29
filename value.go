@@ -378,16 +378,31 @@ func inferSliceLogicalTypeAndValue[T any](val T, array bool, length int) (mappin
 	defer destroyLogicalTypes(&logicalTypes)
 
 	var elemLogicalType mapping.LogicalType
-	for _, v := range slice {
+	expectedIndex := -1
+	expectedTypeStr := ""
+
+	for i, v := range slice {
 		et, vv, err := inferLogicalTypeAndValue(v)
 		if err != nil {
 			return mapping.LogicalType{}, mapping.Value{}, err
 		}
-		if et.Ptr != nil {
-			elemLogicalType = et
-		}
 		values = append(values, vv)
 		logicalTypes = append(logicalTypes, et)
+
+		if et.Ptr != nil {
+			if elemLogicalType.Ptr == nil {
+				elemLogicalType = et
+				expectedIndex = i
+				expectedTypeStr = logicalTypeString(et)
+				continue
+			}
+			// Check if this element's type matches the first non-null element's type
+			if currentTypeStr := logicalTypeString(et); currentTypeStr != expectedTypeStr {
+				return mapping.LogicalType{}, mapping.Value{},
+					fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
+						expectedTypeStr, expectedIndex, currentTypeStr, i)
+			}
+		}
 	}
 
 	if elemLogicalType.Ptr == nil {
