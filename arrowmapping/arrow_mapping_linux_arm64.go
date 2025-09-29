@@ -9,20 +9,26 @@ import (
 // Pointers.
 
 type (
-	Arrow       = bindings.Arrow
-	ArrowStream = bindings.ArrowStream
-	ArrowSchema = bindings.ArrowSchema
-	ArrowArray  = bindings.ArrowArray
+	Arrow                = bindings.Arrow
+	ArrowStream          = bindings.ArrowStream
+	ArrowSchema          = bindings.ArrowSchema
+	ArrowConvertedSchema = bindings.ArrowConvertedSchema
+	ArrowArray           = bindings.ArrowArray
+	ArrowOptions         = bindings.ArrowOptions
 )
 
 // Functions.
 
 var (
-	QueryArrowSchema     = bindings.QueryArrowSchema
-	QueryArrowArray      = bindings.QueryArrowArray
-	ArrowRowCount        = bindings.ArrowRowCount
-	QueryArrowError      = bindings.QueryArrowError
-	DestroyArrow         = bindings.DestroyArrow
-	ExecutePreparedArrow = bindings.ExecutePreparedArrow
-	ArrowScan            = bindings.ArrowScan
+	ConnectionGetArrowOptions   = bindings.ConnectionGetArrowOptions
+	DestroyArrowOptions         = bindings.DestroyArrowOptions
+	ResultGetArrowOptions       = bindings.ResultGetArrowOptions
+	DestroyArrowConvertedSchema = bindings.DestroyArrowConvertedSchema
+	QueryArrowSchema            = bindings.QueryArrowSchema
+	QueryArrowArray             = bindings.QueryArrowArray
+	ArrowRowCount               = bindings.ArrowRowCount
+	QueryArrowError             = bindings.QueryArrowError
+	DestroyArrow                = bindings.DestroyArrow
+	ExecutePreparedArrow        = bindings.ExecutePreparedArrow
+	ArrowScan                   = bindings.ArrowScan
 )
