@@ -379,29 +379,30 @@ func inferSliceLogicalTypeAndValue[T any](val T, array bool, length int) (mappin
 
 	var elemLogicalType mapping.LogicalType
 	expectedIndex := -1
-	expectedType := mapping.Type(0)
+	expectedTypeStr := ""
+
 	for i, v := range slice {
 		et, vv, err := inferLogicalTypeAndValue(v)
 		if err != nil {
 			return mapping.LogicalType{}, mapping.Value{}, err
 		}
+		values = append(values, vv)
+		logicalTypes = append(logicalTypes, et)
+
 		if et.Ptr != nil {
 			if elemLogicalType.Ptr == nil {
 				elemLogicalType = et
 				expectedIndex = i
-				expectedType = mapping.GetTypeId(elemLogicalType)
-			} else {
-				// Check if this element's type matches the first non-null element's type
-				if logicalTypeString(elemLogicalType) != logicalTypeString(et) {
-					currentType := mapping.GetTypeId(et)
-					return mapping.LogicalType{}, mapping.Value{},
-						fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
-							typeToStringMap[expectedType], expectedIndex, typeToStringMap[currentType], i)
-				}
+				expectedTypeStr = logicalTypeString(et)
+				continue
+			}
+			// Check if this element's type matches the first non-null element's type
+			if currentTypeStr := logicalTypeString(et); currentTypeStr != expectedTypeStr {
+				return mapping.LogicalType{}, mapping.Value{},
+					fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
+						expectedTypeStr, expectedIndex, currentTypeStr, i)
 			}
 		}
-		values = append(values, vv)
-		logicalTypes = append(logicalTypes, et)
 	}
 
 	if elemLogicalType.Ptr == nil {

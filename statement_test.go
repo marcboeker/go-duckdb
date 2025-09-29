@@ -868,5 +868,5 @@ func TestMixedTypeSliceBinding(t *testing.T) {
 
 	nestedMixedSlice := [][]any{{"hello this is text"}, {2}}
 	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", nestedMixedSlice)
-	require.ErrorContains(t, err, "mixed types in slice: cannot bind LIST (index 0) and LIST (index 1)")
+	require.ErrorContains(t, err, "mixed types in slice: cannot bind VARCHAR[] (index 0) and BIGINT[] (index 1)")
 }
