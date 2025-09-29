@@ -51,7 +51,7 @@ func newRowsWithStmt(res mapping.Result, stmt *Stmt) *rows {
 		// Cache column metadata
 		logicalType := mapping.ColumnLogicalType(&res, i)
 		r.scanTypes[i] = r.getScanType(logicalType, i)
-		r.dbTypeNames[i] = r.getDBTypeName(logicalType, i)
+		r.dbTypeNames[i] = logicalTypeString(logicalType)
 		mapping.DestroyLogicalType(&logicalType)
 	}
 
@@ -162,21 +162,6 @@ func (r *rows) getScanType(logicalType mapping.LogicalType, index mapping.IdxT) 
 // ColumnTypeDatabaseTypeName implements driver.RowsColumnTypeScanType.
 func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 	return r.dbTypeNames[index]
-}
-
-func (r *rows) getDBTypeName(logicalType mapping.LogicalType, index mapping.IdxT) string {
-	alias := mapping.LogicalTypeGetAlias(logicalType)
-	if alias == aliasJSON {
-		return aliasJSON
-	}
-
-	t := mapping.ColumnType(&r.res, index)
-	switch t {
-	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
-		return logicalTypeName(logicalType)
-	default:
-		return typeToStringMap[t]
-	}
 }
 
 func (r *rows) Close() error {
