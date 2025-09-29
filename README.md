@@ -4,14 +4,15 @@
 
 The DuckDB driver conforms to the built-in `database/sql` interface.
 
-**Current DuckDB version: `v1.3.2`.**
+**Current DuckDB version: `v1.4.0`.**
 
-The first go-duckdb tag with that version is `v2.3.3`.
+The first go-duckdb tag with that version is `v2.4.0`.
 
 Previous DuckDB versions:
 
 | DuckDB   | go-duckdb |
 |----------|-----------|
+| `v1.4.0` | `v2.4.0`  |
 | `v1.3.2` | `v2.3.3`  |
 | `v1.3.1` | `v2.3.2`  |
 | `v1.3.0` | `v2.3.0`  |
@@ -213,6 +214,14 @@ microseconds elapsed since January 1, 1970, UTC (i.e., an instant without offset
 When passing a `time.Time` to go-duckdb, go-duckdb transforms it to an instant with `UnixMicro()`,
 even when using `TIMESTAMP_TZ`. Later, scanning either type of value returns an instant, as SQL types do not model
 time zone information for individual values.
+
+**Connection lifetime**
+
+Temporary objects and state, such as temporary tables, are scoped to connections.
+When closing a connection, Go's `database.sql` pooling logic might cache it as an idle connection,
+instead of invoking its clean-up code by closing the connection. 
+That behavior can lead to, e.g., temporary tables persisting longer than expected.
+To disable keeping idle connections alive, use `db.SetMaxIdleConns(0)`.
 
 ## Memory Allocation
 

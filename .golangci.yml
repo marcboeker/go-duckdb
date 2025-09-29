@@ -21,6 +21,7 @@ linters:
     - noinlineerr
     - paralleltest
     - testpackage
+    - unqueryvet
     - varnamelen
     - wrapcheck
     - wsl

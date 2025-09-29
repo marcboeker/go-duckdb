@@ -43,8 +43,9 @@ const (
 	TYPE_TIME_TZ      = mapping.TypeTimeTZ
 	TYPE_TIMESTAMP_TZ = mapping.TypeTimestampTZ
 	TYPE_ANY          = mapping.TypeAny
-	TYPE_VARINT       = mapping.TypeVarInt
+	TYPE_BIGNUM       = mapping.TypeBigNum
 	TYPE_SQLNULL      = mapping.TypeSQLNull
+	// TODO: add TYPE_TIME_NS here, or support it.
 )
 
 // FIXME: Implement support for these types.
@@ -53,7 +54,7 @@ var unsupportedTypeToStringMap = map[Type]string{
 	TYPE_UHUGEINT: "UHUGEINT",
 	TYPE_BIT:      "BIT",
 	TYPE_ANY:      "ANY",
-	TYPE_VARINT:   "VARINT",
+	TYPE_BIGNUM:   "BIGNUM",
 }
 
 var typeToStringMap = map[Type]string{
@@ -92,7 +93,7 @@ var typeToStringMap = map[Type]string{
 	TYPE_TIME_TZ:      "TIMETZ",
 	TYPE_TIMESTAMP_TZ: "TIMESTAMPTZ",
 	TYPE_ANY:          "ANY",
-	TYPE_VARINT:       "VARINT",
+	TYPE_BIGNUM:       "BIGNUM",
 	TYPE_SQLNULL:      "SQLNULL",
 }
 

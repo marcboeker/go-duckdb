@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest, macos-13, ubuntu-24.04-arm]
-        go: [1.23, 1.24]
+        go: [1.24]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        go: [1.23, 1.24]
+        go: [1.24]
     defaults:
       run:
         shell: bash
@@ -51,7 +51,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: [1.23, 1.24]
+        go: [1.24]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        go: [1.23, 1.24]
+        go: [1.24]
         os: [macos-13, macos-14, ubuntu-latest, ubuntu-24.04-arm]
         include:
           - os: "macos-13"
@@ -91,7 +91,7 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Run Dynamic Lib Tests
         run: |
-          make test.dynamic.lib FILENAME=${{ matrix.filename }} VERSION=v1.3.2
+          make test.dynamic.lib FILENAME=${{ matrix.filename }} VERSION=v1.4.0
           CGO_ENABLED=1 CGO_LDFLAGS="-lduckdb -L${SRCDIR}dynamic-dir" ${{ matrix.ld_path_env_name }}=${SRCDIR}dynamic-dir go test -tags=duckdb_use_lib
   test-static-lib-darwin-arm64:
     name: Static Lib Tests Darwin ARM64
@@ -101,7 +101,7 @@ jobs:
         shell: bash
     strategy:
       matrix:
-        go: [1.23, 1.24]
+        go: [1.24]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -110,5 +110,5 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Run Static Lib Tests Darwin ARM64
         run: |
-          make test.static.lib.darwin.arm64 VERSION=v1.3.2
+          make test.static.lib.darwin.arm64 VERSION=v1.4.0
           CGO_ENABLED=1 CPPFLAGS="-DDUCKDB_STATIC_BUILD" CGO_LDFLAGS="-lduckdb_static -lautocomplete_extension -lcore_functions_extension -licu_extension -ljson_extension -lparquet_extension -ltpcds_extension -ltpch_extension -lduckdb_fastpforlib -lduckdb_fmt -lduckdb_fsst -lduckdb_hyperloglog -lduckdb_mbedtls -lduckdb_miniz -lduckdb_pg_query -lduckdb_re2 -lduckdb_skiplistlib -lduckdb_utf8proc -lduckdb_yyjson -lduckdb_zstd -lc++ -L${SRCDIR}static-dir" go test -tags=duckdb_use_static_lib

@@ -16,6 +16,35 @@ import (
 	"github.com/marcboeker/go-duckdb/mapping"
 )
 
+// go-duckdb exports the following type wrappers:
+// UUID, Map, Interval, Decimal, Union, Composite (optional, used to scan LIST and STRUCT).
+
+// Pre-computed reflect type values to avoid repeated allocations.
+var (
+	reflectTypeBool      = reflect.TypeOf(true)
+	reflectTypeInt8      = reflect.TypeOf(int8(0))
+	reflectTypeInt16     = reflect.TypeOf(int16(0))
+	reflectTypeInt32     = reflect.TypeOf(int32(0))
+	reflectTypeInt64     = reflect.TypeOf(int64(0))
+	reflectTypeUint8     = reflect.TypeOf(uint8(0))
+	reflectTypeUint16    = reflect.TypeOf(uint16(0))
+	reflectTypeUint32    = reflect.TypeOf(uint32(0))
+	reflectTypeUint64    = reflect.TypeOf(uint64(0))
+	reflectTypeFloat32   = reflect.TypeOf(float32(0))
+	reflectTypeFloat64   = reflect.TypeOf(float64(0))
+	reflectTypeTime      = reflect.TypeOf(time.Time{})
+	reflectTypeInterval  = reflect.TypeOf(Interval{})
+	reflectTypeBigInt    = reflect.TypeOf(big.NewInt(0))
+	reflectTypeString    = reflect.TypeOf("")
+	reflectTypeBytes     = reflect.TypeOf([]byte{})
+	reflectTypeDecimal   = reflect.TypeOf(Decimal{})
+	reflectTypeSliceAny  = reflect.TypeOf([]any{})
+	reflectTypeMapString = reflect.TypeOf(map[string]any{})
+	reflectTypeMap       = reflect.TypeOf(Map{})
+	reflectTypeUnion     = reflect.TypeOf(Union{})
+	reflectTypeAny       = reflect.TypeFor[any]()
+)
+
 type numericType interface {
 	int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | float32 | float64
 }
@@ -66,6 +95,27 @@ func (u *UUID) Value() (driver.Value, error) {
 	return u.String(), nil
 }
 
+func inferUUID(val any) (mapping.HugeInt, error) {
+	var id UUID
+	switch v := val.(type) {
+	case UUID:
+		id = v
+	case *UUID:
+		id = *v
+	case []uint8:
+		if len(v) != uuidLength {
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(id).String())
+		}
+		for i := range uuidLength {
+			id[i] = v[i]
+		}
+	default:
+		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(id).String())
+	}
+	hi := uuidToHugeInt(id)
+	return hi, nil
+}
+
 // duckdb_hugeint is composed of (lower, upper) components.
 // The value is computed as: upper * 2^64 + lower
 
@@ -78,7 +128,7 @@ func hugeIntToUUID(hugeInt *mapping.HugeInt) []byte {
 	return val[:]
 }
 
-func uuidToHugeInt(uuid UUID) *mapping.HugeInt {
+func uuidToHugeInt(uuid UUID) mapping.HugeInt {
 	// Flip the sign bit.
 	lower := binary.BigEndian.Uint64(uuid[8:])
 	upper := binary.BigEndian.Uint64(uuid[:8])
@@ -93,7 +143,7 @@ func hugeIntToNative(hugeInt *mapping.HugeInt) *big.Int {
 	return i
 }
 
-func hugeIntFromNative(i *big.Int) (*mapping.HugeInt, error) {
+func hugeIntFromNative(i *big.Int) (mapping.HugeInt, error) {
 	d := big.NewInt(1)
 	d.Lsh(d, 64)
 
@@ -102,10 +152,71 @@ func hugeIntFromNative(i *big.Int) (*mapping.HugeInt, error) {
 	q.DivMod(i, d, r)
 
 	if !q.IsInt64() {
-		return nil, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
+		return mapping.HugeInt{}, fmt.Errorf("big.Int(%s) is too big for HUGEINT", i.String())
 	}
 
 	return mapping.NewHugeInt(r.Uint64(), q.Int64()), nil
+}
+
+func inferHugeInt(val any) (mapping.HugeInt, error) {
+	var err error
+	var hi mapping.HugeInt
+	switch v := val.(type) {
+	case uint8:
+		hi = mapping.NewHugeInt(uint64(v), 0)
+	case int8:
+		hi = mapping.NewHugeInt(uint64(v), 0)
+	case uint16:
+		hi = mapping.NewHugeInt(uint64(v), 0)
+	case int16:
+		hi = mapping.NewHugeInt(uint64(v), 0)
+	case uint32:
+		hi = mapping.NewHugeInt(uint64(v), 0)
+	case int32:
+		hi = mapping.NewHugeInt(uint64(v), 0)
+	case uint64:
+		hi = mapping.NewHugeInt(v, 0)
+	case int64:
+		hi, err = hugeIntFromNative(big.NewInt(v))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case uint:
+		hi = mapping.NewHugeInt(uint64(v), 0)
+	case int:
+		hi, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case float32:
+		hi, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case float64:
+		hi, err = hugeIntFromNative(big.NewInt(int64(v)))
+		if err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case *big.Int:
+		if v == nil {
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
+		}
+		if hi, err = hugeIntFromNative(v); err != nil {
+			return mapping.HugeInt{}, err
+		}
+	case Decimal:
+		if v.Value == nil {
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
+		}
+		if hi, err = hugeIntFromNative(v.Value); err != nil {
+			return mapping.HugeInt{}, err
+		}
+	default:
+		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
+	}
+
+	return hi, nil
 }
 
 type Map map[any]any
@@ -134,11 +245,18 @@ type Interval struct {
 	Micros int64 `json:"micros"`
 }
 
-func (i *Interval) getMappedInterval() *mapping.Interval {
-	return mapping.NewInterval(i.Months, i.Days, i.Micros)
+func inferInterval(val any) (mapping.Interval, error) {
+	var i Interval
+	switch v := val.(type) {
+	case Interval:
+		i = v
+	default:
+		return mapping.Interval{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(i).String())
+	}
+	return mapping.NewInterval(i.Months, i.Days, i.Micros), nil
 }
 
-// Use as the `Scanner` type for any composite types (maps, lists, structs)
+// Composite can be used as the `Scanner` type for any composite types (maps, lists, structs).
 type Composite[T any] struct {
 	t T
 }
@@ -242,46 +360,51 @@ func getTSTicks(t Type, val any) (int64, error) {
 	return ti.UnixNano(), nil
 }
 
-func getMappedTimestamp(t Type, val any) (*mapping.Timestamp, error) {
+func inferTimestamp(t Type, val any) (mapping.Timestamp, error) {
 	ticks, err := getTSTicks(t, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestamp(ticks), nil
+	return mapping.NewTimestamp(ticks), err
 }
 
-func getMappedTimestampS(val any) (*mapping.TimestampS, error) {
+func inferTimestampS(val any) (mapping.TimestampS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_S, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestampS(ticks), nil
+	return mapping.NewTimestampS(ticks), err
 }
 
-func getMappedTimestampMS(val any) (*mapping.TimestampMS, error) {
+func inferTimestampMS(val any) (mapping.TimestampMS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_MS, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestampMS(ticks), nil
+	return mapping.NewTimestampMS(ticks), err
 }
 
-func getMappedTimestampNS(val any) (*mapping.TimestampNS, error) {
+func inferTimestampNS(val any) (mapping.TimestampNS, error) {
 	ticks, err := getTSTicks(TYPE_TIMESTAMP_NS, val)
-	if err != nil {
-		return nil, err
-	}
-	return mapping.NewTimestampNS(ticks), nil
+	return mapping.NewTimestampNS(ticks), err
 }
 
-func getMappedDate[T any](val T) (*mapping.Date, error) {
+func inferDate[T any](val T) (mapping.Date, error) {
 	ti, err := castToTime(val)
 	if err != nil {
-		return nil, err
+		return mapping.Date{}, err
 	}
 
 	date := mapping.NewDate(int32(ti.Unix() / secondsPerDay))
-	return date, nil
+	return date, err
+}
+
+func inferTime(val any) (mapping.Time, error) {
+	ticks, err := getTimeTicks(val)
+	if err != nil {
+		return mapping.Time{}, err
+	}
+	return mapping.NewTime(ticks), nil
+}
+
+func inferTimeTZ(val any) (mapping.TimeTZ, error) {
+	ticks, err := getTimeTicks(val)
+	if err != nil {
+		return mapping.TimeTZ{}, err
+	}
+	// The UTC offset is 0.
+	return mapping.CreateTimeTZ(ticks, 0), nil
 }
 
 func getTimeTicks[T any](val T) (int64, error) {
