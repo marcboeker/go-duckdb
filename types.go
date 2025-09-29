@@ -160,63 +160,63 @@ func hugeIntFromNative(i *big.Int) (mapping.HugeInt, error) {
 
 func inferHugeInt(val any) (mapping.HugeInt, error) {
 	var err error
-	var fv mapping.HugeInt
+	var hi mapping.HugeInt
 	switch v := val.(type) {
 	case uint8:
-		fv = mapping.NewHugeInt(uint64(v), 0)
+		hi = mapping.NewHugeInt(uint64(v), 0)
 	case int8:
-		fv = mapping.NewHugeInt(uint64(v), 0)
+		hi = mapping.NewHugeInt(uint64(v), 0)
 	case uint16:
-		fv = mapping.NewHugeInt(uint64(v), 0)
+		hi = mapping.NewHugeInt(uint64(v), 0)
 	case int16:
-		fv = mapping.NewHugeInt(uint64(v), 0)
+		hi = mapping.NewHugeInt(uint64(v), 0)
 	case uint32:
-		fv = mapping.NewHugeInt(uint64(v), 0)
+		hi = mapping.NewHugeInt(uint64(v), 0)
 	case int32:
-		fv = mapping.NewHugeInt(uint64(v), 0)
+		hi = mapping.NewHugeInt(uint64(v), 0)
 	case uint64:
-		fv = mapping.NewHugeInt(v, 0)
+		hi = mapping.NewHugeInt(v, 0)
 	case int64:
-		fv, err = hugeIntFromNative(big.NewInt(v))
+		hi, err = hugeIntFromNative(big.NewInt(v))
 		if err != nil {
 			return mapping.HugeInt{}, err
 		}
 	case uint:
-		fv = mapping.NewHugeInt(uint64(v), 0)
+		hi = mapping.NewHugeInt(uint64(v), 0)
 	case int:
-		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		hi, err = hugeIntFromNative(big.NewInt(int64(v)))
 		if err != nil {
 			return mapping.HugeInt{}, err
 		}
 	case float32:
-		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		hi, err = hugeIntFromNative(big.NewInt(int64(v)))
 		if err != nil {
 			return mapping.HugeInt{}, err
 		}
 	case float64:
-		fv, err = hugeIntFromNative(big.NewInt(int64(v)))
+		hi, err = hugeIntFromNative(big.NewInt(int64(v)))
 		if err != nil {
 			return mapping.HugeInt{}, err
 		}
 	case *big.Int:
 		if v == nil {
-			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
 		}
-		if fv, err = hugeIntFromNative(v); err != nil {
+		if hi, err = hugeIntFromNative(v); err != nil {
 			return mapping.HugeInt{}, err
 		}
 	case Decimal:
 		if v.Value == nil {
-			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
 		}
-		if fv, err = hugeIntFromNative(v.Value); err != nil {
+		if hi, err = hugeIntFromNative(v.Value); err != nil {
 			return mapping.HugeInt{}, err
 		}
 	default:
-		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(fv).String())
+		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
 	}
 
-	return fv, nil
+	return hi, nil
 }
 
 type Map map[any]any

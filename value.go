@@ -68,29 +68,25 @@ func getValue(info TypeInfo, v mapping.Value) (any, error) {
 	}
 }
 
-func createValue(lt mapping.LogicalType, v any) (mapping.Value, error) {
+func createValue(lt mapping.LogicalType, val any) (mapping.Value, error) {
 	t := mapping.GetTypeId(lt)
-	r, err := createPrimitiveValue(t, v)
-	if err != nil {
-		return r, err
-	}
-
-	if r.Ptr != nil {
-		return r, nil
+	if isPrimitiveType(t) {
+		return createPrimitiveValue(t, val)
 	}
 
 	switch t {
 	case TYPE_ARRAY:
-		return createSliceValue(lt, t, v)
+		return createSliceValue(lt, t, val)
 	case TYPE_LIST:
-		return createSliceValue(lt, t, v)
+		return createSliceValue(lt, t, val)
 	case TYPE_STRUCT:
-		return createStructValue(lt, v)
+		return createStructValue(lt, val)
 	default:
-		return mapping.Value{}, unsupportedTypeError(reflect.TypeOf(v).Name())
+		return mapping.Value{}, unsupportedTypeError(reflect.TypeOf(val).Name())
 	}
 }
 
+//nolint:gocyclo
 func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 	switch t {
 	case TYPE_SQLNULL:
@@ -181,8 +177,6 @@ func createPrimitiveValue(t mapping.Type, v any) (mapping.Value, error) {
 		lower, upper := mapping.HugeIntMembers(&vv)
 		uHugeInt := mapping.NewUHugeInt(lower, uint64(upper))
 		return mapping.CreateUUID(uHugeInt), nil
-	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
-		return mapping.Value{}, nil
 	}
 	return mapping.Value{}, unsupportedTypeError(typeToStringMap[t])
 }
@@ -221,12 +215,13 @@ func isNil(i any) bool {
 }
 
 func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error) {
-	// Primitive type creation is straightforward.
-	// We special-case TYPE_MAP to disambiguate with structs passed as map[string]any or map[any]any.
-	// We also special-case UNION, as its logical type and value creation is more complex.
+	// Try to create a primitive type.
 	t, vv := inferPrimitiveType(v)
-	if t != TYPE_INVALID && t != TYPE_MAP && t != TYPE_UNION && t != TYPE_DECIMAL {
+	if isPrimitiveType(t) {
 		val, err := createPrimitiveValue(t, vv)
+		if err != nil {
+			return mapping.LogicalType{}, mapping.Value{}, err
+		}
 		return mapping.CreateLogicalType(t), val, err
 	}
 
@@ -236,6 +231,9 @@ func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error)
 	if ss, ok := v.(fmt.Stringer); ok {
 		t = TYPE_VARCHAR
 		val, err := createPrimitiveValue(t, ss.String())
+		if err != nil {
+			return mapping.LogicalType{}, mapping.Value{}, err
+		}
 		return mapping.CreateLogicalType(t), val, err
 	}
 
@@ -243,6 +241,9 @@ func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error)
 	if isNil(v) {
 		t = TYPE_SQLNULL
 		val, err := createPrimitiveValue(t, v)
+		if err != nil {
+			return mapping.LogicalType{}, mapping.Value{}, err
+		}
 		return mapping.CreateLogicalType(t), val, err
 	}
 
@@ -273,7 +274,8 @@ func inferLogicalTypeAndValue(v any) (mapping.LogicalType, mapping.Value, error)
 
 func inferPrimitiveType(v any) (Type, any) {
 	// Return TYPE_INVALID for
-	// TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_ARRAY, and for the unsupported types.
+	// TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_ARRAY,
+	// and for the unsupported types.
 	t := TYPE_INVALID
 
 	switch vv := v.(type) {
@@ -336,6 +338,18 @@ func inferPrimitiveType(v any) (Type, any) {
 	return t, v
 }
 
+func isPrimitiveType(t Type) bool {
+	switch t {
+	case TYPE_DECIMAL, TYPE_ENUM, TYPE_LIST, TYPE_STRUCT, TYPE_MAP, TYPE_ARRAY, TYPE_UNION:
+		// Complex type.
+		return false
+	case TYPE_INVALID, TYPE_UHUGEINT, TYPE_BIT, TYPE_ANY, TYPE_BIGNUM:
+		// Invalid or unsupported.
+		return false
+	}
+	return true
+}
+
 func inferSliceLogicalTypeAndValue[T any](val T, array bool, length int) (mapping.LogicalType, mapping.Value, error) {
 	createFunc := mapping.CreateListValue
 	typeFunc := mapping.CreateListType
@@ -361,19 +375,34 @@ func inferSliceLogicalTypeAndValue[T any](val T, array bool, length int) (mappin
 	}
 
 	logicalTypes := make([]mapping.LogicalType, 0, length)
-	defer destroyLogicalTypes(logicalTypes)
+	defer destroyLogicalTypes(&logicalTypes)
 
 	var elemLogicalType mapping.LogicalType
-	for _, v := range slice {
+	expectedIndex := -1
+	expectedTypeStr := ""
+
+	for i, v := range slice {
 		et, vv, err := inferLogicalTypeAndValue(v)
 		if err != nil {
 			return mapping.LogicalType{}, mapping.Value{}, err
 		}
-		if et.Ptr != nil {
-			elemLogicalType = et
-		}
 		values = append(values, vv)
 		logicalTypes = append(logicalTypes, et)
+
+		if et.Ptr != nil {
+			if elemLogicalType.Ptr == nil {
+				elemLogicalType = et
+				expectedIndex = i
+				expectedTypeStr = logicalTypeString(et)
+				continue
+			}
+			// Check if this element's type matches the first non-null element's type
+			if currentTypeStr := logicalTypeString(et); currentTypeStr != expectedTypeStr {
+				return mapping.LogicalType{}, mapping.Value{},
+					fmt.Errorf("mixed types in slice: cannot bind %s (index %d) and %s (index %d)",
+						expectedTypeStr, expectedIndex, currentTypeStr, i)
+			}
+		}
 	}
 
 	if elemLogicalType.Ptr == nil {

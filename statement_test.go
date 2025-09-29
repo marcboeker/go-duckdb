@@ -842,5 +842,31 @@ func TestDriverValuer(t *testing.T) {
 	// Expected to fail - no driver.Valuer implementation
 	_, err = db.Exec(`INSERT INTO valuer_test (ids) VALUES (?)`, []uuid.UUID{uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"), uuid.MustParse("3a92e387-4b7d-4098-b273-967d48f6925f")})
 	require.Error(t, err, "[]uuid.UUID should fail without driver.Valuer")
-	require.Contains(t, err.Error(), "cannot cast uuid.UUID to duckdb.UUID")
+	require.Contains(t, err.Error(), castErrMsg)
+}
+
+func TestMixedTypeSliceBinding(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE mixed_slice_test (foo TEXT)`)
+	_, err := db.Exec(`INSERT INTO mixed_slice_test VALUES ('hello this is text'), ('other')`)
+	require.NoError(t, err)
+
+	sameTypeSlice := []any{"hello this is text", "other"}
+	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", sameTypeSlice)
+	require.NoError(t, err)
+
+	mixedSlice := []any{"hello this is text", 2}
+
+	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", mixedSlice)
+	require.ErrorContains(t, err, "mixed types in slice: cannot bind VARCHAR (index 0) and BIGINT (index 1)")
+
+	// Same test with named parameters
+	_, err = db.Query("FROM mixed_slice_test WHERE foo IN $foo", sql.Named("foo", mixedSlice))
+	require.ErrorContains(t, err, "mixed types in slice: cannot bind VARCHAR (index 0) and BIGINT (index 1)")
+
+	nestedMixedSlice := [][]any{{"hello this is text"}, {2}}
+	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", nestedMixedSlice)
+	require.ErrorContains(t, err, "mixed types in slice: cannot bind VARCHAR[] (index 0) and BIGINT[] (index 1)")
 }
