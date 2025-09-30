@@ -92,6 +92,12 @@ func newAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, schema, tabl
 	return a
 }
 
+func newQueryAppenderWrapper[T require.TestingT](t T, conn *driver.Conn, query, table string, colTypes []TypeInfo, colNames []string) *Appender {
+	a, err := NewQueryAppender(*conn, query, table, colTypes, colNames)
+	require.NoError(t, err)
+	return a
+}
+
 func closeAppenderWrapper[T require.TestingT](t T, a *Appender) {
 	if a == nil {
 		return

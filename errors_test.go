@@ -91,6 +91,45 @@ func TestErrAppender(t *testing.T) {
 		testError(t, err, errAppenderCreation.Error())
 	})
 
+	t.Run(errAppenderEmptyQuery.Error(), func(t *testing.T) {
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
+
+		a, err := NewQueryAppender(conn, "", "", []TypeInfo{}, []string{})
+		defer closeAppenderWrapper(t, a)
+		testError(t, err, errAppenderEmptyQuery.Error())
+	})
+
+	t.Run(errAppenderEmptyColumnTypes.Error(), func(t *testing.T) {
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
+
+		a, err := NewQueryAppender(conn, `INSERT INTO test SELECT * FROM appended_data`, "", []TypeInfo{}, []string{"c1", "c2"})
+		defer closeAppenderWrapper(t, a)
+		testError(t, err, errAppenderEmptyColumnTypes.Error())
+	})
+
+	t.Run(errAppenderColumnMismatch.Error(), func(t *testing.T) {
+		c := newConnectorWrapper(t, ``, nil)
+		defer closeConnectorWrapper(t, c)
+
+		conn := openDriverConnWrapper(t, c)
+		defer closeDriverConnWrapper(t, &conn)
+
+		info, err := NewTypeInfo(TYPE_INTEGER)
+		require.NoError(t, err)
+
+		a, err := NewQueryAppender(conn, `INSERT INTO test SELECT * FROM appended_data`, "", []TypeInfo{info}, []string{"c1", "c2"})
+		defer closeAppenderWrapper(t, a)
+		testError(t, err, errAppenderColumnMismatch.Error())
+	})
+
 	t.Run(errAppenderDoubleClose.Error(), func(t *testing.T) {
 		c := newConnectorWrapper(t, ``, nil)
 		defer closeConnectorWrapper(t, c)

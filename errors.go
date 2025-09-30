@@ -116,6 +116,9 @@ var (
 	errAppenderAppendRow        = errors.New("could not append row")
 	errAppenderAppendAfterClose = fmt.Errorf("%w: appender already closed", errAppenderAppendRow)
 	errAppenderFlush            = errors.New("could not flush appender")
+	errAppenderEmptyQuery       = errors.New("empty query")
+	errAppenderEmptyColumnTypes = errors.New("empty column types")
+	errAppenderColumnMismatch   = errors.New("mismatch between the number of column types and names")
 
 	errUnsupportedMapKeyType = errors.New("MAP key type not supported")
 	errEmptyName             = errors.New("empty name")

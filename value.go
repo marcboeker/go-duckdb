@@ -375,16 +375,16 @@ func inferSliceLogicalTypeAndValue[T any](val T, array bool, length int) (mappin
 	}
 
 	logicalTypes := make([]mapping.LogicalType, 0, length)
-	defer destroyLogicalTypes(&logicalTypes)
+	defer destroyLogicalTypes(logicalTypes)
 
 	var elemLogicalType mapping.LogicalType
 	expectedIndex := -1
 	expectedTypeStr := ""
 
 	for i, v := range slice {
-		et, vv, err := inferLogicalTypeAndValue(v)
-		if err != nil {
-			return mapping.LogicalType{}, mapping.Value{}, err
+		et, vv, errInfer := inferLogicalTypeAndValue(v)
+		if errInfer != nil {
+			return mapping.LogicalType{}, mapping.Value{}, errInfer
 		}
 		values = append(values, vv)
 		logicalTypes = append(logicalTypes, et)
