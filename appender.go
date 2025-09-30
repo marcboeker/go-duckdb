@@ -23,24 +23,10 @@ type Appender struct {
 	types []mapping.LogicalType
 	// The number of appended rows.
 	rowCount int
-
-	// True, if the appender has been initialized.
-	initialized bool
-	// (Optional) query appender initialization information.
-	initInfo appenderInitInfo
-}
-
-// appenderInitInfo is necessary, if we postpone appender creation to the first
-// call to AppendRow. This can happen when creating a query Appender without
-// specifying its column types.
-type appenderInitInfo struct {
-	query    string
-	table    string
-	colNames []string
 }
 
 // NewAppenderFromConn returns a new Appender for the default catalog.
-// The Appender batches rows via AppendRow. Upon reading the auto-flush threshold or
+// The Appender batches rows via AppendRow. Upon reaching the auto-flush threshold or
 // upon calling Flush or Close, it appends these rows to the table.
 // Thus, it can be used instead of INSERT INTO statements to enable bulk insertions.
 // `driverConn` is the raw sql.Conn's driver connection.
@@ -50,16 +36,14 @@ func NewAppenderFromConn(driverConn driver.Conn, schema, table string) (*Appende
 }
 
 // NewAppender returns a new Appender.
-// The Appender batches rows via AppendRow. Upon reading the auto-flush threshold or
+// The Appender batches rows via AppendRow. Upon reaching the auto-flush threshold or
 // upon calling Flush or Close, it appends these rows to the table.
 // Thus, it can be used instead of INSERT INTO statements to enable bulk insertions.
 // `driverConn` is the raw sql.Conn's driver connection.
 // `catalog`, `schema` and `table` specify the table (`catalog.schema.table`) to append to.
 func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Appender, error) {
 	var a Appender
-	var err error
-
-	err = a.appenderConn(driverConn)
+	err := a.appenderConn(driverConn)
 	if err != nil {
 		return nil, err
 	}
@@ -88,27 +72,22 @@ func NewAppender(driverConn driver.Conn, catalog, schema, table string) (*Append
 		}
 	}
 
-	a.initialized = true
 	return a.initAppenderChunk()
 }
 
 // NewQueryAppender returns a new query Appender.
-// The Appender batches rows via AppendRow. Upon reading the auto-flush threshold or
+// The Appender batches rows via AppendRow. Upon reaching the auto-flush threshold or
 // upon calling Flush or Close, it executes the query, treating the batched rows as a temporary table.
 // `driverConn` is the raw sql.Conn's driver connection.
 // `query` is the query to execute. It can be a INSERT, DELETE, UPDATE or MERGE INTO statement.
 // `table` is the (optional) table name of the temporary table containing the batched rows.
 // It defaults to `appended_data`.
-// `colTypes` are the (optional) column types of the temporary table.
-// NOTE: If left empty, go-duckdb initializes the Appender on the first call to `AppendRow` using reflection.
-// Meaning that first call might result in 'unexpected' Appender creation errors.
+// `colTypes` are the column types of the temporary table.
 // `colNames` are the (optional) names of the columns of the temporary table containing the batched rows.
 // They default to `col1`, `col2`, ...
 func NewQueryAppender(driverConn driver.Conn, query, table string, colTypes []TypeInfo, colNames []string) (*Appender, error) {
 	var a Appender
-	var err error
-
-	err = a.appenderConn(driverConn)
+	err := a.appenderConn(driverConn)
 	if err != nil {
 		return nil, err
 	}
@@ -116,21 +95,13 @@ func NewQueryAppender(driverConn driver.Conn, query, table string, colTypes []Ty
 	if query == "" {
 		return nil, getError(errAppenderEmptyQuery, nil)
 	}
+	if len(colTypes) == 0 {
+		return nil, getError(errAppenderEmptyColumnTypes, nil)
+	}
 	if len(colNames) != 0 && len(colTypes) != 0 {
 		if len(colNames) != len(colTypes) {
 			return nil, getError(errAppenderColumnMismatch, nil)
 		}
-	}
-
-	a.initInfo = appenderInitInfo{
-		query:    query,
-		table:    table,
-		colNames: colNames,
-	}
-
-	// Infer the types during the first call to AppendRow.
-	if len(colTypes) == 0 {
-		return &a, nil
 	}
 
 	// Get the logical types via the type infos.
@@ -138,16 +109,21 @@ func NewQueryAppender(driverConn driver.Conn, query, table string, colTypes []Ty
 		a.types = append(a.types, ct.logicalType())
 	}
 
-	return a.initQueryAppender()
+	state := mapping.AppenderCreateQuery(a.conn.conn, query, a.types, table, colNames, &a.appender)
+	if state == mapping.StateError {
+		destroyLogicalTypes(a.types)
+		err = errorDataError(mapping.AppenderErrorData(a.appender))
+		mapping.AppenderDestroy(&a.appender)
+		return nil, getError(errAppenderCreation, err)
+	}
+
+	return a.initAppenderChunk()
 }
 
 // Flush the data chunks to the underlying table and clear the internal cache.
 // Does not close the appender, even if it returns an error. Unless you have a good reason to call this,
 // call Close when you are done with the appender.
 func (a *Appender) Flush() error {
-	if !a.initialized {
-		return nil
-	}
 	if err := a.appendDataChunk(); err != nil {
 		return getError(errAppenderFlush, invalidatedAppenderError(err))
 	}
@@ -167,10 +143,6 @@ func (a *Appender) Close() error {
 		return getError(errAppenderDoubleClose, nil)
 	}
 	a.closed = true
-
-	if !a.initialized {
-		return nil
-	}
 
 	// Append all remaining chunks.
 	errAppend := a.appendDataChunk()
@@ -203,17 +175,6 @@ func (a *Appender) AppendRow(args ...driver.Value) error {
 		return getError(errAppenderAppendAfterClose, nil)
 	}
 
-	if !a.initialized {
-		err := a.inferRowTypes(args)
-		if err != nil {
-			return getError(errAppenderCreation, err)
-		}
-		_, err = a.initQueryAppender()
-		if err != nil {
-			return getError(errAppenderCreation, err)
-		}
-	}
-
 	err := a.appendRowSlice(args)
 	if err != nil {
 		return getError(errAppenderAppendRow, err)
@@ -233,19 +194,6 @@ func (a *Appender) appenderConn(driverConn driver.Conn) error {
 	}
 
 	return nil
-}
-
-func (a *Appender) initQueryAppender() (*Appender, error) {
-	state := mapping.AppenderCreateQuery(a.conn.conn, a.initInfo.query, a.types, a.initInfo.table, a.initInfo.colNames, &a.appender)
-	if state == mapping.StateError {
-		destroyLogicalTypes(a.types)
-		err := errorDataError(mapping.AppenderErrorData(a.appender))
-		mapping.AppenderDestroy(&a.appender)
-		return nil, getError(errAppenderCreation, err)
-	}
-
-	a.initialized = true
-	return a.initAppenderChunk()
 }
 
 func (a *Appender) inferRowTypes(args []driver.Value) error {
