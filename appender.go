@@ -196,26 +196,6 @@ func (a *Appender) appenderConn(driverConn driver.Conn) error {
 	return nil
 }
 
-func (a *Appender) inferRowTypes(args []driver.Value) error {
-	for _, arg := range args {
-		err := func() error {
-			lt, v, err := inferLogicalTypeAndValue(arg)
-			if err != nil {
-				return err
-			}
-			defer mapping.DestroyValue(&v)
-			a.types = append(a.types, lt)
-			return nil
-		}()
-		if err != nil {
-			destroyLogicalTypes(a.types)
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (a *Appender) initAppenderChunk() (*Appender, error) {
 	if err := a.chunk.initFromTypes(a.types, true); err != nil {
 		a.chunk.close()
