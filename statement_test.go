@@ -870,3 +870,75 @@ func TestMixedTypeSliceBinding(t *testing.T) {
 	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", nestedMixedSlice)
 	require.ErrorContains(t, err, "mixed types in slice: cannot bind VARCHAR[] (index 0) and BIGINT[] (index 1)")
 }
+
+func TestInsertWithReturningClause(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE SEQUENCE location_id_seq START WITH 1 INCREMENT BY 1`)
+	require.NoError(t, err)
+	createTable(t, db, `CREATE TABLE location (
+		id INTEGER PRIMARY KEY DEFAULT nextval('location_id_seq'),
+		name TEXT NOT NULL
+	)`)
+
+	// INSERT without RETURNING using Exec
+	res, err := db.Exec("INSERT INTO location (name) VALUES (?)", "test1")
+	require.NoError(t, err)
+	changes, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), changes)
+
+	// INSERT with RETURNING using Exec
+	// FIXME: RowsAffected returns ID value, not affected rows
+	res, err = db.Exec("INSERT INTO location (name) VALUES (?) RETURNING id", "test2")
+	require.NoError(t, err)
+	changes, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(2), changes)
+
+	// Verify both rows were inserted
+	var count int64
+	err = db.QueryRow("SELECT COUNT(*) FROM location").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), count)
+
+	// QueryRow
+	var id int64
+	err = db.QueryRow("INSERT INTO location (name) VALUES (?) RETURNING id", "test3").Scan(&id)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), id)
+
+	// Query
+	rows, err := db.Query("INSERT INTO location (name) VALUES (?) RETURNING id", "test4")
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, rows)
+	require.True(t, rows.Next())
+	err = rows.Scan(&id)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), id)
+	require.False(t, rows.Next())
+
+	// Prepared statement
+	stmt, err := db.Prepare("INSERT INTO location (name) VALUES (?) RETURNING id")
+	require.NoError(t, err)
+	defer closePreparedWrapper(t, stmt)
+	err = stmt.QueryRow("test5").Scan(&id)
+	require.NoError(t, err)
+	require.Equal(t, int64(5), id)
+
+	// Multiple RETURNING columns
+	var name string
+	err = db.QueryRow(
+		"INSERT INTO location (name) VALUES (?) RETURNING id, name",
+		"test6",
+	).Scan(&id, &name)
+	require.NoError(t, err)
+	require.Equal(t, int64(6), id)
+	require.Equal(t, "test6", name)
+
+	// Verify final count
+	err = db.QueryRow("SELECT COUNT(*) FROM location").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, int64(6), count)
+}
