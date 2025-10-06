@@ -871,6 +871,146 @@ func TestMixedTypeSliceBinding(t *testing.T) {
 	require.ErrorContains(t, err, "mixed types in slice: cannot bind VARCHAR[] (index 0) and BIGINT[] (index 1)")
 }
 
+func TestInsertWithReturningClause(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	_, err := db.Exec(`CREATE SEQUENCE location_id_seq START WITH 1 INCREMENT BY 1`)
+	require.NoError(t, err)
+	createTable(t, db, `CREATE TABLE location (
+		id INTEGER PRIMARY KEY DEFAULT nextval('location_id_seq'),
+		name TEXT NOT NULL
+	)`)
+
+	// INSERT without RETURNING using Exec
+	res, err := db.Exec("INSERT INTO location (name) VALUES (?)", "test1")
+	require.NoError(t, err)
+	changes, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), changes)
+
+	// INSERT with RETURNING using Exec - RowsAffected is 0 (known limitation)
+	res, err = db.Exec("INSERT INTO location (name) VALUES (?) RETURNING id", "test2")
+	require.NoError(t, err)
+	changes, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), changes)
+
+	// Verify both rows were inserted
+	var count int64
+	err = db.QueryRow("SELECT COUNT(*) FROM location").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), count)
+
+	// QueryRow
+	var id int64
+	err = db.QueryRow("INSERT INTO location (name) VALUES (?) RETURNING id", "test3").Scan(&id)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), id)
+
+	// Query
+	rows, err := db.Query("INSERT INTO location (name) VALUES (?) RETURNING id", "test4")
+	require.NoError(t, err)
+	defer closeRowsWrapper(t, rows)
+	require.True(t, rows.Next())
+	err = rows.Scan(&id)
+	require.NoError(t, err)
+	require.Equal(t, int64(4), id)
+	require.False(t, rows.Next())
+
+	// Prepared statement
+	stmt, err := db.Prepare("INSERT INTO location (name) VALUES (?) RETURNING id")
+	require.NoError(t, err)
+	defer closePreparedWrapper(t, stmt)
+	err = stmt.QueryRow("test5").Scan(&id)
+	require.NoError(t, err)
+	require.Equal(t, int64(5), id)
+
+	// Multiple RETURNING columns
+	var name string
+	err = db.QueryRow(
+		"INSERT INTO location (name) VALUES (?) RETURNING id, name",
+		"test6",
+	).Scan(&id, &name)
+	require.NoError(t, err)
+	require.Equal(t, int64(6), id)
+	require.Equal(t, "test6", name)
+
+	// Verify final count
+	err = db.QueryRow("SELECT COUNT(*) FROM location").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, int64(6), count)
+}
+
+func TestRowsAffected(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	createTable(t, db, `CREATE TABLE test_rows (id INTEGER, value TEXT)`)
+
+	// Test INSERT - single row
+	res, err := db.Exec("INSERT INTO test_rows VALUES (1, 'a')")
+	require.NoError(t, err)
+	affected, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), affected)
+
+	// Test INSERT - multiple rows
+	res, err = db.Exec("INSERT INTO test_rows VALUES (2, 'b'), (3, 'c'), (4, 'd')")
+	require.NoError(t, err)
+	affected, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(3), affected)
+
+	// Test UPDATE - single row
+	res, err = db.Exec("UPDATE test_rows SET value = 'updated' WHERE id = 1")
+	require.NoError(t, err)
+	affected, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), affected)
+
+	// Test UPDATE - multiple rows
+	res, err = db.Exec("UPDATE test_rows SET value = 'batch' WHERE id IN (2, 3)")
+	require.NoError(t, err)
+	affected, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(2), affected)
+
+	// Test UPDATE - no matching rows
+	res, err = db.Exec("UPDATE test_rows SET value = 'none' WHERE id = 999")
+	require.NoError(t, err)
+	affected, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), affected)
+
+	// Test DELETE - single row
+	res, err = db.Exec("DELETE FROM test_rows WHERE id = 4")
+	require.NoError(t, err)
+	affected, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), affected)
+
+	// Test DELETE - multiple rows
+	res, err = db.Exec("DELETE FROM test_rows WHERE id IN (2, 3)")
+	require.NoError(t, err)
+	affected, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(2), affected)
+
+	// Test DELETE - no matching rows
+	res, err = db.Exec("DELETE FROM test_rows WHERE id = 999")
+	require.NoError(t, err)
+	affected, err = res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), affected)
+
+	// Verify only row with id=1 remains
+	var count int64
+	err = db.QueryRow("SELECT COUNT(*) FROM test_rows").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count)
+}
+
 func TestInterrupt(t *testing.T) {
 	db := openDbWrapper(t, ``)
 	defer closeDbWrapper(t, db)
