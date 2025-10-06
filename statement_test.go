@@ -870,3 +870,22 @@ func TestMixedTypeSliceBinding(t *testing.T) {
 	_, err = db.Query("FROM mixed_slice_test WHERE foo IN ?", nestedMixedSlice)
 	require.ErrorContains(t, err, "mixed types in slice: cannot bind VARCHAR[] (index 0) and BIGINT[] (index 1)")
 }
+
+func TestInterrupt(t *testing.T) {
+	db := openDbWrapper(t, ``)
+	defer closeDbWrapper(t, db)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Long-running query.
+	go func() {
+		_, err := db.ExecContext(ctx, "CREATE TABLE t AS SELECT range::VARCHAR, random() AS k FROM range(1_000_000_000) ORDER BY k")
+		require.ErrorContains(t, err, "INTERRUPT Error: Interrupted!")
+	}()
+
+	// Interrupt it.
+	time.Sleep(1 * time.Millisecond)
+	go func() {
+		cancel()
+	}()
+}
