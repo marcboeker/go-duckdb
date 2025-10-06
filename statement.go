@@ -466,7 +466,7 @@ func (s *Stmt) ExecContext(ctx context.Context, nargs []driver.NamedValue) (driv
 	}
 	defer mapping.DestroyResult(res)
 
-	ra := mapping.ValueInt64(res, 0, 0)
+	ra := int64(mapping.RowsChanged(res))
 	return &result{ra}, nil
 }
 
@@ -490,7 +490,7 @@ func (s *Stmt) ExecBound(ctx context.Context) (driver.Result, error) {
 	}
 	defer mapping.DestroyResult(res)
 
-	ra := mapping.ValueInt64(res, 0, 0)
+	ra := int64(mapping.RowsChanged(res))
 	return &result{ra}, nil
 }
 
