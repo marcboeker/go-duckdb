@@ -588,12 +588,7 @@ func (s *Stmt) executeBound(ctx context.Context) (*mapping.Result, error) {
 	<-bgDoneCh
 
 	if state == mapping.StateError {
-		if ctx.Err() != nil {
-			mapping.DestroyResult(&res)
-			return nil, ctx.Err()
-		}
-
-		err := getDuckDBError(mapping.ResultError(&res))
+		err := errors.Join(ctx.Err(), getDuckDBError(mapping.ResultError(&res)))
 		mapping.DestroyResult(&res)
 		return nil, err
 	}
