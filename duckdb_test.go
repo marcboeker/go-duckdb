@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net/url"
 	"os"
 	"reflect"
 	"sync"
@@ -881,4 +882,58 @@ func Example_simpleConnection() {
 
 	fmt.Printf("Inserted %d row(s) into users table", rowsAffected)
 	// Output: Inserted 1 row(s) into users table
+}
+
+func TestGetInstancePath(t *testing.T) {
+	tests := []struct {
+		dsn      string
+		expected string
+	}{
+		{
+			dsn:      "my_db",
+			expected: "my_db",
+		},
+		{
+			dsn:      "foo:my_db",
+			expected: "foo:my_db",
+		},
+		{
+			dsn:      "foo:my_db?timeout=30&retry=5",
+			expected: "foo:my_db",
+		},
+		{
+			dsn:      "md:my_db?session_hint=user1",
+			expected: "md:my_db#1682e8aa1ced9420",
+		},
+		{
+			dsn:      "md:my_db?motherduck_token=token123",
+			expected: "md:my_db#3a4bebd76484468f",
+		},
+		{
+			dsn:      "md:my_db?timeout=30&motherduck_token=token123&retry=5",
+			expected: "md:my_db#3a4bebd76484468f",
+		},
+		{
+			dsn:      "postgres:my_db?user=user123&password=password123",
+			expected: "postgres:my_db#f648129cdb5e895d",
+		},
+		{
+			dsn:      "postgres:my_db?password=password123&user=user123",
+			expected: "postgres:my_db#f648129cdb5e895d",
+		},
+		{
+			dsn:      "airport:grpc://localhost:50003/test1?auth_token=abc",
+			expected: "airport:grpc://localhost:50003/test1#3e62b24070d0991e",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.dsn, func(t *testing.T) {
+			parsedDSN, err := url.Parse(tt.dsn)
+			require.NoError(t, err)
+
+			path := getInstancePath(tt.dsn, parsedDSN)
+			require.Equal(t, tt.expected, path)
+		})
+	}
 }
