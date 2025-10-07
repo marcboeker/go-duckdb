@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"runtime"
 	"runtime/cgo"
 	"unsafe"
@@ -51,8 +52,23 @@ type ScalarFuncConfig struct {
 
 // bindInfo holds bind data accessible during execution.
 type bindInfo struct {
-	connId uint64
+	connId         uint64
+	customBindData ScalarUDFArg
 }
+
+// ScalarUDFArg contains scalar UDF argument metadata and the optional argument.
+type ScalarUDFArg struct {
+	// Foldable is true, if the argument was folded into a value, else false.
+	Foldable bool
+	// Value is the folded argument value, or nil, if the argument is not foldable.
+	Value driver.Value
+}
+
+// CtxBindDataKeyType defines the key type of the context's optional bind data value.
+type CtxBindDataKeyType string
+
+// CtxBindDataKey defines the key of the context's optional bind data value.
+const CtxBindDataKey CtxBindDataKeyType = "ctx_bind_data_key"
 
 type (
 	// RowExecutorFn is the type for any row-based execution function.
@@ -61,6 +77,8 @@ type (
 	// RowContextExecutorFn accepts a row-based execution function using a context.
 	// It takes a context and the row values, and returns the row execution result, or error.
 	RowContextExecutorFn func(ctx context.Context, values []driver.Value) (any, error)
+	// ScalarBinderFn takes a context and the scalar function's arguments.
+	ScalarBinderFn func(ctx context.Context, args []ScalarUDFArg) (ScalarUDFArg, error)
 )
 
 // ScalarFuncExecutor contains the functions to execute a user-defined scalar function.
@@ -70,6 +88,8 @@ type ScalarFuncExecutor struct {
 	RowExecutor RowExecutorFn
 	// RowContextExecutor accepts a row-based execution function of type RowContextExecutorFn.
 	RowContextExecutor RowContextExecutorFn
+	// Binder accepts a bind function of type ScalarBinderFn.
+	ScalarBinder ScalarBinderFn
 }
 
 // ScalarFunc is the user-defined scalar function interface.
@@ -194,6 +214,12 @@ func scalar_udf_callback(functionInfoPtr, inputPtr, outputPtr unsafe.Pointer) {
 	bindDataPtr := mapping.ScalarFunctionGetBindData(functionInfo)
 	info := getPinned[*bindInfo](bindDataPtr)
 
+	// TODO: decide if we want another RowExecutor taking ScalarUDFArg as its input,
+	// TODO: or if we want to set it (like now) in the context.
+	ctx := function.ctxStore.load(info.connId)
+	ctx = context.WithValue(ctx, CtxBindDataKey, info.customBindData)
+	function.ctxStore.store(info.connId, ctx)
+
 	f := function.RowExecutor(info)
 	values := make([]driver.Value, len(inputChunk.columns))
 
@@ -263,17 +289,25 @@ func scalar_udf_bind_copy_callback(dataPtr unsafe.Pointer) unsafe.Pointer {
 //export scalar_udf_bind_callback
 func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
 	info := mapping.BindInfo{Ptr: bindInfoPtr}
+	extraInfo := mapping.BindGetExtraInfo(info)
+	function := getPinned[*scalarFuncContext](extraInfo)
 
-	// FIXME: Once available through the duckdb-go-bindings (and the C API),
-	// FIXME: we want to get extraInfo here, to access user-defined `func Binder(BindInfo) (any, any)` callbacks.
-	// FIXME: With these callbacks, we can set additional user-defined bind data in the context.
+	var clientCtx mapping.ClientContext
+	mapping.ScalarFunctionGetClientContext(info, &clientCtx)
+	defer mapping.DestroyClientContext(&clientCtx)
 
-	var ctx mapping.ClientContext
-	mapping.ScalarFunctionGetClientContext(info, &ctx)
-	defer mapping.DestroyClientContext(&ctx)
+	connId := mapping.ClientContextGetConnectionId(clientCtx)
+	data := bindInfo{connId: uint64(connId)}
 
-	id := mapping.ClientContextGetConnectionId(ctx)
-	data := bindInfo{connId: uint64(id)}
+	// Get any custom bind data by invoking the custom bind function.
+	if function.f.Executor().ScalarBinder != nil {
+		arg, err := function.bind(info, clientCtx, connId)
+		if err != nil {
+			mapping.ScalarFunctionBindSetError(info, err.Error())
+			return
+		}
+		data.customBindData = arg
+	}
 
 	// Set the copy callback of the bind info.
 	copyPtr := unsafe.Pointer(C.scalar_udf_bind_copy_callback_t(C.scalar_udf_bind_copy_callback))
@@ -290,6 +324,37 @@ func scalar_udf_bind_callback(bindInfoPtr unsafe.Pointer) {
 	// Set the bind data.
 	deleteCallbackPtr := unsafe.Pointer(C.scalar_udf_delete_callback_t(C.scalar_udf_delete_callback))
 	mapping.ScalarFunctionSetBindData(info, unsafe.Pointer(&h), deleteCallbackPtr)
+}
+
+func (s *scalarFuncContext) bind(info mapping.BindInfo, clientCtx mapping.ClientContext, connId uint64) (ScalarUDFArg, error) {
+	ctx := s.ctxStore.load(connId)
+
+	argCount := mapping.ScalarFunctionBindGetArgumentCount(info)
+	var args []ScalarUDFArg
+	for i := 0; i < argCount; i++ {
+		func() {
+			expr := mapping.ScalarFunctionBindGetArgument(info, i)
+			defer mapping.DestroyExpression(&expr)
+			arg := ScalarUDFArg{
+				Foldable: mapping.ExpressionIsFoldable(expr),
+			}
+			if arg.Foldable {
+				var v mapping.Value
+				errorData := mapping.ExpressionFold(clientCtx, expr, &v)
+				// TODO: handle error data.
+				fmt.Println(errorData)
+				// TODO: generalize value.go getValue() to work here.
+				// TODO: we should be able to get the type info via the logical type,
+				// TODO: either directly from mapping.GetValueType (+recursion), or via the logical type (+recursion) of mapping.ExpressionReturnType,
+				// TODO: which should match the folded type.
+				var assumeThisIsTheExtractedValue any
+				arg.Value = assumeThisIsTheExtractedValue
+			}
+			args = append(args, arg)
+		}()
+	}
+
+	return s.f.Executor().ScalarBinder(ctx, args)
 }
 
 func registerInputParams(config ScalarFuncConfig, f mapping.ScalarFunction) error {
