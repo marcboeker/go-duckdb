@@ -451,7 +451,7 @@ func createSliceValue[T any](lt mapping.LogicalType, t Type, val T) (mapping.Val
 func createStructValue(lt mapping.LogicalType, val any) (mapping.Value, error) {
 	m, ok := val.(map[string]any)
 	if !ok {
-		return mapping.Value{}, castError(reflect.TypeOf(val).Name(), reflect.TypeOf(map[string]any{}).Name())
+		return mapping.Value{}, castError(reflect.TypeOf(val).Name(), reflectTypeMapString.Name())
 	}
 
 	var values []mapping.Value
@@ -502,7 +502,7 @@ func extractSlice[S any](val S) ([]any, error) {
 	default:
 		kind := reflect.TypeOf(val).Kind()
 		if kind != reflect.Array && kind != reflect.Slice {
-			return nil, castError(reflect.TypeOf(val).String(), reflect.TypeOf(s).String())
+			return nil, castError(reflect.TypeOf(val).String(), reflectTypeSliceAny.String())
 		}
 
 		// Insert the values into the slice.

@@ -21,28 +21,30 @@ import (
 
 // Pre-computed reflect type values to avoid repeated allocations.
 var (
-	reflectTypeBool      = reflect.TypeOf(true)
-	reflectTypeInt8      = reflect.TypeOf(int8(0))
-	reflectTypeInt16     = reflect.TypeOf(int16(0))
-	reflectTypeInt32     = reflect.TypeOf(int32(0))
-	reflectTypeInt64     = reflect.TypeOf(int64(0))
-	reflectTypeUint8     = reflect.TypeOf(uint8(0))
-	reflectTypeUint16    = reflect.TypeOf(uint16(0))
-	reflectTypeUint32    = reflect.TypeOf(uint32(0))
-	reflectTypeUint64    = reflect.TypeOf(uint64(0))
-	reflectTypeFloat32   = reflect.TypeOf(float32(0))
-	reflectTypeFloat64   = reflect.TypeOf(float64(0))
-	reflectTypeTime      = reflect.TypeOf(time.Time{})
-	reflectTypeInterval  = reflect.TypeOf(Interval{})
-	reflectTypeBigInt    = reflect.TypeOf(big.NewInt(0))
-	reflectTypeString    = reflect.TypeOf("")
-	reflectTypeBytes     = reflect.TypeOf([]byte{})
-	reflectTypeDecimal   = reflect.TypeOf(Decimal{})
-	reflectTypeSliceAny  = reflect.TypeOf([]any{})
-	reflectTypeMapString = reflect.TypeOf(map[string]any{})
-	reflectTypeMap       = reflect.TypeOf(Map{})
-	reflectTypeUnion     = reflect.TypeOf(Union{})
+	reflectTypeBool      = reflect.TypeFor[bool]()
+	reflectTypeInt8      = reflect.TypeFor[int8]()
+	reflectTypeInt16     = reflect.TypeFor[int16]()
+	reflectTypeInt32     = reflect.TypeFor[int32]()
+	reflectTypeInt64     = reflect.TypeFor[int64]()
+	reflectTypeUint8     = reflect.TypeFor[uint8]()
+	reflectTypeUint16    = reflect.TypeFor[uint16]()
+	reflectTypeUint32    = reflect.TypeFor[uint32]()
+	reflectTypeUint64    = reflect.TypeFor[uint64]()
+	reflectTypeFloat32   = reflect.TypeFor[float32]()
+	reflectTypeFloat64   = reflect.TypeFor[float64]()
+	reflectTypeTime      = reflect.TypeFor[time.Time]()
+	reflectTypeInterval  = reflect.TypeFor[Interval]()
+	reflectTypeBigInt    = reflect.TypeFor[*big.Int]()
+	reflectTypeString    = reflect.TypeFor[string]()
+	reflectTypeBytes     = reflect.TypeFor[[]byte]()
+	reflectTypeDecimal   = reflect.TypeFor[Decimal]()
+	reflectTypeSliceAny  = reflect.TypeFor[[]any]()
+	reflectTypeMapString = reflect.TypeFor[map[string]any]()
+	reflectTypeMap       = reflect.TypeFor[Map]()
+	reflectTypeUnion     = reflect.TypeFor[Union]()
 	reflectTypeAny       = reflect.TypeFor[any]()
+	reflectTypeUUID      = reflect.TypeFor[UUID]()
+	reflectTypeHugeInt   = reflect.TypeFor[mapping.HugeInt]()
 )
 
 type numericType interface {
@@ -104,13 +106,13 @@ func inferUUID(val any) (mapping.HugeInt, error) {
 		id = *v
 	case []uint8:
 		if len(v) != uuidLength {
-			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(id).String())
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflectTypeUUID.String())
 		}
 		for i := range uuidLength {
 			id[i] = v[i]
 		}
 	default:
-		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(id).String())
+		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflectTypeUUID.String())
 	}
 	hi := uuidToHugeInt(id)
 	return hi, nil
@@ -200,20 +202,20 @@ func inferHugeInt(val any) (mapping.HugeInt, error) {
 		}
 	case *big.Int:
 		if v == nil {
-			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflectTypeHugeInt.String())
 		}
 		if hi, err = hugeIntFromNative(v); err != nil {
 			return mapping.HugeInt{}, err
 		}
 	case Decimal:
 		if v.Value == nil {
-			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
+			return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflectTypeHugeInt.String())
 		}
 		if hi, err = hugeIntFromNative(v.Value); err != nil {
 			return mapping.HugeInt{}, err
 		}
 	default:
-		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(hi).String())
+		return mapping.HugeInt{}, castError(reflect.TypeOf(val).String(), reflectTypeHugeInt.String())
 	}
 
 	return hi, nil
@@ -251,7 +253,7 @@ func inferInterval(val any) (mapping.Interval, error) {
 	case Interval:
 		i = v
 	default:
-		return mapping.Interval{}, castError(reflect.TypeOf(val).String(), reflect.TypeOf(i).String())
+		return mapping.Interval{}, castError(reflect.TypeOf(val).String(), reflectTypeInterval.String())
 	}
 	return mapping.NewInterval(i.Months, i.Days, i.Micros), nil
 }
@@ -327,7 +329,7 @@ func castToTime(val any) (time.Time, error) {
 	case time.Time:
 		ti = v
 	default:
-		return ti, castError(reflect.TypeOf(val).String(), reflect.TypeOf(ti).String())
+		return ti, castError(reflect.TypeOf(val).String(), reflectTypeTime.String())
 	}
 	return ti.UTC(), nil
 }
