@@ -80,7 +80,7 @@ func setBool[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	case bool:
 		b = v
 	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(b).String())
+		return castError(reflect.TypeOf(val).String(), reflectTypeBool.String())
 	}
 	setPrimitive(vec, rowIdx, b)
 	return nil
@@ -204,7 +204,7 @@ func setEnum[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	case string:
 		str = v
 	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(str).String())
+		return castError(reflect.TypeOf(val).String(), reflectTypeString.String())
 	}
 
 	if v, ok := vec.namesDict[str]; ok {
@@ -219,7 +219,7 @@ func setEnum[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 			return setNumeric[uint32, int64](vec, rowIdx, v)
 		}
 	} else {
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(str).String())
+		return castError(reflect.TypeOf(val).String(), reflectTypeString.String())
 	}
 	return nil
 }
@@ -250,7 +250,7 @@ func setStruct[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 
 		// Catch mismatching types.
 		goType := reflect.TypeOf(val)
-		if reflect.TypeOf(val).Kind() != reflect.Struct {
+		if goType.Kind() != reflect.Struct {
 			return castError(goType.String(), reflect.Struct.String())
 		}
 
@@ -294,7 +294,7 @@ func setMap[S any](vec *vector, rowIdx mapping.IdxT, val S) error {
 	case Map:
 		m = v
 	default:
-		return castError(reflect.TypeOf(val).String(), reflect.TypeOf(m).String())
+		return castError(reflect.TypeOf(val).String(), reflectTypeMap.String())
 	}
 
 	// Create a LIST of STRUCT values.

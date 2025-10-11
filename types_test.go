@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
-	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -1010,8 +1009,8 @@ func TestJSONColType(t *testing.T) {
 	require.Len(t, columnTypes, 2)
 	require.Equal(t, aliasJSON, columnTypes[0].DatabaseTypeName())
 	require.Equal(t, typeToStringMap[TYPE_BIGINT], columnTypes[1].DatabaseTypeName())
-	require.Equal(t, reflect.TypeOf((*any)(nil)).Elem(), columnTypes[0].ScanType())
-	require.Equal(t, reflect.TypeOf(int64(0)), columnTypes[1].ScanType())
+	require.Equal(t, reflectTypeAny, columnTypes[0].ScanType())
+	require.Equal(t, reflectTypeInt64, columnTypes[1].ScanType())
 }
 
 func TestUnionTypes(t *testing.T) {
