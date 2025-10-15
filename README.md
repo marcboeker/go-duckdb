@@ -19,6 +19,8 @@ is to fully transfer the maintenance and day-to-day work of the driver to the Du
 That being said, the DuckDB Go client has become what it is also due to its many contributions from the community,
 and we are looking forward to your future PRs, issues, and discussions!
 
+The license is unchanged: the migrated repository keeps the original MIT license, which is the same for core DuckDB and other primary clients.
+
 ---
 
 # Go SQL Driver For [DuckDB](https://github.com/duckdb/duckdb)
