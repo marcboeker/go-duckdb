@@ -1,3 +1,5 @@
+// Deprecated: This module has moved to github.com/duckdb/duckdb-go.
+// See https://github.com/duckdb/duckdb-go for migration instructions.
 module github.com/marcboeker/go-duckdb/v2
 
 go 1.24
